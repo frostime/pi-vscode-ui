@@ -30,11 +30,11 @@ If implementation evidence requires violating one of these cuts, stop and reasse
 
 ## Phase 1: Private protocol and bundled Pi extension
 
-- [ ] Define the versioned private marker, request-file schema, projected Question request, submission schema, and bounded validation in one shared pure protocol module.
-- [ ] Implement the bundled Pi extension with the established `question` tool parameter/result contract.
-- [ ] On execution, normalize questions, atomically publish an authenticated request file, call abort-aware `ctx.ui.input()`, validate the returned submission, return the normal tool result, and remove the request file in `finally`.
-- [ ] Keep the tool callable only through normal Pi tool registration; do not add a slash command.
-- [ ] Add the bundled extension as a separate esbuild entry.
+- [x] Define the versioned private marker, request-file schema, projected Question request, submission schema, and bounded validation in one shared pure protocol module.
+- [x] Implement the bundled Pi extension with the established `question` tool parameter/result contract.
+- [x] On execution, normalize questions, atomically publish an authenticated request file, call abort-aware `ctx.ui.input()`, validate the returned submission, return the normal tool result, and remove the request file in `finally`.
+- [x] Keep the tool callable only through normal Pi tool registration; do not add a slash command.
+- [x] Add the bundled extension as a separate esbuild entry.
 
 **Agent Check**:
 
@@ -44,13 +44,13 @@ If implementation evidence requires violating one of these cuts, stop and reasse
 
 ## Phase 2: Extension Host bridge and Extension UI lifecycle
 
-- [ ] Add a per-`SessionRuntime` Question bridge that owns the random token, temporary directory, bundled artifact path, launch arguments, and environment variables.
-- [ ] Recognize authenticated FrostPi Question input markers before generic `input` handling.
-- [ ] Read the request by derived identifier only, enforce directory containment and size/schema limits, then hand the typed pending request to `ExtensionUiCoordinator`.
-- [ ] Extend `ExtensionUiCoordinator` with a narrow way to register the resolved Question dialog while preserving its existing exactly-once response, timeout, and `cancelAll()` ownership.
-- [ ] Serialize a structured Webview submission into the standard Pi `{ value: string }` response; use `{ cancelled: true }` for cancellation.
-- [ ] Prepare and dispose Question bridge resources with the owning Pi process. Runtime shutdown remains responsible for cancelling dialogs before process termination.
-- [ ] Preserve multiple pending requests by request id; do not introduce a singleton current request.
+- [x] Add a per-`SessionRuntime` Question bridge that owns the random token, temporary directory, bundled artifact path, launch arguments, and environment variables.
+- [x] Recognize authenticated FrostPi Question input markers before generic `input` handling.
+- [x] Read the request by derived identifier only, enforce directory containment and size/schema limits, then hand the typed pending request to `ExtensionUiCoordinator`.
+- [x] Extend `ExtensionUiCoordinator` with a narrow way to register the resolved Question dialog while preserving its existing exactly-once response, timeout, and `cancelAll()` ownership.
+- [x] Serialize a structured Webview submission into the standard Pi `{ value: string }` response; use `{ cancelled: true }` for cancellation.
+- [x] Prepare and dispose Question bridge resources with the owning Pi process. Runtime shutdown remains responsible for cancelling dialogs before process termination.
+- [x] Preserve multiple pending requests by request id; do not introduce a singleton current request.
 
 **Agent Check**:
 
@@ -60,12 +60,12 @@ If implementation evidence requires violating one of these cuts, stop and reasse
 
 ## Phase 3: Configuration and applied-process state
 
-- [ ] Add a resource-scoped `frostpi.questionTool.enabled` setting with default `false`.
-- [ ] Read the setting into `FrostPiConfiguration` and inject the bundled extension only when enabled at process start.
-- [ ] Track configured versus applied state for running sessions and expose `restartRequired` when they differ.
-- [ ] Configuration changes refresh the displayed state without interrupting the current Pi process.
-- [ ] Add a compact session-menu row that opens FrostPi settings and states Disabled, Enabled, or Restart required.
-- [ ] Preserve Pi extension priority: project/global `question` tools remain effective when loaded before FrostPi's explicit bundled extension.
+- [x] Add a resource-scoped `frostpi.questionTool.enabled` setting with default `false`.
+- [x] Read the setting into `FrostPiConfiguration` and inject the bundled extension only when enabled at process start.
+- [x] Track configured versus applied state for running sessions and expose `restartRequired` when they differ.
+- [x] Configuration changes refresh the displayed state without interrupting the current Pi process.
+- [x] Add a compact session-menu row that opens FrostPi settings and states Disabled, Enabled, or Restart required.
+- [x] Preserve Pi extension priority: project/global `question` tools remain effective when loaded before FrostPi's explicit bundled extension.
 
 **Agent Check**:
 
@@ -75,11 +75,11 @@ If implementation evidence requires violating one of these cuts, stop and reasse
 
 ## Phase 4: Typed Host-Webview bridge
 
-- [ ] Represent a pending Question as a discriminated subtype of the existing pending Extension UI model.
-- [ ] Add a structured `respondQuestion` Webview message with bounded answers, optional note, and cancellation.
-- [ ] Route that message through `WebviewBridge` → `SessionRegistry` → `SessionRuntime` while validating session ownership and pending request identity.
-- [ ] Keep ordinary `respondExtensionUi` messages and standard input/select/editor/confirm cards unchanged.
-- [ ] Let existing session snapshots/deltas carry pending Question requests; do not add a parallel Host-to-Webview channel.
+- [x] Represent a pending Question as a discriminated subtype of the existing pending Extension UI model.
+- [x] Add a structured `respondQuestion` Webview message with bounded answers, optional note, and cancellation.
+- [x] Route that message through `WebviewBridge` → `SessionRegistry` → `SessionRuntime` while validating session ownership and pending request identity.
+- [x] Keep ordinary `respondExtensionUi` messages and standard input/select/editor/confirm cards unchanged.
+- [x] Let existing session snapshots/deltas carry pending Question requests; do not add a parallel Host-to-Webview channel.
 
 **Agent Check**:
 
@@ -89,13 +89,13 @@ If implementation evidence requires violating one of these cuts, stop and reasse
 
 ## Phase 5: Webview Question experience
 
-- [ ] Add a Question host that partitions Question requests from ordinary Extension UI cards.
-- [ ] Present one active Question request at a time with a compact request switcher when multiple requests are pending.
-- [ ] Use a docked, height-bounded panel with an independently scrolling body; the conversation remains visible and independently scrollable.
-- [ ] Support collapse to a compact request bar and restore without losing mounted in-memory drafts.
-- [ ] Implement single- and multi-question navigation, predefined option selection, explicit written-answer editing, answer replacement, optional overall note, Cancel, and final Submit.
-- [ ] Require every question to be answered before Submit. A single question follows the same explicit Submit rule.
-- [ ] Keep feature-private styling scoped to the new Svelte components and maintain keyboard/focus accessibility at 280 px width.
+- [x] Add a Question host that partitions Question requests from ordinary Extension UI cards.
+- [x] Present one active Question request at a time with a compact request switcher when multiple requests are pending.
+- [x] Use a docked, height-bounded panel with an independently scrolling body; the conversation remains visible and independently scrollable.
+- [x] Support collapse to a compact request bar and restore without losing mounted in-memory drafts.
+- [x] Implement single- and multi-question navigation, predefined option selection, explicit written-answer editing, answer replacement, optional overall note, Cancel, and final Submit.
+- [x] Require every question to be answered before Submit. A single question follows the same explicit Submit rule.
+- [x] Keep feature-private styling scoped to the new Svelte components and maintain keyboard/focus accessibility at 280 px width.
 
 **Agent Check**:
 
@@ -114,9 +114,9 @@ If implementation evidence requires violating one of these cuts, stop and reasse
 
 ## Phase 6: Compatibility documentation and final verification
 
-- [ ] Document the optional bundled tool, next-process activation rule, existing-tool priority, Remote SSH behavior, and `PI_INSIDE_FROSTPI` guidance.
-- [ ] Update the feature map and durable Extension UI/RPC/UI boundary documents without duplicating implementation detail from code.
-- [ ] Reconcile `DEV_SPEC.md` with any implementation evidence and remove unresolved statements that no longer apply.
+- [x] Document the optional bundled tool, next-process activation rule, existing-tool priority, Remote SSH behavior, and `PI_INSIDE_FROSTPI` guidance.
+- [x] Update the feature map and durable Extension UI/RPC/UI boundary documents without duplicating implementation detail from code.
+- [x] Reconcile `DEV_SPEC.md` with any implementation evidence and remove unresolved statements that no longer apply.
 
 **Agent Check**:
 

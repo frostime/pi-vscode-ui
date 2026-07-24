@@ -3,7 +3,7 @@ title: UI Design Specification
 description: Visual language, density, theming, and interaction rules for FrostPi.
 scope:
   - /apps/vscode/src/webview/**
-updated: 2026-07-24
+updated: 2026-07-25
 ---
 
 # UI Design Specification
@@ -29,6 +29,14 @@ FrostPi should feel like a first-party desktop coding surface: compact, low-nois
 - User scrolling away pauses follow mode. New activity preserves the viewport and exposes a floating jump-to-latest control.
 - User messages and individual assistant responses expose a compact action row on hover or keyboard focus. Copy writes only the original text blocks in protocol order, preserving raw Markdown and excluding images, reasoning, tools, notices, and rendered formatting. Fork remains user-message-only: it targets that exact Pi entry, preserves the original session, and restores the selected text and images into the fork's Composer; unavailable actions remain disabled rather than guessing by message text.
 - Completed user messages expose **Branch here** beside Fork. Branch here edits and resubmits the prompt in the same Pi session; Fork creates another FrostPi session. Represented branch points are centered timeline milestones: thin rules flank a compact `<count> branches` control. Its native QuickPick separates `Current path` from `Other paths`; each selectable row shows divergence content, message count, last update, and a bounded ending preview. The current path is first and is a no-op. Generated branch summaries are collapsed conversation boundaries. Switching/summarizing shows non-cancellable progress and preserves a draft for non-editable targets.
+
+## Question requests
+
+- FrostPi's bundled Question tool renders in a bottom-docked panel between the conversation and composer. The expanded panel has bounded height and its own scrolling so the conversation remains visible and independently scrollable while the user answers.
+- The panel can collapse without cancelling pending requests. When multiple requests are pending, the user can switch among them; no session-level singleton request is assumed.
+- Every question requires an explicit predefined selection or saved custom answer before Submit is enabled. Single-question requests follow the same explicit Submit rule. Cancel resolves only the selected request.
+- A Webview remount may reconstruct pending requests from Host state; unsubmitted Webview draft state is disposable. A Pi process stop or restart cancels pending requests instead of restoring them.
+- At 280px width, controls may wrap vertically but question text, answer selection, Cancel, Submit, collapse, and request switching remain usable without horizontal scrolling.
 
 ## Composer and pickers
 

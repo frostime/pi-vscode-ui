@@ -4,7 +4,9 @@ description: Supported Pi RPC commands/events, executable resolution, and compat
 scope:
   - /packages/pi-rpc/**
   - /apps/vscode/src/extension/pi-runtime/**
-updated: 2026-07-24
+  - /apps/vscode/src/extension/question-tool/**
+  - /apps/vscode/pi-extensions/question-tool.ts
+updated: 2026-07-25
 ---
 
 # Pi RPC Compatibility
@@ -20,6 +22,8 @@ Message-level Fork uses `get_entries` to bind the displayed user message to its 
 Pi built-in interactive commands are not returned by `get_commands` and do not execute through RPC `prompt`. FrostPi therefore translates text-only `/compact` and `/compact <instructions>` submissions to the documented `compact` request. Successful `compaction_end` events append a visible compaction boundary without removing already projected turns; resumed `compactionSummary` messages restore the same boundary.
 
 Session-tree reads use documented complete `get_entries` data. Native RPC does not expose `navigate_tree`, so FrostPi packages a feature-specific private Pi extension and injects it by absolute `-e` path. Its command calls `ctx.navigateTree()` and exchanges only bounded status/leaf metadata through a per-runtime token and OS temporary result directory. `get_commands.sourceInfo.path` discovers the final command name and hides every command from that bundled source. Missing capability disables tree actions visibly; compatibility is capability-based rather than inferred from a Pi version string.
+
+The optional bundled `question` tool also stays above the RPC transport package. At process start, the extension receives a per-runtime token and temporary request directory, writes a bounded request file, then blocks on documented `ctx.ui.input()`. FrostPi recognizes the authenticated private input title, projects the request into its Webview, and returns the answer through the standard `extension_ui_response` value. There is no custom RPC event, watcher, polling loop, response file, or change to `packages/pi-rpc`. Setting changes apply only to the next Pi process. Project/global `question` registrations loaded earlier by Pi retain priority over FrostPi's explicit `-e` extension.
 
 Pi extension commands do execute through RPC `prompt` (with args after the command name). They may complete without `agent_start` / `agent_settled`; FrostPi classifies them via `get_commands` (`source: "extension"`, refresh only on name miss) and closes the turn opened for that prompt after short idle checks.
 

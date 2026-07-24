@@ -4,7 +4,7 @@ description: Compact index from feature domain to primary implementation files. 
 scope:
   - /apps/vscode/**
   - /packages/pi-rpc/**
-updated: 2026-07-16
+updated: 2026-07-25
 ---
 
 # Feature → Code Map
@@ -172,7 +172,13 @@ Pi sends `extension_ui_request` events → `ExtensionUiCoordinator` handles dial
 | `{{ext}}/extension-ui/ExtensionUiCoordinator` | receives Pi extension UI events; owns pending dialogs, statuses, widgets; `handle()`, `respond()`, `cancelAll()` |
 | `{{ext}}/extension-ui/sanitizeExtensionUiText` | strips control characters |
 | `{{web}}/extension-ui/ExtensionUiHost.svelte` | renders pending dialogs + status widgets |
-| `{{web}}/extension-ui/ExtensionUiRequestCard.svelte` | single dialog card (confirm/select/input/editor) |
+| `{{web}}/extension-ui/ExtensionUiRequestCard.svelte` | single standard dialog card (confirm/select/input/editor) |
+| `{{ext}}/question-tool/QuestionToolExtensionBridge` | authenticates private Question markers; reads bounded request files; serializes responses |
+| `{{shared}}/question-tool/questionToolProtocol` | dependency-free private marker, request, response, and answer-validation contract |
+| `apps/vscode/pi-extensions/question-tool.ts` | bundled Pi `question` tool; request-file publication plus blocking `ctx.ui.input()` |
+| `{{web}}/question-tool/QuestionToolHost.svelte` | bounded/collapsible panel and multiple-request switching |
+| `{{web}}/question-tool/QuestionForm.svelte` | explicit per-question answers, note, Cancel, and Submit |
+| `{{web}}/question-tool/questionDraft` | pure draft state and complete-submission rules |
 
 SPEC: `{{ext}}/extension-ui/extension-ui.SPEC`
 
