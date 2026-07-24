@@ -72,6 +72,32 @@ describe("Pi extension UI coordination", () => {
     await expect(coordinator.respond("r1", { value: "again" })).rejects.toThrow(/no longer pending/);
   });
 
+  it("keeps multiple Question requests pending and cancels all of them on session teardown", async () => {
+    const sendExtensionUiResponse = vi.fn().mockResolvedValue(undefined);
+    const coordinator = new ExtensionUiCoordinator(
+      { sendExtensionUiResponse } as never,
+      { onChange: vi.fn(), onNotify: vi.fn(), onTitle: vi.fn(), onEditorText: vi.fn() },
+    );
+    for (const id of ["question-1", "question-2"]) {
+      coordinator.addPending({
+        id,
+        method: "question",
+        title: "Scope",
+        requestId: `${id}-payload`,
+        questions: [{ id: "scope", label: "Scope", prompt: "Choose scope", options: [] }],
+        receivedAt: 1,
+      });
+    }
+
+    expect(coordinator.snapshot().pending.map((request) => request.id)).toEqual(["question-1", "question-2"]);
+    await coordinator.cancelAll();
+    expect(coordinator.snapshot().pending).toEqual([]);
+    expect(sendExtensionUiResponse.mock.calls).toEqual([
+      ["question-1", { cancelled: true }],
+      ["question-2", { cancelled: true }],
+    ]);
+  });
+
   it("routes set_editor_text to the host composer effect", () => {
     const onEditorText = vi.fn();
     const coordinator = new ExtensionUiCoordinator(
