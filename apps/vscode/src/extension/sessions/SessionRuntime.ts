@@ -501,10 +501,17 @@ export class SessionRuntime {
     const credentials = await this.#proxySecrets.get();
     if (this.#disposed || lifecycleVersion !== this.#lifecycleVersion) return;
     const proxyEnvironment = buildPiProcessEnvironment(configuration.proxy, credentials, vscodeProxy);
+    const frostpiExtension = vscode.extensions.getExtension("frostime.frostpi");
+    const frostpiVersion = (frostpiExtension?.packageJSON as { version?: string } | undefined)?.version ?? "unknown";
     const connection = new PiRpcConnection({
       cwd: this.cwd,
       args,
-      env: { ...proxyEnvironment.env, ...(this.#sessionTreeBridge?.launchEnvironment() ?? {}) },
+      env: {
+        PI_INSIDE_FROSTPI: "1",
+        PI_INSIDE_FROSTPI_VERSION: frostpiVersion,
+        ...proxyEnvironment.env,
+        ...(this.#sessionTreeBridge?.launchEnvironment() ?? {}),
+      },
       ...invocation,
       requestTimeoutMs: 30_000,
       startupTimeoutMs: 45_000,

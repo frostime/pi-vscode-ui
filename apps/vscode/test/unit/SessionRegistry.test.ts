@@ -74,6 +74,7 @@ vi.mock("vscode", () => {
       },
       getWorkspaceFolder: () => undefined,
     },
+    extensions: { getExtension: () => undefined },
   };
 });
 

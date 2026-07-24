@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Inject `PI_INSIDE_FROSTPI` and `PI_INSIDE_FROSTPI_VERSION` environment variables into every Pi child process so Pi extensions can detect they are running under FrostPi.
+
 ### Changed
 
 - Extract shared content max-width and composer editor size constants into CSS variables.

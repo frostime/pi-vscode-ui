@@ -70,6 +70,8 @@ Multiple sessions can modify the same workspace concurrently. FrostPi isolates t
 
 Proxy configuration is resolved when a Pi process starts. Changing proxy settings does not update an already-running session. Restart the affected session to apply the new environment. Proxy environment variables are also inherited by commands launched by Pi.
 
+FrostPi injects `PI_INSIDE_FROSTPI=1` and `PI_INSIDE_FROSTPI_VERSION=<extension version>` into every Pi child process. Pi extensions can read these to detect that they are running under FrostPi and which version launched them.
+
 ## Settings
 
 - `frostpi.pi.executable`

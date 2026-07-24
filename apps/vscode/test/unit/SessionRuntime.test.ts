@@ -10,6 +10,7 @@ vi.mock("vscode", () => ({
     workspaceFolders: [],
     getConfiguration: () => ({ get: (_key: string, fallback: unknown) => fallback }),
   },
+  extensions: { getExtension: () => undefined },
 }));
 
 const { ProxySecretStore } = await import("../../src/extension/network/ProxySecretStore.js");
