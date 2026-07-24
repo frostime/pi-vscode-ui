@@ -64,7 +64,7 @@ export function questionSubmission(draft: QuestionDraftState, questions: readonl
   if (!questionDraftComplete(draft, questions)) throw new Error("Answer every question before submitting.");
   const note = draft.extraNote.trim();
   return {
-    answers: questions.map((question) => draft.answers[question.id]!),
+    answers: questions.map((question) => ({ ...draft.answers[question.id]! })),
     ...(note ? { extraNote: note } : {}),
   };
 }

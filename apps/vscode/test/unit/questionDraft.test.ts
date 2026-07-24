@@ -34,4 +34,16 @@ describe("Question draft", () => {
       extraNote: "Preserve conversation context",
     });
   });
+
+  it("returns plain answers that VS Code can clone across the Webview boundary", () => {
+    const selected = selectQuestionOption(createQuestionDraft(), questions[0]!, questions[0]!.options[0]!, 0);
+    const answer = selected.answers.scope!;
+    const draft = {
+      ...selected,
+      answers: { scope: new Proxy(answer, {}) },
+    };
+
+    expect(() => structuredClone(draft.answers.scope)).toThrow();
+    expect(() => structuredClone(questionSubmission(draft, [questions[0]!]))).not.toThrow();
+  });
 });
