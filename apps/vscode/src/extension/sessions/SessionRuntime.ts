@@ -5,6 +5,7 @@ import {
   PiRpcConnection,
   isExtensionUiRequest,
   type RpcEvent,
+  type RpcExtensionUiRequest,
   type RpcExtensionUiResponse,
   type RpcModel,
   type ThinkingLevel,
@@ -12,6 +13,7 @@ import {
 import * as vscode from "vscode";
 
 import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
+import type { QuestionDraftSubmission } from "../../shared/question-tool/questionToolProtocol.js";
 import type { ImageAttachmentView } from "../../shared/model/conversationModel.js";
 import type { ComposerSeedView, SessionViewModel } from "../../shared/model/sessionViewModel.js";
 import { normalizeImageAttachments, validateProjectedImageAttachments } from "../attachments/normalizeImageAttachment.js";
@@ -21,6 +23,7 @@ import { SessionProjection } from "../conversation/SessionProjection.js";
 import { activeLeafContinues, activeUserEntryReferences, userEntryReferences } from "../conversation/userEntryReferences.js";
 import { redactDiagnosticText, type DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { ExtensionUiCoordinator } from "../extension-ui/ExtensionUiCoordinator.js";
+import { QuestionToolExtensionBridge } from "../question-tool/QuestionToolExtensionBridge.js";
 import { commandName, normalizePiSlashPrompt } from "./normalizePiSlashPrompt.js";
 import { configuredPiInvocation } from "../pi-runtime/resolvePiExecutable.js";
 import { buildPiProcessEnvironment, proxyFingerprint, proxyModeLabel } from "../network/buildPiProcessEnvironment.js";
@@ -68,7 +71,9 @@ export class SessionRuntime {
   #liveStatsRefreshVersion = 0;
   #appliedProxyFingerprint: string | null = null;
   #proxyRestartForced = false;
+  #appliedQuestionToolEnabled: boolean | null = null;
   readonly #sessionTreeBridge: SessionTreeExtensionBridge | null;
+  readonly #questionToolBridge: QuestionToolExtensionBridge | null;
 
   constructor(
     id: string,
@@ -80,6 +85,7 @@ export class SessionRuntime {
     logger: DiagnosticLogger,
     hooks: SessionRuntimeHooks,
     sessionTreeArtifactPath?: string,
+    questionToolArtifactPath?: string,
   ) {
     this.#id = id;
     const initialConfiguration = configurationProvider();
@@ -87,11 +93,17 @@ export class SessionRuntime {
       maxImageBytes: initialConfiguration.maxImageBytes,
       maxImages: 12,
     }, updatedAt, initialConfiguration.collapseTurnTrace);
+    this.#projection.setQuestionTool({
+      configuredEnabled: initialConfiguration.questionToolEnabled,
+      appliedEnabled: initialConfiguration.questionToolEnabled,
+      restartRequired: false,
+    });
     this.#configurationProvider = configurationProvider;
     this.#proxySecrets = proxySecrets;
     this.#logger = logger;
     this.#hooks = hooks;
     this.#sessionTreeBridge = sessionTreeArtifactPath ? new SessionTreeExtensionBridge(sessionTreeArtifactPath) : null;
+    this.#questionToolBridge = questionToolArtifactPath ? new QuestionToolExtensionBridge(questionToolArtifactPath) : null;
   }
 
   get id(): string {
@@ -137,7 +149,10 @@ export class SessionRuntime {
     this.#notifyChange();
     await this.#extensionUi?.cancelAll();
     await this.#connection?.stop();
-    await this.#sessionTreeBridge?.dispose();
+    await Promise.all([
+      this.#sessionTreeBridge?.dispose(),
+      this.#questionToolBridge?.dispose(),
+    ]);
     this.#connection = null;
     this.#api = null;
     this.#extensionUi = null;
@@ -148,6 +163,7 @@ export class SessionRuntime {
     this.#entryTrackingReady = false;
     this.#appliedProxyFingerprint = null;
     this.#proxyRestartForced = false;
+    this.#appliedQuestionToolEnabled = null;
     // Local follow-up bubbles are ephemeral; a dead process cannot promote them.
     this.#projection.clearQueuedFollowUps();
     this.#projection.setForking(false);
@@ -219,6 +235,7 @@ export class SessionRuntime {
   }
 
   async abort(): Promise<void> {
+    await this.#extensionUi?.cancelAll();
     await this.#requireApi().abort();
     // Abort cancels the active run; pending local follow-up UI is no longer trustworthy.
     this.#projection.clearQueuedFollowUps();
@@ -445,6 +462,19 @@ export class SessionRuntime {
     await this.#extensionUi?.respond(requestId, response);
   }
 
+  async respondQuestion(requestId: string, response: QuestionDraftSubmission | { cancelled: true }): Promise<void> {
+    const coordinator = this.#extensionUi;
+    if (!coordinator) throw new Error("Question request is no longer pending.");
+    const pending = coordinator.pending(requestId);
+    if (!pending || pending.method !== "question") throw new Error("Question request is no longer pending.");
+    if ("cancelled" in response) {
+      await coordinator.respond(requestId, { cancelled: true });
+      return;
+    }
+    if (!this.#questionToolBridge) throw new Error("FrostPi Question tool is unavailable.");
+    await coordinator.respond(requestId, { value: this.#questionToolBridge.responseValue(pending, response) });
+  }
+
   refreshConfigurationState(forceRestartRequired = false): void {
     const configuration = this.#configurationProvider();
     const vscodeProxy = readVsCodeProxy(this.cwd);
@@ -462,6 +492,14 @@ export class SessionRuntime {
       ...(restartRequired ? { pendingLabel: configuredLabel } : {}),
       restartRequired,
     });
+    const appliedQuestionToolEnabled = running
+      ? this.#appliedQuestionToolEnabled ?? false
+      : configuration.questionToolEnabled;
+    this.#projection.setQuestionTool({
+      configuredEnabled: configuration.questionToolEnabled,
+      appliedEnabled: appliedQuestionToolEnabled,
+      restartRequired: running && appliedQuestionToolEnabled !== configuration.questionToolEnabled,
+    });
     this.#notifyChange();
   }
 
@@ -477,6 +515,7 @@ export class SessionRuntime {
       `Model: ${view.model ? `${view.model.provider}/${view.model.id}` : "<none>"}`,
       `Thinking: ${view.thinkingLevel}`,
       `Proxy: ${view.networkProxy.label}${view.networkProxy.restartRequired ? ` → ${view.networkProxy.pendingLabel ?? proxyModeLabel(view.networkProxy.mode)} after restart` : ""}`,
+      `Question tool: ${view.questionTool.appliedEnabled ? "enabled" : "disabled"}${view.questionTool.restartRequired ? ` → ${view.questionTool.configuredEnabled ? "enabled" : "disabled"} after restart` : ""}`,
       `Turns: ${view.turns.length}`,
       `Tool calls: ${view.turns.reduce((count, turn) => count + turn.activities.filter((activity) => activity.type === "tool").length, 0)}`,
       `Pending extension UI: ${view.pendingExtensionUi.length}`,
@@ -492,10 +531,12 @@ export class SessionRuntime {
     const configuration = this.#configurationProvider();
     const invocation = configuredPiInvocation(configuration.piExecutable);
     await this.#sessionTreeBridge?.prepare();
+    if (configuration.questionToolEnabled) await this.#questionToolBridge?.prepare();
     const args = [
       ...configuration.piArguments,
       ...(sessionFile ? ["--session", sessionFile] : []),
       ...(this.#sessionTreeBridge?.launchArguments() ?? []),
+      ...(configuration.questionToolEnabled ? this.#questionToolBridge?.launchArguments() ?? [] : []),
     ];
     const vscodeProxy = readVsCodeProxy(this.cwd);
     const credentials = await this.#proxySecrets.get();
@@ -511,6 +552,7 @@ export class SessionRuntime {
         PI_INSIDE_FROSTPI_VERSION: frostpiVersion,
         ...proxyEnvironment.env,
         ...(this.#sessionTreeBridge?.launchEnvironment() ?? {}),
+        ...(configuration.questionToolEnabled ? this.#questionToolBridge?.launchEnvironment() ?? {} : {}),
       },
       ...invocation,
       requestTimeoutMs: 30_000,
@@ -560,6 +602,7 @@ export class SessionRuntime {
       }
       this.#appliedProxyFingerprint = proxyFingerprint(configuration.proxy, vscodeProxy);
       this.#proxyRestartForced = false;
+      this.#appliedQuestionToolEnabled = configuration.questionToolEnabled;
       this.#projection.setNetworkProxy({ mode: configuration.proxy.mode, label: proxyEnvironment.label, restartRequired: false });
       this.#projection.applyState(state);
       this.#logger.info(`Started Pi session ${this.id} in ${this.cwd}`);
@@ -648,14 +691,33 @@ export class SessionRuntime {
   }
 
   #applyConnectionEvent(event: RpcEvent): void {
-    if (isExtensionUiRequest(event)) this.#extensionUi?.handle(event);
-    else this.#projection.applyEvent(event);
+    if (isExtensionUiRequest(event)) {
+      if (this.#questionToolBridge?.recognizes(event)) void this.#handleQuestionUiRequest(event);
+      else this.#extensionUi?.handle(event);
+    } else this.#projection.applyEvent(event);
     if (event.type === "agent_start") this.#startLiveStatsRefresh();
     if (event.type === "agent_settled") {
       this.#stopLiveStatsRefresh();
       void this.#refreshAfterSettled();
     }
     if (event.type === "compaction_end") void this.#refreshAfterCompaction();
+  }
+
+  async #handleQuestionUiRequest(request: RpcExtensionUiRequest): Promise<void> {
+    const bridge = this.#questionToolBridge;
+    const coordinator = this.#extensionUi;
+    const api = this.#api;
+    if (!bridge || !coordinator || !api) return;
+    try {
+      const pending = await bridge.resolve(request);
+      if (bridge !== this.#questionToolBridge || coordinator !== this.#extensionUi || api !== this.#api) return;
+      coordinator.addPending(pending, request.timeout);
+    } catch (error) {
+      this.#logger.error("Rejected FrostPi Question request", error);
+      this.#projection.appendNotice(`Unable to open FrostPi Question UI: ${errorMessage(error)}`, "error");
+      this.#notifyChange();
+      await api.sendExtensionUiResponse(request.id, { cancelled: true }).catch(() => undefined);
+    }
   }
 
   async #refreshAfterCompaction(): Promise<void> {

@@ -190,6 +190,17 @@
               <span class="codicon codicon-globe"></span>
               <span><strong>Network & proxy</strong><small>{active.networkProxy.restartRequired ? `${active.networkProxy.pendingLabel ?? active.networkProxy.label} · restart required` : active.networkProxy.label}</small></span>
             </button>
+            <button type="button" onclick={() => { closeMenus(); postToHost({ type: "openSettings" }); }}>
+              <span class="codicon codicon-question"></span>
+              <span>
+                <strong>Question tool</strong>
+                <small>
+                  {active.questionTool.restartRequired
+                    ? `${active.questionTool.configuredEnabled ? "Enable" : "Disable"} after restart`
+                    : active.questionTool.appliedEnabled ? "Enabled for this process" : "Disabled"}
+                </small>
+              </span>
+            </button>
             <button type="button" onclick={() => { closeMenus(); postToHost({ type: "checkPiIntegration", sessionId: active.id }); }}>
               <span class="codicon codicon-plug"></span>
               <span><strong>Pi integration</strong><small>Session tree adapter · {active.sessionTreeAvailable ? "Connected" : "Unavailable"}</small></span>

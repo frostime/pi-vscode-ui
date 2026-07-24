@@ -40,9 +40,8 @@ export class ExtensionUiCoordinator {
 
   handle(request: RpcExtensionUiRequest): void {
     if (DIALOG_METHODS.has(request.method)) {
-      const method = request.method as PendingExtensionUiView["method"];
-      this.#clearTimeout(request.id);
-      this.#pending.set(request.id, {
+      const method = request.method as "select" | "confirm" | "input" | "editor";
+      this.addPending({
         id: request.id,
         method,
         title: request.title ? sanitizeExtensionUiText(request.title) : defaultTitle(method),
@@ -51,15 +50,7 @@ export class ExtensionUiCoordinator {
         ...(request.placeholder ? { placeholder: request.placeholder } : {}),
         ...(request.prefill ? { prefill: request.prefill } : {}),
         receivedAt: Date.now(),
-      });
-      if (typeof request.timeout === "number" && request.timeout > 0) {
-        const timer = setTimeout(() => {
-          this.#timeouts.delete(request.id);
-          if (this.#pending.delete(request.id)) this.#effects.onChange();
-        }, request.timeout);
-        this.#timeouts.set(request.id, timer);
-      }
-      this.#effects.onChange();
+      }, request.timeout);
       return;
     }
 
@@ -94,6 +85,23 @@ export class ExtensionUiCoordinator {
       default:
         break;
     }
+  }
+
+  addPending(request: PendingExtensionUiView, timeout?: number): void {
+    this.#clearTimeout(request.id);
+    this.#pending.set(request.id, request);
+    if (typeof timeout === "number" && timeout > 0) {
+      const timer = setTimeout(() => {
+        this.#timeouts.delete(request.id);
+        if (this.#pending.delete(request.id)) this.#effects.onChange();
+      }, timeout);
+      this.#timeouts.set(request.id, timer);
+    }
+    this.#effects.onChange();
+  }
+
+  pending(requestId: string): PendingExtensionUiView | undefined {
+    return this.#pending.get(requestId);
   }
 
   clearSessionDecorations(): void {

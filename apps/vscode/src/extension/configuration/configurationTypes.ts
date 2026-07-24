@@ -15,6 +15,7 @@ export interface FrostPiConfiguration {
   startSessionOnOpen: boolean;
   streamingBehavior: StreamingBehavior;
   collapseTurnTrace: boolean;
+  questionToolEnabled: boolean;
   maxImageBytes: number;
   diagnosticsLevel: "error" | "info" | "debug";
   proxy: ProxyConfiguration;

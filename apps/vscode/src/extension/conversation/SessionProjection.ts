@@ -34,6 +34,7 @@ export class SessionProjection {
       attachmentLimits,
       collapseTurnTrace,
       networkProxy: { mode: "inherit", label: "Inherited", restartRequired: false },
+      questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
       turns: [],
       notices: [],
       compactions: [],
@@ -155,6 +156,11 @@ export class SessionProjection {
 
   setNetworkProxy(networkProxy: SessionViewModel["networkProxy"]): void {
     this.#view.networkProxy = networkProxy;
+    this.#touch();
+  }
+
+  setQuestionTool(questionTool: SessionViewModel["questionTool"]): void {
+    this.#view.questionTool = questionTool;
     this.#touch();
   }
 

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { PendingExtensionUiView } from "$shared/model/extensionUiModel";
+  import type { PendingStandardExtensionUiView } from "$shared/model/extensionUiModel";
   import { postToHost } from "../../bridge/vscodeBridge";
   import IconButton from "../../primitives/IconButton.svelte";
 
-  let { sessionId, request }: { sessionId: string; request: PendingExtensionUiView } = $props();
+  let { sessionId, request }: { sessionId: string; request: PendingStandardExtensionUiView } = $props();
   let value = $state("");
   let initializedRequestId = $state("");
   const canCancel = $derived(request.method !== "confirm");

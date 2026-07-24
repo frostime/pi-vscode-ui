@@ -36,6 +36,12 @@ export interface AttachmentLimitsView {
   maxImages: number;
 }
 
+export interface QuestionToolStateView {
+  configuredEnabled: boolean;
+  appliedEnabled: boolean;
+  restartRequired: boolean;
+}
+
 export interface ComposerSeedView {
   id: string;
   text: string;
@@ -70,6 +76,7 @@ export interface SessionViewModel {
   /** When true, completed turns collapse tool/reasoning/interim replies into one summary above the final response. */
   collapseTurnTrace: boolean;
   networkProxy: NetworkProxyView;
+  questionTool: QuestionToolStateView;
   turns: AgentTurnView[];
   notices: SessionNoticeView[];
   compactions: CompactionView[];

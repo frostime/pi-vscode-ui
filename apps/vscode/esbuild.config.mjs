@@ -30,4 +30,15 @@ await Promise.all([
     sourcesContent: sourcemap,
     logLevel: "info",
   }),
+  esbuild.build({
+    entryPoints: ["pi-extensions/question-tool.ts"],
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    target: "node20",
+    outfile: "dist/pi-extensions/question-tool.js",
+    sourcemap,
+    sourcesContent: sourcemap,
+    logLevel: "info",
+  }),
 ]);
