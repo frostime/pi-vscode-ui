@@ -120,6 +120,17 @@ button.session-heading.active { background: var(--frost-hover); }
 .session-launcher-menu { width: min(250px, calc(100vw - 20px)); }
 .session-menu button.danger { color: var(--frost-error); }
 .menu-separator { height: 1px; margin: 4px 2px; background: var(--frost-border-soft); }
+.session-submenu-wrap { position: relative; }
+.session-submenu-trigger { width: 100%; }
+.session-submenu-trigger.active { background: var(--frost-hover); }
+.session-submenu-chevron { margin-left: auto; opacity: 0.7; }
+.session-submenu {
+  top: calc(100% + 2px);
+  left: -5px;
+  right: -5px;
+  width: auto;
+  z-index: 1;
+}
 .session-list-panel {
   position: absolute;
   z-index: 30;

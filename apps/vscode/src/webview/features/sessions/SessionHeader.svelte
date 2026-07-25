@@ -13,6 +13,7 @@
   let menuOpen = $state(false);
   let launcherOpen = $state(false);
   let sessionListOpen = $state(false);
+  let extensionsMenuOpen = $state(false);
   let hidden = $state(false);
   let titleInput = $state<HTMLInputElement | null>(null);
   let root = $state<HTMLElement | null>(null);
@@ -30,6 +31,7 @@
       menuOpen = false;
       launcherOpen = false;
       sessionListOpen = false;
+      extensionsMenuOpen = false;
     };
     document.addEventListener("pointerdown", closeMenus);
     return () => document.removeEventListener("pointerdown", closeMenus);
@@ -39,6 +41,11 @@
     menuOpen = false;
     launcherOpen = false;
     sessionListOpen = false;
+    extensionsMenuOpen = false;
+  }
+
+  function toggleExtensionsMenu(): void {
+    extensionsMenuOpen = !extensionsMenuOpen;
   }
 
   function beginRename(): void {
@@ -190,21 +197,44 @@
               <span class="codicon codicon-globe"></span>
               <span><strong>Network & proxy</strong><small>{active.networkProxy.restartRequired ? `${active.networkProxy.pendingLabel ?? active.networkProxy.label} · restart required` : active.networkProxy.label}</small></span>
             </button>
-            <button type="button" onclick={() => { closeMenus(); postToHost({ type: "openSettings" }); }}>
-              <span class="codicon codicon-question"></span>
-              <span>
-                <strong>Question tool</strong>
-                <small>
-                  {active.questionTool.restartRequired
-                    ? `${active.questionTool.configuredEnabled ? "Enable" : "Disable"} after restart`
-                    : active.questionTool.appliedEnabled ? "Enabled for this process" : "Disabled"}
-                </small>
-              </span>
-            </button>
-            <button type="button" onclick={() => { closeMenus(); postToHost({ type: "checkPiIntegration", sessionId: active.id }); }}>
-              <span class="codicon codicon-plug"></span>
-              <span><strong>Pi integration</strong><small>Session tree adapter · {active.sessionTreeAvailable ? "Connected" : "Unavailable"}</small></span>
-            </button>
+            <div class="session-submenu-wrap">
+              <button
+                type="button"
+                class="session-submenu-trigger"
+                class:active={extensionsMenuOpen}
+                aria-haspopup="true"
+                aria-expanded={extensionsMenuOpen}
+                onclick={toggleExtensionsMenu}
+              >
+                <span class="codicon codicon-extensions"></span>
+                <span><strong>FrostPi extensions</strong></span>
+                <span
+                  class="codicon session-submenu-chevron"
+                  class:codicon-chevron-right={!extensionsMenuOpen}
+                  class:codicon-chevron-down={extensionsMenuOpen}
+                  aria-hidden="true"
+                ></span>
+              </button>
+              {#if extensionsMenuOpen}
+                <div class="session-menu session-submenu">
+                  <button type="button" onclick={() => { closeMenus(); postToHost({ type: "checkPiIntegration", sessionId: active.id }); }}>
+                    <span class="codicon codicon-list-tree"></span>
+                    <span><strong>Session tree adapter</strong><small>{active.sessionTreeAvailable ? "Connected" : "Unavailable"}</small></span>
+                  </button>
+                  <button type="button" onclick={() => { closeMenus(); postToHost({ type: "openSettings" }); }}>
+                    <span class="codicon codicon-question"></span>
+                    <span>
+                      <strong>Question tool</strong>
+                      <small>
+                        {active.questionTool.restartRequired
+                          ? `${active.questionTool.configuredEnabled ? "Enable" : "Disable"} after restart`
+                          : active.questionTool.appliedEnabled ? "Enabled for this process" : "Disabled"}
+                      </small>
+                    </span>
+                  </button>
+                </div>
+              {/if}
+            </div>
             <button type="button" onclick={() => { closeMenus(); postToHost({ type: "refreshCommands", sessionId: active.id }); }}><span class="codicon codicon-refresh"></span> Refresh commands</button>
             <button type="button" onclick={() => { closeMenus(); postToHost({ type: "exportDiagnostics" }); }}><span class="codicon codicon-save"></span> Export diagnostics</button>
             <div class="menu-separator"></div>

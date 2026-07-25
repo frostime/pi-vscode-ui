@@ -62,7 +62,7 @@ describe("bundled Pi question tool", () => {
     });
 
     expect(result.details).toMatchObject({ cancelled: false, answers: [{ id: "scope", value: "local" }] });
-    expect(result.content[0]?.text).toBe("Q1: user selected: 1. Local");
+    expect(result.content[0]?.text).toBe("[Q1]\nUser selected: 1. Local");
     await expect(access(join(directory, `${requestId}.json`))).rejects.toThrow();
   });
 
