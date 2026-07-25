@@ -267,6 +267,9 @@ export class WebviewBridge implements vscode.Disposable {
       case "respondExtensionUi":
         await this.#registry.respondExtensionUi(message.sessionId, message.requestId, message.response);
         break;
+      case "respondQuestion":
+        await this.#registry.respondQuestion(message.sessionId, message.requestId, message.response);
+        break;
       case "addSelection": {
         const text = captureActiveSelection();
         if (!text) throw new Error("Open a workspace file first.");

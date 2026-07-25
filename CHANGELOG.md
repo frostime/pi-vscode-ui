@@ -8,11 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add an optional FrostPi-bundled Pi `question` tool (off by default via `frostpi.questionTool.enabled`) that renders clarification prompts inside the Webview and returns structured answers through the standard Pi Extension UI response. The bundled extension is injected only into newly started or restarted Pi processes; project/global `question` registrations keep Pi's load-order priority. Document that third-party question extensions can inspect `PI_INSIDE_FROSTPI` to skip their own registration when users prefer FrostPi's bundled tool.
 - Inject `PI_INSIDE_FROSTPI` and `PI_INSIDE_FROSTPI_VERSION` environment variables into every Pi child process so Pi extensions can detect they are running under FrostPi.
 
 ### Changed
 
 - Extract shared content max-width and composer editor size constants into CSS variables.
+- Densify the Question tool panel (header, tabs, options, review rows, and action bar) and limit its expanded height so more conversation remains visible while answering; custom-answer and overall-note textareas now start at a single line and can still be resized vertically.
 
 ### Fixed
 

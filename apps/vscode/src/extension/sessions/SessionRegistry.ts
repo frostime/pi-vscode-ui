@@ -6,6 +6,7 @@ import type { RpcExtensionUiResponse, ThinkingLevel } from "@frostime/pi-rpc";
 import * as vscode from "vscode";
 
 import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
+import type { QuestionDraftSubmission } from "../../shared/question-tool/questionToolProtocol.js";
 import type { SessionRuntimeStatus, SessionSummaryView, WorkspaceViewModel } from "../../shared/model/sessionViewModel.js";
 import { readConfiguration } from "../configuration/readConfiguration.js";
 import { workspaceUriForPath } from "../configuration/workspaceScope.js";
@@ -58,6 +59,7 @@ export class SessionRegistry implements vscode.Disposable {
   readonly #workingDirectoriesByCwd = new Map<string, SessionWorkingDirectory>();
   readonly #discoverWorkingDirectories: DiscoverSessionWorkingDirectories;
   readonly #sessionTreeArtifactPath: string | undefined;
+  readonly #questionToolArtifactPath: string | undefined;
 
   #activeSessionId: string | null = null;
   #forkOperation: ForkOperation | null = null;
@@ -81,6 +83,9 @@ export class SessionRegistry implements vscode.Disposable {
     this.#discoverWorkingDirectories = discoverWorkingDirectories;
     this.#sessionTreeArtifactPath = typeof context.asAbsolutePath === "function"
       ? context.asAbsolutePath("dist/pi-extensions/session-tree.js")
+      : undefined;
+    this.#questionToolArtifactPath = typeof context.asAbsolutePath === "function"
+      ? context.asAbsolutePath("dist/pi-extensions/question-tool.js")
       : undefined;
     this.#proxySecrets = new ProxySecretStore(context.secrets);
     const stored = this.#persistence.load();
@@ -468,6 +473,10 @@ export class SessionRegistry implements vscode.Disposable {
     await this.#requireRuntime(sessionId).respondExtensionUi(requestId, response);
   }
 
+  async respondQuestion(sessionId: string, requestId: string, response: QuestionDraftSubmission | { cancelled: true }): Promise<void> {
+    await this.#requireRuntime(sessionId).respondQuestion(requestId, response);
+  }
+
   diagnosticsSummary(): string {
     const sessions = [...this.#runtimes.values()];
     const operation = this.#forkOperation;
@@ -584,6 +593,7 @@ export class SessionRegistry implements vscode.Disposable {
         },
       },
       this.#sessionTreeArtifactPath,
+      this.#questionToolArtifactPath,
     );
   }
 

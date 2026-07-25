@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+import {
+  MAX_QUESTION_COUNT,
+  MAX_QUESTION_OPTIONS,
+  type QuestionDraftSubmission,
+} from "../question-tool/questionToolProtocol.js";
 import { BRIDGE_VERSION } from "./bridgeVersion.js";
 
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
@@ -11,6 +16,17 @@ const imageSchema = z.object({
   mimeType: z.enum(["image/png", "image/jpeg", "image/webp"]),
   data: z.string().min(1).max(MAX_ENCODED_IMAGE_CHARS),
   size: z.number().int().nonnegative().max(MAX_IMAGE_BYTES),
+});
+
+const questionDraftSubmissionSchema: z.ZodType<QuestionDraftSubmission> = z.object({
+  answers: z.array(z.object({
+    id: z.string().min(1).max(128),
+    value: z.string().min(1).max(32_768),
+    label: z.string().min(1).max(32_768),
+    wasCustom: z.boolean(),
+    index: z.number().int().min(1).max(MAX_QUESTION_OPTIONS).optional(),
+  })).min(1).max(MAX_QUESTION_COUNT),
+  extraNote: z.string().max(64 * 1024).optional(),
 });
 
 const openFileSchema = z.object({
@@ -95,6 +111,12 @@ const payloadSchema = z.discriminatedUnion("type", [
       z.object({ confirmed: z.boolean() }),
       z.object({ cancelled: z.literal(true) }),
     ]),
+  }),
+  z.object({
+    type: z.literal("respondQuestion"),
+    sessionId: z.string().min(1).max(128),
+    requestId: z.string().min(1).max(256),
+    response: z.union([questionDraftSubmissionSchema, z.object({ cancelled: z.literal(true) })]),
   }),
   z.object({ type: z.literal("addSelection") }),
   z.object({ type: z.literal("addCurrentFile") }),

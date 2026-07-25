@@ -16,6 +16,7 @@ It runs your configured Pi through its native RPC mode. Pi remains responsible f
 * **Navigate Pi's session tree visually.** Use **Branch here** to revise an earlier prompt and **Switch branch** to move between existing paths without leaving the current Pi session.
 * **Fork into an independent session.** Keep the original session intact while continuing selected context in a separate Pi and FrostPi session.
 * **Keep Pi workflows available.** Extension commands, model selection, thinking controls, resume, compaction, and parallel sessions.
+* **Answer Pi questions in the Webview.** An optional bundled `question` tool keeps multi-question prompts and the conversation visible in the same VS Code panel.
 * **Work naturally in VS Code.** Reference selections, files, workspace paths, and images, and inspect changes in native editors.
 * **Keep the boundary simple.** FrostPi manages the interface; Pi remains responsible for execution and session storage.
 
@@ -82,6 +83,12 @@ FrostPi provides a graphical interface for Pi's session-tree workflow:
 - **Fork** is intentionally different: it creates a separate Pi session and FrostPi session. Use it when the continuation should run and persist independently rather than become another path in the current session tree.
 
 Pi remains authoritative for the active tree leaf and reconstructed conversation context; FrostPi supplies the GUI and VS Code interaction.
+
+### Question tool
+
+Set `frostpi.questionTool.enabled` to inject FrostPi's bundled `question` tool when a Pi session process starts. Restart running sessions after changing the setting. Question requests open in a bounded, collapsible panel below the conversation; every question requires an explicit answer and Submit, including single-question requests.
+
+Pi loads project and global extensions before FrostPi's explicit bundled extension, so an existing `question` registration keeps priority. Third-party question extensions can detect `PI_INSIDE_FROSTPI=1` and conditionally skip registration when users prefer FrostPi's Webview tool. Because that environment variable identifies FrostPi regardless of this setting, an extension should not skip unconditionally when the bundled tool is disabled.
 
 ### Network and diagnostics
 

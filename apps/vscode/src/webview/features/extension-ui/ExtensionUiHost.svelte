@@ -1,13 +1,19 @@
 <script lang="ts">
-  import type { PendingExtensionUiView } from "$shared/model/extensionUiModel";
+  import type { PendingExtensionUiView, PendingQuestionUiView, PendingStandardExtensionUiView } from "$shared/model/extensionUiModel";
+
+  import QuestionToolHost from "../question-tool/QuestionToolHost.svelte";
   import ExtensionUiRequestCard from "./ExtensionUiRequestCard.svelte";
 
   let { sessionId, requests }: { sessionId: string; requests: PendingExtensionUiView[] } = $props();
+  const questionRequests = $derived(requests.filter((request): request is PendingQuestionUiView => request.method === "question"));
+  const standardRequests = $derived(requests.filter((request): request is PendingStandardExtensionUiView => request.method !== "question"));
 </script>
 
-{#if requests.length}
+<QuestionToolHost {sessionId} requests={questionRequests} />
+
+{#if standardRequests.length}
   <div class="extension-ui-host">
-    {#each requests as request (request.id)}
+    {#each standardRequests as request (request.id)}
       <ExtensionUiRequestCard {sessionId} {request} />
     {/each}
   </div>

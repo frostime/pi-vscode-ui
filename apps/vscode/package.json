@@ -201,6 +201,12 @@
           "scope": "resource",
           "description": "After a turn completes, collapse tools, reasoning, and interim replies into one summary above the final response."
         },
+        "frostpi.questionTool.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "Inject FrostPi's private question tool when a Pi session process starts. Running sessions must be restarted after this setting changes."
+        },
         "frostpi.attachments.maxImageBytes": {
           "type": "number",
           "minimum": 1048576,

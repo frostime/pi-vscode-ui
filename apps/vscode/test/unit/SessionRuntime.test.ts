@@ -75,6 +75,7 @@ process.on("SIGTERM", () => process.exit(0));
       startSessionOnOpen: true,
       streamingBehavior: "followUp" as const,
       collapseTurnTrace: true,
+      questionToolEnabled: false,
       maxImageBytes: 10 * 1024 * 1024,
       diagnosticsLevel: "info" as const,
       proxy: { mode: "inherit" as const },
@@ -186,6 +187,7 @@ process.on("SIGTERM", () => process.exit(0));
       startSessionOnOpen: true,
       streamingBehavior: "followUp" as const,
       collapseTurnTrace: true,
+      questionToolEnabled: false,
       maxImageBytes: 10 * 1024 * 1024,
       diagnosticsLevel: "info" as const,
       proxy: { mode: "inherit" as const },
@@ -257,6 +259,7 @@ process.on("SIGTERM", () => process.exit(0));
       startSessionOnOpen: true,
       streamingBehavior: "followUp" as const,
       collapseTurnTrace: true,
+      questionToolEnabled: false,
       maxImageBytes: 10 * 1024 * 1024,
       diagnosticsLevel: "info" as const,
       proxy: { mode: "inherit" as const },
@@ -331,6 +334,7 @@ process.on("SIGTERM", () => process.exit(0));
       startSessionOnOpen: true,
       streamingBehavior: "followUp" as const,
       collapseTurnTrace: true,
+      questionToolEnabled: false,
       maxImageBytes: 10 * 1024 * 1024,
       diagnosticsLevel: "info" as const,
       proxy: { mode: "inherit" as const },
@@ -409,6 +413,7 @@ process.on("SIGTERM", () => process.exit(0));
       startSessionOnOpen: true,
       streamingBehavior: "followUp" as const,
       collapseTurnTrace: true,
+      questionToolEnabled: false,
       maxImageBytes: 10 * 1024 * 1024,
       diagnosticsLevel: "info" as const,
       proxy: { mode: "inherit" as const },
@@ -510,6 +515,7 @@ process.on("SIGTERM", () => process.exit(0));
       startSessionOnOpen: true,
       streamingBehavior: "followUp" as const,
       collapseTurnTrace: true,
+      questionToolEnabled: false,
       maxImageBytes: 10 * 1024 * 1024,
       diagnosticsLevel: "info" as const,
       proxy: { mode: "inherit" as const },
@@ -568,6 +574,86 @@ process.on("SIGTERM", () => process.exit(0));
 
     await runtime.stop();
     await expect(access(launch.resultDirectory)).rejects.toThrow();
+  });
+
+  it("applies the Question tool setting only to the started Pi process", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-question-runtime-"));
+    const launchRecord = join(dir, "launch.json");
+    const fakePi = join(dir, "fake-pi.cjs");
+    const artifactPath = join(dir, "question-tool.js");
+    await writeFile(artifactPath, "export default function () {}\n");
+    await writeFile(fakePi, String.raw`#!/usr/bin/env node
+const fs = require("node:fs");
+fs.writeFileSync(${JSON.stringify(launchRecord)}, JSON.stringify({
+  args: process.argv.slice(2),
+  token: process.env.FROSTPI_QUESTION_TOKEN,
+  requestDirectory: process.env.FROSTPI_QUESTION_REQUEST_DIR,
+}));
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => {
+  input += chunk;
+  while (input.includes("\n")) {
+    const index = input.indexOf("\n");
+    const command = JSON.parse(input.slice(0, index));
+    input = input.slice(index + 1);
+    const response = { type: "response", id: command.id, success: true };
+    if (command.type === "get_state") response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionId: "question-runtime" };
+    else if (command.type === "get_messages") response.data = { messages: [] };
+    else if (command.type === "get_entries") response.data = { entries: [], leafId: null };
+    else if (command.type === "get_available_models") response.data = { models: [] };
+    else if (command.type === "get_commands") response.data = { commands: [] };
+    else if (command.type === "get_session_stats") response.data = { sessionId: "question-runtime", userMessages: 0, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 0, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 };
+    process.stdout.write(JSON.stringify(response) + "\n");
+  }
+});
+process.on("SIGTERM", () => process.exit(0));
+`);
+
+    const configuration = {
+      piExecutable: fakePi,
+      piArguments: [],
+      startSessionOnOpen: true,
+      streamingBehavior: "followUp" as const,
+      collapseTurnTrace: true,
+      questionToolEnabled: true,
+      maxImageBytes: 10 * 1024 * 1024,
+      diagnosticsLevel: "info" as const,
+      proxy: { mode: "inherit" as const },
+      fileMentionRespectSearchExclude: true,
+      fileMentionRespectIgnoreFiles: true,
+      fileMentionFollowSymlinks: true,
+    };
+    const runtime = new SessionRuntime(
+      "question-session",
+      dir,
+      "Question",
+      Date.now(),
+      () => configuration,
+      new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
+      { error: vi.fn(), info: vi.fn() } as never,
+      { onChange: vi.fn(), onEditorText: vi.fn() },
+      undefined,
+      artifactPath,
+    );
+    runtimes.push(runtime);
+
+    await runtime.start();
+    const launch = JSON.parse(await readFile(launchRecord, "utf8")) as {
+      args: string[];
+      token: string;
+      requestDirectory: string;
+    };
+    expect(launch.args).toContain(artifactPath);
+    expect(launch.token).toHaveLength(43);
+    expect(runtime.view.questionTool).toEqual({ configuredEnabled: true, appliedEnabled: true, restartRequired: false });
+
+    configuration.questionToolEnabled = false;
+    runtime.refreshConfigurationState();
+    expect(runtime.view.questionTool).toEqual({ configuredEnabled: false, appliedEnabled: true, restartRequired: true });
+
+    await runtime.stop();
+    await expect(access(launch.requestDirectory)).rejects.toThrow();
   });
 });
 
