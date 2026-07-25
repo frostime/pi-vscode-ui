@@ -5,6 +5,7 @@ import {
   formatTraceSummaryLabel,
   formatTurnDuration,
   planTurnActivities,
+  turnStateLabel,
 } from "../../src/webview/features/conversation/collapseTurnTrace.js";
 
 describe("planTurnActivities", () => {
@@ -18,10 +19,46 @@ describe("planTurnActivities", () => {
     const turn = makeTurn("completed", activities, 1_000, 62_000);
     expect(planTurnActivities(turn, true)).toEqual({
       mode: "collapsed",
+      stateLabel: "Worked",
       collapsed: activities.slice(0, 4),
       visible: [activities[4]],
       summary: { steps: 4, errors: 0, durationLabel: "1m 01s" },
     });
+  });
+
+  it("collapses aborted turns under a Stopped header", () => {
+    const activities = [tool("t1"), tool("t2"), response("partial")];
+    const turn = makeTurn("aborted", activities, 0, 5_000);
+    expect(planTurnActivities(turn, true)).toEqual({
+      mode: "collapsed",
+      stateLabel: "Stopped",
+      collapsed: activities.slice(0, 2),
+      visible: [activities[2]],
+      summary: { steps: 2, errors: 0, durationLabel: "5s" },
+    });
+  });
+
+  it("collapses aborted turns with no final response by anchoring on the last tool", () => {
+    const activities = [tool("t1"), tool("t2"), tool("t3")];
+    const turn = makeTurn("aborted", activities, 0, 5_000);
+    expect(planTurnActivities(turn, true)).toEqual({
+      mode: "collapsed",
+      stateLabel: "Stopped",
+      collapsed: activities.slice(0, 2),
+      visible: [activities[2]],
+      summary: { steps: 2, errors: 0, durationLabel: "5s" },
+    });
+  });
+
+  it("collapses error turns under a Failed header and still counts tool errors", () => {
+    const activities = [tool("ok"), tool("bad", true), response("final")];
+    const turn = makeTurn("error", activities, 0, 4_200);
+    const plan = planTurnActivities(turn, true);
+    expect(plan.mode).toBe("collapsed");
+    if (plan.mode !== "collapsed") return;
+    expect(plan.stateLabel).toBe("Failed");
+    expect(plan.summary).toEqual({ steps: 2, errors: 1, durationLabel: "4s" });
+    expect(formatTraceSummaryLabel(plan.summary)).toBe("2 steps · 1 error · 4s");
   });
 
   it("stays flat when collapse is disabled or there is nothing before the final response", () => {
@@ -29,15 +66,16 @@ describe("planTurnActivities", () => {
     expect(planTurnActivities(onlyFinal, true).mode).toBe("flat");
     expect(planTurnActivities(makeTurn("completed", [tool("t1"), response("r1")]), false).mode).toBe("flat");
     expect(planTurnActivities(makeTurn("completed", [tool("t1")]), true).mode).toBe("flat");
+    expect(planTurnActivities(makeTurn("aborted", [tool("t1")]), true).mode).toBe("flat");
   });
+});
 
-  it("counts tool errors in the summary", () => {
-    const turn = makeTurn("completed", [tool("ok"), tool("bad", true), response("final")], 0, 4_200);
-    const plan = planTurnActivities(turn, true);
-    expect(plan.mode).toBe("collapsed");
-    if (plan.mode !== "collapsed") return;
-    expect(plan.summary).toEqual({ steps: 2, errors: 1, durationLabel: "4s" });
-    expect(formatTraceSummaryLabel(plan.summary)).toBe("2 steps · 1 error · 4s");
+describe("turnStateLabel", () => {
+  it("maps turn status to a header label", () => {
+    expect(turnStateLabel("completed")).toBe("Worked");
+    expect(turnStateLabel("aborted")).toBe("Stopped");
+    expect(turnStateLabel("error")).toBe("Failed");
+    expect(turnStateLabel("running")).toBe("Worked");
   });
 });
 

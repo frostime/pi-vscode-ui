@@ -1,4 +1,4 @@
-import type { AgentActivityView, AgentTurnView } from "$shared/model/agentTurnModel";
+import type { AgentActivityView, AgentTurnView, AgentTurnStatus } from "$shared/model/agentTurnModel";
 
 export interface TurnTraceSummary {
   steps: number;
@@ -6,22 +6,25 @@ export interface TurnTraceSummary {
   durationLabel: string | null;
 }
 
+export type TurnTraceStateLabel = "Worked" | "Stopped" | "Failed";
+
 export type TurnActivityPlan =
   | { mode: "flat"; activities: readonly AgentActivityView[] }
   | {
       mode: "collapsed";
+      stateLabel: TurnTraceStateLabel;
       collapsed: readonly AgentActivityView[];
       visible: readonly AgentActivityView[];
       summary: TurnTraceSummary;
     };
 
-/** Codex-style: after completion, hide everything before the final response behind one summary. */
+/** Codex-style: once a turn settles, hide the work trace before the final reply or the interrupted step. */
 export function planTurnActivities(
   turn: Pick<AgentTurnView, "status" | "activities" | "startedAt" | "endedAt">,
   collapseTurnTrace: boolean,
 ): TurnActivityPlan {
-  const { activities } = turn;
-  if (!collapseTurnTrace || turn.status !== "completed" || activities.length === 0) {
+  const { activities, status } = turn;
+  if (!collapseTurnTrace || status === "running" || activities.length === 0) {
     return { mode: "flat", activities };
   }
 
@@ -32,19 +35,49 @@ export function planTurnActivities(
       break;
     }
   }
-  if (lastResponseIndex <= 0) return { mode: "flat", activities };
 
-  const collapsed = activities.slice(0, lastResponseIndex);
+  const anchorIndex = traceAnchorIndex(status, activities.length, lastResponseIndex);
+  if (anchorIndex <= 0) return { mode: "flat", activities };
+
+  const collapsed = activities.slice(0, anchorIndex);
   return {
     mode: "collapsed",
+    stateLabel: turnStateLabel(status),
     collapsed,
-    visible: activities.slice(lastResponseIndex),
+    visible: activities.slice(anchorIndex),
     summary: {
       steps: collapsed.length,
       errors: countTraceErrors(collapsed),
       durationLabel: formatTurnDuration(turn.startedAt, turn.endedAt),
     },
   };
+}
+
+function traceAnchorIndex(status: AgentTurnStatus, activityCount: number, lastResponseIndex: number): number {
+  // Completed turns keep the existing behavior: anchor on the last response. If there is no
+  // response, the turn is malformed and we leave it flat.
+  if (status === "completed") {
+    return lastResponseIndex > 0 ? lastResponseIndex : -1;
+  }
+
+  // Aborted/error turns may end before the assistant produces a final response. Anchor on the
+  // last response when available, otherwise on the last activity so the interrupted step stays
+  // visible.
+  if (lastResponseIndex > 0) return lastResponseIndex;
+  return activityCount > 1 ? activityCount - 1 : -1;
+}
+
+export function turnStateLabel(status: AgentTurnStatus): TurnTraceStateLabel {
+  switch (status) {
+    case "completed":
+      return "Worked";
+    case "aborted":
+      return "Stopped";
+    case "error":
+      return "Failed";
+    case "running":
+      return "Worked";
+  }
 }
 
 export function formatTraceSummaryLabel(summary: TurnTraceSummary): string {

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Extract shared content max-width and composer editor size constants into CSS variables.
 - Densify the Question tool panel (header, tabs, options, review rows, and action bar) and limit its expanded height so more conversation remains visible while answering; custom-answer and overall-note textareas now start at a single line and can still be resized vertically.
+- Collapse the work trace of settled turns that ended abnormally: aborted turns now use a "Stopped" header and error turns use a "Failed" header (previously stayed fully expanded). Also fold turns that were interrupted mid-tool or before the assistant produced a final response; in that case the last activity is treated as the visible outcome and the break label is "Last step". The running turn remains flat.
 
 ### Fixed
 

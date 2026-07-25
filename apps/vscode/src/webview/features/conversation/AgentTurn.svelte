@@ -35,7 +35,7 @@
           onclick={() => traceOpen = !traceOpen}
         >
           <span class="codicon codicon-list-tree activity-leading" aria-hidden="true"></span>
-          <span class="activity-title">Worked</span>
+          <span class="activity-title">{plan.stateLabel}</span>
           <span class="turn-trace-meta">{summaryLabel}</span>
           <span class={`codicon codicon-chevron-${traceOpen ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
         </button>
@@ -52,7 +52,7 @@
         onclick={() => traceOpen = !traceOpen}
       >
         <span class="turn-trace-break-line" aria-hidden="true"></span>
-        <span class="turn-trace-break-label">Reply</span>
+        <span class="turn-trace-break-label">{plan.visible[0]?.type === "response" ? "Reply" : "Last step"}</span>
         <span class="turn-trace-break-line" aria-hidden="true"></span>
       </button>
       {#each plan.visible as activity (activity.id)}
