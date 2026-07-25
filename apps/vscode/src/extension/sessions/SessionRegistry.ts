@@ -12,6 +12,7 @@ import { readConfiguration } from "../configuration/readConfiguration.js";
 import { workspaceUriForPath } from "../configuration/workspaceScope.js";
 import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { ProxySecretStore } from "../network/ProxySecretStore.js";
+import { showWindowsToast } from "../notifications/showWindowsToast.js";
 import { pickPiSession, readPiSessionMetadata, type PiSessionCatalogEntry } from "./SessionCatalog.js";
 import { SessionPersistence } from "./SessionPersistence.js";
 import {
@@ -29,6 +30,7 @@ export interface RegistryToast {
   message: string;
 }
 
+type SystemNotificationEvent = "inputRequired" | "failed" | "completed";
 type DiscoverSessionWorkingDirectories = typeof discoverSessionWorkingDirectories;
 
 interface ForkOperation {
@@ -587,6 +589,7 @@ export class SessionRegistry implements vscode.Disposable {
       this.#logger,
       {
         onChange: (runtime) => this.#handleRuntimeChange(runtime),
+        onAgentTurnCompleted: (runtime) => this.#showSystemNotification(runtime, "completed"),
         onEditorText: (runtime, text) => {
           if (runtime.id === this.#activeSessionId) this.#setComposerTextEmitter.fire({ sessionId: runtime.id, text });
           else this.#pendingEditorText.set(runtime.id, text);
@@ -740,8 +743,13 @@ export class SessionRegistry implements vscode.Disposable {
     this.#lastStatuses.set(runtime.id, view.status);
     const previousPendingUiCount = this.#lastPendingUiCounts.get(runtime.id) ?? 0;
     this.#lastPendingUiCounts.set(runtime.id, view.pendingExtensionUi.length);
-    if (runtime.id !== this.#activeSessionId && previousPendingUiCount === 0 && view.pendingExtensionUi.length > 0) {
+    const inputRequired = previousPendingUiCount === 0 && view.pendingExtensionUi.length > 0;
+    if (runtime.id !== this.#activeSessionId && inputRequired) {
       this.#toastEmitter.fire({ level: "info", message: "A background FrostPi session is waiting for input." });
+    }
+    if (inputRequired) this.#showSystemNotification(runtime, "inputRequired");
+    if (previousStatus && previousStatus !== "failed" && view.status === "failed") {
+      this.#showSystemNotification(runtime, "failed");
     }
     const metadataChanged = Boolean(previous && (
       previous.title !== view.title ||
@@ -767,6 +775,28 @@ export class SessionRegistry implements vscode.Disposable {
       void vscode.commands.executeCommand("setContext", "frostpi.sessionRunning", view.isStreaming);
     }
     this.#scheduleChange();
+  }
+
+  #showSystemNotification(runtime: SessionRuntime, event: SystemNotificationEvent): void {
+    if (vscode.window.state.focused) return;
+    const scope = workspaceUriForPath(this.#configurationScopeCwd(runtime.view.cwd));
+    if (!readConfiguration(scope).experimentalNotificationsEnabled) return;
+    const backgroundSession = runtime.id !== this.#activeSessionId;
+    const message = event === "inputRequired"
+      ? backgroundSession ? "A background FrostPi session is waiting for input." : "FrostPi is waiting for your input."
+      : event === "completed"
+        ? backgroundSession ? "A background FrostPi session completed an agent turn." : "FrostPi completed an agent turn."
+        : "A FrostPi session failed. Open VS Code for details.";
+    const title = event === "completed" ? "FrostPi turn completed" : "FrostPi needs your attention";
+    const nativeOptions = vscode.env.remoteName === undefined ? {} : { remoteName: vscode.env.remoteName };
+    void showWindowsToast(title, message, nativeOptions).then((shown) => {
+      if (!shown && !vscode.window.state.focused) this.#showVsCodeNotification(event, message);
+    });
+  }
+
+  #showVsCodeNotification(event: SystemNotificationEvent, message: string): void {
+    if (event === "failed") void vscode.window.showErrorMessage(message);
+    else void vscode.window.showInformationMessage(message);
   }
 
   #scheduleChange(): void {

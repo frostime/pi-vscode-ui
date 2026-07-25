@@ -15,6 +15,7 @@ export function readConfiguration(scope?: vscode.Uri): FrostPiConfiguration {
     questionToolEnabled: config.get<boolean>("questionTool.enabled", false),
     maxImageBytes: config.get<number>("attachments.maxImageBytes", 10 * 1024 * 1024),
     diagnosticsLevel: config.get<"error" | "info" | "debug">("diagnostics.level", "info"),
+    experimentalNotificationsEnabled: config.get<boolean>("notifications.experimental.enabled", false),
     proxy: {
       mode: config.get<"inherit" | "vscode" | "custom" | "direct">("network.proxy.mode", "inherit"),
       ...optional("endpoint", readProxyEndpoint(config)),

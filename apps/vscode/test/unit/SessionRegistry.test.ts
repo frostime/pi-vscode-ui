@@ -12,13 +12,26 @@ const treePickerMocks = vi.hoisted(() => ({
   confirmDraftReplacement: vi.fn(),
 }));
 
+const vscodeMocks = vi.hoisted(() => ({
+  showErrorMessage: vi.fn().mockResolvedValue(undefined),
+  showInformationMessage: vi.fn().mockResolvedValue(undefined),
+  showWarningMessage: vi.fn().mockResolvedValue("Close session"),
+}));
+
+const windowsToastMocks = vi.hoisted(() => ({
+  showWindowsToast: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock("../../src/extension/session-tree/SessionTreePicker.js", () => treePickerMocks);
+vi.mock("../../src/extension/notifications/showWindowsToast.js", () => windowsToastMocks);
 
 const testEnvironment = vi.hoisted(() => ({
   cwd: "",
   piExecutable: "",
   quickPickCwd: "",
   configurationScopes: [] as string[],
+  experimentalNotificationsEnabled: true,
+  windowFocused: true,
   startSessionOnOpenByCwd: new Map<string, boolean>(),
 }));
 
@@ -50,13 +63,16 @@ vi.mock("vscode", () => {
     QuickPickItemKind: { Separator: -1 },
     Uri: { file: (fsPath: string) => ({ fsPath }) },
     commands: { executeCommand: vi.fn().mockResolvedValue(undefined) },
+    env: { remoteName: undefined },
     window: {
       activeTextEditor: undefined,
+      get state() { return { focused: testEnvironment.windowFocused, active: true }; },
       showQuickPick: vi.fn((items: Array<{ directory?: { cwd: string } }>) => Promise.resolve(
         items.find((item) => item.directory?.cwd === testEnvironment.quickPickCwd),
       )),
-      showInformationMessage: vi.fn().mockResolvedValue(undefined),
-      showWarningMessage: vi.fn().mockResolvedValue("Close session"),
+      showErrorMessage: vscodeMocks.showErrorMessage,
+      showInformationMessage: vscodeMocks.showInformationMessage,
+      showWarningMessage: vscodeMocks.showWarningMessage,
     },
     workspace: {
       get workspaceFolders() { return testEnvironment.cwd ? [{ name: "test", uri: { fsPath: testEnvironment.cwd } }] : []; },
@@ -65,6 +81,7 @@ vi.mock("vscode", () => {
         return {
           get: (key: string, fallback: unknown) => {
             if (section === "frostpi" && key === "pi.executable") return testEnvironment.piExecutable;
+            if (section === "frostpi" && key === "notifications.experimental.enabled") return testEnvironment.experimentalNotificationsEnabled;
             if (section === "frostpi" && key === "session.startOnOpen" && scope?.fsPath) {
               return testEnvironment.startSessionOnOpenByCwd.get(scope.fsPath) ?? fallback;
             }
@@ -87,7 +104,10 @@ describe("FrostPi session collection", () => {
     await Promise.all(registries.splice(0).map((registry) => registry.dispose()));
     testEnvironment.quickPickCwd = "";
     testEnvironment.configurationScopes = [];
+    testEnvironment.experimentalNotificationsEnabled = true;
+    testEnvironment.windowFocused = true;
     testEnvironment.startSessionOnOpenByCwd.clear();
+    windowsToastMocks.showWindowsToast.mockReset().mockResolvedValue(true);
     treePickerMocks.pickBranchEnd.mockReset();
     treePickerMocks.pickBranchSummary.mockReset();
     treePickerMocks.confirmDraftReplacement.mockReset();
@@ -515,6 +535,115 @@ process.on("SIGTERM", () => process.exit(0));
     const third = (await registry.createSession())!;
     expect(new Set(registry.snapshot().sessions.map((session) => session.id))).toEqual(new Set([second, third]));
     expect((persisted as { sessions: Array<{ id: string }> }).sessions.map((session) => session.id)).toEqual([second]);
+  });
+
+  it("uses experimental notifications for unfocused input, completion, and failure transitions", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-registry-notifications-"));
+    const fakePi = join(dir, "fake-pi.cjs");
+    await writeFile(fakePi, String.raw`#!/usr/bin/env node
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => {
+  input += chunk;
+  while (input.includes("\n")) {
+    const index = input.indexOf("\n");
+    const command = JSON.parse(input.slice(0, index));
+    input = input.slice(index + 1);
+    const response = { type: "response", id: command.id, success: true };
+    if (command.type === "get_state") response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionFile: process.cwd() + "/session.jsonl", sessionId: "notifications" };
+    else if (command.type === "get_available_models") response.data = { models: [] };
+    else if (command.type === "get_commands") response.data = { commands: [] };
+    else if (command.type === "get_session_stats") response.data = { sessionId: "notifications", userMessages: 0, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 0, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 };
+    else if (command.type === "prompt") {
+      if (command.message === "fail") {
+        process.stdout.write(JSON.stringify(response) + "\n");
+        setTimeout(() => process.exit(1), 0);
+        continue;
+      }
+      if (command.message === "hold") {
+        process.stdout.write(JSON.stringify(response) + "\n");
+        process.stdout.write(JSON.stringify({ type: "agent_start" }) + "\n");
+        continue;
+      }
+      if (command.message === "complete") {
+        process.stdout.write(JSON.stringify(response) + "\n");
+        process.stdout.write(JSON.stringify({ type: "agent_start" }) + "\n");
+        process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "assistant", timestamp: Date.now(), stopReason: "stop", content: [{ type: "text", text: "Done" }] } }) + "\n");
+        process.stdout.write(JSON.stringify({ type: "agent_settled" }) + "\n");
+        continue;
+      }
+      process.stdout.write(JSON.stringify({ type: "extension_ui_request", id: "answer", method: "confirm", message: "Continue?" }) + "\n");
+    } else if (command.type === "abort") {
+      process.stdout.write(JSON.stringify(response) + "\n");
+      process.stdout.write(JSON.stringify({ type: "agent_settled" }) + "\n");
+      continue;
+    }
+    process.stdout.write(JSON.stringify(response) + "\n");
+  }
+});
+process.on("SIGTERM", () => process.exit(0));
+`);
+    testEnvironment.cwd = dir;
+    testEnvironment.piExecutable = fakePi;
+    vscodeMocks.showInformationMessage.mockClear();
+    vscodeMocks.showErrorMessage.mockClear();
+    const registry = new SessionRegistry(createContext() as never, { error: vi.fn(), info: vi.fn() } as never);
+    registries.push(registry);
+
+    const sessionId = (await registry.createSession())!;
+    await waitFor(() => registry.snapshot().activeSession?.status === "ready");
+    await registry.sendPrompt(sessionId, "ask", []);
+    await waitFor(() => registry.snapshot().activeSession?.pendingExtensionUi.length === 1);
+    expect(windowsToastMocks.showWindowsToast).not.toHaveBeenCalled();
+
+    await registry.respondExtensionUi(sessionId, "answer", { confirmed: true });
+    await waitFor(() => registry.snapshot().activeSession?.pendingExtensionUi.length === 0);
+    testEnvironment.windowFocused = false;
+    windowsToastMocks.showWindowsToast.mockResolvedValueOnce(false);
+    await registry.sendPrompt(sessionId, "ask", []);
+    await waitFor(() => vscodeMocks.showInformationMessage.mock.calls.length === 1);
+    expect(windowsToastMocks.showWindowsToast).toHaveBeenCalledWith(
+      "FrostPi needs your attention",
+      "FrostPi is waiting for your input.",
+      {},
+    );
+    expect(vscodeMocks.showInformationMessage).toHaveBeenCalledWith("FrostPi is waiting for your input.");
+
+    await registry.respondExtensionUi(sessionId, "answer", { confirmed: true });
+    await waitFor(() => registry.snapshot().activeSession?.pendingExtensionUi.length === 0);
+    testEnvironment.experimentalNotificationsEnabled = false;
+    await registry.sendPrompt(sessionId, "ask", []);
+    await waitFor(() => registry.snapshot().activeSession?.pendingExtensionUi.length === 1);
+    expect(windowsToastMocks.showWindowsToast).toHaveBeenCalledOnce();
+
+    await registry.respondExtensionUi(sessionId, "answer", { confirmed: true });
+    await waitFor(() => registry.snapshot().activeSession?.pendingExtensionUi.length === 0);
+    testEnvironment.experimentalNotificationsEnabled = true;
+
+    await registry.sendPrompt(sessionId, "complete", []);
+    await waitFor(() => registry.snapshot().activeSession?.turns.at(-1)?.status === "completed");
+    await waitFor(() => windowsToastMocks.showWindowsToast.mock.calls.length === 2);
+    expect(windowsToastMocks.showWindowsToast).toHaveBeenLastCalledWith(
+      "FrostPi turn completed",
+      "FrostPi completed an agent turn.",
+      {},
+    );
+
+    await registry.sendPrompt(sessionId, "hold", []);
+    await waitFor(() => registry.snapshot().activeSession?.isStreaming === true);
+    await registry.abort(sessionId);
+    await waitFor(() => registry.snapshot().activeSession?.status === "ready");
+    expect(windowsToastMocks.showWindowsToast).toHaveBeenCalledTimes(2);
+
+    await registry.sendPrompt(sessionId, "fail", []);
+    await waitFor(() => registry.snapshot().activeSession?.status === "failed");
+    await waitFor(() => windowsToastMocks.showWindowsToast.mock.calls.length === 3);
+    expect(windowsToastMocks.showWindowsToast).toHaveBeenLastCalledWith(
+      "FrostPi needs your attention",
+      "A FrostPi session failed. Open VS Code for details.",
+      {},
+    );
+    expect(vscodeMocks.showErrorMessage).not.toHaveBeenCalled();
   });
 
   it("replaces composer text for set_editor_text on the active session and defers inactive sessions", async () => {

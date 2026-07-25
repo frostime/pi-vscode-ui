@@ -101,6 +101,8 @@ A history-load failure does not fail the live Pi process. The session remains us
 
 Dialog requests are owned by the session that emitted them. They remain pending until the user responds, Pi's own timeout resolves them, or the session closes. Closing a session explicitly sends cancellation responses for every pending dialog. FrostPi never auto-confirms a dialog. A background session with a newly pending dialog is marked as requiring user input.
 
+When the experimental `frostpi.notifications.experimental.enabled` setting is on and the VS Code window is unfocused, FrostPi notifies for the first pending dialog, a transition into `failed`, and a normal Agent Turn closed by `agent_settled`. Explicit abort, `/compact`, immediate extension commands, error turns, and repeated state updates do not produce completion notifications. A local Windows Extension Host uses a native Windows PowerShell toast; unavailable native delivery falls back to a VS Code notification.
+
 Fire-and-forget UI requests affect only their session. `set_editor_text` is routed to the composer only when the session is active; inactive-session text is retained by the host until that session is activated.
 
 ## Failure recovery

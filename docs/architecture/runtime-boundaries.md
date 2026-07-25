@@ -16,4 +16,6 @@ VS Code workspace state stores session metadata only. Pi owns conversation JSONL
 
 Proxy settings apply to Pi and child commands inheriting its environment. Changing them cannot modify an existing process; FrostPi marks the session restart-required and does not interrupt an active turn automatically.
 
+When experimental notifications are enabled, local Windows may launch Windows PowerShell while VS Code is unfocused to publish a native notification for a completed Agent Turn, a failed Session, or required input. The script receives only fixed FrostPi notification text encoded as data. Other hosts and native-delivery failures fall back to VS Code notifications.
+
 Diagnostic exports omit prompts/responses and redact common token, password, bearer, and URL credential forms. Paths and third-party stderr may still be sensitive and should be reviewed before sharing.

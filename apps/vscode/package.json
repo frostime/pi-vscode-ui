@@ -226,6 +226,12 @@
           "scope": "window",
           "description": "Verbosity of the FrostPi output channel. Prompt and model content are not logged."
         },
+        "frostpi.notifications.experimental.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "Experimental: Notify when an agent turn completes, a session fails, or FrostPi waits for input while the VS Code window is unfocused. Local Windows uses a native PowerShell toast; unavailable native delivery falls back to a VS Code notification."
+        },
         "frostpi.network.proxy.mode": {
           "type": "string",
           "enum": [

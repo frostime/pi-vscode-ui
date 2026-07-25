@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Show a native Windows notification when an agent turn completes, a session fails, or FrostPi waits for user input while the VS Code window is unfocused or minimized. Disabled by default; enable with `frostpi.notifications.experimental.enabled`. FrostPi reuses the system-registered PowerShell AUMID by now, only windows is supported now.
+
+
 ## [0.9.0] - 2026-07-25
 
 ### Added

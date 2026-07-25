@@ -41,6 +41,7 @@ import {
 export interface SessionRuntimeHooks {
   onChange(runtime: SessionRuntime): void;
   onEditorText(runtime: SessionRuntime, text: string): void;
+  onAgentTurnCompleted?(runtime: SessionRuntime): void;
 }
 
 export type ForkExecutionResult =
@@ -72,6 +73,7 @@ export class SessionRuntime {
   #appliedProxyFingerprint: string | null = null;
   #proxyRestartForced = false;
   #appliedQuestionToolEnabled: boolean | null = null;
+  #abortRequested = false;
   readonly #sessionTreeBridge: SessionTreeExtensionBridge | null;
   readonly #questionToolBridge: QuestionToolExtensionBridge | null;
 
@@ -236,7 +238,13 @@ export class SessionRuntime {
 
   async abort(): Promise<void> {
     await this.#extensionUi?.cancelAll();
-    await this.#requireApi().abort();
+    this.#abortRequested = true;
+    try {
+      await this.#requireApi().abort();
+    } catch (error) {
+      this.#abortRequested = false;
+      throw error;
+    }
     // Abort cancels the active run; pending local follow-up UI is no longer trustworthy.
     this.#projection.clearQueuedFollowUps();
     this.#notifyChange();
@@ -691,13 +699,22 @@ export class SessionRuntime {
   }
 
   #applyConnectionEvent(event: RpcEvent): void {
+    const latestTurn = event.type === "agent_settled" ? this.view.turns.at(-1) : undefined;
+    const settlingTurnId = latestTurn?.status === "running" ? latestTurn.id : undefined;
+    const abortRequested = this.#abortRequested;
     if (isExtensionUiRequest(event)) {
       if (this.#questionToolBridge?.recognizes(event)) void this.#handleQuestionUiRequest(event);
       else this.#extensionUi?.handle(event);
     } else this.#projection.applyEvent(event);
-    if (event.type === "agent_start") this.#startLiveStatsRefresh();
+    if (event.type === "agent_start") {
+      this.#abortRequested = false;
+      this.#startLiveStatsRefresh();
+    }
     if (event.type === "agent_settled") {
+      this.#abortRequested = false;
       this.#stopLiveStatsRefresh();
+      const settledTurn = settlingTurnId ? this.view.turns.find((turn) => turn.id === settlingTurnId) : undefined;
+      if (!abortRequested && settledTurn?.status === "completed") this.#hooks.onAgentTurnCompleted?.(this);
       void this.#refreshAfterSettled();
     }
     if (event.type === "compaction_end") void this.#refreshAfterCompaction();

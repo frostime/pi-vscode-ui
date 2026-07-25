@@ -18,6 +18,7 @@ export interface FrostPiConfiguration {
   questionToolEnabled: boolean;
   maxImageBytes: number;
   diagnosticsLevel: "error" | "info" | "debug";
+  experimentalNotificationsEnabled: boolean;
   proxy: ProxyConfiguration;
   fileMentionRespectSearchExclude: boolean;
   fileMentionRespectIgnoreFiles: boolean;
