@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-25
+
 ### Added
 
 - Add an optional FrostPi-bundled Pi `question` tool (off by default via `frostpi.questionTool.enabled`) that renders clarification prompts inside the Webview and returns structured answers through the standard Pi Extension UI response. The bundled extension is injected only into newly started or restarted Pi processes; project/global `question` registrations keep Pi's load-order priority. Document that third-party question extensions can inspect `PI_INSIDE_FROSTPI` to skip their own registration when users prefer FrostPi's bundled tool.
