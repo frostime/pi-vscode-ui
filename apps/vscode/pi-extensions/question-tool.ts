@@ -147,10 +147,10 @@ export default function questionTool(pi: ExtensionApi) {
         const answerLines = response.answers.map((answer) => {
           const label = questions.find((question) => question.id === answer.id)?.label ?? answer.id;
           return answer.wasCustom
-            ? `${label}: user wrote: ${answer.label}`
-            : `${label}: user selected: ${answer.index}. ${answer.label}`;
+            ? `[${label}]\nUser wrote: ${answer.label}`
+            : `[${label}]\nUser selected: ${answer.index}. ${answer.label}`;
         });
-        if (result.extraNote) answerLines.push(`Extra Note: ${result.extraNote}`);
+        if (result.extraNote) answerLines.push(`[Extra Note]\n${result.extraNote}`);
         return { content: [{ type: "text" as const, text: answerLines.join("\n") }], details: result };
       } catch (error) {
         if (signal?.aborted) return cancelledResult(questions);
