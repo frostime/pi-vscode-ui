@@ -1,6 +1,6 @@
 # Entry-backed Conversation History: Landing Proposal
 
-> This proposal is superseded by the working tree once skeleton Pass 0 lands. Delete it or mark it superseded at that point; do not maintain it as a design document.
+> Superseded as a landing proposal by the working tree. Retained as the original change-shape estimate; do not update it during implementation.
 
 Behavior and architectural intent are defined by `changes/entry-backed-conversation-history/DEV_SPEC.md`. This file fixes only repository landing points, ownership, and cross-module contracts.
 
