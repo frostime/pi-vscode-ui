@@ -6,8 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-27
+
 ### Added
 
+- Copy the active Pi session file's absolute path from Session actions for use with Pi's terminal `--session` option.
 - Show a native Windows notification when an agent turn completes, a session fails, or FrostPi waits for user input while the VS Code window is unfocused or minimized. Disabled by default; enable with `frostpi.notifications.experimental.enabled`. FrostPi reuses the system-registered PowerShell AUMID by now, only windows is supported now.
 - Render Pi branch summaries and every displayable custom message, including text and images, at their persisted positions on the selected session path.
 
@@ -270,7 +273,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/frostpi/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/frostime/frostpi/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/frostime/frostpi/compare/v0.9.0...v0.10.0
 [0.7.2]: https://github.com/frostime/frostpi/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/frostime/frostpi/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/frostime/frostpi/compare/v0.6.2...v0.7.0

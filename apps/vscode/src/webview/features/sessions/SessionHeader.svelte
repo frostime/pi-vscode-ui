@@ -193,6 +193,16 @@
               <button type="button" onclick={() => { closeMenus(); postToHost({ type: "loadHistory", sessionId: active.id }); }}><span class="codicon codicon-history"></span> Load conversation history</button>
             {/if}
             <button type="button" onclick={() => { closeMenus(); postToHost({ type: "restartSession", sessionId: active.id }); }}><span class="codicon codicon-debug-restart"></span> Restart session</button>
+            {#if active.sessionFile}
+              <button
+                type="button"
+                title={`Copy session file: ${active.sessionFile}`}
+                onclick={() => { closeMenus(); postToHost({ type: "copyText", text: active.sessionFile! }); }}
+              >
+                <span class="codicon codicon-copy"></span>
+                <span><strong>Session file</strong><small class="session-file-path">{active.sessionFile}</small></span>
+              </button>
+            {/if}
             <button type="button" onclick={() => { closeMenus(); postToHost({ type: "openProxySettings" }); }}>
               <span class="codicon codicon-globe"></span>
               <span><strong>Network & proxy</strong><small>{active.networkProxy.restartRequired ? `${active.networkProxy.pendingLabel ?? active.networkProxy.label} · restart required` : active.networkProxy.label}</small></span>
@@ -247,3 +257,7 @@
   </header>
 {/if}
 </div>
+
+<style>
+  .session-file-path { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>

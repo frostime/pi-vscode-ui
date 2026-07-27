@@ -17,6 +17,7 @@ FrostPi should feel like a first-party desktop coding surface: compact, low-nois
 - The session list distinguishes the selected session, background execution, queued startup, failure, and required user input. Sessions running outside the open workspace folders show the worktree directory name as a compact capsule on the secondary status line (header inline status and list) and expose the complete `cwd` as a tooltip; titles stay aligned across local and external sessions. Closing a running session requires confirmation; closing a temporary unused session does not.
 - New uses a native VS Code directory picker only when linked worktrees are available. Resume remains one native searchable `createQuickPick`, grouped by worktree with linked worktrees before the current workspace; it does not introduce a nested Webview tree or mandatory two-stage selection.
 - At 280px width, secondary status text may disappear but switching, creation, closing, and restoring the bar remain available. The Session actions menu includes a `Pi integration` row showing cached session-tree adapter availability; activating it performs a fresh capability probe and reports the actual connection result through native VS Code messaging.
+- When Pi has supplied a session file, Session actions exposes it with a truncated absolute-path preview and copies the full path through the Extension Host clipboard channel. The path is intended for Pi's terminal `--session` argument.
 
 ## Conversation
 
