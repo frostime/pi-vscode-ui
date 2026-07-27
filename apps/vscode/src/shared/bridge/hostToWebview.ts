@@ -1,9 +1,9 @@
-import type { AgentTurnView, SessionNoticeView } from "../model/agentTurnModel.js";
+import type { ConversationItemView } from "../model/conversationModel.js";
 import type { ChatTypographyView } from "../model/chatTypography.js";
 import type { SessionSummaryView, SessionViewModel, WorkspaceViewModel } from "../model/sessionViewModel.js";
 import type { EditorMentionSpecialView, WorkspaceFileCandidateView } from "../model/workspaceFileModel.js";
 
-export type SessionBaseView = Omit<SessionViewModel, "turns" | "notices">;
+export type SessionBaseView = Omit<SessionViewModel, "conversationItems">;
 
 export interface CollectionDelta<T> {
   mode: "replace" | "upsert";
@@ -19,8 +19,7 @@ export interface WorkspaceDeltaView {
   piError?: string;
   activeSession: {
     base: SessionBaseView;
-    turns: CollectionDelta<AgentTurnView>;
-    notices: CollectionDelta<SessionNoticeView>;
+    conversationItems: CollectionDelta<ConversationItemView>;
   } | null;
 }
 

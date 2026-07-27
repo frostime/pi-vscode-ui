@@ -1,14 +1,16 @@
 import type { RpcEvent, RpcSessionState } from "@frostime/pi-rpc";
 
-import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
-import type { AgentTurnStatus, SessionNoticeLevel } from "../../shared/model/agentTurnModel.js";
-import type { AttachmentLimitsView, BranchControlView, SessionRuntimeStatus, SessionViewModel } from "../../shared/model/sessionViewModel.js";
-import { TurnProjection } from "./TurnProjection.js";
-import type { UserEntryReference } from "./userEntryReferences.js";
+import type { ConversationProjectionSnapshot } from "../conversation/ConversationProjection.js";
+import type {
+  AttachmentLimitsView,
+  SessionRuntimeStatus,
+  SessionViewModel,
+} from "../../shared/model/sessionViewModel.js";
 
-export class SessionProjection {
-  readonly #view: SessionViewModel;
-  readonly #conversation = new TurnProjection();
+type SessionScalarView = Omit<SessionViewModel, "conversationItems" | "queuedFollowUps">;
+
+export class SessionViewState {
+  readonly #view: SessionScalarView;
 
   constructor(
     id: string,
@@ -35,15 +37,9 @@ export class SessionProjection {
       collapseTurnTrace,
       networkProxy: { mode: "inherit", label: "Inherited", restartRequired: false },
       questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
-      turns: [],
-      notices: [],
-      compactions: [],
-      branchSummaries: [],
-      queuedFollowUps: [],
       pendingExtensionUi: [],
       extensionStatuses: [],
       extensionWidgets: [],
-      branchControls: [],
       sessionTreeAvailable: false,
       isNavigatingTree: false,
       isSummarizingTree: false,
@@ -51,17 +47,18 @@ export class SessionProjection {
     };
   }
 
-  read(): Readonly<SessionViewModel> {
-    return this.#view;
+  read(conversation: ConversationProjectionSnapshot): SessionViewModel {
+    return {
+      ...this.#view,
+      conversationItems: [...conversation.items],
+      queuedFollowUps: [...conversation.queuedFollowUps],
+      updatedAt: Math.max(this.#view.updatedAt, conversation.updatedAt),
+    };
   }
 
   rebindSessionId(id: string): void {
     this.#view.id = id;
     this.#touch();
-  }
-
-  snapshot(): SessionViewModel {
-    return structuredClone(this.#view);
   }
 
   setStatus(status: SessionRuntimeStatus, error?: string): void {
@@ -83,16 +80,25 @@ export class SessionProjection {
     this.#touch();
   }
 
-  hydrateMessages(rawMessages: unknown[], userEntries: readonly UserEntryReference[] = []): void {
-    this.#conversation.hydrate(rawMessages, userEntries);
-    this.#syncConversation();
-    this.#view.historyStatus = "loaded";
-    this.#touch();
-  }
-
-  attachUserEntryReferences(userEntries: readonly UserEntryReference[]): void {
-    if (!this.#conversation.attachUserEntryReferences(userEntries)) return;
-    this.#syncConversation();
+  applyEvent(event: RpcEvent): void {
+    switch (event.type) {
+      case "agent_start":
+        this.#view.status = "running";
+        this.#view.isStreaming = true;
+        break;
+      case "agent_settled":
+        this.#view.status = "ready";
+        this.#view.isStreaming = false;
+        break;
+      case "compaction_start":
+        this.#view.isCompacting = true;
+        break;
+      case "compaction_end":
+        this.#view.isCompacting = false;
+        break;
+      default:
+        return;
+    }
     this.#touch();
   }
 
@@ -106,26 +112,20 @@ export class SessionProjection {
     this.#touch();
   }
 
-  setSessionTreeState(
-    available: boolean,
-    branchControls: BranchControlView[],
-    isNavigatingTree = this.#view.isNavigatingTree,
-  ): void {
+  clearComposerSeed(): void {
+    if (!this.#view.composerSeed) return;
+    delete this.#view.composerSeed;
+    this.#touch();
+  }
+
+  setSessionTreeAvailable(available: boolean): void {
     this.#view.sessionTreeAvailable = available;
-    this.#view.branchControls = branchControls;
-    this.#view.isNavigatingTree = isNavigatingTree;
     this.#touch();
   }
 
   setNavigatingTree(isNavigatingTree: boolean, isSummarizingTree = false): void {
     this.#view.isNavigatingTree = isNavigatingTree;
     this.#view.isSummarizingTree = isNavigatingTree && isSummarizingTree;
-    this.#touch();
-  }
-
-  clearComposerSeed(): void {
-    if (!this.#view.composerSeed) return;
-    delete this.#view.composerSeed;
     this.#touch();
   }
 
@@ -185,85 +185,7 @@ export class SessionProjection {
     this.#touch();
   }
 
-  appendUserPrompt(text: string, images: WebviewImageInput[]): string {
-    const turnId = this.#conversation.appendUserPrompt(text, images);
-    this.#syncConversation();
-    this.#touch();
-    return turnId;
-  }
-
-  enqueueFollowUp(text: string, images: WebviewImageInput[]): string {
-    const id = this.#conversation.enqueueFollowUp(text, images);
-    this.#syncConversation();
-    this.#touch();
-    return id;
-  }
-
-  clearQueuedFollowUps(): void {
-    this.#conversation.clearQueuedFollowUps();
-    this.#syncConversation();
-    this.#touch();
-  }
-
-  removeQueuedFollowUp(id: string): boolean {
-    const removed = this.#conversation.removeQueuedFollowUp(id);
-    if (removed) {
-      this.#syncConversation();
-      this.#touch();
-    }
-    return removed;
-  }
-
-  appendNotice(text: string, level: SessionNoticeLevel = "info"): void {
-    this.#conversation.appendNotice(text, level);
-    this.#syncConversation();
-    this.#touch();
-  }
-
-  completeTurn(turnId: string, status: AgentTurnStatus = "completed"): boolean {
-    const completed = this.#conversation.completeTurn(turnId, status);
-    if (completed) {
-      this.#syncConversation();
-      this.#touch();
-    }
-    return completed;
-  }
-
-  applyEvent(event: RpcEvent): void {
-    switch (event.type) {
-      case "agent_start":
-        this.#view.status = "running";
-        this.#view.isStreaming = true;
-        break;
-      case "agent_settled":
-        this.#view.status = "ready";
-        this.#view.isStreaming = false;
-        break;
-      case "compaction_start":
-        this.#view.isCompacting = true;
-        break;
-      case "compaction_end":
-        this.#view.isCompacting = false;
-        if (typeof event.errorMessage === "string") this.#conversation.appendNotice(event.errorMessage, "error");
-        break;
-      default:
-        break;
-    }
-    this.#conversation.applyEvent(event);
-    this.#syncConversation();
-    this.#touch();
-  }
-
-  #syncConversation(): void {
-    const snapshot = this.#conversation.snapshot();
-    this.#view.turns = snapshot.turns;
-    this.#view.notices = snapshot.notices;
-    this.#view.compactions = snapshot.compactions;
-    this.#view.branchSummaries = snapshot.branchSummaries;
-    this.#view.queuedFollowUps = snapshot.queuedFollowUps;
-  }
-
   #touch(): void {
-    this.#view.updatedAt = Date.now();
+    this.#view.updatedAt = Math.max(Date.now(), this.#view.updatedAt + 1);
   }
 }

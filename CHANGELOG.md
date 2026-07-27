@@ -9,7 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Show a native Windows notification when an agent turn completes, a session fails, or FrostPi waits for user input while the VS Code window is unfocused or minimized. Disabled by default; enable with `frostpi.notifications.experimental.enabled`. FrostPi reuses the system-registered PowerShell AUMID by now, only windows is supported now.
+- Render Pi branch summaries and every displayable custom message, including text and images, at their persisted positions on the selected session path.
 
+### Changed
+
+- REFACTOR: Rebuild conversation history from Pi's complete session-entry tree and active leaf instead of its compaction-aware model context. The Extension Host now supplies one authoritative order for turns, tool activity, branch controls, summaries, compaction boundaries, and custom messages.
+
+### Fixed
+
+- Keep pre-compaction history scrollable after resume or reload, and preserve live turn identity and order as optimistic and queued prompts reconcile with persisted entries without matching text or timestamps.
 
 ## [0.9.0] - 2026-07-25
 

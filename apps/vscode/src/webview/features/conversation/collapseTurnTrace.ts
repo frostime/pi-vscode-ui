@@ -1,4 +1,4 @@
-import type { AgentActivityView, AgentTurnView, AgentTurnStatus } from "$shared/model/agentTurnModel";
+import type { AgentActivityView, AgentTurnStatus, AgentTurnView } from "$shared/model/conversationModel";
 
 export interface TurnTraceSummary {
   steps: number;
@@ -8,43 +8,49 @@ export interface TurnTraceSummary {
 
 export type TurnTraceStateLabel = "Worked" | "Stopped" | "Failed";
 
-export type TurnActivityPlan =
-  | { mode: "flat"; activities: readonly AgentActivityView[] }
+export type TurnItemPlan =
+  | { mode: "flat" }
   | {
       mode: "collapsed";
       stateLabel: TurnTraceStateLabel;
-      collapsed: readonly AgentActivityView[];
-      visible: readonly AgentActivityView[];
+      collapsedItemIds: ReadonlySet<string>;
+      firstCollapsedItemId: string;
+      anchorItemId: string;
+      anchorLabel: "Reply" | "Last step";
       summary: TurnTraceSummary;
     };
 
-/** Codex-style: once a turn settles, hide the work trace before the final reply or the interrupted step. */
-export function planTurnActivities(
-  turn: Pick<AgentTurnView, "status" | "activities" | "startedAt" | "endedAt">,
+export function planTurnItems(
+  turn: Pick<AgentTurnView, "status" | "items" | "startedAt" | "endedAt">,
   collapseTurnTrace: boolean,
-): TurnActivityPlan {
-  const { activities, status } = turn;
-  if (!collapseTurnTrace || status === "running" || activities.length === 0) {
-    return { mode: "flat", activities };
-  }
+): TurnItemPlan {
+  if (!collapseTurnTrace || turn.status === "running" || turn.items.length === 0) return { mode: "flat" };
 
-  let lastResponseIndex = -1;
-  for (let index = activities.length - 1; index >= 0; index -= 1) {
-    if (activities[index]!.type === "response") {
-      lastResponseIndex = index;
+  const activityLocations = turn.items.flatMap((item, itemIndex) => isAgentActivity(item) ? [{ item, itemIndex }] : []);
+  if (activityLocations.length === 0) return { mode: "flat" };
+
+  let lastResponseIndex: number | undefined;
+  for (let index = activityLocations.length - 1; index >= 0; index -= 1) {
+    const location = activityLocations[index];
+    if (location?.item.type === "response") {
+      lastResponseIndex = location.itemIndex;
       break;
     }
   }
+  const anchorIndex = traceAnchorIndex(turn.status, activityLocations, lastResponseIndex);
+  if (anchorIndex === undefined) return { mode: "flat" };
 
-  const anchorIndex = traceAnchorIndex(status, activities.length, lastResponseIndex);
-  if (anchorIndex <= 0) return { mode: "flat", activities };
+  const collapsed = activityLocations.filter(({ itemIndex }) => itemIndex < anchorIndex).map(({ item }) => item);
+  const anchor = turn.items[anchorIndex];
+  if (collapsed.length === 0 || !anchor || !isAgentActivity(anchor)) return { mode: "flat" };
 
-  const collapsed = activities.slice(0, anchorIndex);
   return {
     mode: "collapsed",
-    stateLabel: turnStateLabel(status),
-    collapsed,
-    visible: activities.slice(anchorIndex),
+    stateLabel: turnStateLabel(turn.status),
+    collapsedItemIds: new Set(collapsed.map((item) => item.id)),
+    firstCollapsedItemId: collapsed[0]!.id,
+    anchorItemId: anchor.id,
+    anchorLabel: anchor.type === "response" ? "Reply" : "Last step",
     summary: {
       steps: collapsed.length,
       errors: countTraceErrors(collapsed),
@@ -53,18 +59,14 @@ export function planTurnActivities(
   };
 }
 
-function traceAnchorIndex(status: AgentTurnStatus, activityCount: number, lastResponseIndex: number): number {
-  // Completed turns keep the existing behavior: anchor on the last response. If there is no
-  // response, the turn is malformed and we leave it flat.
-  if (status === "completed") {
-    return lastResponseIndex > 0 ? lastResponseIndex : -1;
-  }
-
-  // Aborted/error turns may end before the assistant produces a final response. Anchor on the
-  // last response when available, otherwise on the last activity so the interrupted step stays
-  // visible.
-  if (lastResponseIndex > 0) return lastResponseIndex;
-  return activityCount > 1 ? activityCount - 1 : -1;
+function traceAnchorIndex(
+  status: AgentTurnStatus,
+  activities: readonly { item: AgentActivityView; itemIndex: number }[],
+  lastResponseIndex: number | undefined,
+): number | undefined {
+  if (status === "completed") return lastResponseIndex;
+  if (lastResponseIndex !== undefined) return lastResponseIndex;
+  return activities.length > 1 ? activities.at(-1)?.itemIndex : undefined;
 }
 
 export function turnStateLabel(status: AgentTurnStatus): TurnTraceStateLabel {
@@ -101,10 +103,10 @@ export function formatTurnDuration(startedAt: number, endedAt?: number): string 
   return seconds > 0 ? `${minutes}m ${String(seconds).padStart(2, "0")}s` : `${minutes}m`;
 }
 
+function isAgentActivity(item: AgentTurnView["items"][number]): item is AgentActivityView {
+  return item.type === "reasoning" || item.type === "response" || item.type === "tool";
+}
+
 function countTraceErrors(activities: readonly AgentActivityView[]): number {
-  let errors = 0;
-  for (const activity of activities) {
-    if (activity.type === "tool" && (activity.tool.isError || activity.tool.status === "error")) errors += 1;
-  }
-  return errors;
+  return activities.filter((activity) => activity.type === "tool" && (activity.tool.isError || activity.tool.status === "error")).length;
 }

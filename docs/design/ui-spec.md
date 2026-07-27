@@ -3,7 +3,7 @@ title: UI Design Specification
 description: Visual language, density, theming, and interaction rules for FrostPi.
 scope:
   - /apps/vscode/src/webview/**
-updated: 2026-07-25
+updated: 2026-07-27
 ---
 
 # UI Design Specification
@@ -20,15 +20,15 @@ FrostPi should feel like a first-party desktop coding surface: compact, low-nois
 
 ## Conversation
 
-- A user prompt and subsequent Pi activity form one visual turn.
+- The conversation renders the complete selected Pi entry path in Host order, including pre-compaction content. A user prompt and subsequent Pi activity form one visual turn; persisted boundaries and branch controls may appear between activities when that is their authoritative path position.
 - Assistant identity is expressed by the session header; do not repeat an avatar/icon for every fragment.
 - Responses are Markdown with KaTeX math (`$…$`, `$$…$$`, `\(…\)`, `\[…\]`) and complete `mermaid` fences. Incomplete mermaid fences stay source text while streaming. User prompts use a restrained bubble.
 - Reasoning and tools are dense one-line activities, default collapsed. Failure exposes an inline summary but does not force expansion. When `frostpi.conversation.collapseTurnTrace` is enabled (default), a settled turn — completed, aborted, or error — further collapses tools, reasoning, and interim replies into one summary row above the final response. The header reads "Worked" for a completed turn, "Stopped" for an aborted turn, and "Failed" for an error turn; if the turn ended without a final response, the last activity is shown as the visible outcome and the break reads "Last step". Only the still-running turn stays expanded step-by-step.
 - Disclosure state is user-owned; live updates must not reopen a manually collapsed activity.
-- While context is compacting, the conversation shows a non-timeline status row. A successful compaction inserts a distinct, collapsed boundary showing the pre-compaction token count. Expanding it reveals Pi's Markdown summary; prior visible turns remain scrollable.
+- While context is compacting, the conversation shows a non-timeline status row. A successful compaction inserts a distinct, collapsed boundary showing the pre-compaction token count. Expanding it reveals Pi's Markdown summary; prior visible turns remain scrollable. Displayable Pi custom messages render generic text and image blocks at their persisted positions.
 - User scrolling away pauses follow mode. New activity preserves the viewport and exposes a floating jump-to-latest control.
 - User messages and individual assistant responses expose a compact action row on hover or keyboard focus. Copy writes only the original text blocks in protocol order, preserving raw Markdown and excluding images, reasoning, tools, notices, and rendered formatting. Fork remains user-message-only: it targets that exact Pi entry, preserves the original session, and restores the selected text and images into the fork's Composer; unavailable actions remain disabled rather than guessing by message text.
-- Completed user messages expose **Branch here** beside Fork. Branch here edits and resubmits the prompt in the same Pi session; Fork creates another FrostPi session. Represented branch points are centered timeline milestones: thin rules flank a compact `<count> branches` control. Its native QuickPick separates `Current path` from `Other paths`; each selectable row shows divergence content, message count, last update, and a bounded ending preview. The current path is first and is a no-op. Generated branch summaries are collapsed conversation boundaries. Switching/summarizing shows non-cancellable progress and preserves a draft for non-editable targets.
+- Completed user messages expose **Branch here** beside Fork. Branch here edits and resubmits the prompt in the same Pi session; Fork creates another FrostPi session. A represented branch point is a centered milestone on the active parent-child edge: thin rules flank a compact `<count> branches` control immediately before the active child, including virtual-root and mid-turn edges. Its native QuickPick separates `Current path` from `Other paths`; each selectable row shows divergence content, message count, last update, and a bounded ending preview. The current path is first and is a no-op. Generated branch summaries are independent collapsed conversation boundaries at their persisted positions. Switching/summarizing shows non-cancellable progress and preserves a draft for non-editable targets.
 
 ## Question requests
 

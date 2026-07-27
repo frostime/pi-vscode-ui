@@ -4,6 +4,8 @@ import { join, resolve } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { AgentTurnView, CompactionView } from "../../src/shared/model/conversationModel.js";
+import type { SessionViewModel } from "../../src/shared/model/sessionViewModel.js";
 import type * as SessionWorkingDirectoriesModule from "../../src/extension/sessions/SessionWorkingDirectories.js";
 
 const treePickerMocks = vi.hoisted(() => ({
@@ -381,7 +383,7 @@ let messages = [
   { role: "user", content: "Wait", timestamp: 4 },
 ];
 let entries = [
-  { type: "message", id: "user-entry", parentId: null, message: { role: "user", content: "Retry this", timestamp: 1 } },
+  { type: "message", id: "user-entry", parentId: null, message: { role: "user", content: [{ type: "text", text: "Retry this" }, { type: "image", id: "image", fileName: "shot.png", mimeType: "image/png", data: "AA==", size: 1 }], timestamp: 1 } },
   { type: "message", id: "cancel-entry", parentId: "user-entry", message: { role: "user", content: "Cancel this", timestamp: 2 } },
   { type: "message", id: "fail-entry", parentId: "cancel-entry", message: { role: "user", content: "Fail refresh", timestamp: 3 } },
   { type: "message", id: "wait-entry", parentId: "fail-entry", message: { role: "user", content: "Wait", timestamp: 4 } },
@@ -471,7 +473,7 @@ process.on("SIGTERM", () => process.exit(0));
       id: result.forkSessionId,
       title: "Fork: Source",
       sessionId: "fork",
-      turns: [],
+      conversationItems: [],
       composerSeed: {
         id: result.forkSessionId,
         text: "Retry this",
@@ -516,7 +518,7 @@ process.on("SIGTERM", () => process.exit(0));
 
     await registry.sendPrompt(second, "Keep this session", []);
     expect((persisted as { sessions: Array<{ id: string }> }).sessions.map((session) => session.id)).toEqual([second]);
-    const turnsBeforeCompaction = registry.snapshot().activeSession?.turns.length;
+    const turnsBeforeCompaction = conversationTurns(registry.snapshot().activeSession).length;
 
     await expect(registry.sendPrompt(second, "/compact Keep code changes", [{
       id: "image",
@@ -527,8 +529,8 @@ process.on("SIGTERM", () => process.exit(0));
     }])).rejects.toThrow("/compact does not support image attachments");
 
     await registry.sendPrompt(second, "/compact Keep code changes", []);
-    expect(registry.snapshot().activeSession?.turns).toHaveLength(turnsBeforeCompaction ?? 0);
-    expect(registry.snapshot().activeSession?.compactions).toEqual([
+    expect(conversationTurns(registry.snapshot().activeSession)).toHaveLength(turnsBeforeCompaction);
+    expect(conversationCompactions(registry.snapshot().activeSession)).toEqual([
       expect.objectContaining({ summary: "Compacted context: Keep code changes", tokensBefore: 42_000 }),
     ]);
 
@@ -554,6 +556,7 @@ process.stdin.on("data", chunk => {
     else if (command.type === "get_available_models") response.data = { models: [] };
     else if (command.type === "get_commands") response.data = { commands: [] };
     else if (command.type === "get_session_stats") response.data = { sessionId: "notifications", userMessages: 0, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 0, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 };
+    else if (command.type === "get_entries") response.data = { entries: [], leafId: null };
     else if (command.type === "prompt") {
       if (command.message === "fail") {
         process.stdout.write(JSON.stringify(response) + "\n");
@@ -621,7 +624,7 @@ process.on("SIGTERM", () => process.exit(0));
     testEnvironment.experimentalNotificationsEnabled = true;
 
     await registry.sendPrompt(sessionId, "complete", []);
-    await waitFor(() => registry.snapshot().activeSession?.turns.at(-1)?.status === "completed");
+    await waitFor(() => conversationTurns(registry.snapshot().activeSession).at(-1)?.status === "completed");
     await waitFor(() => windowsToastMocks.showWindowsToast.mock.calls.length === 2);
     expect(windowsToastMocks.showWindowsToast).toHaveBeenLastCalledWith(
       "FrostPi turn completed",
@@ -726,12 +729,24 @@ process.on("SIGTERM", () => process.exit(0));
   });
 });
 
+function conversationTurns(session: SessionViewModel | null | undefined): AgentTurnView[] {
+  return session?.conversationItems.filter((item): item is AgentTurnView => item.type === "turn") ?? [];
+}
+
+function conversationCompactions(session: SessionViewModel | null | undefined): CompactionView[] {
+  return session?.conversationItems.flatMap((item) => {
+    if (item.type === "compaction") return [item];
+    if (item.type !== "turn") return [];
+    return item.items.filter((turnItem): turnItem is CompactionView => turnItem.type === "compaction");
+  }) ?? [];
+}
+
 async function waitForForkableHistory(registry: InstanceType<typeof SessionRegistry>, lastEntryId: string): Promise<void> {
   await waitFor(() => {
     const active = registry.snapshot().activeSession;
     return active?.status === "ready"
       && active.historyStatus === "loaded"
-      && active.turns.at(-1)?.userMessage?.sourceEntryId === lastEntryId;
+      && conversationTurns(active).at(-1)?.userMessage?.sourceEntryId === lastEntryId;
   });
 }
 

@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildSessionTreeIndex,
-  compactSessionTreeEntries,
+  projectActiveBranchEdges,
   projectBranchEndChoices,
-  projectBranchPointControls,
   projectEditableTarget,
 } from "../../src/extension/session-tree/sessionTreeProjection.js";
+import { SessionEntryState } from "../../src/extension/sessions/SessionEntryState.js";
 
 const entries: RpcSessionEntry[] = [
   entry("root", null, 1, "user", "Start"),
@@ -22,28 +22,34 @@ const entries: RpcSessionEntry[] = [
 ];
 
 describe("session tree projection", () => {
-  it("removes message content and image bytes from the retained compact index", () => {
-    const compact = compactSessionTreeEntries([{
-      type: "message",
-      id: "image-entry",
-      parentId: null,
-      timestamp: new Date(1).toISOString(),
-      message: { role: "user", content: [{ type: "image", data: "secret-bytes", mimeType: "image/png" }] },
-    }]);
+  it("projects branch controls from exact active parent-child edges", () => {
+    const state = new SessionEntryState();
+    const { index } = state.replace(entries, "nested-a-end");
 
-    expect(compact).toEqual([{
-      type: "message",
-      id: "image-entry",
-      parentId: null,
-      timestamp: new Date(1).toISOString(),
-      message: { role: "user" },
-    }]);
+    expect(projectActiveBranchEdges(index)).toEqual([
+      { branchPointId: "a", activeChildEntryId: "branch-b", pathCount: 3 },
+      { branchPointId: "branch-b", activeChildEntryId: "nested-a", pathCount: 2 },
+    ]);
   });
 
-  it("derives the active path and reachable branch ends without using text as identity", () => {
+  it("projects a virtual-root edge when the session has multiple roots", () => {
+    const rootBranches = [
+      entry("root-a", null, 1, "user", "First root"),
+      entry("root-a-end", "root-a", 2, "assistant", "First end"),
+      entry("root-b", null, 3, "user", "Second root"),
+      entry("root-b-end", "root-b", 4, "assistant", "Second end"),
+    ];
+    const state = new SessionEntryState();
+    const { index } = state.replace(rootBranches, "root-b-end");
+
+    expect(projectActiveBranchEdges(index)).toEqual([
+      { branchPointId: null, activeChildEntryId: "root-b", pathCount: 2 },
+    ]);
+  });
+
+  it("derives reachable branch ends without using message text as identity", () => {
     const index = buildSessionTreeIndex(entries, "nested-a-end");
 
-    expect(index.activePath).toEqual(["root", "a", "branch-b", "nested-a", "nested-a-user", "nested-a-end"]);
     expect(projectBranchEndChoices(index, "a").map((choice) => choice.targetId)).toEqual([
       "nested-a-end",
       "nested-b",
@@ -52,7 +58,7 @@ describe("session tree projection", () => {
     expect(projectBranchEndChoices(index, "a")[0]).toMatchObject({ isCurrent: true, messageCount: 4 });
   });
 
-  it("includes the current non-terminal position and orders other ends newest first", () => {
+  it("includes a current non-terminal position and orders other ends newest first", () => {
     const index = buildSessionTreeIndex(entries, "branch-b");
     const choices = projectBranchEndChoices(index, "a");
 
@@ -62,36 +68,14 @@ describe("session tree projection", () => {
       ["nested-a-end", false],
       ["branch-a-end", false],
     ]);
-    const current = choices.find((choice) => choice.targetId === "branch-b");
-    expect(current?.isEditable).toBe(true);
-    expect(current?.detail).toContain("Opens this prompt in Composer");
+    expect(choices[0]).toMatchObject({ isEditable: true });
   });
 
-  it("anchors nested controls before the nearest active-path user message", () => {
-    const index = buildSessionTreeIndex(entries, "nested-a-end");
-
-    expect(projectBranchPointControls(index)).toEqual([
-      {
-        branchPointId: "a",
-        anchorEntryId: "branch-b",
-        anchorPosition: "before",
-        pathCount: 3,
-      },
-      {
-        branchPointId: "branch-b",
-        anchorEntryId: "nested-a-user",
-        anchorPosition: "before",
-        pathCount: 2,
-      },
-    ]);
-  });
-
-  it("projects user text and images only when an operation asks for the target", () => {
+  it("projects user text and images only when navigation requests the target", () => {
     const target: RpcSessionEntry = {
       type: "message",
       id: "editable",
       parentId: "root",
-      timestamp: new Date(10).toISOString(),
       message: {
         role: "user",
         content: [
@@ -114,48 +98,18 @@ describe("session tree projection", () => {
     expect(projectEditableTarget(entries[1]!)).toBeNull();
   });
 
-  it("treats missing parents and parent cycles as separate roots", () => {
-    const malformed: RpcSessionEntry[] = [
-      entry("orphan", "missing", 1, "assistant", "orphan"),
-      entry("cycle-a", "cycle-b", 2, "user", "same"),
-      entry("cycle-b", "cycle-a", 3, "assistant", "same"),
-      entry("cycle-end", "cycle-b", 4, "assistant", "end"),
-    ];
-    const index = buildSessionTreeIndex(malformed, "cycle-end");
-
-    expect(index.activePath).toEqual(["cycle-end"]);
-    expect(index.childrenById.get(null)).toEqual(["orphan", "cycle-a", "cycle-b", "cycle-end"]);
-  });
-
-  it("projects root branches and nested divergence breadcrumbs", () => {
-    const rootBranches: RpcSessionEntry[] = [
-      entry("root-a", null, 1, "user", "First root"),
-      entry("root-a-end", "root-a", 2, "assistant", "First end"),
-      entry("root-b", null, 3, "user", "Second root"),
-      entry("root-b-split", "root-b", 4, "assistant", "Shared path"),
-      entry("root-b-left", "root-b-split", 5, "user", "Left nested"),
-      entry("root-b-right", "root-b-split", 6, "user", "Right nested"),
-    ];
-    const index = buildSessionTreeIndex(rootBranches, "root-b-right");
-    const choices = projectBranchEndChoices(index, null);
-
-    expect(choices.map((choice) => choice.targetId)).toEqual(["root-b-right", "root-b-left", "root-a-end"]);
-    expect(choices[0]?.label).toBe("Second root › Right nested");
-    expect(projectBranchPointControls(index)[0]).toEqual({
-      branchPointId: null,
-      anchorEntryId: "root-b",
-      anchorPosition: "before",
-      pathCount: 3,
-    });
-  });
-
-  it("falls back to bounded type and id labels when content is unavailable", () => {
-    const metadata: RpcSessionEntry = { type: "tool_call", id: "123456789", parentId: null, timestamp: new Date(1).toISOString() };
-    const index = buildSessionTreeIndex([metadata], "123456789");
+  it("uses bounded type and id labels when a branch end has no displayable content", () => {
+    const metadata: RpcSessionEntry = {
+      type: "model_change",
+      id: "123456789",
+      parentId: null,
+      timestamp: new Date(1).toISOString(),
+    };
+    const index = buildSessionTreeIndex([metadata], metadata.id);
 
     expect(projectBranchEndChoices(index, null)[0]).toMatchObject({
-      label: "tool_call · 12345678",
-      detail: "Ends with tool_call: tool_call · 12345678",
+      label: "model_change · 12345678",
+      detail: "Ends with model_change: model_change · 12345678",
     });
   });
 });

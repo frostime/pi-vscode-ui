@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Collapsible } from "bits-ui";
-  import type { ToolActivityView } from "$shared/model/agentTurnModel";
+  import type { ToolActivityView } from "$shared/model/conversationModel";
 
   import { postToHost } from "../../bridge/vscodeBridge";
 

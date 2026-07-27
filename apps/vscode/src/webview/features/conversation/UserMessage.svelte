@@ -2,7 +2,6 @@
   import type { ConversationMessageView } from "$shared/model/conversationModel";
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
-  import BranchPointControl from "./BranchPointControl.svelte";
   import ImageGallery from "./ImageGallery.svelte";
   import MarkdownContent from "./MarkdownContent.svelte";
   import { copyMessageText, rawMessageText } from "./copyMessageClient";
@@ -16,13 +15,7 @@
   );
   const pending = $derived($pendingForkEntryId === message.sourceEntryId);
   const copyText = $derived(rawMessageText(message.blocks));
-  const beforeControls = $derived(session.branchControls.filter((control) => control.anchorEntryId === message.sourceEntryId && control.anchorPosition === "before"));
-  const afterControls = $derived(session.branchControls.filter((control) => control.anchorEntryId === message.sourceEntryId && control.anchorPosition === "after"));
 </script>
-
-{#each beforeControls as control (control.branchPointId)}
-  <BranchPointControl {control} {session} />
-{/each}
 
 <article class="message message-user" data-pi-entry-id={message.sourceEntryId}>
   <div class="user-message-stack">
@@ -70,9 +63,6 @@
   </div>
 </article>
 
-{#each afterControls as control (control.branchPointId)}
-  <BranchPointControl {control} {session} />
-{/each}
 
 <style>
 .user-message-stack { max-width: 100%; display: flex; flex-direction: column; align-items: flex-end; }
