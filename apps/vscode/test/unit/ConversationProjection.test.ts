@@ -235,9 +235,12 @@ describe("ConversationProjection", () => {
       assistantEntry("a1", "u1", [{ type: "text", text: "Done" }], "stop", 2),
     ], []);
 
-    expect(projection.reconcileEntries([], [
+    expect(projection.reconcileEntries([
+      entry("custom_message", "custom1", "a1", { display: true, content: "Appended" }),
+    ], [
       { branchPointId: null, activeChildEntryId: "u1", pathCount: 2 },
     ])).toBe("reload");
+    expect(projection.read().items.some((item) => item.id === "custom1")).toBe(false);
   });
 });
 
