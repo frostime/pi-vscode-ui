@@ -1,12 +1,12 @@
 <script lang="ts">
-  import type { AgentTurnView, SessionNoticeView } from "$shared/model/agentTurnModel";
-  import type { CompactionView, CustomMessageView } from "$shared/model/conversationModel";
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
   import { onDestroy, onMount } from "svelte";
 
   import NewUpdatesButton from "../scrolling/NewUpdatesButton.svelte";
   import { INITIAL_SCROLL_FOLLOW_STATE, reduceScrollFollow } from "../scrolling/scrollFollowState";
   import AgentTurn from "./AgentTurn.svelte";
+  import BranchPointControl from "./BranchPointControl.svelte";
+  import BranchSummaryBlock from "./BranchSummaryBlock.svelte";
   import CompactionBlock from "./CompactionBlock.svelte";
   import CustomBlock from "./CustomBlock.svelte";
   import SessionNotice from "./SessionNotice.svelte";
@@ -20,18 +20,7 @@
   let programmaticScroll = false;
   let resizeObserver: ResizeObserver | null = null;
 
-  type TimelineItem =
-    | { kind: "turn"; timestamp: number; value: AgentTurnView }
-    | { kind: "notice"; timestamp: number; value: SessionNoticeView }
-    | { kind: "compaction"; timestamp: number; value: CompactionView }
-    | { kind: "custom"; timestamp: number; value: CustomMessageView };
-
-  const timeline = $derived.by<TimelineItem[]>(() => [
-    ...session.turns.map((value) => ({ kind: "turn" as const, timestamp: value.startedAt, value })),
-    ...session.notices.map((value) => ({ kind: "notice" as const, timestamp: value.timestamp, value })),
-    ...session.compactions.map((value) => ({ kind: "compaction" as const, timestamp: value.timestamp, value })),
-    ...session.customMessages.map((value) => ({ kind: "custom" as const, timestamp: value.timestamp, value })),
-  ].sort((left, right) => left.timestamp - right.timestamp));
+  const turnCount = $derived(session.conversationItems.filter((item) => item.type === "turn").length);
 
   onMount(() => {
     resizeObserver = new ResizeObserver(() => {
@@ -45,7 +34,6 @@
 
   $effect(() => {
     const updatedAt = session.updatedAt;
-    const turnCount = session.turns.length;
     if (!scroller || updatedAt === lastUpdatedAt) return;
     const isNewTurn = turnCount > lastTurnCount;
     lastUpdatedAt = updatedAt;
@@ -89,22 +77,26 @@
 <div class="conversation-frame">
   <div class="conversation" bind:this={scroller} onscroll={handleScroll}>
     <div class="conversation-inner" bind:this={content}>
-      {#if timeline.length === 0}
+      {#if session.conversationItems.length === 0}
         <div class="conversation-empty">
           <div class="empty-orbit"><span>π</span></div>
           <h2>What are you working on?</h2>
           <p>Ask Pi to inspect code, make changes, run commands, or explain the current project.</p>
         </div>
       {:else}
-        {#each timeline as item (`${item.kind}-${item.value.id}`)}
-          {#if item.kind === "turn"}
-            <AgentTurn turn={item.value} {session} />
-          {:else if item.kind === "compaction"}
-            <CompactionBlock compaction={item.value} />
-          {:else if item.kind === "custom"}
-            <CustomBlock message={item.value} />
+        {#each session.conversationItems as item (item.id)}
+          {#if item.type === "turn"}
+            <AgentTurn turn={item} {session} />
+          {:else if item.type === "branchControl"}
+            <BranchPointControl control={item} {session} />
+          {:else if item.type === "compaction"}
+            <CompactionBlock compaction={item} />
+          {:else if item.type === "branchSummary"}
+            <BranchSummaryBlock summary={item} />
+          {:else if item.type === "customMessage"}
+            <CustomBlock message={item} />
           {:else}
-            <SessionNotice notice={item.value} />
+            <SessionNotice notice={item} />
           {/if}
         {/each}
       {/if}

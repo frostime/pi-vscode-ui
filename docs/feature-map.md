@@ -4,7 +4,7 @@ description: Compact index from feature domain to primary implementation files. 
 scope:
   - /apps/vscode/**
   - /packages/pi-rpc/**
-updated: 2026-07-25
+updated: 2026-07-27
 ---
 
 # Feature → Code Map
@@ -27,33 +27,33 @@ Entry point for create, start, stop, persist, discover, fork, tree-nav.
 | File | Role |
 |------|------|
 | `{{ext}}/sessions/SessionRegistry` | owns session collection; create/close/activate/persist; fork & branch orchestration; serialized start & history queues |
-| `{{ext}}/sessions/SessionRuntime` | one Pi subprocess per session; prompt dispatch; event→projection routing; model/rename/compact RPC |
+| `{{ext}}/sessions/SessionRuntime` | one Pi subprocess per session; coordinates entry, conversation, and scalar state; prompt/event/RPC lifecycle |
 | `{{ext}}/sessions/SessionWorkingDirectories` | `git worktree list` → valid working directories |
 | `{{ext}}/sessions/SessionCatalog` | scan disk for Pi `.jsonl` sessions; read metadata from file headers; QuickPick UI for resume |
 | `{{ext}}/sessions/SessionPersistence` | `vscode.WorkspaceState` adapter for session metadata |
 | `{{ext}}/sessions/normalizePiSlashPrompt` | trim & normalize `/compact`, `/resume`, whitespace in slash commands |
 | `{{ext}}/session-tree/SessionTreeExtensionBridge` | injects bundled `session-tree.js` extension into Pi; `navigate()` wraps Pi's tree mutation |
-| `{{ext}}/session-tree/sessionTreeProjection` | pure functions: `buildSessionTreeIndex()`, `projectBranchPointControls()`, `projectBranchEndChoices()` |
+| `{{ext}}/session-tree/sessionTreeProjection` | pure functions: `projectActiveBranchEdges()`, editable targets, navigation validation, and branch-end choices |
 | `{{ext}}/session-tree/SessionTreePicker` | VS Code QuickPick/InputBox for branch summary, branch-end, draft-replacement prompts |
 
 SPEC: `{{ext}}/sessions/session-lifecycle.SPEC`, `{{ext}}/sessions/session-catalog.SPEC`
 
 ---
 
-## Turn Projection
+## Conversation Projection
 
-Converts raw Pi RPC events into the `AgentTurnView[]` / `CompactionView[]` / `BranchSummaryView[]` model.
+Builds the complete active-path transcript from Pi entries and reconciles optimistic/live RPC events into the same ordered model.
 
 | File | Role |
 |------|------|
-| `{{ext}}/conversation/TurnProjection` | event→turn state machine: `applyEvent()`, `hydrate()`, follow-up queue promote/drain, compaction/branch summary tracking |
-| `{{ext}}/conversation/SessionProjection` | wraps TurnProjection + session-level state (status, isStreaming, model, proxy, history, tree controls) → `SessionViewModel` |
-| `{{ext}}/conversation/messageAssembler` | helpers: `createToolView()`, `extractText()`, `contentToBlocks()` |
-| `{{ext}}/conversation/userEntryReferences` | maps Pi `get_entries` entries → user message timestamps; `activeLeafContinues()` for incremental entry merge |
+| `{{ext}}/sessions/SessionEntryState` | owns entry cursor/leaf, validates incremental continuation, retains content-free tree index, selects active path |
+| `{{ext}}/conversation/ConversationProjection` | owns ordered conversation items, visual turns, live-to-persisted identity, tools, follow-ups, and boundaries |
+| `{{ext}}/sessions/SessionViewState` | owns session-level scalar state and composes `SessionViewModel` with the conversation snapshot |
+| `{{ext}}/conversation/messageAssembler` | deterministic message content, image-block, tool, and text conversion |
 
-Shared model types: `{{shared}}/model/sessionViewModel.ts`, `{{shared}}/model/conversationModel.ts`, `{{shared}}/model/agentTurnModel.ts`, `{{shared}}/model/toolCallModel.ts`
+Shared model types: `{{shared}}/model/sessionViewModel.ts`, `{{shared}}/model/conversationModel.ts`, `{{shared}}/model/toolCallModel.ts`
 
-SPEC: `{{ext}}/conversation/turn-projection.SPEC`
+SPEC: `{{ext}}/conversation/conversation-projection.SPEC`
 
 ---
 
@@ -124,8 +124,8 @@ SPEC: `{{web}}/composer/composer.SPEC`, `{{ext}}/workspace-files/file-mentions.S
 
 | File | Role |
 |------|------|
-| `{{web}}/conversation/ConversationView.svelte` | turn list container; reads `workspaceStore` |
-| `{{web}}/conversation/AgentTurn.svelte` | single agent turn: thinking → tool calls → response; collapsible trace |
+| `{{web}}/conversation/ConversationView.svelte` | renders Host-ordered top-level conversation items from `workspaceStore` |
+| `{{web}}/conversation/AgentTurn.svelte` | renders ordered turn items and collapses agent activities without moving fixed boundaries |
 | `{{web}}/conversation/UserMessage.svelte` | user message blocks (text + images) |
 | `{{web}}/conversation/ThinkingActivity.svelte` | reasoning/thinking block |
 | `{{web}}/conversation/ToolActivity.svelte` | tool call card (bash, read, write, etc.) |

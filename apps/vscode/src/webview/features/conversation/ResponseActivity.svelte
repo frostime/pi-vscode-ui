@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ResponseActivityView } from "$shared/model/agentTurnModel";
+  import type { ResponseActivityView } from "$shared/model/conversationModel";
 
   import Spinner from "../../primitives/Spinner.svelte";
   import ImageGallery from "./ImageGallery.svelte";

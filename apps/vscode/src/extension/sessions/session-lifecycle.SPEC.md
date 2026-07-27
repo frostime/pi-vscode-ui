@@ -5,7 +5,7 @@ scope:
   - /apps/vscode/src/extension/sessions/**
   - /apps/vscode/src/extension/conversation/**
   - /apps/vscode/src/extension/extension-ui/**
-updated: 2026-07-24
+updated: 2026-07-27
 ---
 
 # Pi Session Lifecycle
@@ -54,7 +54,7 @@ Tree navigation is an in-place mutation of the selected runtime, Pi session id, 
 
 Before navigation, Runtime refetches complete entries, revalidates the target, and validates any editable text/image seed. Registry owns native target, summary, custom-focus, and draft-replacement interaction. Runtime retains only a content-free tree index for branch controls; complete entries are operation-local.
 
-Pi cancellation and failure before the private result confirms a commit preserve the displayed history and Composer. Once commit is confirmed, Pi is authoritative. FrostPi rebuilds state, messages, entries, stats, controls, and an optional same-session Composer seed without replacing runtime identity. A later hydrate failure leaves the navigation committed, marks history failed for retry, and never reverse-navigates automatically.
+Pi cancellation and failure before the private result confirms a commit preserve the displayed history and Composer. Once commit is confirmed, Pi is authoritative. FrostPi fetches complete entries, rebuilds the active-path conversation and tree index, refreshes state and stats, and prepares an optional same-session Composer seed without replacing runtime identity. A later entry-load or projection failure leaves the navigation committed, marks history failed for retry, and never reverse-navigates automatically.
 
 ## Persistence
 
@@ -67,7 +67,7 @@ FrostPi persists only:
 - last-updated timestamp;
 - active session id.
 
-It does not persist message bodies, reasoning, tool output, images, provider credentials, API keys, worktree lists, branch names, or the anchor workspace folder. The anchor is recovered from current Git worktree relationships before an external process starts. On restoration, the process starts with `--session <path>` and conversation state is rebuilt from Pi's `get_messages` response.
+It does not persist message bodies, reasoning, tool output, images, provider credentials, API keys, worktree lists, branch names, or the anchor workspace folder. The anchor is recovered from current Git worktree relationships before an external process starts. On restoration, the process starts with `--session <path>` and conversation state is rebuilt from the active path in Pi's `get_entries` response.
 
 ## State semantics
 
@@ -93,9 +93,13 @@ Pi extension commands (from `get_commands` with `source: "extension"`) execute i
 
 ## Conversation history
 
-A resumed Pi process becomes ready after startup state is available; loading prior messages is separate. The Webview disables and the host rejects prompt submission during an automatic history load. Pi events received while `get_messages` is pending are retained and applied in order after the displayed history is replaced. History loads are serialized. Session files larger than 8 MiB are not loaded automatically because Pi returns `get_messages` as one potentially large JSONL record; these sessions remain usable and the user may explicitly request history loading from the session menu.
+A resumed Pi process becomes ready after startup state is available; loading prior conversation entries is separate. The Webview disables and the Host rejects prompt submission during an automatic history load. Pi events received while complete `get_entries` is pending are retained and applied in order after the active-path conversation is replaced. History loads are serialized.
 
-A history-load failure does not fail the live Pi process. The session remains usable and exposes the failed history state for retry.
+Session files larger than 8 MiB are not loaded automatically. Deferred startup does not fetch full entry content merely to prepare branch controls; tree actions remain unavailable until explicit history loading. Once loaded, FrostPi retains only a content-free complete-tree index and projects complete content for the selected active path.
+
+After `agent_settled`, successful compaction, an immediate extension command reaching idle, committed tree navigation, or committed fork reconciliation, Runtime refreshes persisted entries. A cursor response is applied incrementally only when its reported leaf demonstrably extends the prior active leaf through that batch; otherwise Runtime requests complete entries and rebuilds.
+
+A history-load or projection failure does not fail the live Pi process. The session remains usable and exposes the failed history state for retry.
 
 ## Extension UI
 

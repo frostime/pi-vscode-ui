@@ -3,7 +3,7 @@ title: FrostPi Engineering Guide
 description: Entry point for architecture, protocol, UI, testing, release, privacy, and maintenance documentation.
 scope:
   - /**
-updated: 2026-07-16
+updated: 2026-07-27
 ---
 
 # FrostPi Engineering Guide
@@ -29,7 +29,7 @@ Behavioral contracts that must survive refactors live adjacent to code:
 - `packages/pi-rpc/SPEC.md`
 - `apps/vscode/src/extension/sessions/session-lifecycle.SPEC.md`
 - `apps/vscode/src/extension/sessions/session-catalog.SPEC.md`
-- `apps/vscode/src/extension/conversation/turn-projection.SPEC.md`
+- `apps/vscode/src/extension/conversation/conversation-projection.SPEC.md`
 - `apps/vscode/src/extension/workspace-files/file-mentions.SPEC.md`
 - `apps/vscode/src/extension/network/proxy-environment.SPEC.md`
 - `apps/vscode/src/webview/features/composer/composer.SPEC.md`

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Collapsible } from "bits-ui";
-  import type { ReasoningActivityView } from "$shared/model/agentTurnModel";
+  import type { ReasoningActivityView } from "$shared/model/conversationModel";
 
   import MarkdownContent from "./MarkdownContent.svelte";
 

@@ -4,6 +4,9 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { AgentTurnView, SessionNoticeView } from "../../src/shared/model/conversationModel.js";
+import type { SessionViewModel } from "../../src/shared/model/sessionViewModel.js";
+
 vi.mock("vscode", () => ({
   Uri: { file: (fsPath: string) => ({ fsPath }) },
   workspace: {
@@ -41,25 +44,25 @@ process.stdin.on("data", chunk => {
     input = input.slice(index + 1);
     const base = { type: "response", id: command.id, success: true };
     if (command.type === "get_state") base.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionFile, sessionId: "history-test" };
-    else if (command.type === "get_messages") {
-      process.stdout.write(JSON.stringify({ type: "extension_ui_request", id: "notice-during-history", method: "notify", message: "Notice during history load" }) + "\n");
-      process.stdout.write(JSON.stringify({ type: "message_start", message: { id: "live-assistant", role: "assistant", timestamp: 2, content: [{ type: "text", text: "Live response" }] } }) + "\n");
-      process.stdout.write(JSON.stringify({ type: "message_end", message: { id: "live-assistant", role: "assistant", timestamp: 2, stopReason: "stop", content: [{ type: "text", text: "Live response" }] } }) + "\n");
-      setTimeout(() => {
-        base.data = { messages: [{ role: "user", content: "Earlier request", timestamp: 1 }] };
-        process.stdout.write(JSON.stringify(base) + "\n");
-      }, 25);
-      continue;
-    }
     else if (command.type === "prompt") {
       process.stdout.write(JSON.stringify(base) + "\n");
       process.stdout.write(JSON.stringify({ type: "agent_start" }) + "\n");
       continue;
     }
-    else if (command.type === "get_entries") base.data = {
-      entries: [{ type: "message", id: "history-user-entry", parentId: null, message: { role: "user", content: "Earlier request", timestamp: 1 } }],
-      leafId: "history-user-entry",
-    };
+    else if (command.type === "get_entries" && !command.since) {
+      process.stdout.write(JSON.stringify({ type: "extension_ui_request", id: "notice-during-history", method: "notify", message: "Notice during history load" }) + "\n");
+      process.stdout.write(JSON.stringify({ type: "message_start", message: { id: "live-assistant", role: "assistant", timestamp: 2, content: [{ type: "text", text: "Live response" }] } }) + "\n");
+      process.stdout.write(JSON.stringify({ type: "message_end", message: { id: "live-assistant", role: "assistant", timestamp: 2, stopReason: "stop", content: [{ type: "text", text: "Live response" }] } }) + "\n");
+      setTimeout(() => {
+        base.data = {
+          entries: [{ type: "message", id: "history-user-entry", parentId: null, message: { role: "user", content: "Earlier request", timestamp: 1 } }],
+          leafId: "history-user-entry",
+        };
+        process.stdout.write(JSON.stringify(base) + "\n");
+      }, 25);
+      continue;
+    }
+    else if (command.type === "get_entries") base.data = { entries: [], leafId: "history-user-entry" };
     else if (command.type === "get_available_models") base.data = { models: [] };
     else if (command.type === "get_commands") base.data = { commands: [] };
     else if (command.type === "get_session_stats") base.data = { sessionFile, sessionId: "history-test", userMessages: 1, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 1, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 };
@@ -95,21 +98,21 @@ process.on("SIGTERM", () => process.exit(0));
     await runtime.start(sessionFile);
     expect(runtime.view.status).toBe("ready");
     expect(runtime.view.historyStatus).toBe("queued");
-    expect(runtime.view.turns).toHaveLength(0);
+    expect(conversationTurns(runtime.view)).toHaveLength(0);
 
     await runtime.loadHistory(false);
     expect(runtime.view.historyStatus).toBe("deferred");
-    expect(runtime.view.turns).toHaveLength(0);
+    expect(conversationTurns(runtime.view)).toHaveLength(0);
 
     const repeatedAutomaticLoad = runtime.loadHistory(false);
     const explicitLoad = runtime.loadHistory(true);
     await Promise.all([repeatedAutomaticLoad, explicitLoad]);
     expect(runtime.view.historyStatus).toBe("loaded");
-    expect(runtime.view.turns).toHaveLength(2);
-    expect(runtime.view.turns.flatMap((turn) => turn.activities)).toContainEqual(
+    expect(conversationTurns(runtime.view)).toHaveLength(2);
+    expect(conversationTurns(runtime.view).flatMap((turn) => turn.items)).toContainEqual(
       expect.objectContaining({ type: "response", blocks: [{ type: "text", text: "Live response" }] }),
     );
-    expect(runtime.view.notices).toEqual([
+    expect(conversationNotices(runtime.view)).toEqual([
       expect.objectContaining({ text: "Notice during history load" }),
     ]);
 
@@ -153,6 +156,7 @@ process.stdin.on("data", chunk => {
         ],
       };
     } else if (command.type === "get_available_models") base.data = { models: [] };
+    else if (command.type === "get_entries") base.data = { entries: [], leafId: null };
     else if (command.type === "get_session_stats") {
       base.data = {
         sessionId: "extension-cmd",
@@ -212,12 +216,12 @@ process.on("SIGTERM", () => process.exit(0));
 
     expect(runtime.view.isStreaming).toBe(false);
     expect(runtime.view.status).toBe("ready");
-    expect(runtime.view.turns).toHaveLength(1);
-    expect(runtime.view.turns[0]?.userMessage?.blocks).toEqual([
+    expect(conversationTurns(runtime.view)).toHaveLength(1);
+    expect(conversationTurns(runtime.view)[0]?.userMessage?.blocks).toEqual([
       { type: "text", text: "/toggle-web-proxy on" },
     ]);
-    expect(runtime.view.turns[0]?.status).toBe("completed");
-    const notice = runtime.view.turns[0]?.activities.find((activity) => activity.type === "notice");
+    expect(conversationTurns(runtime.view)[0]?.status).toBe("completed");
+    const notice = conversationTurns(runtime.view)[0]?.items.find((item) => item.type === "notice");
     expect(notice?.type).toBe("notice");
     if (notice?.type === "notice") {
       expect(notice.text).toContain("args=/toggle-web-proxy on");
@@ -285,8 +289,8 @@ process.on("SIGTERM", () => process.exit(0));
     await waitFor(() => runtime.view.isStreaming);
 
     // Misclassifying as extension would force-complete after idle checks.
-    expect(runtime.view.turns[0]?.status).toBe("running");
-    expect(runtime.view.turns[0]?.userMessage?.blocks).toEqual([{ type: "text", text: "/inspect src" }]);
+    expect(conversationTurns(runtime.view)[0]?.status).toBe("running");
+    expect(conversationTurns(runtime.view)[0]?.userMessage?.blocks).toEqual([{ type: "text", text: "/inspect src" }]);
   });
 
   it("parks follow-up prompts while streaming and clears them on abort", async () => {
@@ -307,6 +311,7 @@ process.stdin.on("data", chunk => {
       base.data = { model: null, thinkingLevel: "off", isStreaming: streaming, isCompacting: false, pendingMessageCount: 0, sessionId: "followup" };
     } else if (command.type === "get_commands") base.data = { commands: [] };
     else if (command.type === "get_available_models") base.data = { models: [] };
+    else if (command.type === "get_entries") base.data = { entries: [], leafId: null };
     else if (command.type === "get_session_stats") {
       base.data = { sessionId: "followup", userMessages: 0, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 0, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 };
     } else if (command.type === "prompt") {
@@ -357,11 +362,11 @@ process.on("SIGTERM", () => process.exit(0));
     await runtime.start();
     await runtime.sendPrompt("first", []);
     await waitFor(() => runtime.view.isStreaming);
-    expect(runtime.view.turns).toHaveLength(1);
+    expect(conversationTurns(runtime.view)).toHaveLength(1);
 
     await runtime.sendPrompt("queued later", []);
     await waitFor(() => runtime.view.status === "ready");
-    expect(runtime.view.turns).toHaveLength(1);
+    expect(conversationTurns(runtime.view)).toHaveLength(1);
     expect(runtime.view.queuedFollowUps.map((item) => item.text)).toEqual(["queued later"]);
     await expect(runtime.executeFork("any-entry")).rejects.toThrow("Wait for queued follow-ups to settle");
 
@@ -469,7 +474,7 @@ const entries = [
 ];
 let leafId = "old-end";
 let messages = [entries[0].message, entries[1].message, entries[2].message, entries[3].message];
-let failMessages = false;
+let failEntries = false;
 let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", chunk => {
@@ -480,14 +485,14 @@ process.stdin.on("data", chunk => {
     input = input.slice(index + 1);
     const response = { type: "response", id: command.id, success: true };
     if (command.type === "get_state") response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, pendingMessageCount: 0, sessionId: "tree-session" };
-    else if (command.type === "get_messages") {
-      if (failMessages) {
+    else if (command.type === "get_messages") response.data = { messages };
+    else if (command.type === "get_entries") {
+      if (failEntries) {
         response.success = false;
-        response.error = "hydrate failed";
-        failMessages = false;
-      } else response.data = { messages };
+        response.error = "entry reload failed";
+        failEntries = false;
+      } else response.data = { entries, leafId };
     }
-    else if (command.type === "get_entries") response.data = { entries, leafId };
     else if (command.type === "get_available_models") response.data = { models: [] };
     else if (command.type === "get_commands") response.data = { commands: [
       { name: "frostpi.session-tree:1", source: "extension", sourceInfo: { path: artifactPath, source: "local", scope: "temporary", origin: "top-level" } },
@@ -504,7 +509,7 @@ process.stdin.on("data", chunk => {
       else {
         leafId = "answer";
         messages = [entries[0].message, entries[1].message];
-        if (request.customInstructions === "hydrate-fail") failMessages = true;
+        if (request.customInstructions === "entry-fail") failEntries = true;
       }
       fs.writeFileSync(path.join(process.env.FROSTPI_SESSION_TREE_RESULT_DIR, request.requestId + ".json"), JSON.stringify({ version: 1, requestId: request.requestId, status, leafId }));
     }
@@ -548,9 +553,14 @@ process.on("SIGTERM", () => process.exit(0));
       commandName: "frostpi.session-tree:1",
     });
     expect(runtime.view.commands.map((command) => command.name)).toEqual(["visible"]);
-    expect(runtime.view.branchControls).toEqual([
-      expect.objectContaining({ branchPointId: "answer", anchorEntryId: "old-user", pathCount: 2 }),
-    ]);
+    expect(runtime.view.conversationItems).toContainEqual(
+      expect.objectContaining({
+        type: "branchControl",
+        branchPointId: "answer",
+        activeChildEntryId: "old-user",
+        pathCount: 2,
+      }),
+    );
     expect((await runtime.listBranchEnds("answer")).map((choice) => choice.targetId)).toEqual(["old-end", "target-user"]);
 
     await expect(runtime.navigateTree("target-user", { summarize: true, customInstructions: "cancel" }))
@@ -564,7 +574,7 @@ process.on("SIGTERM", () => process.exit(0));
 
     expect(runtime.id).toBe("session");
     expect(runtime.view.sessionId).toBe("tree-session");
-    expect(runtime.view.turns).toHaveLength(1);
+    expect(conversationTurns(runtime.view)).toHaveLength(1);
     expect(result).toEqual({
       cancelled: false,
       seed: {
@@ -574,8 +584,8 @@ process.on("SIGTERM", () => process.exit(0));
       },
     });
 
-    await expect(runtime.navigateTree("old-user", { summarize: true, customInstructions: "hydrate-fail" }))
-      .rejects.toThrow("hydrate failed");
+    await expect(runtime.navigateTree("old-user", { summarize: true, customInstructions: "entry-fail" }))
+      .rejects.toThrow("entry reload failed");
     expect(runtime.view.historyStatus).toBe("failed");
 
     await runtime.stop();
@@ -663,6 +673,18 @@ process.on("SIGTERM", () => process.exit(0));
     await expect(access(launch.requestDirectory)).rejects.toThrow();
   });
 });
+
+function conversationTurns(view: Readonly<SessionViewModel>): AgentTurnView[] {
+  return view.conversationItems.filter((item): item is AgentTurnView => item.type === "turn");
+}
+
+function conversationNotices(view: Readonly<SessionViewModel>): SessionNoticeView[] {
+  return view.conversationItems.flatMap((item) => {
+    if (item.type === "notice") return [item];
+    if (item.type !== "turn") return [];
+    return item.items.filter((turnItem): turnItem is SessionNoticeView => turnItem.type === "notice");
+  });
+}
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
   const started = Date.now();

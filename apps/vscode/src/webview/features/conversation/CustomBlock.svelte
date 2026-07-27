@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { CustomMessageView } from "$shared/model/conversationModel";
 
+  import ImageGallery from "./ImageGallery.svelte";
   import MarkdownContent from "./MarkdownContent.svelte";
 
   let { message }: { message: CustomMessageView } = $props();
@@ -21,7 +22,13 @@
     <span class={`codicon codicon-chevron-${expanded ? "down" : "right"}`} aria-hidden="true"></span>
   </button>
   {#if expanded}
-    <div class="custom-message-content"><MarkdownContent content={message.content} /></div>
+    <div class="custom-message-content">
+      {#each message.blocks as block, index (index)}
+        {#if block.type === "text"}<MarkdownContent content={block.text} />{/if}
+        {#if block.type === "images"}<ImageGallery images={block.images} />{/if}
+        {#if block.type === "error"}<div class="inline-error">{block.text}</div>{/if}
+      {/each}
+    </div>
   {/if}
 </section>
 

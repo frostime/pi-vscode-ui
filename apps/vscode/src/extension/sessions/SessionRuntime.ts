@@ -14,13 +14,12 @@ import * as vscode from "vscode";
 
 import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
 import type { QuestionDraftSubmission } from "../../shared/question-tool/questionToolProtocol.js";
-import type { ImageAttachmentView } from "../../shared/model/conversationModel.js";
+import type { AgentTurnView, ImageAttachmentView } from "../../shared/model/conversationModel.js";
 import type { ComposerSeedView, SessionViewModel } from "../../shared/model/sessionViewModel.js";
 import { normalizeImageAttachments, validateProjectedImageAttachments } from "../attachments/normalizeImageAttachment.js";
 import type { FrostPiConfiguration } from "../configuration/configurationTypes.js";
 import { workspaceUriForPath } from "../configuration/workspaceScope.js";
-import { SessionProjection } from "../conversation/SessionProjection.js";
-import { activeLeafContinues, activeUserEntryReferences, userEntryReferences } from "../conversation/userEntryReferences.js";
+import { ConversationProjection } from "../conversation/ConversationProjection.js";
 import { redactDiagnosticText, type DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { ExtensionUiCoordinator } from "../extension-ui/ExtensionUiCoordinator.js";
 import { QuestionToolExtensionBridge } from "../question-tool/QuestionToolExtensionBridge.js";
@@ -31,12 +30,13 @@ import type { ProxySecretStore } from "../network/ProxySecretStore.js";
 import { SessionTreeExtensionBridge, type SessionTreeSummaryOptions } from "../session-tree/SessionTreeExtensionBridge.js";
 import {
   buildSessionTreeIndex,
-  compactSessionTreeEntries,
+  projectActiveBranchEdges,
   projectBranchEndChoices,
-  projectBranchPointControls,
   projectEditableTarget,
   type BranchEndChoiceProjection,
 } from "../session-tree/sessionTreeProjection.js";
+import { SessionEntryState } from "./SessionEntryState.js";
+import { SessionViewState } from "./SessionViewState.js";
 
 export interface SessionRuntimeHooks {
   onChange(runtime: SessionRuntime): void;
@@ -49,7 +49,9 @@ export type ForkExecutionResult =
   | { cancelled: false; text: string; images: ImageAttachmentView[] };
 
 export class SessionRuntime {
-  readonly #projection: SessionProjection;
+  readonly #conversation: ConversationProjection;
+  readonly #entries = new SessionEntryState();
+  readonly #viewState: SessionViewState;
   readonly #configurationProvider: () => FrostPiConfiguration;
   readonly #proxySecrets: ProxySecretStore;
   readonly #logger: DiagnosticLogger;
@@ -62,10 +64,6 @@ export class SessionRuntime {
   #starting: Promise<void> | null = null;
   #historyLoading: Promise<void> | null = null;
   #historyEventBuffer: RpcEvent[] | null = null;
-  #entriesCursor: string | null = null;
-  #entriesLeafId: string | null = null;
-  readonly #treeEntriesById = new Map<string, Awaited<ReturnType<PiRpcApi["getEntries"]>>["entries"][number]>();
-  #entryTrackingReady = false;
   #disposed = false;
   #lifecycleVersion = 0;
   #liveStatsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -91,11 +89,12 @@ export class SessionRuntime {
   ) {
     this.#id = id;
     const initialConfiguration = configurationProvider();
-    this.#projection = new SessionProjection(id, cwd, title, {
+    this.#conversation = new ConversationProjection(initialConfiguration.maxImageBytes, 12);
+    this.#viewState = new SessionViewState(id, cwd, title, {
       maxImageBytes: initialConfiguration.maxImageBytes,
       maxImages: 12,
     }, updatedAt, initialConfiguration.collapseTurnTrace);
-    this.#projection.setQuestionTool({
+    this.#viewState.setQuestionTool({
       configuredEnabled: initialConfiguration.questionToolEnabled,
       appliedEnabled: initialConfiguration.questionToolEnabled,
       restartRequired: false,
@@ -113,7 +112,7 @@ export class SessionRuntime {
   }
 
   get view(): Readonly<SessionViewModel> {
-    return this.#projection.read();
+    return this.#viewState.read(this.#conversation.read());
   }
 
   get snapshot(): SessionViewModel {
@@ -126,7 +125,7 @@ export class SessionRuntime {
 
   markWaitingToStart(): void {
     if (this.#disposed || this.#connection?.started || this.#starting) return;
-    this.#projection.setStatus("queued");
+    this.#viewState.setStatus("queued");
     this.#notifyChange();
   }
 
@@ -136,8 +135,9 @@ export class SessionRuntime {
     if (this.#connection?.started) return;
 
     const lifecycleVersion = ++this.#lifecycleVersion;
-    this.#projection.setHistoryStatus(sessionFile ? "queued" : "loaded");
-    this.#entryTrackingReady = !sessionFile;
+    this.#viewState.setHistoryStatus(sessionFile ? "queued" : "loaded");
+    if (sessionFile) this.#entries.reset();
+    else this.#entries.replace([], null);
     this.#starting = this.#startInternal(sessionFile, lifecycleVersion).finally(() => {
       this.#starting = null;
     });
@@ -146,7 +146,7 @@ export class SessionRuntime {
 
   async stop(): Promise<void> {
     this.#lifecycleVersion += 1;
-    this.#projection.setStatus("stopping");
+    this.#viewState.setStatus("stopping");
     this.#stopLiveStatsRefresh();
     this.#notifyChange();
     await this.#extensionUi?.cancelAll();
@@ -159,17 +159,14 @@ export class SessionRuntime {
     this.#api = null;
     this.#extensionUi = null;
     this.#historyEventBuffer = null;
-    this.#entriesCursor = null;
-    this.#entriesLeafId = null;
-    this.#treeEntriesById.clear();
-    this.#entryTrackingReady = false;
+    this.#entries.reset();
     this.#appliedProxyFingerprint = null;
     this.#proxyRestartForced = false;
     this.#appliedQuestionToolEnabled = null;
     // Local follow-up bubbles are ephemeral; a dead process cannot promote them.
-    this.#projection.clearQueuedFollowUps();
-    this.#projection.setForking(false);
-    this.#projection.setStatus("stopped");
+    this.#conversation.clearQueuedFollowUps();
+    this.#viewState.setForking(false);
+    this.#viewState.setStatus("stopped");
     this.refreshConfigurationState(false);
   }
 
@@ -196,7 +193,7 @@ export class SessionRuntime {
       && (this.view.isStreaming || this.view.queuedFollowUps.length > 0);
 
     if (queueAsFollowUp) {
-      const queuedId = this.#projection.enqueueFollowUp(message, images);
+      const queuedId = this.#conversation.enqueueFollowUp(message, images);
       this.#notifyChange();
       try {
         await api.prompt(message, {
@@ -204,15 +201,15 @@ export class SessionRuntime {
           streamingBehavior: "followUp",
         });
       } catch (error) {
-        this.#projection.removeQueuedFollowUp(queuedId);
-        this.#projection.appendNotice(errorMessage(error), "error");
+        this.#conversation.removeQueuedFollowUp(queuedId);
+        this.#conversation.appendNotice(errorMessage(error), "error");
         this.#notifyChange();
         throw error;
       }
       return;
     }
 
-    const turnId = this.#projection.appendUserPrompt(message, images);
+    const turnId = this.#conversation.appendUserPrompt(message, images);
     this.#notifyChange();
 
     try {
@@ -225,8 +222,8 @@ export class SessionRuntime {
       if (extensionCommand) await this.#finishImmediateExtensionCommand(turnId);
     } catch (error) {
       const messageText = errorMessage(error);
-      this.#projection.appendNotice(messageText, "error");
-      if (!this.view.isStreaming) this.#projection.completeTurn(turnId, "error");
+      this.#conversation.appendNotice(messageText, "error");
+      if (!this.view.isStreaming) this.#conversation.completeTurn(turnId, "error");
       this.#notifyChange();
       throw error;
     }
@@ -246,7 +243,7 @@ export class SessionRuntime {
       throw error;
     }
     // Abort cancels the active run; pending local follow-up UI is no longer trustworthy.
-    this.#projection.clearQueuedFollowUps();
+    this.#conversation.clearQueuedFollowUps();
     this.#notifyChange();
   }
 
@@ -275,34 +272,29 @@ export class SessionRuntime {
     } : undefined;
 
     let committed = false;
-    this.#projection.setNavigatingTree(true, summary.summarize);
+    this.#viewState.setNavigatingTree(true, summary.summarize);
     this.#notifyChange();
     try {
       const result = await this.#sessionTreeBridge.navigate(api, targetId, summary);
       if (result.status === "cancelled") return { cancelled: true };
       committed = true;
       const entryData = await api.getEntries();
-      const [state, messages, stats] = await Promise.all([
+      const [state, stats] = await Promise.all([
         api.getState(),
-        api.getMessages(),
         api.getSessionStats().catch(() => undefined),
       ]);
-      this.#entriesCursor = lastEntryId(entryData.entries);
-      this.#entriesLeafId = entryData.leafId;
-      this.#entryTrackingReady = true;
-      this.#projection.applyState(state);
-      this.#projection.hydrateMessages(messages, activeUserEntryReferences(entryData.entries, entryData.leafId));
-      if (stats) this.#projection.setStats(stats);
-      this.#applyTreeEntries(entryData.entries, entryData.leafId);
+      this.#viewState.applyState(state);
+      this.#replacePersistedEntries(entryData.entries, entryData.leafId);
+      if (stats) this.#viewState.setStats(stats);
       return seed ? { cancelled: false, seed } : { cancelled: false };
     } catch (error) {
       if (committed) {
-        this.#projection.setHistoryStatus("failed");
-        this.#projection.appendNotice(`Unable to reload the committed session branch: ${errorMessage(error)}`, "error");
+        this.#viewState.setHistoryStatus("failed");
+        this.#conversation.appendNotice(`Unable to reload the committed session branch: ${errorMessage(error)}`, "error");
       }
       throw error;
     } finally {
-      this.#projection.setNavigatingTree(false);
+      this.#viewState.setNavigatingTree(false);
       this.#notifyChange();
     }
   }
@@ -314,7 +306,7 @@ export class SessionRuntime {
     if (this.view.historyStatus !== "loaded") throw new Error("Load conversation history before forking a message.");
     if (this.view.pendingExtensionUi.length > 0) throw new Error("Answer the pending Pi request before forking.");
     if (this.view.queuedFollowUps.length > 0) throw new Error("Wait for queued follow-ups to settle before forking.");
-    const selectedMessage = this.view.turns.find((turn) => turn.userMessage?.sourceEntryId === entryId)?.userMessage;
+    const selectedMessage = this.#conversation.userMessage(entryId);
     if (!selectedMessage) throw new Error("The selected message is no longer available for forking.");
     const projectedImages = selectedMessage.blocks.flatMap((block) => block.type === "images" ? block.images : []);
     const images = validateProjectedImageAttachments(
@@ -325,20 +317,20 @@ export class SessionRuntime {
 
     const previousExtensionUi = this.#extensionUi?.snapshot();
     this.#extensionUi?.clearSessionDecorations();
-    this.#projection.setForking(true);
+    this.#viewState.setForking(true);
     this.#notifyChange();
     try {
       const result = await this.#requireApi().fork(entryId);
       if (result.cancelled) {
         if (previousExtensionUi) this.#restoreForkDecorations(previousExtensionUi);
-        this.#projection.setForking(false);
+        this.#viewState.setForking(false);
         this.#notifyChange();
         return { cancelled: true };
       }
       return { cancelled: false, text: result.text, images };
     } catch (error) {
       if (previousExtensionUi) this.#restoreForkDecorations(previousExtensionUi);
-      this.#projection.setForking(false);
+      this.#viewState.setForking(false);
       this.#notifyChange();
       throw error;
     }
@@ -348,21 +340,17 @@ export class SessionRuntime {
     const api = this.#requireApi();
     await api.setSessionName(name);
     const state = await api.getState();
-    const [messages, entryData, stats, commands] = await Promise.all([
-      api.getMessages(),
+    const [entryData, stats, commands] = await Promise.all([
       api.getEntries(),
       api.getSessionStats().catch(() => undefined),
       api.getCommands().catch(() => undefined),
     ]);
-    this.#projection.applyState(state);
-    this.#entriesCursor = lastEntryId(entryData.entries);
-    this.#entriesLeafId = entryData.leafId;
-    this.#entryTrackingReady = true;
-    this.#projection.hydrateMessages(messages, activeUserEntryReferences(entryData.entries, entryData.leafId));
-    if (stats) this.#projection.setStats(stats);
-    if (commands) this.#projection.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
-    this.#projection.setComposerSeed(composerSeed);
-    this.#projection.setForking(false);
+    this.#viewState.applyState(state);
+    this.#replacePersistedEntries(entryData.entries, entryData.leafId);
+    if (stats) this.#viewState.setStats(stats);
+    if (commands) this.#viewState.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
+    this.#viewState.setComposerSeed(composerSeed);
+    this.#viewState.setForking(false);
     this.#notifyChange();
   }
 
@@ -370,65 +358,62 @@ export class SessionRuntime {
     if (this.#starting || this.#historyLoading) throw new Error("Cannot replace a session identity while lifecycle work is pending.");
     // Registry rekeys its maps around this call; emitting midway would expose mismatched identities.
     this.#id = id;
-    this.#projection.rebindSessionId(id);
+    this.#viewState.rebindSessionId(id);
   }
 
   setComposerSeed(seed: ComposerSeedView): void {
-    this.#projection.setComposerSeed(seed);
+    this.#viewState.setComposerSeed(seed);
     this.#notifyChange();
   }
 
   clearComposerSeed(): void {
-    this.#projection.clearComposerSeed();
+    this.#viewState.clearComposerSeed();
     this.#notifyChange();
   }
 
   setDisplayTitle(title: string): void {
-    this.#projection.setTitle(title);
+    this.#viewState.setTitle(title);
     this.#notifyChange();
   }
 
   async rename(name: string): Promise<void> {
     const normalized = name.trim();
     await this.#requireApi().setSessionName(normalized);
-    this.#projection.setTitle(normalized || "Untitled session");
+    this.#viewState.setTitle(normalized || "Untitled session");
     this.#notifyChange();
   }
 
   async setModel(provider: string, modelId: string): Promise<void> {
     const model = await this.#requireApi().setModel(provider, modelId);
     const state = await this.#requireApi().getState();
-    this.#projection.applyState({ ...state, model });
+    this.#viewState.applyState({ ...state, model });
     this.#notifyChange();
   }
 
   async setThinkingLevel(level: ThinkingLevel): Promise<void> {
     await this.#requireApi().setThinkingLevel(level);
     const state = await this.#requireApi().getState();
-    this.#projection.applyState(state);
+    this.#viewState.applyState(state);
     this.#notifyChange();
   }
 
   async refreshModels(): Promise<RpcModel[]> {
     const models = await this.#requireApi().getAvailableModels();
-    this.#projection.setModels(models);
+    this.#viewState.setModels(models);
     this.#notifyChange();
     return models;
   }
 
   async refreshCommands(): Promise<void> {
     const commands = await this.#requireApi().getCommands();
-    this.#projection.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
+    this.#viewState.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
     this.#notifyChange();
   }
 
   async probePiIntegration(): Promise<{ available: boolean; commandName: string | null }> {
     const commands = await this.#requireApi().getCommands();
-    this.#projection.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
-    this.#projection.setSessionTreeState(
-      this.#sessionTreeBridge?.available ?? false,
-      this.view.branchControls,
-    );
+    this.#viewState.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
+    this.#viewState.setSessionTreeAvailable(this.#sessionTreeBridge?.available ?? false);
     this.#notifyChange();
     return {
       available: this.#sessionTreeBridge?.available ?? false,
@@ -437,7 +422,7 @@ export class SessionRuntime {
   }
 
   markHistoryWaiting(): void {
-    this.#projection.setHistoryStatus("queued");
+    this.#viewState.setHistoryStatus("queued");
     this.#notifyChange();
   }
 
@@ -455,7 +440,7 @@ export class SessionRuntime {
     const api = this.#requireApi();
     const sessionFile = this.view.sessionFile;
     if (!sessionFile) {
-      this.#projection.setHistoryStatus("loaded");
+      this.#viewState.setHistoryStatus("loaded");
       this.#notifyChange();
       return;
     }
@@ -492,9 +477,10 @@ export class SessionRuntime {
     const restartRequired = running && (this.#proxyRestartForced || (this.#appliedProxyFingerprint !== null && fingerprint !== this.#appliedProxyFingerprint));
     const configuredLabel = proxyModeLabel(configuration.proxy.mode);
     const appliedLabel = running ? this.view.networkProxy.label : configuredLabel;
-    this.#projection.setAttachmentLimits({ maxImageBytes: configuration.maxImageBytes, maxImages: 12 });
-    this.#projection.setCollapseTurnTrace(configuration.collapseTurnTrace);
-    this.#projection.setNetworkProxy({
+    this.#conversation.setImageLimits(configuration.maxImageBytes, 12);
+    this.#viewState.setAttachmentLimits({ maxImageBytes: configuration.maxImageBytes, maxImages: 12 });
+    this.#viewState.setCollapseTurnTrace(configuration.collapseTurnTrace);
+    this.#viewState.setNetworkProxy({
       mode: configuration.proxy.mode,
       label: appliedLabel,
       ...(restartRequired ? { pendingLabel: configuredLabel } : {}),
@@ -503,7 +489,7 @@ export class SessionRuntime {
     const appliedQuestionToolEnabled = running
       ? this.#appliedQuestionToolEnabled ?? false
       : configuration.questionToolEnabled;
-    this.#projection.setQuestionTool({
+    this.#viewState.setQuestionTool({
       configuredEnabled: configuration.questionToolEnabled,
       appliedEnabled: appliedQuestionToolEnabled,
       restartRequired: running && appliedQuestionToolEnabled !== configuration.questionToolEnabled,
@@ -524,8 +510,8 @@ export class SessionRuntime {
       `Thinking: ${view.thinkingLevel}`,
       `Proxy: ${view.networkProxy.label}${view.networkProxy.restartRequired ? ` → ${view.networkProxy.pendingLabel ?? proxyModeLabel(view.networkProxy.mode)} after restart` : ""}`,
       `Question tool: ${view.questionTool.appliedEnabled ? "enabled" : "disabled"}${view.questionTool.restartRequired ? ` → ${view.questionTool.configuredEnabled ? "enabled" : "disabled"} after restart` : ""}`,
-      `Turns: ${view.turns.length}`,
-      `Tool calls: ${view.turns.reduce((count, turn) => count + turn.activities.filter((activity) => activity.type === "tool").length, 0)}`,
+      `Turns: ${conversationTurns(view).length}`,
+      `Tool calls: ${conversationTurns(view).reduce((count, turn) => count + turn.items.filter((item) => item.type === "tool").length, 0)}`,
       `Pending extension UI: ${view.pendingExtensionUi.length}`,
       `Last error: ${view.error ?? "<none>"}`,
       `Pi stderr tail: ${redactDiagnosticText(this.#connection?.getStderr() || "<empty>")}`,
@@ -533,7 +519,7 @@ export class SessionRuntime {
   }
 
   async #startInternal(sessionFile: string | undefined, lifecycleVersion: number): Promise<void> {
-    this.#projection.setStatus("starting");
+    this.#viewState.setStatus("starting");
     this.#notifyChange();
 
     const configuration = this.#configurationProvider();
@@ -575,9 +561,9 @@ export class SessionRuntime {
         this.#syncExtensionUiSnapshot();
         this.#notifyChange();
       },
-      onNotify: (level, message) => this.#projection.appendNotice(message, level),
+      onNotify: (level, message) => this.#conversation.appendNotice(message, level),
       onTitle: (title) => {
-        this.#projection.setTitle(title);
+        this.#viewState.setTitle(title);
         this.#notifyChange();
       },
       onEditorText: (text) => this.#hooks.onEditorText(this, text),
@@ -594,8 +580,8 @@ export class SessionRuntime {
     connection.onFailure((error) => {
       this.#logger.error(`Session ${this.id} failed`, error);
       this.#stopLiveStatsRefresh();
-      this.#projection.clearQueuedFollowUps();
-      this.#projection.setStatus("failed", errorMessage(error));
+      this.#conversation.clearQueuedFollowUps();
+      this.#viewState.setStatus("failed", errorMessage(error));
       this.#notifyChange();
     });
     connection.onExit(({ code, signal }) => {
@@ -611,15 +597,15 @@ export class SessionRuntime {
       this.#appliedProxyFingerprint = proxyFingerprint(configuration.proxy, vscodeProxy);
       this.#proxyRestartForced = false;
       this.#appliedQuestionToolEnabled = configuration.questionToolEnabled;
-      this.#projection.setNetworkProxy({ mode: configuration.proxy.mode, label: proxyEnvironment.label, restartRequired: false });
-      this.#projection.applyState(state);
+      this.#viewState.setNetworkProxy({ mode: configuration.proxy.mode, label: proxyEnvironment.label, restartRequired: false });
+      this.#viewState.applyState(state);
       this.#logger.info(`Started Pi session ${this.id} in ${this.cwd}`);
       this.#notifyChange();
       void this.#loadSessionInformation(api);
     } catch (error) {
       if (this.#disposed || lifecycleVersion !== this.#lifecycleVersion) return;
       const message = errorMessage(error);
-      this.#projection.setStatus("failed", message);
+      this.#viewState.setStatus("failed", message);
       this.#logger.error(`Failed to start Pi session ${this.id}`, error);
       this.#notifyChange();
       throw error;
@@ -639,12 +625,13 @@ export class SessionRuntime {
       api.getSessionStats().catch(() => undefined),
     ]);
     if (this.#disposed || api !== this.#api) return;
-    this.#projection.setModels(models);
-    this.#projection.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
-    if (stats) this.#projection.setStats(stats);
-    if (this.#sessionTreeBridge) {
-      await this.#refreshTreeProjection(api).catch((error: unknown) => {
-        this.#logger.error("Failed to load session tree", error);
+    this.#viewState.setModels(models);
+    this.#viewState.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
+    if (stats) this.#viewState.setStats(stats);
+    this.#viewState.setSessionTreeAvailable(this.#sessionTreeBridge?.available ?? false);
+    if (this.#entries.initialized) {
+      await this.#refreshPersistedEntries(api).catch((error) => {
+        this.#logger.error("Failed to initialize Pi session entries", error);
       });
     }
     this.#notifyChange();
@@ -652,41 +639,34 @@ export class SessionRuntime {
 
   async #loadHistoryInternal(api: PiRpcApi, sessionFile: string, force: boolean): Promise<void> {
     if (this.view.isStreaming) {
-      this.#projection.setHistoryStatus("deferred");
+      this.#viewState.setHistoryStatus("deferred");
       this.#notifyChange();
       throw new Error("Stop the running session before loading its conversation history.");
     }
 
     try {
       if (!force && (await stat(sessionFile)).size > MAX_AUTO_HISTORY_LOAD_BYTES) {
-        this.#projection.setHistoryStatus("deferred");
-        this.#projection.appendNotice("Conversation history is large and was not loaded automatically.", "info");
+        this.#viewState.setHistoryStatus("deferred");
+        this.#conversation.appendNotice("Conversation history is large and was not loaded automatically.", "info");
         this.#notifyChange();
         return;
       }
-      this.#projection.setHistoryStatus("loading");
+      this.#viewState.setHistoryStatus("loading");
       this.#historyEventBuffer = [];
       this.#notifyChange();
-      const [messages, entryData] = await Promise.all([api.getMessages(), api.getEntries()]);
+      const entryData = await api.getEntries();
       const bufferedEvents = this.#takeHistoryEvents();
       if (this.#disposed || api !== this.#api) return;
-      this.#entriesCursor = lastEntryId(entryData.entries);
-      this.#entriesLeafId = entryData.leafId;
-      this.#entryTrackingReady = true;
-      this.#projection.hydrateMessages(
-        messages,
-        activeUserEntryReferences(entryData.entries, entryData.leafId),
-      );
-      this.#applyTreeEntries(entryData.entries, entryData.leafId);
+      this.#replacePersistedEntries(entryData.entries, entryData.leafId);
       for (const event of bufferedEvents) this.#applyConnectionEvent(event);
       this.#notifyChange();
     } catch (error) {
       const bufferedEvents = this.#takeHistoryEvents();
       if (this.#disposed || api !== this.#api) return;
       for (const event of bufferedEvents) this.#applyConnectionEvent(event);
-      this.#logger.error("Failed to load Pi messages", error);
-      this.#projection.setHistoryStatus("failed");
-      this.#projection.appendNotice(`Unable to load conversation history: ${errorMessage(error)}`, "error");
+      this.#logger.error("Failed to load Pi session entries", error);
+      this.#viewState.setHistoryStatus("failed");
+      this.#conversation.appendNotice(`Unable to load conversation history: ${errorMessage(error)}`, "error");
       this.#notifyChange();
       throw error;
     }
@@ -699,13 +679,19 @@ export class SessionRuntime {
   }
 
   #applyConnectionEvent(event: RpcEvent): void {
-    const latestTurn = event.type === "agent_settled" ? this.view.turns.at(-1) : undefined;
-    const settlingTurnId = latestTurn?.status === "running" ? latestTurn.id : undefined;
+    const latestTurn = event.type === "agent_settled" ? conversationTurns(this.view).at(-1) : undefined;
+    const settlingTurnId = this.view.isStreaming ? latestTurn?.id : undefined;
     const abortRequested = this.#abortRequested;
     if (isExtensionUiRequest(event)) {
       if (this.#questionToolBridge?.recognizes(event)) void this.#handleQuestionUiRequest(event);
       else this.#extensionUi?.handle(event);
-    } else this.#projection.applyEvent(event);
+    } else {
+      this.#viewState.applyEvent(event);
+      this.#conversation.applyEvent(event);
+      if (event.type === "compaction_end" && typeof event.errorMessage === "string") {
+        this.#conversation.appendNotice(event.errorMessage, "error");
+      }
+    }
     if (event.type === "agent_start") {
       this.#abortRequested = false;
       this.#startLiveStatsRefresh();
@@ -713,7 +699,7 @@ export class SessionRuntime {
     if (event.type === "agent_settled") {
       this.#abortRequested = false;
       this.#stopLiveStatsRefresh();
-      const settledTurn = settlingTurnId ? this.view.turns.find((turn) => turn.id === settlingTurnId) : undefined;
+      const settledTurn = settlingTurnId ? conversationTurns(this.view).find((turn) => turn.id === settlingTurnId) : undefined;
       if (!abortRequested && settledTurn?.status === "completed") this.#hooks.onAgentTurnCompleted?.(this);
       void this.#refreshAfterSettled();
     }
@@ -731,7 +717,7 @@ export class SessionRuntime {
       coordinator.addPending(pending, request.timeout);
     } catch (error) {
       this.#logger.error("Rejected FrostPi Question request", error);
-      this.#projection.appendNotice(`Unable to open FrostPi Question UI: ${errorMessage(error)}`, "error");
+      this.#conversation.appendNotice(`Unable to open FrostPi Question UI: ${errorMessage(error)}`, "error");
       this.#notifyChange();
       await api.sendExtensionUiResponse(request.id, { cancelled: true }).catch(() => undefined);
     }
@@ -742,7 +728,10 @@ export class SessionRuntime {
     if (!api) return;
     const stats = await api.getSessionStats().catch(() => undefined);
     if (this.#disposed || api !== this.#api) return;
-    if (stats) this.#projection.setStats(stats);
+    if (stats) this.#viewState.setStats(stats);
+    await this.#refreshPersistedEntries(api).catch((error) => {
+      this.#reportEntryRefreshFailure("Failed to reconcile Pi entries after compaction", error);
+    });
     this.#notifyChange();
   }
 
@@ -771,7 +760,7 @@ export class SessionRuntime {
     const stats = await api.getSessionStats().catch(() => undefined);
     if (this.#disposed || api !== this.#api || version !== this.#liveStatsRefreshVersion || !this.view.isStreaming) return;
     if (stats) {
-      this.#projection.setStats(stats);
+      this.#viewState.setStats(stats);
       this.#notifyChange();
     }
     this.#scheduleLiveStatsRefresh();
@@ -780,67 +769,44 @@ export class SessionRuntime {
   async #refreshAfterSettled(): Promise<void> {
     const api = this.#api;
     if (!api) return;
-    const [state, stats, commands, entryData] = await Promise.all([
+    const [state, stats, commands] = await Promise.all([
       api.getState().catch(() => undefined),
       api.getSessionStats().catch(() => undefined),
       api.getCommands().catch(() => undefined),
-      this.#entryTrackingReady
-        ? api.getEntries(this.#entriesCursor ?? undefined).catch(() => undefined)
-        : Promise.resolve(undefined),
     ]);
-    if (state) this.#projection.applyState(state);
-    if (stats) this.#projection.setStats(stats);
-    if (commands) this.#projection.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
-    if (entryData) {
-      await this.#reconcileIncrementalEntries(api, entryData.entries, entryData.leafId).catch((error) => {
-        this.#logger.error("Failed to reconcile Pi session entries", error);
-      });
-    }
+    if (state) this.#viewState.applyState(state);
+    if (stats) this.#viewState.setStats(stats);
+    if (commands) this.#viewState.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
+    await this.#refreshPersistedEntries(api).catch((error) => {
+      this.#reportEntryRefreshFailure("Failed to reconcile Pi session entries", error);
+    });
     this.#notifyChange();
   }
 
-  async #reconcileIncrementalEntries(
-    api: PiRpcApi,
-    entries: Awaited<ReturnType<PiRpcApi["getEntries"]>>["entries"],
-    leafId: string | null,
-  ): Promise<void> {
-    if (activeLeafContinues(this.#entriesLeafId, entries, leafId)) {
-      this.#entriesCursor = lastEntryId(entries) ?? this.#entriesCursor;
-      this.#entriesLeafId = leafId;
-      this.#projection.attachUserEntryReferences(userEntryReferences(entries));
-      this.#applyTreeEntries(entries, leafId, false);
-      return;
+  async #refreshPersistedEntries(api: PiRpcApi): Promise<void> {
+    if (!this.#entries.initialized) return;
+    const incremental = await api.getEntries(this.#entries.cursor ?? undefined);
+    if (this.#disposed || api !== this.#api) return;
+
+    const update = this.#entries.applyIncrement(incremental.entries, incremental.leafId);
+    if (update.kind === "append") {
+      const edges = projectActiveBranchEdges(update.index);
+      if (this.#conversation.reconcileEntries(update.activePathAppend, edges) === "applied") return;
     }
 
-    const [messages, entryData] = await Promise.all([api.getMessages(), api.getEntries()]);
+    const complete = await api.getEntries();
     if (this.#disposed || api !== this.#api) return;
-    this.#entriesCursor = lastEntryId(entryData.entries);
-    this.#entriesLeafId = entryData.leafId;
-    this.#projection.hydrateMessages(messages, activeUserEntryReferences(entryData.entries, entryData.leafId));
-    this.#applyTreeEntries(entryData.entries, entryData.leafId);
+    this.#replacePersistedEntries(complete.entries, complete.leafId);
   }
 
-  #applyTreeEntries(
+  #replacePersistedEntries(
     entries: Awaited<ReturnType<PiRpcApi["getEntries"]>>["entries"],
     leafId: string | null,
-    replace = true,
   ): void {
-    if (replace) this.#treeEntriesById.clear();
-    for (const entry of compactSessionTreeEntries(entries)) this.#treeEntriesById.set(entry.id, entry);
-    const index = buildSessionTreeIndex([...this.#treeEntriesById.values()], leafId);
-    this.#projection.setSessionTreeState(
-      this.#sessionTreeBridge?.available ?? false,
-      projectBranchPointControls(index, this.view.branchSummaries),
-    );
-  }
-
-  async #refreshTreeProjection(api: PiRpcApi): Promise<void> {
-    const entryData = await api.getEntries();
-    if (this.#disposed || api !== this.#api) return;
-    this.#entriesCursor = lastEntryId(entryData.entries);
-    this.#entriesLeafId = entryData.leafId;
-    this.#entryTrackingReady = true;
-    this.#applyTreeEntries(entryData.entries, entryData.leafId);
+    const replacement = this.#entries.replace(entries, leafId);
+    this.#conversation.replaceEntries(replacement.activePath, projectActiveBranchEdges(replacement.index));
+    this.#viewState.setHistoryStatus("loaded");
+    this.#viewState.setSessionTreeAvailable(this.#sessionTreeBridge?.available ?? false);
   }
 
   async #resolveImmediateExtensionCommand(message: string): Promise<string | undefined> {
@@ -854,7 +820,7 @@ export class SessionRuntime {
     try {
       const commands = await this.#requireApi().getCommands();
       const visibleCommands = this.#sessionTreeBridge?.discover(commands) ?? commands;
-      this.#projection.setCommands(visibleCommands);
+      this.#viewState.setCommands(visibleCommands);
       this.#notifyChange();
       const found = visibleCommands.find((command) => command.name === name);
       return found?.source === "extension" ? name : undefined;
@@ -897,19 +863,33 @@ export class SessionRuntime {
     // If every get_state failed but the local session never entered an agent run, still close the turn
     // so extension-command UX cannot stick on running forever.
     if (!sawSuccessfulIdleState && !this.view.isStreaming) {
-      this.#projection.completeTurn(turnId, "completed");
+      this.#conversation.completeTurn(turnId, "completed");
+      const api = this.#api;
+      if (api) await this.#refreshPersistedEntries(api).catch((error) => {
+        this.#reportEntryRefreshFailure("Failed to reconcile entries after extension command", error);
+      });
       this.#notifyChange();
       return;
     }
     if (!idleState) return;
 
-    this.#projection.completeTurn(turnId, "completed");
-    this.#projection.applyState(idleState);
+    this.#conversation.completeTurn(turnId, "completed");
+    this.#viewState.applyState(idleState);
+    const api = this.#api;
+    if (api) await this.#refreshPersistedEntries(api).catch((error) => {
+      this.#reportEntryRefreshFailure("Failed to reconcile entries after extension command", error);
+    });
     this.#notifyChange();
   }
 
+  #reportEntryRefreshFailure(logMessage: string, error: unknown): void {
+    this.#logger.error(logMessage, error);
+    this.#viewState.setHistoryStatus("failed");
+    this.#conversation.appendNotice(`Unable to reconcile conversation history: ${errorMessage(error)}`, "error");
+  }
+
   #turnStillRunning(turnId: string): boolean {
-    return this.view.turns.some((turn) => turn.id === turnId && turn.status === "running");
+    return conversationTurns(this.view).some((turn) => turn.id === turnId && turn.status === "running");
   }
 
   #requireApi(): PiRpcApi {
@@ -920,7 +900,7 @@ export class SessionRuntime {
   #syncExtensionUiSnapshot(): void {
     const snapshot = this.#extensionUi?.snapshot();
     if (!snapshot) return;
-    this.#projection.setExtensionUi(snapshot.pending, snapshot.statuses, snapshot.widgets);
+    this.#viewState.setExtensionUi(snapshot.pending, snapshot.statuses, snapshot.widgets);
   }
 
   #restoreForkDecorations(snapshot: ReturnType<ExtensionUiCoordinator["snapshot"]>): void {
@@ -928,7 +908,7 @@ export class SessionRuntime {
       this.#extensionUi.restoreSessionDecorations(snapshot.statuses, snapshot.widgets);
       return;
     }
-    this.#projection.setExtensionUi([], snapshot.statuses, snapshot.widgets);
+    this.#viewState.setExtensionUi([], snapshot.statuses, snapshot.widgets);
   }
 
   #notifyChange(): void {
@@ -954,8 +934,8 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function lastEntryId(entries: readonly { id: string }[]): string | null {
-  return entries.at(-1)?.id ?? null;
+function conversationTurns(view: SessionViewModel): AgentTurnView[] {
+  return view.conversationItems.filter((item): item is AgentTurnView => item.type === "turn");
 }
 
 function readVsCodeProxy(cwd: string): string | undefined {

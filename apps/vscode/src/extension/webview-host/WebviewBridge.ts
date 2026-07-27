@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 
 import { BRIDGE_VERSION } from "../../shared/bridge/bridgeVersion.js";
 import type { HostToWebviewPayload, WorkspaceDeltaView } from "../../shared/bridge/hostToWebview.js";
-import type { AgentTurnView, SessionNoticeView } from "../../shared/model/agentTurnModel.js";
+import type { ConversationItemView } from "../../shared/model/conversationModel.js";
 import type { SessionViewModel } from "../../shared/model/sessionViewModel.js";
 import { collectionDelta } from "../../shared/bridge/collectionDelta.js";
 import { webviewToHostSchema, type WebviewToHostMessage } from "../../shared/bridge/webviewToHost.js";
@@ -37,10 +37,8 @@ export class WebviewBridge implements vscode.Disposable {
   #webview: vscode.Webview | null = null;
   #webviewMessageDisposable: vscode.Disposable | null = null;
   #cachedActiveSessionId: string | null = null;
-  #turnOrder: string[] = [];
-  #turnRefs = new Map<string, AgentTurnView>();
-  #noticeOrder: string[] = [];
-  #noticeRefs = new Map<string, SessionNoticeView>();
+  #conversationItemOrder: string[] = [];
+  #conversationItemRefs = new Map<string, ConversationItemView>();
   readonly #pendingComposerText = new Map<string, string>();
 
   constructor(registry: SessionRegistry, logger: DiagnosticLogger) {
@@ -163,22 +161,21 @@ export class WebviewBridge implements vscode.Disposable {
   }
 
   #sessionDelta(session: SessionViewModel): NonNullable<WorkspaceDeltaView["activeSession"]> {
-    const { turns, notices, ...base } = session;
-    const turnDelta = collectionDelta(this.#turnOrder, this.#turnRefs, turns);
-    const noticeDelta = collectionDelta(this.#noticeOrder, this.#noticeRefs, notices);
-    this.#turnOrder = turns.map((turn) => turn.id);
-    this.#turnRefs = referenceMap(turns);
-    this.#noticeOrder = notices.map((notice) => notice.id);
-    this.#noticeRefs = referenceMap(notices);
-    return { base, turns: turnDelta, notices: noticeDelta };
+    const { conversationItems, ...base } = session;
+    const conversationDelta = collectionDelta(
+      this.#conversationItemOrder,
+      this.#conversationItemRefs,
+      conversationItems,
+    );
+    this.#conversationItemOrder = conversationItems.map((item) => item.id);
+    this.#conversationItemRefs = referenceMap(conversationItems);
+    return { base, conversationItems: conversationDelta };
   }
 
   #resetCache(session: SessionViewModel | null): void {
     this.#cachedActiveSessionId = session?.id ?? null;
-    this.#turnOrder = session?.turns.map((turn) => turn.id) ?? [];
-    this.#turnRefs = referenceMap(session?.turns ?? []);
-    this.#noticeOrder = session?.notices.map((notice) => notice.id) ?? [];
-    this.#noticeRefs = referenceMap(session?.notices ?? []);
+    this.#conversationItemOrder = session?.conversationItems.map((item) => item.id) ?? [];
+    this.#conversationItemRefs = referenceMap(session?.conversationItems ?? []);
   }
 
   async #receive(raw: unknown): Promise<void> {
@@ -394,9 +391,10 @@ function workspaceFileBoosts(session: SessionViewModel): Set<string> {
   };
   add(vscode.window.activeTextEditor?.document.uri.fsPath);
   for (const editor of vscode.window.visibleTextEditors) add(editor.document.uri.fsPath);
-  for (const turn of session.turns) {
-    for (const activity of turn.activities) {
-      if (activity.type === "tool") add(activity.tool.filePath);
+  for (const item of session.conversationItems) {
+    if (item.type !== "turn") continue;
+    for (const turnItem of item.items) {
+      if (turnItem.type === "tool") add(turnItem.tool.filePath);
     }
   }
   return boosts;

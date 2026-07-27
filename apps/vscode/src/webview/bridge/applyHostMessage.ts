@@ -30,8 +30,10 @@ export function applyHostMessage(message: HostToWebviewMessage): void {
         const existing = current.activeSession?.id === incoming?.base.id ? current.activeSession : null;
         activeSession = incoming ? {
           ...incoming.base,
-          turns: mergeCollection(existing?.turns ?? [], incoming.turns),
-          notices: mergeCollection(existing?.notices ?? [], incoming.notices),
+          conversationItems: mergeCollection(
+            existing?.conversationItems ?? [],
+            incoming.conversationItems,
+          ),
         } : null;
         return {
           workspaceName: message.workspace.workspaceName,

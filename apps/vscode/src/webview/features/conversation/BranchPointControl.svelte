@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { BranchControlView, SessionViewModel } from "$shared/model/sessionViewModel";
+  import type { BranchControlView } from "$shared/model/conversationModel";
+  import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
   import { requestBranchSwitch } from "./sessionTreeClient";
 

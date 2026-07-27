@@ -1,6 +1,7 @@
 import type { RpcSessionEntry } from "@frostime/pi-rpc";
 
-import type { BranchSummaryView, ImageAttachmentView } from "../../shared/model/conversationModel.js";
+import type { ImageAttachmentView } from "../../shared/model/conversationModel.js";
+import type { SessionEntryIndex } from "../sessions/SessionEntryState.js";
 
 export interface SessionTreeIndex {
   entriesById: ReadonlyMap<string, RpcSessionEntry>;
@@ -10,12 +11,10 @@ export interface SessionTreeIndex {
   leafId: string | null;
 }
 
-export interface BranchPointControlProjection {
+export interface ActiveBranchEdge {
   branchPointId: string | null;
-  anchorEntryId: string;
-  anchorPosition: "before";
+  activeChildEntryId: string;
   pathCount: number;
-  branchSummary?: BranchSummaryView;
 }
 
 export interface BranchEndChoiceProjection {
@@ -37,18 +36,6 @@ export interface EditableTargetProjection {
 
 const PREVIEW_LENGTH = 80;
 const DETAIL_LENGTH = 72;
-
-export function compactSessionTreeEntries(entries: readonly RpcSessionEntry[]): RpcSessionEntry[] {
-  return entries.map((entry) => ({
-    type: entry.type,
-    id: entry.id,
-    parentId: entry.parentId,
-    ...(typeof entry.timestamp === "string" || typeof entry.timestamp === "number" ? { timestamp: entry.timestamp } : {}),
-    ...(entry.type === "message" && isRecord(entry.message) && typeof entry.message.role === "string"
-      ? { message: { role: entry.message.role } }
-      : {}),
-  }));
-}
 
 export function buildSessionTreeIndex(
   entries: readonly RpcSessionEntry[],
@@ -80,47 +67,28 @@ export function buildSessionTreeIndex(
   };
 }
 
-export function projectBranchPointControls(
-  index: SessionTreeIndex,
-  branchSummaries: readonly BranchSummaryView[] = [],
-): BranchPointControlProjection[] {
-  const summaryByBranchPoint = new Map<string | null, BranchSummaryView>();
-  for (const summary of branchSummaries) {
-    const branchPointId = findBranchPointForEntry(index, summary.fromId);
-    if (branchPointId !== undefined) summaryByBranchPoint.set(branchPointId, summary);
+export function projectActiveBranchEdges(index: SessionEntryIndex): ActiveBranchEdge[] {
+  const edges: ActiveBranchEdge[] = [];
+  const rootEntryId = index.activePath[0];
+  if (rootEntryId && retainedChildren(index, null).length >= 2) {
+    edges.push({
+      branchPointId: null,
+      activeChildEntryId: rootEntryId,
+      pathCount: reachablePathCount(index, null),
+    });
   }
 
-  const controls: BranchPointControlProjection[] = [];
-  if (children(index, null).length >= 2) {
-    const anchor = branchControlAnchor(index, -1);
-    if (anchor) {
-      const control: BranchPointControlProjection = {
-        branchPointId: null,
-        anchorEntryId: anchor.entryId,
-        anchorPosition: anchor.position,
-        pathCount: projectBranchEndChoices(index, null).length,
-      };
-      const summary = summaryByBranchPoint.get(null);
-      if (summary) control.branchSummary = summary;
-      controls.push(control);
-    }
-  }
-  for (let branchIndex = 0; branchIndex < index.activePath.length; branchIndex++) {
-    const branchPointId = index.activePath[branchIndex];
-    if (!branchPointId || children(index, branchPointId).length < 2) continue;
-    const anchor = branchControlAnchor(index, branchIndex);
-    if (!anchor) continue;
-    const control: BranchPointControlProjection = {
+  for (let pathIndex = 0; pathIndex < index.activePath.length - 1; pathIndex++) {
+    const branchPointId = index.activePath[pathIndex];
+    const activeChildEntryId = index.activePath[pathIndex + 1];
+    if (!branchPointId || !activeChildEntryId || retainedChildren(index, branchPointId).length < 2) continue;
+    edges.push({
       branchPointId,
-      anchorEntryId: anchor.entryId,
-      anchorPosition: anchor.position,
-      pathCount: projectBranchEndChoices(index, branchPointId).length,
-    };
-    const summary = summaryByBranchPoint.get(branchPointId);
-    if (summary) control.branchSummary = summary;
-    controls.push(control);
+      activeChildEntryId,
+      pathCount: reachablePathCount(index, branchPointId),
+    });
   }
-  return controls;
+  return edges;
 }
 
 export function projectBranchEndChoices(
@@ -187,33 +155,6 @@ function activeEntryPath(
     currentId = parentById.get(currentId) ?? null;
   }
   return path.reverse();
-}
-
-function branchControlAnchor(
-  index: SessionTreeIndex,
-  branchIndex: number,
-): { entryId: string; position: "before" } | null {
-  for (let pathIndex = branchIndex + 1; pathIndex < index.activePath.length; pathIndex++) {
-    const entryId = index.activePath[pathIndex];
-    if (entryId && isUserMessage(index.entriesById.get(entryId))) return { entryId, position: "before" };
-  }
-  for (let pathIndex = branchIndex; pathIndex >= 0; pathIndex--) {
-    const entryId = index.activePath[pathIndex];
-    if (entryId && isUserMessage(index.entriesById.get(entryId))) return { entryId, position: "before" };
-  }
-  return null;
-}
-
-function findBranchPointForEntry(index: SessionTreeIndex, entryId: string): string | null | undefined {
-  const seen = new Set<string>();
-  let currentId: string | null = entryId;
-  while (currentId !== null) {
-    if (seen.has(currentId)) return undefined;
-    seen.add(currentId);
-    if (children(index, currentId).length >= 2) return currentId;
-    currentId = index.parentById.get(currentId) ?? null;
-  }
-  return undefined;
 }
 
 function branchEndChoice(
@@ -295,6 +236,29 @@ function descendantIds(index: SessionTreeIndex, parentId: string | null): string
 
 function children(index: SessionTreeIndex, parentId: string | null): readonly string[] {
   return index.childrenById.get(parentId) ?? [];
+}
+
+function retainedChildren(index: SessionEntryIndex, parentId: string | null): readonly string[] {
+  return index.childrenByParentId.get(parentId) ?? [];
+}
+
+function reachablePathCount(index: SessionEntryIndex, branchPointId: string | null): number {
+  const descendants: string[] = [];
+  const pending = [...retainedChildren(index, branchPointId)];
+  const seen = new Set<string>();
+  while (pending.length > 0) {
+    const entryId = pending.shift();
+    if (!entryId || seen.has(entryId)) continue;
+    seen.add(entryId);
+    descendants.push(entryId);
+    pending.push(...retainedChildren(index, entryId));
+  }
+
+  const terminalCount = descendants.filter((entryId) => retainedChildren(index, entryId).length === 0).length;
+  const currentLeafIsNonTerminal = index.leafId !== null
+    && seen.has(index.leafId)
+    && retainedChildren(index, index.leafId).length > 0;
+  return terminalCount + (currentLeafIsNonTerminal ? 1 : 0);
 }
 
 function endingDescription(entry: RpcSessionEntry): string {
@@ -408,10 +372,6 @@ function entryTimestamp(entry: RpcSessionEntry): number {
     return entry.message.timestamp;
   }
   return 0;
-}
-
-function isUserMessage(entry: RpcSessionEntry | undefined): boolean {
-  return entry?.type === "message" && isRecord(entry.message) && entry.message.role === "user";
 }
 
 function isMessageLike(entry: RpcSessionEntry | undefined): boolean {
