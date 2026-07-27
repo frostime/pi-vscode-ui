@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Rebuild conversation history from Pi's complete session-entry tree and active leaf instead of its compaction-aware model context. The Extension Host now supplies one authoritative order for turns, tool activity, branch controls, summaries, compaction boundaries, and custom messages.
+- REFACTOR: Rebuild conversation history from Pi's complete session-entry tree and active leaf instead of its compaction-aware model context. The Extension Host now supplies one authoritative order for turns, tool activity, branch controls, summaries, compaction boundaries, and custom messages.
 
 ### Fixed
 
