@@ -29,6 +29,15 @@ export interface BranchSummaryView {
   timestamp: number;
 }
 
+export interface CustomMessageView {
+  id: string;
+  customType: string;
+  content: string;
+  display: boolean;
+  details?: Record<string, unknown>;
+  timestamp: number;
+}
+
 /** Local follow-up waiting for the current agent run to settle. Not part of the durable turn timeline. */
 export interface QueuedFollowUpView {
   id: string;

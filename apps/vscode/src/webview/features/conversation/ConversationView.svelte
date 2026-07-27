@@ -1,14 +1,14 @@
 <script lang="ts">
   import type { AgentTurnView, SessionNoticeView } from "$shared/model/agentTurnModel";
-  import type { BranchSummaryView, CompactionView } from "$shared/model/conversationModel";
+  import type { CompactionView, CustomMessageView } from "$shared/model/conversationModel";
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
   import { onDestroy, onMount } from "svelte";
 
   import NewUpdatesButton from "../scrolling/NewUpdatesButton.svelte";
   import { INITIAL_SCROLL_FOLLOW_STATE, reduceScrollFollow } from "../scrolling/scrollFollowState";
   import AgentTurn from "./AgentTurn.svelte";
-  import BranchSummaryBlock from "./BranchSummaryBlock.svelte";
   import CompactionBlock from "./CompactionBlock.svelte";
+  import CustomBlock from "./CustomBlock.svelte";
   import SessionNotice from "./SessionNotice.svelte";
 
   let { session }: { session: SessionViewModel } = $props();
@@ -24,13 +24,13 @@
     | { kind: "turn"; timestamp: number; value: AgentTurnView }
     | { kind: "notice"; timestamp: number; value: SessionNoticeView }
     | { kind: "compaction"; timestamp: number; value: CompactionView }
-    | { kind: "branchSummary"; timestamp: number; value: BranchSummaryView };
+    | { kind: "custom"; timestamp: number; value: CustomMessageView };
 
   const timeline = $derived.by<TimelineItem[]>(() => [
     ...session.turns.map((value) => ({ kind: "turn" as const, timestamp: value.startedAt, value })),
     ...session.notices.map((value) => ({ kind: "notice" as const, timestamp: value.timestamp, value })),
     ...session.compactions.map((value) => ({ kind: "compaction" as const, timestamp: value.timestamp, value })),
-    ...session.branchSummaries.map((value) => ({ kind: "branchSummary" as const, timestamp: value.timestamp, value })),
+    ...session.customMessages.map((value) => ({ kind: "custom" as const, timestamp: value.timestamp, value })),
   ].sort((left, right) => left.timestamp - right.timestamp));
 
   onMount(() => {
@@ -101,8 +101,8 @@
             <AgentTurn turn={item.value} {session} />
           {:else if item.kind === "compaction"}
             <CompactionBlock compaction={item.value} />
-          {:else if item.kind === "branchSummary"}
-            <BranchSummaryBlock summary={item.value} />
+          {:else if item.kind === "custom"}
+            <CustomBlock message={item.value} />
           {:else}
             <SessionNotice notice={item.value} />
           {/if}

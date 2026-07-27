@@ -13,6 +13,7 @@ import type {
   BranchSummaryView,
   CompactionView,
   ConversationMessageView,
+  CustomMessageView,
   ImageAttachmentView,
   MessageBlockView,
   MessageStatus,
@@ -27,6 +28,7 @@ export interface TurnProjectionSnapshot {
   notices: SessionNoticeView[];
   compactions: CompactionView[];
   branchSummaries: BranchSummaryView[];
+  customMessages: CustomMessageView[];
   queuedFollowUps: QueuedFollowUpView[];
 }
 
@@ -40,6 +42,7 @@ export class TurnProjection {
   #notices: SessionNoticeView[] = [];
   #compactions: CompactionView[] = [];
   #branchSummaries: BranchSummaryView[] = [];
+  #customMessages: CustomMessageView[] = [];
   #queuedFollowUps: QueuedFollowUpView[] = [];
   #activeTurnId: string | null = null;
   #streamingMessageId: string | null = null;
@@ -53,6 +56,7 @@ export class TurnProjection {
       notices: this.#notices,
       compactions: this.#compactions,
       branchSummaries: this.#branchSummaries,
+      customMessages: this.#customMessages,
       queuedFollowUps: this.#queuedFollowUps,
     };
   }
@@ -62,6 +66,7 @@ export class TurnProjection {
     this.#notices = [];
     this.#compactions = [];
     this.#branchSummaries = [];
+    this.#customMessages = [];
     this.#queuedFollowUps = [];
     this.#activeTurnId = null;
     this.#streamingMessageId = null;
@@ -87,6 +92,23 @@ export class TurnProjection {
           fromId: raw.fromId,
           timestamp,
         }];
+        currentTurnId = null;
+        continue;
+      }
+
+      if (raw.role === "custom" && typeof raw.customType === "string" && raw.display === true) {
+        const content = extractText(raw.content);
+        if (content) {
+          const message: CustomMessageView = {
+            id: `custom-${timestamp}-${++this.#sequence}`,
+            customType: raw.customType,
+            content,
+            display: true,
+            timestamp,
+          };
+          if (isRecord(raw.details)) message.details = raw.details;
+          this.#customMessages = [...this.#customMessages, message];
+        }
         currentTurnId = null;
         continue;
       }

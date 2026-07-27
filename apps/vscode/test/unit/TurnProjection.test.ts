@@ -21,6 +21,32 @@ describe("TurnProjection", () => {
     expect(projection.snapshot().turns).toHaveLength(2);
   });
 
+  it("hydrates displayable custom messages with their content and type", () => {
+    const projection = new TurnProjection();
+    projection.hydrate([
+      { role: "user", timestamp: 1, content: "Hello" },
+      {
+        role: "custom",
+        customType: "my-extension",
+        content: "Injected context",
+        display: true,
+        details: { key: "value" },
+        timestamp: 2,
+      },
+      { role: "custom", customType: "hidden", content: "Hidden", display: false, timestamp: 3 },
+    ]);
+
+    const messages = projection.snapshot().customMessages;
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      customType: "my-extension",
+      content: "Injected context",
+      display: true,
+      details: { key: "value" },
+      timestamp: 2,
+    });
+  });
+
   it("binds stable Pi entry ids to duplicate user prompts without guessing by text", () => {
     const projection = new TurnProjection();
     projection.hydrate([

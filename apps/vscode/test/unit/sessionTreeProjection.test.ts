@@ -1,6 +1,7 @@
 import type { RpcSessionEntry } from "@frostime/pi-rpc";
 import { describe, expect, it } from "vitest";
 
+import type { BranchSummaryView } from "../../src/shared/model/conversationModel.js";
 import {
   buildSessionTreeIndex,
   compactSessionTreeEntries,
@@ -146,6 +147,43 @@ describe("session tree projection", () => {
       anchorEntryId: "root-b",
       anchorPosition: "before",
       pathCount: 3,
+    });
+  });
+
+  it("anchors controls before the nearest user message even when it precedes the branch point", () => {
+    const assistantSplit: RpcSessionEntry[] = [
+      entry("user-a", null, 1, "user", "Prompt"),
+      entry("assistant-split", "user-a", 2, "assistant", "Split"),
+      entry("assistant-left", "assistant-split", 3, "assistant", "Left"),
+      entry("assistant-right", "assistant-split", 4, "assistant", "Right"),
+    ];
+    const index = buildSessionTreeIndex(assistantSplit, "assistant-left");
+
+    expect(projectBranchPointControls(index)).toEqual([{
+      branchPointId: "assistant-split",
+      anchorEntryId: "user-a",
+      anchorPosition: "before",
+      pathCount: 2,
+    }]);
+  });
+
+  it("attaches branch summaries to the control for their nearest branching point", () => {
+    const index = buildSessionTreeIndex(entries, "nested-a-end");
+    const summaries: BranchSummaryView[] = [
+      { id: "s1", summary: "From nested branch", fromId: "nested-a-end", timestamp: 10 },
+      { id: "s2", summary: "From root branch", fromId: "branch-a-end", timestamp: 11 },
+    ];
+
+    const controls = projectBranchPointControls(index, summaries);
+    expect(controls.find((c) => c.branchPointId === "branch-b")?.branchSummary).toMatchObject({
+      id: "s1",
+      summary: "From nested branch",
+      fromId: "nested-a-end",
+    });
+    expect(controls.find((c) => c.branchPointId === "a")?.branchSummary).toMatchObject({
+      id: "s2",
+      summary: "From root branch",
+      fromId: "branch-a-end",
     });
   });
 

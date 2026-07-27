@@ -1,6 +1,6 @@
 import type { RpcSessionEntry } from "@frostime/pi-rpc";
 
-import type { ImageAttachmentView } from "../../shared/model/conversationModel.js";
+import type { BranchSummaryView, ImageAttachmentView } from "../../shared/model/conversationModel.js";
 
 export interface SessionTreeIndex {
   entriesById: ReadonlyMap<string, RpcSessionEntry>;
@@ -13,8 +13,9 @@ export interface SessionTreeIndex {
 export interface BranchPointControlProjection {
   branchPointId: string | null;
   anchorEntryId: string;
-  anchorPosition: "before" | "after";
+  anchorPosition: "before";
   pathCount: number;
+  branchSummary?: BranchSummaryView;
 }
 
 export interface BranchEndChoiceProjection {
@@ -79,17 +80,29 @@ export function buildSessionTreeIndex(
   };
 }
 
-export function projectBranchPointControls(index: SessionTreeIndex): BranchPointControlProjection[] {
+export function projectBranchPointControls(
+  index: SessionTreeIndex,
+  branchSummaries: readonly BranchSummaryView[] = [],
+): BranchPointControlProjection[] {
+  const summaryByBranchPoint = new Map<string | null, BranchSummaryView>();
+  for (const summary of branchSummaries) {
+    const branchPointId = findBranchPointForEntry(index, summary.fromId);
+    if (branchPointId !== undefined) summaryByBranchPoint.set(branchPointId, summary);
+  }
+
   const controls: BranchPointControlProjection[] = [];
   if (children(index, null).length >= 2) {
     const anchor = branchControlAnchor(index, -1);
     if (anchor) {
-      controls.push({
+      const control: BranchPointControlProjection = {
         branchPointId: null,
         anchorEntryId: anchor.entryId,
         anchorPosition: anchor.position,
         pathCount: projectBranchEndChoices(index, null).length,
-      });
+      };
+      const summary = summaryByBranchPoint.get(null);
+      if (summary) control.branchSummary = summary;
+      controls.push(control);
     }
   }
   for (let branchIndex = 0; branchIndex < index.activePath.length; branchIndex++) {
@@ -97,12 +110,15 @@ export function projectBranchPointControls(index: SessionTreeIndex): BranchPoint
     if (!branchPointId || children(index, branchPointId).length < 2) continue;
     const anchor = branchControlAnchor(index, branchIndex);
     if (!anchor) continue;
-    controls.push({
+    const control: BranchPointControlProjection = {
       branchPointId,
       anchorEntryId: anchor.entryId,
       anchorPosition: anchor.position,
       pathCount: projectBranchEndChoices(index, branchPointId).length,
-    });
+    };
+    const summary = summaryByBranchPoint.get(branchPointId);
+    if (summary) control.branchSummary = summary;
+    controls.push(control);
   }
   return controls;
 }
@@ -176,16 +192,28 @@ function activeEntryPath(
 function branchControlAnchor(
   index: SessionTreeIndex,
   branchIndex: number,
-): { entryId: string; position: "before" | "after" } | null {
+): { entryId: string; position: "before" } | null {
   for (let pathIndex = branchIndex + 1; pathIndex < index.activePath.length; pathIndex++) {
     const entryId = index.activePath[pathIndex];
     if (entryId && isUserMessage(index.entriesById.get(entryId))) return { entryId, position: "before" };
   }
   for (let pathIndex = branchIndex; pathIndex >= 0; pathIndex--) {
     const entryId = index.activePath[pathIndex];
-    if (entryId && isUserMessage(index.entriesById.get(entryId))) return { entryId, position: "after" };
+    if (entryId && isUserMessage(index.entriesById.get(entryId))) return { entryId, position: "before" };
   }
   return null;
+}
+
+function findBranchPointForEntry(index: SessionTreeIndex, entryId: string): string | null | undefined {
+  const seen = new Set<string>();
+  let currentId: string | null = entryId;
+  while (currentId !== null) {
+    if (seen.has(currentId)) return undefined;
+    seen.add(currentId);
+    if (children(index, currentId).length >= 2) return currentId;
+    currentId = index.parentById.get(currentId) ?? null;
+  }
+  return undefined;
 }
 
 function branchEndChoice(

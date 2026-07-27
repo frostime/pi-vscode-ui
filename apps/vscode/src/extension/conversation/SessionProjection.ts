@@ -39,6 +39,7 @@ export class SessionProjection {
       notices: [],
       compactions: [],
       branchSummaries: [],
+      customMessages: [],
       queuedFollowUps: [],
       pendingExtensionUi: [],
       extensionStatuses: [],
@@ -260,6 +261,7 @@ export class SessionProjection {
     this.#view.notices = snapshot.notices;
     this.#view.compactions = snapshot.compactions;
     this.#view.branchSummaries = snapshot.branchSummaries;
+    this.#view.customMessages = snapshot.customMessages;
     this.#view.queuedFollowUps = snapshot.queuedFollowUps;
   }
 

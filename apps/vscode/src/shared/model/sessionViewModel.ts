@@ -1,7 +1,7 @@
 import type { RpcCommandDescriptor, RpcModel, RpcSessionStats, ThinkingLevel } from "@frostime/pi-rpc";
 
 import type { AgentTurnView, SessionNoticeView } from "./agentTurnModel.js";
-import type { BranchSummaryView, CompactionView, ImageAttachmentView, QueuedFollowUpView } from "./conversationModel.js";
+import type { BranchSummaryView, CompactionView, CustomMessageView, ImageAttachmentView, QueuedFollowUpView } from "./conversationModel.js";
 import type { ExtensionStatusView, ExtensionWidgetView, PendingExtensionUiView } from "./extensionUiModel.js";
 
 export type SessionRuntimeStatus = "queued" | "starting" | "ready" | "running" | "stopping" | "stopped" | "failed";
@@ -54,6 +54,7 @@ export interface BranchControlView {
   anchorEntryId: string;
   anchorPosition: "before" | "after";
   pathCount: number;
+  branchSummary?: BranchSummaryView;
 }
 
 export interface SessionViewModel {
@@ -81,6 +82,7 @@ export interface SessionViewModel {
   notices: SessionNoticeView[];
   compactions: CompactionView[];
   branchSummaries: BranchSummaryView[];
+  customMessages: CustomMessageView[];
   /** Follow-ups accepted while streaming in followUp mode; shown at the conversation tail until promoted. */
   queuedFollowUps: QueuedFollowUpView[];
   pendingExtensionUi: PendingExtensionUiView[];

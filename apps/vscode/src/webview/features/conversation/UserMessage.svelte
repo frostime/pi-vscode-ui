@@ -3,6 +3,7 @@
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
   import BranchPointControl from "./BranchPointControl.svelte";
+  import BranchSummaryBlock from "./BranchSummaryBlock.svelte";
   import ImageGallery from "./ImageGallery.svelte";
   import MarkdownContent from "./MarkdownContent.svelte";
   import { copyMessageText, rawMessageText } from "./copyMessageClient";
@@ -22,6 +23,9 @@
 
 {#each beforeControls as control (control.branchPointId)}
   <BranchPointControl {control} {session} />
+  {#if control.branchSummary}
+    <BranchSummaryBlock summary={control.branchSummary} />
+  {/if}
 {/each}
 
 <article class="message message-user" data-pi-entry-id={message.sourceEntryId}>

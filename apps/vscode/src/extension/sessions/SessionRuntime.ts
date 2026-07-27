@@ -828,7 +828,10 @@ export class SessionRuntime {
     if (replace) this.#treeEntriesById.clear();
     for (const entry of compactSessionTreeEntries(entries)) this.#treeEntriesById.set(entry.id, entry);
     const index = buildSessionTreeIndex([...this.#treeEntriesById.values()], leafId);
-    this.#projection.setSessionTreeState(this.#sessionTreeBridge?.available ?? false, projectBranchPointControls(index));
+    this.#projection.setSessionTreeState(
+      this.#sessionTreeBridge?.available ?? false,
+      projectBranchPointControls(index, this.view.branchSummaries),
+    );
   }
 
   async #refreshTreeProjection(api: PiRpcApi): Promise<void> {
