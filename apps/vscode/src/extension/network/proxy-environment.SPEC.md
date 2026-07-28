@@ -1,5 +1,7 @@
 # Proxy environment lifecycle
 
+`proxyConfiguration.ts` owns the proxy configuration types and default `NO_PROXY` value; proxy configuration UI remains under `extension/network`.
+
 FrostPi proxy settings are process-start configuration.
 
 - The guided command stores configuration at User or Workspace scope.

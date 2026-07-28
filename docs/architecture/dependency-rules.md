@@ -17,6 +17,6 @@ updated: 2026-07-27
 - The Host owns conversation order and turn membership. The Webview may collapse or expand activities but must not reconstruct order from timestamps or parallel collections.
 - `WorkspaceFileCatalog` returns paths/metadata only and never reads mentioned file content.
 - `WebviewBridge` validates and transports messages; it does not infer Pi behavior.
-- Proxy/credential policy belongs in `extension/network`, while generic environment merging remains in `pi-rpc`.
+- Proxy configuration types, defaults, UI, and credential policy belong in `extension/network`, while generic environment merging remains in `pi-rpc`.
 
 Repeated import-rule exceptions indicate a boundary problem and require an explicit architecture decision.

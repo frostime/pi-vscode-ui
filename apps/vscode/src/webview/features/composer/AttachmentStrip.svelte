@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DraftImage } from "../../state/composerDraftStore.svelte";
+  import type { DraftImage } from "../../features/composer/composerDraftStore.svelte";
 
   let { images, onremove }: { images: DraftImage[]; onremove: (id: string) => void } = $props();
 </script>

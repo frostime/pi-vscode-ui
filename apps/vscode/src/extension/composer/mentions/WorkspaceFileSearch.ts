@@ -5,7 +5,7 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 
 
 import { minimatch } from "minimatch";
 
-import type { WorkspaceFileCandidateView } from "../../shared/model/workspaceFileModel.js";
+import type { WorkspaceFileCandidateView } from "../../../shared/model/workspaceFileModel.js";
 import { rankFileCandidate } from "./rankFileCandidate.js";
 
 const MAX_FD_RESULTS = 500;

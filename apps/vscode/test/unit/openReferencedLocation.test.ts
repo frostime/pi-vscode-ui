@@ -57,7 +57,7 @@ vi.mock("vscode", () => ({
 }));
 
 const { openReferencedLocation } = await import(
-  "../../src/extension/editor-context/openReferencedLocation.js"
+  "../../src/extension/conversation/openReferencedLocation.js"
 );
 
 describe("openReferencedLocation", () => {

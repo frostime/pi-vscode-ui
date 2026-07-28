@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { PiRpcApi, RpcCommandDescriptor } from "@frostime/pi-rpc";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { SessionTreeExtensionBridge } from "../../src/extension/session-tree/SessionTreeExtensionBridge.js";
+import { SessionTreeExtensionBridge } from "../../src/extension/sessions/tree/SessionTreeExtensionBridge.js";
 
 const bridges: SessionTreeExtensionBridge[] = [];
 

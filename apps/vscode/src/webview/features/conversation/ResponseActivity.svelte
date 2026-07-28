@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ResponseActivityView } from "$shared/model/conversationModel";
 
-  import Spinner from "../../primitives/Spinner.svelte";
+  import Spinner from "./Spinner.svelte";
   import ImageGallery from "./ImageGallery.svelte";
   import MarkdownContent from "./MarkdownContent.svelte";
   import { copyMessageText, rawMessageText } from "./copyMessageClient";

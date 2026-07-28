@@ -2,7 +2,8 @@
 title: Existing-session discovery and resume
 description: Session storage roots, bounded JSONL discovery, worktree grouping, metadata recovery, and Resume ownership checks.
 scope:
-  - /apps/vscode/src/extension/sessions/SessionCatalog.ts
+  - /apps/vscode/src/extension/sessions/catalog/SessionCatalog.ts
+  - /apps/vscode/src/extension/sessions/catalog/SessionCatalogPicker.ts
 updated: 2026-07-24
 ---
 

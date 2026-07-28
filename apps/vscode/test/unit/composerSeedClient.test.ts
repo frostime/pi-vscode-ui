@@ -2,7 +2,7 @@ import { get } from "svelte/store";
 import { describe, expect, it } from "vitest";
 
 import { applyComposerSeed } from "../../src/webview/features/composer/composerSeedClient.js";
-import { composerDrafts, updateDraft } from "../../src/webview/state/composerDraftStore.svelte.js";
+import { composerDrafts, updateDraft } from "../../src/webview/features/composer/composerDraftStore.svelte.js";
 
 describe("host-validated Composer seed", () => {
   it("applies each host-validated Composer seed once", () => {

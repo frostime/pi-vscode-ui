@@ -1,4 +1,8 @@
-import type { ProxyConfiguration, ProxyMode } from "../configuration/configurationTypes.js";
+import {
+  DEFAULT_NO_PROXY,
+  type ProxyConfiguration,
+  type ProxyMode,
+} from "./proxyConfiguration.js";
 import type { ProxyCredentials } from "./ProxySecretStore.js";
 
 const PROXY_KEYS = [
@@ -8,8 +12,7 @@ const PROXY_KEYS = [
   "NO_PROXY", "no_proxy",
 ] as const;
 
-/** Applied when custom/vscode modes do not set noProxy (empty string falls back here). */
-export const DEFAULT_NO_PROXY = "localhost,127.0.0.1,::1";
+export { DEFAULT_NO_PROXY } from "./proxyConfiguration.js";
 
 export interface ProxyEnvironmentResult {
   env: NodeJS.ProcessEnv;
@@ -110,4 +113,3 @@ function withCredentials(value: string | undefined, credentials: ProxyCredential
     return value;
   }
 }
-

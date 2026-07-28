@@ -1,7 +1,8 @@
 import type { RpcSessionEntry } from "@frostime/pi-rpc";
 
-import type { ImageAttachmentView } from "../../shared/model/conversationModel.js";
-import type { SessionEntryIndex } from "../sessions/SessionEntryState.js";
+import type { ImageAttachmentView } from "../../../shared/model/conversationModel.js";
+import type { ActiveBranchEdge } from "../../conversation/ConversationProjection.js";
+import type { SessionEntryIndex } from "../SessionEntryState.js";
 
 export interface SessionTreeIndex {
   entriesById: ReadonlyMap<string, RpcSessionEntry>;
@@ -9,12 +10,6 @@ export interface SessionTreeIndex {
   parentById: ReadonlyMap<string, string | null>;
   activePath: readonly string[];
   leafId: string | null;
-}
-
-export interface ActiveBranchEdge {
-  branchPointId: string | null;
-  activeChildEntryId: string;
-  pathCount: number;
 }
 
 export interface BranchEndChoiceProjection {

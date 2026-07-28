@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatFileMention } from "../../src/extension/editor-context/formatFileMention.js";
+import { formatFileMention } from "../../src/extension/composer/mentions/formatFileMention.js";
 
 describe("formatFileMention", () => {
   it("formats plain paths and ranges without file bodies", () => {

@@ -12,7 +12,7 @@ vi.mock("vscode", () => ({
 }));
 
 const { confirmDraftReplacement, pickBranchEnd, pickBranchSummary } = await import(
-  "../../src/extension/session-tree/SessionTreePicker.js"
+  "../../src/extension/sessions/tree/SessionTreePicker.js"
 );
 
 beforeEach(() => {

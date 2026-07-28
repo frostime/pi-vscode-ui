@@ -1,13 +1,6 @@
 import type { StreamingBehavior } from "@frostime/pi-rpc";
 
-export type ProxyMode = "inherit" | "vscode" | "custom" | "direct";
-
-export interface ProxyConfiguration {
-  mode: ProxyMode;
-  /** Single custom proxy endpoint. HTTP(S)/bare → HTTP_PROXY+HTTPS_PROXY; socks* → ALL_PROXY. */
-  endpoint?: string;
-  noProxy?: string;
-}
+import type { ProxyConfiguration } from "../network/proxyConfiguration.js";
 
 export interface FrostPiConfiguration {
   piExecutable?: string;

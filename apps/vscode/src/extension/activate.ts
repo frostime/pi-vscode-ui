@@ -4,7 +4,7 @@ import { readConfiguration } from "./configuration/readConfiguration.js";
 import { registerCommands } from "./commands/registerCommands.js";
 import { DiagnosticLogger } from "./diagnostics/DiagnosticLogger.js";
 import { GIT_BASE_SCHEME, GitBaseContentProvider } from "./file-changes/GitBaseContentProvider.js";
-import { SessionStatusBar } from "./onboarding/SessionStatusBar.js";
+import { SessionStatusBar } from "./status-bar/SessionStatusBar.js";
 import { SessionRegistry } from "./sessions/SessionRegistry.js";
 import { PiViewProvider } from "./webview-host/PiViewProvider.js";
 import { WebviewBridge } from "./webview-host/WebviewBridge.js";

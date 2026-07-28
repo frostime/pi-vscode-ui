@@ -29,14 +29,15 @@ Entry point for create, start, stop, persist, discover, fork, tree-nav.
 | `{{ext}}/sessions/SessionRegistry` | owns session collection; create/close/activate/persist; fork & branch orchestration; serialized start & history queues |
 | `{{ext}}/sessions/SessionRuntime` | one Pi subprocess per session; coordinates entry, conversation, and scalar state; prompt/event/RPC lifecycle |
 | `{{ext}}/sessions/SessionWorkingDirectories` | `git worktree list` → valid working directories |
-| `{{ext}}/sessions/SessionCatalog` | scan disk for Pi `.jsonl` sessions; read metadata from file headers; QuickPick UI for resume |
+| `{{ext}}/sessions/catalog/SessionCatalog` | scan disk for Pi `.jsonl` sessions; read metadata from file headers |
+| `{{ext}}/sessions/catalog/SessionCatalogPicker` | VS Code progress, QuickPick, and open-file UI for resume |
 | `{{ext}}/sessions/SessionPersistence` | `vscode.WorkspaceState` adapter for session metadata |
 | `{{ext}}/sessions/normalizePiSlashPrompt` | trim & normalize `/compact`, `/resume`, whitespace in slash commands |
-| `{{ext}}/session-tree/SessionTreeExtensionBridge` | injects bundled `session-tree.js` extension into Pi; `navigate()` wraps Pi's tree mutation |
-| `{{ext}}/session-tree/sessionTreeProjection` | pure functions: `projectActiveBranchEdges()`, editable targets, navigation validation, and branch-end choices |
-| `{{ext}}/session-tree/SessionTreePicker` | VS Code QuickPick/InputBox for branch summary, branch-end, draft-replacement prompts |
+| `{{ext}}/sessions/tree/SessionTreeExtensionBridge` | injects bundled `session-tree.js` extension into Pi; `navigate()` wraps Pi's tree mutation |
+| `{{ext}}/sessions/tree/sessionTreeProjection` | pure functions: `projectActiveBranchEdges()`, editable targets, navigation validation, and branch-end choices |
+| `{{ext}}/sessions/tree/SessionTreePicker` | VS Code QuickPick/InputBox for branch summary, branch-end, draft-replacement prompts |
 
-SPEC: `{{ext}}/sessions/session-lifecycle.SPEC`, `{{ext}}/sessions/session-catalog.SPEC`
+SPEC: `{{ext}}/sessions/session-lifecycle.SPEC`, `{{ext}}/sessions/catalog/session-catalog.SPEC`
 
 ---
 
@@ -68,8 +69,10 @@ SPEC: `{{ext}}/conversation/conversation-projection.SPEC`
 | `{{rpc}}/protocol/JsonlDecoder` | LF-delimited JSON stream parser (not `readline`) |
 | `{{rpc}}/protocol/rpcTypes` | wire types: `RpcCommand`, `RpcEvent`, `RpcResponse`, `RpcSessionState` |
 | `{{rpc}}/protocol/protocolErrors` | `PiRpcCommandError`, `PiRpcProcessError`, `PiRpcProtocolError` |
-| `{{ext}}/pi-runtime/resolvePiExecutable` | resolve `pi` binary from config or PATH |
+| `{{ext}}/configuration/configuredPiInvocation` | converts the configured executable path into command/arguments; complete PATH resolution remains in `packages/pi-rpc/src/process/resolvePiExecutable.ts` |
+| `{{ext}}/network/proxyConfiguration` | proxy configuration types and `DEFAULT_NO_PROXY` |
 | `{{ext}}/network/buildPiProcessEnvironment` | resolve proxy env vars for Pi child process |
+| `{{ext}}/network/configureProxy` | guided proxy and credential configuration UI |
 | `{{ext}}/network/ProxySecretStore` | `vscode.SecretStorage` wrapper for proxy credentials |
 
 SPEC: `{{rpc}}/SPEC` (in `packages/pi-rpc/`), `{{ext}}/network/proxy-environment.SPEC`
@@ -90,7 +93,7 @@ Host-authoritative; snapshot on session switch, delta on same-session update. Al
 | `{{wv}}/bridge/applyHostMessage` | webview side: receives host messages, updates Svelte stores |
 | `{{wv}}/bridge/vscodeBridge` | `postToHost()` wrapper |
 | `{{wv}}/state/sessionViewStore.svelte` | `workspaceStore` (Svelte writable), toast, composerFocusTick |
-| `{{wv}}/state/composerDraftStore.svelte` | per-session draft `{ text, images }`; `getDraft()`, `setDraft()`, `clearDraft()` |
+| `{{wv}}/features/composer/composerDraftStore.svelte` | per-session draft `{ text, images }`; `getDraft()`, `setDraft()`, `clearDraft()` |
 
 SPEC: `{{shared}}/bridge/webview-bridge.SPEC`
 
@@ -108,15 +111,16 @@ SPEC: `{{shared}}/bridge/webview-bridge.SPEC`
 | `{{web}}/composer/fileSuggestionClient` | debounced `searchWorkspaceFiles` requests |
 | `{{web}}/composer/composerSeedClient` | applies `ComposerSeedView` (from fork/tree-nav) into draft |
 | `{{web}}/composer/frostPiCommands` | merges FrostPi-local commands into Pi's command list |
-| `{{ext}}/workspace-files/WorkspaceFileSearch` | fd-based file search with exclude rules, ignore files, symlinks |
-| `{{ext}}/editor-context/ComposerExternalEditor` | `/editor`: temp .md in VS Code, reads back on tab close |
-| `{{ext}}/editor-context/captureActiveFile` | captures active editor path/line for `@file` context |
-| `{{ext}}/editor-context/captureSelection` | captures editor selection for `@selection` mention |
-| `{{ext}}/editor-context/editorMentionSpecials` | special mention targets: `selection`, `file` |
-| `{{ext}}/editor-context/formatFileMention` | formats path → `@path:L` mention string |
+| `{{ext}}/composer/mentions/WorkspaceFileSearch` | fd-based file search with exclude rules, ignore files, symlinks |
+| `{{ext}}/composer/mentions/workspaceFileSearchContext` | derives VS Code exclude rules and active-session path boosts |
+| `{{ext}}/composer/ComposerExternalEditor` | `/editor`: temp .md in VS Code, reads back on tab close |
+| `{{ext}}/composer/mentions/captureActiveFile` | captures active editor path/line for `@file` context |
+| `{{ext}}/composer/mentions/captureSelection` | captures editor selection for `@selection` mention |
+| `{{ext}}/composer/mentions/editorMentionSpecials` | special mention targets: `selection`, `file` |
+| `{{ext}}/composer/mentions/formatFileMention` | formats path → `@path:L` mention string |
 | `{{ext}}/attachments/normalizeImageAttachment` | normalizes pasted/dropped images (dimensions, format, size) |
 
-SPEC: `{{web}}/composer/composer.SPEC`, `{{ext}}/workspace-files/file-mentions.SPEC`
+SPEC: `{{web}}/composer/composer.SPEC`, `{{ext}}/composer/mentions/file-mentions.SPEC`
 
 ---
 
@@ -144,7 +148,7 @@ SPEC: `{{web}}/composer/composer.SPEC`, `{{ext}}/workspace-files/file-mentions.S
 | `{{web}}/conversation/collapseTurnTrace` | collapse policy for completed turns |
 | `{{web}}/conversation/forkMessageClient` | fork request → result correlation |
 | `{{web}}/conversation/copyMessageClient` | copy message text via host clipboard |
-| `{{ext}}/editor-context/openReferencedLocation` | jump to file:line when clicking file refs in conversation |
+| `{{ext}}/conversation/openReferencedLocation` | jump to file:line when clicking file refs in conversation |
 
 SPEC: `{{web}}/conversation/markdown/markdown.SPEC`
 
@@ -189,7 +193,8 @@ SPEC: `{{ext}}/extension-ui/extension-ui.SPEC`
 | File | Role |
 |------|------|
 | `{{ext}}/configuration/readConfiguration` | reads `frostpi.*` settings → `FrostPiConfiguration` |
-| `{{ext}}/configuration/configurationTypes` | `FrostPiConfiguration`, `ProxyMode` types |
+| `{{ext}}/configuration/configurationTypes` | `FrostPiConfiguration` type |
+| `{{ext}}/configuration/configurePiExecutable` | shared VS Code input UI for the Pi executable setting |
 | `{{ext}}/configuration/readChatTypography` | reads VS Code `chat.fontFamily`/`chat.fontSize` |
 | `{{ext}}/configuration/workspaceScope` | cwd → VS Code configuration scope URI |
 
@@ -200,7 +205,7 @@ SPEC: `{{ext}}/extension-ui/extension-ui.SPEC`
 | File | Role |
 |------|------|
 | `{{ext}}/activate` | extension entry point: creates `SessionRegistry`, `WebviewBridge`, `PiViewProvider`; registers commands & config listeners |
-| `{{ext}}/commands/registerCommands` | all `frostpi.*` VS Code command handlers; most delegate to `SessionRegistry` |
+| `{{ext}}/commands/registerCommands` | registers `frostpi.*` commands and delegates feature-specific UI/behavior to owning modules |
 
 ---
 

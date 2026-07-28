@@ -4,7 +4,7 @@
 
   import { postToHost } from "../../bridge/vscodeBridge";
   import IconButton from "../../primitives/IconButton.svelte";
-  import StatusDot from "../../primitives/StatusDot.svelte";
+  import StatusDot from "./StatusDot.svelte";
   import SessionList from "./SessionList.svelte";
 
   let { sessions, active }: { sessions: SessionSummaryView[]; active: SessionViewModel } = $props();

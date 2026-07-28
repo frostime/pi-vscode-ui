@@ -1,7 +1,7 @@
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { composerDrafts } from "../../src/webview/state/composerDraftStore.svelte.js";
+import { composerDrafts } from "../../src/webview/features/composer/composerDraftStore.svelte.js";
 
 const bridge = vi.hoisted(() => ({ postToHost: vi.fn() }));
 vi.mock("../../src/webview/bridge/vscodeBridge.js", () => bridge);
