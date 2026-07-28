@@ -1,114 +1,77 @@
 ---
 title: Pi Session Lifecycle
-description: Observable lifecycle, persistence, concurrency, and recovery rules for VS Code-managed Pi RPC sessions.
+description: Observable session ownership, authorization, state, persistence, concurrency, mutation, and recovery rules.
 scope:
   - /apps/vscode/src/extension/sessions/**
   - /apps/vscode/src/extension/conversation/**
   - /apps/vscode/src/extension/extension-ui/**
-updated: 2026-07-27
+updated: 2026-07-28
 ---
 
 # Pi Session Lifecycle
 
-## Ownership
+## Ownership and working directories
 
-One `SessionRuntime` owns exactly one live `pi --mode rpc` child process. `SessionRegistry` owns the collection, active selection, persistence metadata, and Webview-facing workspace snapshot. Pi owns conversation persistence and session JSONL content.
+One `SessionRuntime` owns exactly one live `pi --mode rpc` process. `SessionRegistry` owns runtimes, active selection, metadata persistence, and the Webview workspace snapshot; Pi owns session JSONL and conversation persistence.
 
-## Working directories
+New/Resume anchor to the active editor's workspace folder, otherwise the first folder. The anchor and existing non-bare, non-prunable worktrees of the same repository are allowed; a workspace opened below a worktree root maps that relative subdirectory into linked worktrees only when it exists. The Webview cannot provide a cwd.
 
-Each Session owns its process working directory. New and Resume use the active editor's workspace folder, otherwise the first workspace folder, as their anchor. That folder is always allowed; existing non-bare, non-`prunable` worktrees of the same Git repository are also allowed. A workspace opened below the worktree root maps the same repository-relative subdirectory into linked worktrees, and omits a worktree when that mapped directory does not exist.
+Multi-root New/Resume does not aggregate repositories, but persisted records are validated against every open root. External worktree sessions inherit resource-scoped configuration from their anchor. Git authorization is refreshed on New, Resume, restoration, and before starting/restarting a stopped external session. Confirmed worktree removal drops FrostPi metadata without deleting JSONL; failed discovery neither drops uncertain records nor authorizes process start.
 
-Worktree discovery and path authorization remain in the Extension Host. The Webview cannot supply a `cwd`. Multi-root workspaces do not aggregate repositories in New or Resume, but persisted records are validated against every open workspace folder so an inactive root's Sessions remain valid. An external worktree Session inherits resource-scoped FrostPi configuration from its anchor workspace folder.
+## Concurrency and initial restoration
 
-FrostPi queries Git on New, Resume, initial restoration, and before starting or restarting a stopped external Session. It does not cache the worktree list persistently, watch `.git`, or interrupt a running process after external worktree removal. Authoritatively removed worktrees cause FrostPi metadata cleanup without deleting Pi JSONL; failed Git discovery retains uncertain records and does not authorize their process start.
+Process starts are serialized; complete-history loads use a separate serialized queue. Agent execution remains concurrent, including sessions sharing a workspace. Selection changes presentation only. FrostPi adds no global execution lock, file-write interception, or conflict resolver.
 
-## Concurrency
+Activation restores metadata only and creates no session. `frostpi.session.startOnOpen` may start the selected restored session but cannot invent an identity.
 
-Multiple sessions may run concurrently, including sessions sharing a workspace. Exactly one session is selected for Webview presentation; selecting another session does not stop background work or invoke Pi's `switch_session` command.
+## State and turn semantics
 
-Pi process starts are serialized to avoid concurrent startup spikes. Conversation-history loads are serialized separately, so a slow history load does not prevent an already started Pi process from becoming usable. FrostPi does not add a global execution lock, command gate, file-write proxy, or conflict resolver. Workspace conflicts are visible consequences of concurrent agents and remain the user's responsibility.
+```text
+stopped ─ request ─> queued ─> starting ─ handshake ─> ready ─ agent_start ─> running
+   ▲                              │                    ▲                    │
+   └──────── stop <────────── stopping     failed <───┴──── agent_settled ─┘
+```
 
-## Initial open
+`failed` ends the current child process but leaves retryable metadata. Queued/starting sessions reject submission and model mutation while retaining session actions; running sessions keep the Composer editable and expose Stop. Prompt RPC success means accepted, not completed; only `agent_settled` returns a running session to ready. Assistant protocol errors remain errors even if settling follows, while a tool failure remains visible without by itself failing the whole turn.
 
-Extension activation restores persisted session metadata only. It does not create a new session when none exist; the Webview shows the onboarding home until the user creates or resumes one. `frostpi.session.startOnOpen` may start the already-selected restored session's Pi process, but never invents a session identity.
+`abort` stops the current run and keeps the process. A restart cancels pending extension UI, stops the child, and starts Pi with the recorded session file; active streams, tools, and pending requests do not survive. Disruptive explicit restart requires confirmation.
 
-## Temporary new sessions
+## Temporary sessions
 
-A locally created session remains temporary until Pi accepts its first non-empty prompt or the user renames it. Temporary sessions appear in the live session list but are excluded from workspace persistence. Selecting, creating, or resuming another session closes the currently selected temporary session without confirmation.
-
-Resumed sessions are never temporary. Closing a temporary session stops its Pi process but does not delete any file Pi may have created.
+A new local session is temporary until Pi accepts its first non-empty prompt or the user renames it. Temporary sessions are visible but not persisted; selecting/creating/resuming another session closes the selected temporary session without confirmation. Resumed sessions are never temporary, and closing a temporary session does not delete Pi-created files. Automatic fork naming and `/compact` do not commit it.
 
 ## Message Fork
 
-A completed, projected user message may be forked only while its session is selected, idle, fully loaded, free of pending extension UI, and has no locally queued follow-up awaiting promotion. Pi entry ids—not message text—identify the target. The original FrostPi id remains attached to the original session and its Composer draft. After Pi commits the replacement, a new local id adopts the live runtime and becomes the selected temporary fork; the original id receives a stopped runtime. Old extension statuses/widgets are cleared before replacement; a cancelled fork restores them, while the new extension instance may publish its own decorations during rebind.
+Fork requires the selected session to be idle, fully loaded, free of pending extension UI and queued follow-ups, and the target to be a completed projected user message with a Pi entry id. The target is identified by entry id, never text. Attachment/seed validation follows the Composer contract.
 
-The selected user message is excluded from the copied Pi path. Pi's returned text and FrostPi's projected images become a host-projected Composer seed for the fork. The seed is replayable after Webview reload, applied once per mount, never persisted, and cleared after the first successful Composer submission. Before asking Pi to fork, FrostPi validates every projected image with the same Base64, decoded-size, metadata, MIME, count, and configured-size checks used by prompt submission.
+Pi's successful Fork response is the commit boundary: the original FrostPi id receives a stopped original runtime, while a new selected temporary id adopts the live fork runtime. The selected message is excluded from the copied path; Pi text plus projected valid images becomes a one-shot, non-persisted Composer seed.
 
-Fork waits for `session_before_fork` interaction without the ordinary RPC request timeout. The Composer exposes explicit Cancel Fork; cancellation stops the child and restarts the original session so a late Pi commit cannot change the recovered process. Preflight failure or Pi cancellation changes no logical session or draft. If Pi commits but naming/state/history reconciliation fails, FrostPi stops the fork process, removes the unfinished temporary fork, and restarts the original. FrostPi leaves any Pi JSONL already created on disk.
-
-Forks are named `Fork: <source title>` (`Fork session` when no title exists) and remain temporary until their first accepted prompt or an explicit user rename. The automatic fork name and `/compact` do not commit the temporary session.
+Preflight failure or Pi cancellation changes no logical session or draft. Cancel Fork stops the child and restarts the original, preventing a late response from replacing recovery. Post-commit naming/state/history failure stops and removes the unfinished fork, restarts the original, and leaves any Pi-created JSONL on disk.
 
 ## Session-tree navigation
 
-Tree navigation is an in-place mutation of the selected runtime, Pi session id, and Pi JSONL file. FrostPi injects its packaged `dist/pi-extensions/session-tree.js` by absolute `-e` path; the private command delegates leaf mutation and context reconstruction to Pi's `ctx.navigateTree()`. Runtime capability is discovered from `get_commands.sourceInfo.path`, including collision-suffixed command names, and bundled commands are removed from Composer completion.
+Tree navigation is capability-gated, selected-session, ready-state mutation of the same runtime, Pi session id, and JSONL. Runtime refetches complete entries and revalidates the target; Host interaction and Composer replacement policy remain outside the private adapter.
 
-Before navigation, Runtime refetches complete entries, revalidates the target, and validates any editable text/image seed. Registry owns native target, summary, custom-focus, and draft-replacement interaction. Runtime retains only a content-free tree index for branch controls; complete entries are operation-local.
-
-Pi cancellation and failure before the private result confirms a commit preserve the displayed history and Composer. Once commit is confirmed, Pi is authoritative. FrostPi fetches complete entries, rebuilds the active-path conversation and tree index, refreshes state and stats, and prepares an optional same-session Composer seed without replacing runtime identity. A later entry-load or projection failure leaves the navigation committed, marks history failed for retry, and never reverse-navigates automatically.
+Failure or cancellation before Pi confirms commit preserves history and Composer. After commit, Pi is authoritative: Runtime rebuilds the active path/index and refreshes state without changing runtime identity. Entry-load or projection failure after commit sets only retryable history failure and never reverse-navigates automatically.
 
 ## Persistence
 
-FrostPi persists only:
+FrostPi persists only local session id, title, cwd, Pi session-file path, last-updated time, and active session id. It excludes messages, reasoning, tool output, images, credentials, keys, worktree/branch data, and anchor folder. Restoration rebuilds conversation from Pi `get_entries`; see `apps/vscode/src/extension/conversation/conversation-projection.SPEC.md`.
 
-- local UI session id;
-- display title;
-- working directory;
-- Pi session file path;
-- last-updated timestamp;
-- active session id.
+## Follow-ups and slash commands
 
-It does not persist message bodies, reasoning, tool output, images, provider credentials, API keys, worktree lists, branch names, or the anchor workspace folder. The anchor is recovered from current Git worktree relationships before an external process starts. On restoration, the process starts with `--session <path>` and conversation state is rebuilt from the active path in Pi's `get_entries` response.
+In default `followUp` mode, a normal prompt accepted during streaming is parked as a session-level queued follow-up. Later normal prompts stay parked while that local queue exists, including after settle; Pi user-message events promote them in FIFO order, with `agent_start` only a post-settle fallback. `steer` enters the live conversation immediately. Abort, stop, or process failure clears the queue; extension slash commands are not parked.
 
-## State semantics
+Composer normalizes slash input. Host-local `/compact`, `/resume`, and `/editor` do not become ordinary user prompts; other slash commands use `prompt`. Manual compaction follows Pi semantics and may abort an active run; while compacting, submission is disabled and status is not persisted in the timeline. Success preserves prior turns and adds a summary boundary; failure preserves conversation and reports Pi's error. Pi extension commands may finish without `agent_start`/`agent_settled`, so cached command classification plus idle `get_state` checks closes their local turn. Prompt templates and skills remain ordinary agent turns.
 
-`queued → starting → ready/running → stopping → stopped` is the normal lifecycle. `failed` is terminal for the current child process but the session metadata remains retryable.
+## History and extension UI
 
-- `queued`: the session is waiting for the serialized process-start slot.
-- `ready`: process is alive and Pi is idle.
-- `running`: Pi reports an active session-level run.
-- `stopped`: no live child process; a persisted session may be started again.
-- `failed`: startup, protocol, stdin, or unexpected process failure occurred.
+A resumed process may reach ready before history finishes. Automatic loading disables/rejects submission; events arriving during load are replayed after replacement. Files over 8 MiB defer full history until explicit load, and tree actions remain unavailable. Failed history/projection is retryable and does not fail the live process. Incremental/complete-entry authority belongs to the conversation projection SPEC.
 
-`agent_end` is not considered completion. Only `agent_settled` changes a running session back to ready because retries, compaction retries, or queued continuations may follow `agent_end`.
+Blocking extension UI is session-owned and never auto-confirmed. It remains pending until response, Pi timeout, or explicit session cancellation; stop/close/restart cancels pending requests. Background owners are marked as requiring input. Detailed standard/Question behavior belongs to `apps/vscode/src/extension/extension-ui/extension-ui.SPEC.md`.
 
-## Follow-up prompts while streaming
+When notifications are enabled, only first pending input, transition to failed, and a normal turn closed by `agent_settled` notify; explicit abort, `/compact`, immediate extension commands, error turns, and repeated updates do not count as normal completion.
 
-When `frostpi.composer.streamingBehavior` is `followUp` (default), a normal prompt accepted while Pi is streaming is projected as a session-level queued follow-up, not as a durable turn. The host also parks subsequent normal prompts while that local queue is non-empty. Pi typically drains follow-ups before `agent_end` and emits `message_start` (`role: user`) without a new `agent_start`; promotion follows protocol FIFO order. `agent_start` is only a fallback after settle. Extension slash commands are not parked. Abort, process stop, and process failure clear the local queue.
+## Recovery
 
-## Slash commands
-
-Composer text is trimmed before RPC submission so leading/trailing whitespace cannot bypass Pi's leading-`/` extension-command match. After trim, a leading `/command` also normalizes any Unicode whitespace between the command token and its args to a single ASCII space, matching Pi's `indexOf(" ")` command split. FrostPi-local `/compact`, `/resume`, and `/editor` remain host-handled; every other slash is sent as a normal `prompt`. `/editor` opens a VS Code untitled buffer and never reaches Pi.
-
-Pi extension commands (from `get_commands` with `source: "extension"`) execute inside the `prompt` request and often never emit `agent_start` / `agent_settled`. After such a prompt returns, FrostPi closes the turn opened for that prompt once short idle checks (`get_state`) report no agent work, or falls back to local non-streaming completion if every `get_state` fails. Command classification uses the cached list by exact name: a known non-extension slash is not re-fetched; a name missing from the cache triggers one `get_commands` refresh, then classification. Prompt templates and skills still expand into ordinary agent turns and close only on `agent_settled`.
-
-## Conversation history
-
-A resumed Pi process becomes ready after startup state is available; loading prior conversation entries is separate. The Webview disables and the Host rejects prompt submission during an automatic history load. Pi events received while complete `get_entries` is pending are retained and applied in order after the active-path conversation is replaced. History loads are serialized.
-
-Session files larger than 8 MiB are not loaded automatically. Deferred startup does not fetch full entry content merely to prepare branch controls; tree actions remain unavailable until explicit history loading. Once loaded, FrostPi retains only a content-free complete-tree index and projects complete content for the selected active path.
-
-After `agent_settled`, successful compaction, an immediate extension command reaching idle, committed tree navigation, or committed fork reconciliation, Runtime refreshes persisted entries. A cursor response is applied incrementally only when its reported leaf demonstrably extends the prior active leaf through that batch; otherwise Runtime requests complete entries and rebuilds.
-
-A history-load or projection failure does not fail the live Pi process. The session remains usable and exposes the failed history state for retry.
-
-## Extension UI
-
-Dialog requests are owned by the session that emitted them. They remain pending until the user responds, Pi's own timeout resolves them, or the session closes. Closing a session explicitly sends cancellation responses for every pending dialog. FrostPi never auto-confirms a dialog. A background session with a newly pending dialog is marked as requiring user input.
-
-When the experimental `frostpi.notifications.experimental.enabled` setting is on and the VS Code window is unfocused, FrostPi notifies for the first pending dialog, a transition into `failed`, and a normal Agent Turn closed by `agent_settled`. Explicit abort, `/compact`, immediate extension commands, error turns, and repeated state updates do not produce completion notifications. A local Windows Extension Host uses a native Windows PowerShell toast; unavailable native delivery falls back to a VS Code notification.
-
-Fire-and-forget UI requests affect only their session. `set_editor_text` is routed to the composer only when the session is active; inactive-session text is retained by the host until that session is activated.
-
-## Failure recovery
-
-A failed runtime may be restarted using its stored session file. A missing or invalid session file causes Pi startup to fail visibly; FrostPi does not silently create a replacement session under the same UI identity.
+Executable, proxy, and process-environment changes apply only after start/restart. A failed runtime restarts from its stored session file. Missing, corrupt, or incompatible files fail visibly; FrostPi never silently creates an empty replacement under the same UI identity.

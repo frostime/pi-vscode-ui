@@ -1,24 +1,14 @@
 # Composer contract
 
-The composer is a plain-text CodeMirror 6 editor. FrostPi sends exactly the visible document text plus explicit image attachments.
+The Composer is a plain-text CodeMirror editor. FrostPi submits exactly the visible document text plus explicit image attachments; IME, selection, undo/redo, clipboard, and multiline editing remain native.
 
-- `Enter` inserts a newline; `Ctrl+Enter` and `Cmd+Enter` submit. On a non-empty Markdown `-` or `*` list item, `Enter` continues the same marker and indentation. On an empty list item, it removes the marker while preserving the indentation.
-- `Tab` accepts an active completion. Otherwise it inserts two spaces at an unselected cursor, indents all selected lines by two spaces, or indents the whole current line when it is a Markdown `-` or `*` list item. `Shift+Tab` removes up to two leading spaces (or one leading tab) from the current line or all selected lines. Neither key combination moves focus out of the composer.
-- The editor starts at roughly three lines, grows with content, and scrolls internally after its maximum height.
-- A toolbar expand control toggles a panel-local expanded composer: conversation height collapses, the composer fills the remaining FrostPi shell, and Escape or the same control restores the normal layout. Expanded state is Webview-local and resets on session switch.
-- CodeMirror focus must not create a second nested focus border; screen-reader live regions remain off-screen.
-- `/command` completion comes from Pi `get_commands` plus FrostPi-local `/resume`, `/compact`, and `/editor`; descriptions must not open a layout-shifting info panel.
-- `/` and `@` share one completion surface. `Enter` and `Tab` accept the highlighted option. Lists that exceed the available height scroll inside the CodeMirror option list (`ul`). Keyboard selection must keep the highlighted option in view. Tooltips mount on `document.body` so composer/editor geometry cannot clip long file lists; the outer shell may clip only for rounded corners while the inner list remains the scroll container.
-- A text-only `/compact` or `/compact <instructions>` submission is translated to Pi's `compact` RPC request and is never appended as a user prompt. Pi's built-in command takes precedence over a same-named extension command, matching interactive Pi.
-- `/editor` or `/editor <text>` writes one temp markdown file (Pi external-editor shape) and opens it in the current VS Code window with that text as the buffer (command token stripped). Closing the tab reads the file from disk and replaces that session's composer text while preserving image attachments—Save keeps edits, Don't Save discards them. A second `/editor` while the tab is open reveals it instead of creating another buffer. This is host-local and never becomes a Pi prompt.
-- Submitted composer text is trimmed before host handling so `/command args` with surrounding whitespace still matches Pi extension commands. The host also rewrites any Unicode whitespace between `/command` and its args to a single ASCII space before RPC, because Pi splits the command name only on ASCII space. Args after the first token remain part of the prompt string and are parsed by Pi, not FrostPi.
-- On submit the composer clears immediately and keeps a local snapshot only for failure restore. Successful `promptResult` does not touch the draft (extension commands may already have filled it via `set_editor_text`). Failed `promptResult` restores the snapshot only when the composer is still empty.
-- Only a command in the first non-whitespace token of a line is decorated as a command.
-- Typing `@` must immediately start mention completion. With an empty (or matching) query, `@Selection` and `@CurrentFile` appear above workspace file results. Empty, error, and timeout file results must be observable rather than silent.
-- `@Selection` inserts `@path:start-end` (current line when nothing is selected). `@CurrentFile`, file rows, and directory rows insert a workspace-relative path. Files finish with a space; directories finish with `/` and continue completion. For directories containing whitespace, the cursor stays inside the closing quote. Paths containing whitespace use `@"path with spaces"`.
-- File mentions are presentation and completion aids only: FrostPi does not read or inject file content. The composer has no separate Add Context (+) menu; mentions cover path/line references.
-- Request identifiers must not depend exclusively on `crypto.randomUUID`.
-- Pasted PNG/JPEG/WebP files remain explicit image attachments and obey configured limits.
-- Message Fork preserves the current draft under the original stable session id. The newly active fork receives the selected text and projected PNG/JPEG/WebP attachments from a host Composer seed. The host applies prompt-equivalent attachment validation before mutating Pi. During Fork the primary action becomes Cancel Fork, which restores the original session.
-- Fork and in-place Tree navigation share one host-validated, one-shot Composer seed mechanism. A Tree target that is a user/custom message restores text and valid images under the same session id after explicit confirmation when a non-empty draft would be replaced. A non-editable Tree target preserves the current draft. Branch switching disables conflicting send/model/message actions but does not expose a false summary-cancel control.
-- IME composition, selection, undo/redo, clipboard text, and multi-line editing must remain native editor behavior.
+- `Enter` inserts a newline and continues/removes Markdown `-`/`*` list markers. `Tab` accepts completion or indents by two spaces; `Shift+Tab` removes up to two spaces or one tab without moving focus.
+- `Ctrl+Enter` and `Cmd+Enter` submit.
+- Submission clears immediately and retains a local failure snapshot. A failed correlated result restores it only when the Composer is still empty; success never overwrites later Host/editor text.
+- Text is trimmed before Host handling. Unicode whitespace between a leading slash command and its arguments is normalized to one ASCII space; Pi parses the remaining arguments.
+- Text-only `/compact` delegates to Pi's compact request, takes precedence over a same-named extension command, and never appends a user prompt. `/resume` and `/editor` are also Host-local.
+- `/editor` allows one temporary Markdown file at a time. Closing its tab replaces the owning session's text while preserving attachments; another `/editor` reveals the existing tab.
+- File mentions insert only path/line text. FrostPi never reads or injects referenced file content.
+- PNG/JPEG/WebP attachments remain explicit and obey prompt validation limits.
+- Fork preserves the original session draft and delivers selected text/images to the new temporary session through a Host-validated, one-shot, non-persisted seed.
+- In-place tree navigation uses the same seed contract under the same session id; replacing a non-empty draft requires Host confirmation, and non-editable targets preserve it.

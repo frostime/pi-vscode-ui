@@ -25,6 +25,7 @@ For commands where only the result matters, print only the tail or even just the
 - Follow [`docs/development.md`](docs/development.md) for workspace dependencies and package scripts. Install from the repository root; packages own local scripts, while root scripts only orchestrate them.
 - Follow [`docs/testing.md`](docs/testing.md) for verification scope and [`docs/release.md`](docs/release.md) for versions, packaging, tags, and GitHub Actions. Change the product version only with `pnpm version:set <version>`.
 - Update the relevant document in the same change when a durable command, boundary, workflow, or release rule changes. Keep `AGENTS.md` brief and link detailed procedures instead of duplicating them.
+- Top-level `docs/` is reserved for cross-module constraints and workflows; module-specific behavior belongs in the nearest `*.SPEC.md`.
 
 ## Boundaries
 

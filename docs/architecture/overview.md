@@ -1,6 +1,6 @@
 ---
 title: Architecture Overview
-description: Runtime topology, ownership boundaries, and dependency direction for FrostPi.
+description: Cross-module process topology, ownership, trust, persistence, and dependency boundaries.
 scope:
   - /apps/vscode/**
   - /packages/pi-rpc/**
@@ -12,34 +12,40 @@ updated: 2026-07-28
 ```text
 Svelte Webview
   ├─ ordered conversation presentation
-  ├─ CodeMirror composer
-  └─ local disclosure/scroll state
-          ⇅ versioned application messages
-VS Code workspace Extension Host
+  ├─ Composer and local disclosure/scroll state
+  └─ no Node, VS Code API, or raw Pi events
+          ⇅ versioned, schema-validated messages
+Workspace Extension Host (local, SSH, WSL, or Dev Container)
   ├─ SessionRegistry
   │    └─ SessionRuntime × N
   │         ├─ SessionEntryState
   │         ├─ ConversationProjection
   │         ├─ SessionViewState
-  │         ├─ ExtensionUiCoordinator
   │         └─ PiRpcApi
-  ├─ WorkspaceFileSearch
-  ├─ proxy/process environment policy
-  └─ editor, diff, diagnostics integration
+  ├─ proxy/process policy
+  └─ workspace, editor, diff, and diagnostics integration
           ⇅ LF-delimited JSONL over stdio
      pi --mode rpc × N
 ```
 
-One FrostPi session owns one Pi subprocess. Sessions may run concurrently; switching the rendered session never transfers ownership or stops background work.
+## Product and process boundary
 
-`SessionRuntime` is the lifecycle orchestrator for three sibling state owners:
+FrostPi is a self-contained Pi-only VS Code GUI adapter over Pi native RPC. It does not define a generic agent backend or target ACP compatibility. One `SessionRuntime` owns one Pi process; sessions execute independently, and FrostPi adds no global execution or file-write lock.
 
-- `SessionEntryState` owns the `get_entries` cursor, current leaf, content-free complete-tree index, active path, and incremental-continuation validation.
-- `ConversationProjection` owns persisted/live conversation identity, visual-turn grouping, tool correlation, branch-edge placement, and final presentation order.
-- `SessionViewState` owns session-level status, model, configuration, statistics, and extension UI state.
+Local workspaces run Pi locally. Remote SSH, WSL, and Dev Containers run Pi in that workspace's Extension Host; there is no local-to-remote process bridge. Untrusted and virtual workspaces are unsupported because Pi may execute commands and modify files.
 
-`sessionTreeProjection` remains stateless. It derives active branch edges from the retained index and operation-local picker choices from freshly fetched complete entries.
+## State and data ownership
 
-Runtime data flow is `Webview → shared contracts ← Extension Host → @frostime/pi-rpc → Pi`. The Webview may reuse Pi model metadata types at compile time, but it does not consume RPC messages, raw Pi events, or session entries. The Host sends one ordered conversation collection; the Webview does not infer Pi order. `WorkspaceFileSearch` exposes paths only. Proxy policy is resolved at process start and remains outside the RPC protocol.
+`SessionRegistry` owns the runtime collection, active selection, and metadata persistence. Within a runtime, `SessionEntryState` owns the persisted entry cursor/tree and active path, `ConversationProjection` owns persisted/live conversation identity and order, and `SessionViewState` owns session scalar state. Their detailed behavior belongs to adjacent SPECs.
 
-FrostPi is intentionally a Pi-only VS Code GUI adapter. It follows Pi's native RPC model and preserves Pi-specific capabilities rather than defining a generic agent-backend interface or translating Pi through ACP. Other Pi clients may inform behavior comparisons during development, but they are not FrostPi backends or compatibility targets.
+Runtime flow is `Webview → shared contracts ← Extension Host → @frostime/pi-rpc → Pi`. The Host is authoritative for conversation order and turn membership; the Webview renders that order and owns only presentation state such as disclosure and scroll position. Raw Pi events and session entries never cross the bridge.
+
+Pi owns conversation JSONL, provider credentials, model/session state, and file writes. VS Code workspace state stores FrostPi session metadata only. Ordinary Composer drafts and pasted images are not persisted; `/editor` uses a temporary Host-owned file, and Host-projected Fork/tree seeds remain runtime-only. FrostPi file mentions expose paths and line references without injecting file content.
+
+## Dependency and trust boundaries
+
+`packages/pi-rpc` owns subprocess, JSONL framing, and request mechanics without VS Code dependencies. `extension` owns VS Code integration and product policy; `shared` contains serializable contracts and pure helpers; `webview` contains browser/Svelte code without Node or `vscode` imports. Boundary exceptions require an explicit architecture decision.
+
+The Webview is untrusted input: Host actions require complete schema validation and bounded payloads. Process environment and proxy changes apply only when a Pi process starts or restarts; FrostPi never silently interrupts a running turn to apply them.
+
+Diagnostic exports omit prompt and response content and redact common credentials. Workspace paths and third-party stderr can still be sensitive and require review before sharing.
