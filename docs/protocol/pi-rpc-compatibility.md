@@ -3,10 +3,10 @@ title: Pi RPC Compatibility
 description: Supported Pi RPC commands/events, executable resolution, and compatibility policy.
 scope:
   - /packages/pi-rpc/**
-  - /apps/vscode/src/extension/pi-runtime/**
+  - /apps/vscode/src/extension/configuration/configuredPiInvocation.ts
   - /apps/vscode/src/extension/question-tool/**
   - /apps/vscode/pi-extensions/question-tool.ts
-updated: 2026-07-27
+updated: 2026-07-28
 ---
 
 # Pi RPC Compatibility

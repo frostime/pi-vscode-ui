@@ -4,7 +4,7 @@ description: Runtime topology, ownership boundaries, and dependency direction fo
 scope:
   - /apps/vscode/**
   - /packages/pi-rpc/**
-updated: 2026-07-27
+updated: 2026-07-28
 ---
 
 # Architecture Overview
@@ -40,6 +40,6 @@ One FrostPi session owns one Pi subprocess. Sessions may run concurrently; switc
 
 `sessionTreeProjection` remains stateless. It derives active branch edges from the retained index and operation-local picker choices from freshly fetched complete entries.
 
-Dependency direction is `Webview → shared contracts ← Extension Host → @frostime/pi-rpc → Pi`. Raw Pi events and session entries never reach Svelte. The Host sends one ordered conversation collection; the Webview does not infer Pi order. `WorkspaceFileSearch` exposes paths only. Proxy policy is resolved at process start and remains outside the RPC protocol.
+Runtime data flow is `Webview → shared contracts ← Extension Host → @frostime/pi-rpc → Pi`. The Webview may reuse Pi model metadata types at compile time, but it does not consume RPC messages, raw Pi events, or session entries. The Host sends one ordered conversation collection; the Webview does not infer Pi order. `WorkspaceFileSearch` exposes paths only. Proxy policy is resolved at process start and remains outside the RPC protocol.
 
-FrostPi intentionally keeps Pi-specific capabilities first-class. A future ACP backend must project into the same application model rather than forcing Pi through an ACP translation layer today.
+FrostPi is intentionally a Pi-only VS Code GUI adapter. It follows Pi's native RPC model and preserves Pi-specific capabilities rather than defining a generic agent-backend interface or translating Pi through ACP. Other Pi clients may inform behavior comparisons during development, but they are not FrostPi backends or compatibility targets.
