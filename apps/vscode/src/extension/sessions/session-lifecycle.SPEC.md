@@ -70,7 +70,7 @@ A resumed process may reach ready before history finishes. Automatic loading dis
 
 Blocking extension UI is session-owned and never auto-confirmed. It remains pending until response, Pi timeout, or explicit session cancellation; stop/close/restart cancels pending requests. Background owners are marked as requiring input. Detailed standard/Question behavior belongs to `apps/vscode/src/extension/extension-ui/extension-ui.SPEC.md`.
 
-When notifications are enabled, only first pending input, transition to failed, and a normal turn closed by `agent_settled` notify; explicit abort, `/compact`, immediate extension commands, error turns, and repeated updates do not count as normal completion.
+When notifications are enabled, only first pending input, transition to failed, and a normal turn closed by `agent_settled` notify; explicit abort, `/compact`, immediate extension commands, error turns, and repeated updates do not count as normal completion. A local Windows Extension Host may launch Windows PowerShell with fixed FrostPi notification text encoded as data; other hosts and native-delivery failures fall back to VS Code notifications.
 
 ## Recovery
 
