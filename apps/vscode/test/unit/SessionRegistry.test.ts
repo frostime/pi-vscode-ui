@@ -24,7 +24,7 @@ const windowsToastMocks = vi.hoisted(() => ({
   showWindowsToast: vi.fn().mockResolvedValue(true),
 }));
 
-vi.mock("../../src/extension/session-tree/SessionTreePicker.js", () => treePickerMocks);
+vi.mock("../../src/extension/sessions/tree/SessionTreePicker.js", () => treePickerMocks);
 vi.mock("../../src/extension/notifications/showWindowsToast.js", () => windowsToastMocks);
 
 const testEnvironment = vi.hoisted(() => ({

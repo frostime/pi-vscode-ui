@@ -2,8 +2,8 @@
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
   import { onDestroy, onMount } from "svelte";
 
-  import NewUpdatesButton from "../scrolling/NewUpdatesButton.svelte";
-  import { INITIAL_SCROLL_FOLLOW_STATE, reduceScrollFollow } from "../scrolling/scrollFollowState";
+  import NewUpdatesButton from "./scrolling/NewUpdatesButton.svelte";
+  import { INITIAL_SCROLL_FOLLOW_STATE, reduceScrollFollow } from "./scrolling/scrollFollowState";
   import AgentTurn from "./AgentTurn.svelte";
   import BranchPointControl from "./BranchPointControl.svelte";
   import BranchSummaryBlock from "./BranchSummaryBlock.svelte";

@@ -1,45 +1,25 @@
 ---
 title: Troubleshooting
-description: Diagnosis and recovery for executable, protocol, session, Webview, and diff failures.
+description: Current recovery steps for startup, history, discovery, proxy, mentions, editor, and diff failures.
 scope:
   - /apps/vscode/**
-updated: 2026-07-16
+updated: 2026-07-28
 ---
 
 # Troubleshooting
 
-## Pi does not start
+- **Pi executable/startup:** Open FrostPi Output and export diagnostics. Verify `pi --mode rpc` in the same local/remote workspace environment. For a configured JavaScript entry point, verify `node` on `PATH`, update `frostpi.pi.executable`, and retry.
 
-Open the FrostPi Output channel and export diagnostics. Verify `pi --mode rpc` works in a terminal in the same local/remote workspace environment. For a configured JavaScript CLI, verify `node` on `PATH` satisfies Pi's runtime requirement. Update `frostpi.pi.executable`, then retry the failed session.
+- **Restored session/history:** FrostPi never substitutes an empty session for a missing or corrupt file. Repair it outside FrostPi or close the UI session. If only history failed, use retry/load; the live process may remain usable.
 
-## A restored session fails
+- **Stale commands/models:** Use the relevant picker refresh action. FrostPi loads both after startup and refreshes commands after settled turns because Pi extensions may register them dynamically.
 
-FrostPi deliberately does not replace a missing/corrupt Pi session with an empty one. Close that UI session and create a new one, or repair the stored Pi path outside FrostPi.
+- **Proxy changes:** Settings apply only at process start. Restart the affected session; its Pi session file is reused, but active streams, tools, and pending extension UI cannot survive.
 
-## Commands or models are stale
+- **Existing-session discovery:** Roots are filtered by JSONL `cwd` to the active workspace or allowed worktree; relative `sessionDir` resolves from that directory. Browse for non-standard storage, and open another project's owning folder before resuming it.
 
-Use the refresh action in the relevant picker. They are also refreshed after startup and settled turns because Pi extensions may register commands dynamically.
+- **Workspace mention search:** Check Output and ensure `fd` is on `PATH` or in Pi's managed bin. Review `files.exclude`, `search.exclude`, and `frostpi.composer.fileMentions.*`; old fd versions omit directory rows. Mentions inject no file content.
 
-## Diff cannot open
+- **External editor:** `/editor` allows one temporary Markdown tab at a time. Close it to return disk text to its owning Composer; Save keeps edits, Don't Save keeps the last saved or prefilled text. Re-running the command reveals the existing tab.
 
-The Diff action compares against Git `HEAD`; the file must belong to an open Git worktree and exist in `HEAD`. Untracked files have no Git-base document and should be opened directly.
-
-## Extension UI disappears
-
-Pi can assign a timeout to blocking UI requests. FrostPi removes the card when that timeout elapses and does not send a late response. Closing/stopping a session explicitly cancels its pending requests.
-
-## Existing sessions do not appear
-
-FrostPi filters discovered sessions to the active workspace using the JSONL header `cwd`. It checks `--session-dir`, `PI_CODING_AGENT_SESSION_DIR`, project and user `sessionDir` settings, and Pi's default session directory. Relative `sessionDir` values are resolved against the workspace folder (same as Pi's process cwd), not against the settings file directory. Use **Resume session → Browse for a session file…** when storage is non-standard or rewritten by a Pi extension. A session owned by another project must be opened from that folder.
-
-## Icons render as empty squares
-
-Install a current VSIX built with Vite's relative asset base. The packaged `dist/webview/assets/codicon.ttf` and `webview.css` must both be present. Reload the VS Code window after upgrading from 0.1.0.
-
-## Proxy changes do not affect a running session
-
-This is expected. Use **FrostPi: Configure Network Proxy** or **Network & proxy** in the session menu. Settings are resolved only when the Pi process starts. The menu shows `restart required` until you restart the current or all sessions. The original Pi session file is reused, but active tools, streams, and pending extension UI cannot survive restart.
-
-## `@file` completion does not appear
-
-Typing `@` should immediately open workspace-path suggestions. If no path appears, check the FrostPi Output channel, verify that `fd` is available in PATH or Pi's managed bin directory, and review `files.exclude`, `search.exclude`, and the `frostpi.composer.fileMentions.*` settings. Directory rows require fd 10.0.0 or newer; older versions continue to provide file rows and trigger a one-time warning. FrostPi displays no-result/search-error rows instead of failing silently. Completion inserts a workspace-relative textual reference only; Pi decides whether to read it.
+- **Diff/file reference:** Diff requires an open-worktree file present in Git `HEAD`; open untracked files directly. References resolve from the active session cwd, so verify the path and line still exist.

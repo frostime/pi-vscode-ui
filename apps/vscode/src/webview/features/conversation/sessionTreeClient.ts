@@ -2,7 +2,7 @@ import type { ConversationMessageView } from "$shared/model/conversationModel";
 import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
 import { postToHost } from "../../bridge/vscodeBridge";
-import { getDraft } from "../../state/composerDraftStore.svelte";
+import { getDraft } from "../../features/composer/composerDraftStore.svelte";
 
 export function requestBranchHere(session: SessionViewModel, message: ConversationMessageView): void {
   if (!message.sourceEntryId) return;

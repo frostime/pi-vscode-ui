@@ -1,21 +1,16 @@
 ---
 title: Testing Strategy
-description: Required protocol, projection, Webview, integration, and packaging evidence.
+description: Behavior-oriented verification categories and release-gate expectations.
 scope:
   - /apps/vscode/test/**
   - /packages/pi-rpc/test/**
-  - /scripts/**
-updated: 2026-07-16
+updated: 2026-07-28
 ---
 
 # Testing Strategy
 
-Tests target observable contracts:
+Test observable behavior and contracts, not implementation call order. During development, run the narrowest relevant package or test file before repository-wide checks.
 
-- `pi-rpc`: strict LF/UTF-8 framing, correlation, timeout/exit, executable resolution, environment merge, and serialization.
-- Extension unit tests: turn ordering, tool updates, model thinking maps, image limits, bridge schemas/deltas, extension UI, proxy environment, file ranking, prompt syntax, completion activation, Webview-safe ID generation, and scroll-follow reducer.
-- Extension-host integration: fake Pi handshake plus a session command path.
-- Visual release review: dark/light/high-contrast; 280/320/430px and normal widths; long titles; streaming; failed tools; hover usage; model collapse/expand; model/thinking typography; `@` and `/` completion; bounded Composer height; hidden CodeMirror live-region; paused scrolling; proxy wizard/status.
-- Packaging verification: runtime assets present, no source maps/tests/node_modules, identity/version consistency, and bundle budgets.
+Evidence covers transport framing/process behavior; lifecycle, persistence, history, and projection; pure Webview behavior and accessibility; Extension Host integration with controlled/fake Pi; visual review in light/dark/high-contrast at 280px; and packaging contents, identity, source maps, and bundle budgets.
 
-Release gate: `pnpm check`, bundle-size check, VSIX package/verification, then clean-host smoke testing with a real Pi installation. Environment-blocked E2E is reported, never counted as passing.
+Release gates and clean-host smoke testing are defined in [`release.md`](release.md). Environment-blocked E2E is reported with the blocker and never counted as passing.

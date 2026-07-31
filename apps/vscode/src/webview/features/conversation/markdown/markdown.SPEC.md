@@ -1,19 +1,14 @@
 ---
 title: Conversation Markdown Rendering
-description: How message text becomes Markdown, math, and Mermaid in the Webview.
+description: Sanitization, file references, streaming Mermaid, and source-text copy behavior.
 scope:
   - /apps/vscode/src/webview/features/conversation/markdown/**
-  - /apps/vscode/src/webview/features/conversation/MarkdownContent.svelte
-updated: 2026-07-20
+updated: 2026-07-28
 ---
 
 # Conversation Markdown Rendering
 
-- Message text enters through `MarkdownContent`. Callers still pass a single `content: string`; block splitting is internal.
-- Ordinary Markdown uses `markdown-it` with `html: false`, scheme-based linkify on, fuzzy domain linkification off, and DOMPurify on the HTML output. Code fences use `highlight.js` common languages.
-- Markdown file links and exact inline-code references open through the validated `openFile` bridge command. Supported locations are `path`, `path:line`, `path:line:column`, `path:start-end`, and GitHub-style `path#Lstart-Lend`; line ranges select the complete referenced lines. Plain-text paths are not linked. HTTP(S) links retain `openExternal` behavior; non-file inline code is unchanged.
-- Inline-code references are constrained to common text-file extensions (e.g. `.py`, `.ts`, `.tex`, `.yaml`) and well-known filenames without extensions (e.g. `Makefile`, `LICENSE`, `.env.local`). This prevents arbitrary dotted tokens such as `v1.2.3` from becoming links. Markdown links are exempt from this whitelist because an explicit `[text](href)` already signals user intent.
-- Complete ` ```mermaid ` / `~~~mermaid` fences become `MermaidBlock` instances. Incomplete fences remain ordinary Markdown so streaming does not mount a diagram until the fence closes.
-- A mounted Mermaid block re-renders only when its source string changes. Mermaid loads once via the packaged IIFE at `dist/webview/vendor/mermaid.min.js` (script tag, not Vite `import()`), using `securityLevel: "strict"`. SVG is sanitized and fail-closed (never inject raw SVG). Successful SVG results are cached by source. Render failures show the error and the original source.
-- Math delimiters `$...$`, `$$...$$`, `\(...\)`, and `\[...\]` render through KaTeX inside Markdown HTML. KaTeX loads on first math-bearing message (dynamic chunk + CSS). Invalid math does not fail the surrounding message. Successful KaTeX results are cached by `(displayMode, source)`.
-- Copy actions continue to use the original protocol text blocks, not rendered HTML, SVG, or math markup.
+- Ordinary Markdown uses `markdown-it` with raw HTML disabled, then sanitizes output. Mermaid uses strict security, sanitizes SVG, and fails closed without injecting raw output.
+- Explicit Markdown file links and whitelisted inline-code references open through validated `openFile`; supported locations include line, column, line-range, and GitHub `#L` forms. HTTP(S) remains external.
+- Incomplete Mermaid fences remain source text while streaming; only complete fences mount a diagram, and render failure shows the error plus original source.
+- Copy uses original protocol text in order, never rendered HTML, SVG, math markup, images, reasoning, tools, or notices.

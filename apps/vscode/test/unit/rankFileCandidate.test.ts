@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { rankFileCandidate } from "../../src/extension/workspace-files/rankFileCandidate.js";
+import { rankFileCandidate } from "../../src/extension/composer/mentions/rankFileCandidate.js";
 
 describe("workspace file ranking", () => {
   it("prioritizes exact names, prefixes, and boosted paths", () => {

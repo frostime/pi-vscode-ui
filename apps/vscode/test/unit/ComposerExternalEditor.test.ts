@@ -70,7 +70,7 @@ vi.mock("vscode", () => ({
   window: vscodeMock.window,
 }));
 
-const { ComposerExternalEditor } = await import("../../src/extension/editor-context/ComposerExternalEditor.js");
+const { ComposerExternalEditor } = await import("../../src/extension/composer/ComposerExternalEditor.js");
 
 describe("ComposerExternalEditor", () => {
   beforeEach(() => {

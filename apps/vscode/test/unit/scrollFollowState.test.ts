@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { INITIAL_SCROLL_FOLLOW_STATE, reduceScrollFollow } from "../../src/webview/features/scrolling/scrollFollowState.js";
+import { INITIAL_SCROLL_FOLLOW_STATE, reduceScrollFollow } from "../../src/webview/features/conversation/scrolling/scrollFollowState.js";
 
 describe("scroll follow state", () => {
   it("pauses on user scroll and counts updates without moving", () => {

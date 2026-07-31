@@ -24,17 +24,17 @@ import { redactDiagnosticText, type DiagnosticLogger } from "../diagnostics/Diag
 import { ExtensionUiCoordinator } from "../extension-ui/ExtensionUiCoordinator.js";
 import { QuestionToolExtensionBridge } from "../question-tool/QuestionToolExtensionBridge.js";
 import { commandName, normalizePiSlashPrompt } from "./normalizePiSlashPrompt.js";
-import { configuredPiInvocation } from "../pi-runtime/resolvePiExecutable.js";
+import { configuredPiInvocation } from "../configuration/configuredPiInvocation.js";
 import { buildPiProcessEnvironment, proxyFingerprint, proxyModeLabel } from "../network/buildPiProcessEnvironment.js";
 import type { ProxySecretStore } from "../network/ProxySecretStore.js";
-import { SessionTreeExtensionBridge, type SessionTreeSummaryOptions } from "../session-tree/SessionTreeExtensionBridge.js";
+import { SessionTreeExtensionBridge, type SessionTreeSummaryOptions } from "./tree/SessionTreeExtensionBridge.js";
 import {
   buildSessionTreeIndex,
   projectActiveBranchEdges,
   projectBranchEndChoices,
   projectEditableTarget,
   type BranchEndChoiceProjection,
-} from "../session-tree/sessionTreeProjection.js";
+} from "./tree/sessionTreeProjection.js";
 import { SessionEntryState } from "./SessionEntryState.js";
 import { SessionViewState } from "./SessionViewState.js";
 

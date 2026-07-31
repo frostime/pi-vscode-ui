@@ -3,9 +3,9 @@ import type { CollectionDelta, HostToWebviewMessage } from "$shared/bridge/hostT
 import type { ChatTypographyView } from "$shared/model/chatTypography";
 import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
-import { insertDraftText, setDraftText } from "../state/composerDraftStore.svelte";
+import { insertDraftText, setDraftText } from "../features/composer/composerDraftStore.svelte";
 import { composerFocusTick, showToast, workspaceStore } from "../state/sessionViewStore.svelte";
-import { promptSubmissionResult } from "../state/promptSubmissionStore.svelte";
+import { promptSubmissionResult } from "../features/composer/promptSubmissionStore.svelte";
 import { deliverWorkspaceFileSuggestions } from "../features/composer/fileSuggestionClient";
 import { applyComposerSeed } from "../features/composer/composerSeedClient";
 import { resolveForkResult } from "../features/conversation/forkMessageClient";

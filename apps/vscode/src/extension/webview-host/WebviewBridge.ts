@@ -1,31 +1,30 @@
-import { isAbsolute, relative } from "node:path";
-
 import * as vscode from "vscode";
 
 import { BRIDGE_VERSION } from "../../shared/bridge/bridgeVersion.js";
 import type { HostToWebviewPayload, WorkspaceDeltaView } from "../../shared/bridge/hostToWebview.js";
 import type { ConversationItemView } from "../../shared/model/conversationModel.js";
 import type { SessionViewModel } from "../../shared/model/sessionViewModel.js";
-import { collectionDelta } from "../../shared/bridge/collectionDelta.js";
 import { webviewToHostSchema, type WebviewToHostMessage } from "../../shared/bridge/webviewToHost.js";
-import { captureActiveFileReference } from "../editor-context/captureActiveFile.js";
-import { ComposerExternalEditor } from "../editor-context/ComposerExternalEditor.js";
-import { listEditorMentionSpecials } from "../editor-context/editorMentionSpecials.js";
+import { captureActiveFileReference } from "../composer/mentions/captureActiveFile.js";
+import { ComposerExternalEditor } from "../composer/ComposerExternalEditor.js";
+import { listEditorMentionSpecials } from "../composer/mentions/editorMentionSpecials.js";
+import { WorkspaceFileSearch } from "../composer/mentions/WorkspaceFileSearch.js";
+import { workspaceFileBoosts, workspaceFileExcludeRules } from "../composer/mentions/workspaceFileSearchContext.js";
+import { configurePiExecutable } from "../configuration/configurePiExecutable.js";
 import { readConfiguration } from "../configuration/readConfiguration.js";
 import { readChatTypography } from "../configuration/readChatTypography.js";
 import { workspaceUriForPath } from "../configuration/workspaceScope.js";
-import { captureActiveSelection } from "../editor-context/captureSelection.js";
-import { openReferencedLocation } from "../editor-context/openReferencedLocation.js";
+import { captureActiveSelection } from "../composer/mentions/captureSelection.js";
+import { openReferencedLocation } from "../conversation/openReferencedLocation.js";
 import { exportDiagnostics } from "../diagnostics/exportDiagnostics.js";
 import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { openFileDiff } from "../file-changes/GitBaseContentProvider.js";
 import type { SessionRegistry } from "../sessions/SessionRegistry.js";
-import { WorkspaceFileSearch, type WorkspaceFileExcludeRule } from "../workspace-files/WorkspaceFileSearch.js";
+import { collectionDelta } from "./collectionDelta.js";
 
 interface Identified {
   id: string;
 }
-
 
 export class WebviewBridge implements vscode.Disposable {
   readonly #disposables: vscode.Disposable[] = [];
@@ -344,7 +343,7 @@ export class WebviewBridge implements vscode.Disposable {
         await this.#registry.retrySession(message.sessionId);
         break;
       case "configureExecutable":
-        await configureExecutable();
+        await configurePiExecutable();
         break;
       case "exportDiagnostics":
         await exportDiagnostics(this.#logger, this.#registry.diagnosticsSummary());
@@ -356,8 +355,6 @@ export class WebviewBridge implements vscode.Disposable {
   }
 }
 
-type ConfiguredExclude = boolean | { when?: string };
-
 function chatTypographyChanged(event: vscode.ConfigurationChangeEvent): boolean {
   return event.affectsConfiguration("chat.fontFamily")
     || event.affectsConfiguration("chat.fontSize")
@@ -365,55 +362,6 @@ function chatTypographyChanged(event: vscode.ConfigurationChangeEvent): boolean 
     || event.affectsConfiguration("chat.editor.fontSize");
 }
 
-function workspaceFileExcludeRules(scope: vscode.Uri, respectSearchExclude: boolean): WorkspaceFileExcludeRule[] {
-  const files = vscode.workspace.getConfiguration("files", scope).get<Record<string, ConfiguredExclude>>("exclude", {});
-  const rules = Object.entries(files)
-    .filter(([, value]) => value === true || (typeof value === "object" && value !== null))
-    .map(([pattern, value]) => ({
-      pattern,
-      ...(typeof value === "object" && value.when ? { when: value.when } : {}),
-    }));
-  if (!respectSearchExclude) return rules;
-
-  const search = vscode.workspace.getConfiguration("search", scope).get<Record<string, ConfiguredExclude>>("exclude", {});
-  for (const [pattern, value] of Object.entries(search)) {
-    if (value === true || (typeof value === "object" && value !== null)) rules.push({ pattern });
-  }
-  return rules;
-}
-
-function workspaceFileBoosts(session: SessionViewModel): Set<string> {
-  const boosts = new Set<string>();
-  const add = (path: string | undefined): void => {
-    if (!path) return;
-    const relativePath = (isAbsolute(path) ? relative(session.cwd, path) : path).replaceAll("\\", "/");
-    if (relativePath && !relativePath.startsWith("../")) boosts.add(relativePath);
-  };
-  add(vscode.window.activeTextEditor?.document.uri.fsPath);
-  for (const editor of vscode.window.visibleTextEditors) add(editor.document.uri.fsPath);
-  for (const item of session.conversationItems) {
-    if (item.type !== "turn") continue;
-    for (const turnItem of item.items) {
-      if (turnItem.type === "tool") add(turnItem.tool.filePath);
-    }
-  }
-  return boosts;
-}
-
 function referenceMap<T extends Identified>(items: readonly T[]): Map<string, T> {
   return new Map(items.map((item) => [item.id, item]));
-}
-
-async function configureExecutable(): Promise<void> {
-  const configuration = vscode.workspace.getConfiguration("frostpi");
-  const current = configuration.get<string>("pi.executable", "");
-  const value = await vscode.window.showInputBox({
-    title: "Configure Pi executable",
-    prompt: "Enter `pi`, an absolute executable path, or Pi's compiled cli.js path. Leave blank for PATH discovery.",
-    value: current,
-    ignoreFocusOut: true,
-  });
-  if (value === undefined) return;
-  await configuration.update("pi.executable", value.trim(), vscode.ConfigurationTarget.Global);
-  void vscode.window.showInformationMessage("FrostPi executable setting updated. Restart failed sessions to apply it.");
 }

@@ -1,6 +1,6 @@
 import { basename, dirname } from "node:path";
 
-import type { WorkspaceFileCandidateView } from "../../shared/model/workspaceFileModel.js";
+import type { WorkspaceFileCandidateView } from "../../../shared/model/workspaceFileModel.js";
 
 export function rankFileCandidate(
   path: string,

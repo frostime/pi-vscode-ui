@@ -15,7 +15,8 @@ vi.mock("vscode", () => ({
 }));
 
 import { QuickPickItemKind } from "vscode";
-import { buildSessionQuickPickItems, discoverPiSessions, prioritizeSessionRoots, readPiSessionMetadata, resolveSessionRoots } from "../../src/extension/sessions/SessionCatalog.js";
+import { discoverPiSessions, prioritizeSessionRoots, readPiSessionMetadata, resolveSessionRoots } from "../../src/extension/sessions/catalog/SessionCatalog.js";
+import { buildSessionQuickPickItems } from "../../src/extension/sessions/catalog/SessionCatalogPicker.js";
 import type { SessionWorkingDirectory } from "../../src/extension/sessions/SessionWorkingDirectories.js";
 
 describe("Pi session metadata", () => {

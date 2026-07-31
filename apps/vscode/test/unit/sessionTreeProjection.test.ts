@@ -6,7 +6,7 @@ import {
   projectActiveBranchEdges,
   projectBranchEndChoices,
   projectEditableTarget,
-} from "../../src/extension/session-tree/sessionTreeProjection.js";
+} from "../../src/extension/sessions/tree/sessionTreeProjection.js";
 import { SessionEntryState } from "../../src/extension/sessions/SessionEntryState.js";
 
 const entries: RpcSessionEntry[] = [

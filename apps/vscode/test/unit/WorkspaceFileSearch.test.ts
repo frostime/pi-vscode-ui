@@ -18,7 +18,7 @@ import {
   WorkspaceFileSearch,
   type FdExecutable,
   type WorkspaceFileSearchOptions,
-} from "../../src/extension/workspace-files/WorkspaceFileSearch.js";
+} from "../../src/extension/composer/mentions/WorkspaceFileSearch.js";
 
 const temporaryDirectories: string[] = [];
 const searchOptions: WorkspaceFileSearchOptions = {

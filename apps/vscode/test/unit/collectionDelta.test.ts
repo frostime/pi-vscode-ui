@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { collectionDelta } from "../../src/shared/bridge/collectionDelta.js";
+import { collectionDelta } from "../../src/extension/webview-host/collectionDelta.js";
 import { mergeCollection } from "../../src/webview/bridge/applyHostMessage.js";
 
 describe("incremental Webview collections", () => {

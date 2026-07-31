@@ -1,6 +1,6 @@
 import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
-import { setDraft, type DraftImage } from "../../state/composerDraftStore.svelte";
+import { setDraft, type DraftImage } from "../../features/composer/composerDraftStore.svelte";
 import { composerFocusTick } from "../../state/sessionViewStore.svelte";
 
 let appliedComposerSeedId: string | null = null;

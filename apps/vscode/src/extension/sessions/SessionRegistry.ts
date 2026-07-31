@@ -13,14 +13,15 @@ import { workspaceUriForPath } from "../configuration/workspaceScope.js";
 import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { ProxySecretStore } from "../network/ProxySecretStore.js";
 import { showWindowsToast } from "../notifications/showWindowsToast.js";
-import { pickPiSession, readPiSessionMetadata, type PiSessionCatalogEntry } from "./SessionCatalog.js";
+import { readPiSessionMetadata, type PiSessionCatalogEntry } from "./catalog/SessionCatalog.js";
+import { pickPiSession } from "./catalog/SessionCatalogPicker.js";
 import { SessionPersistence } from "./SessionPersistence.js";
 import {
   discoverSessionWorkingDirectories,
   findSessionWorkingDirectory,
   type SessionWorkingDirectory,
 } from "./SessionWorkingDirectories.js";
-import { confirmDraftReplacement, pickBranchEnd, pickBranchSummary } from "../session-tree/SessionTreePicker.js";
+import { confirmDraftReplacement, pickBranchEnd, pickBranchSummary } from "./tree/SessionTreePicker.js";
 import { normalizePiSlashPrompt } from "./normalizePiSlashPrompt.js";
 import { SessionRuntime } from "./SessionRuntime.js";
 import type { PersistedSessionRecord } from "./sessionTypes.js";

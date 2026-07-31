@@ -1,4 +1,4 @@
-import type { CollectionDelta } from "./hostToWebview.js";
+import type { CollectionDelta } from "../../shared/bridge/hostToWebview.js";
 
 interface Identified {
   id: string;

@@ -22,8 +22,13 @@ import type {
 } from "../../shared/model/conversationModel.js";
 import type { ToolCallView } from "../../shared/model/toolCallModel.js";
 import { validateProjectedImageAttachments } from "../attachments/normalizeImageAttachment.js";
-import type { ActiveBranchEdge } from "../session-tree/sessionTreeProjection.js";
 import { contentToBlocks, createToolView, extractText, isRecord, recordValue, stringValue } from "./messageAssembler.js";
+
+export interface ActiveBranchEdge {
+  branchPointId: string | null;
+  activeChildEntryId: string;
+  pathCount: number;
+}
 
 export interface ConversationProjectionSnapshot {
   items: readonly ConversationItemView[];

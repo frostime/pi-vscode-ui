@@ -3,8 +3,8 @@
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
   import { postToHost } from "../../bridge/vscodeBridge";
-  import { clearDraft, composerDrafts, getDraft, setDraft, updateDraft, type DraftImage, type SessionDraft } from "../../state/composerDraftStore.svelte";
-  import { promptSubmissionResult } from "../../state/promptSubmissionStore.svelte";
+  import { clearDraft, composerDrafts, getDraft, setDraft, updateDraft, type DraftImage, type SessionDraft } from "../../features/composer/composerDraftStore.svelte";
+  import { promptSubmissionResult } from "../../features/composer/promptSubmissionStore.svelte";
   import { composerFocusTick, showToast } from "../../state/sessionViewStore.svelte";
   import { createId } from "../../utils/createId";
   import { composerEditorPrefill } from "./editorCommand";
