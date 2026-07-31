@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-07-28
+
 ### Changed
 
 - REFACTOR: Reorganize source ownership by feature without user-visible behavior changes. Session catalog data and picker UI split into separate modules; proxy and executable configuration move into their owning `network`/`configuration` modules; proxy types and defaults consolidate in one place. Commands, settings, session behavior, and the proxy workflow are unchanged. Documentation contracts move into `docs/architecture/overview.md` and the nearest module `*.SPEC.md` files.
@@ -278,6 +280,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
 [Unreleased]: https://github.com/frostime/frostpi/compare/v0.10.0...HEAD
+[0.10.1]: https://github.com/frostime/frostpi/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/frostime/frostpi/compare/v0.9.0...v0.10.0
 [0.7.2]: https://github.com/frostime/frostpi/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/frostime/frostpi/compare/v0.7.0...v0.7.1
