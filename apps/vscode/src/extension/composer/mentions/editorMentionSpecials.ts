@@ -23,13 +23,13 @@ export function listEditorMentionSpecials(query: string): EditorMentionSpecialVi
   const specials: EditorMentionSpecialView[] = [
     {
       id: "selection",
-      label: "@Selection",
+      label: "Selection",
       detail: selectionDetail,
       insertText: `${selectionInsert} `,
     },
     {
       id: "current-file",
-      label: "@CurrentFile",
+      label: "CurrentFile",
       detail: relative,
       insertText: `${fileInsert} `,
     },

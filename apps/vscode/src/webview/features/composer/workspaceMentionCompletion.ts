@@ -9,12 +9,10 @@ export function workspaceMentionReplaceTo(matchText: string, to: number, nextCha
 
 export function workspaceMentionEdit(path: string, isDirectory: boolean): WorkspaceMentionEdit {
   const completionPath = isDirectory && !path.endsWith("/") ? `${path}/` : path;
-  const text = /\s/.test(completionPath)
-    ? `@"${completionPath.replaceAll('"', '\\"')}"`
-    : `@${completionPath}`;
+  const text = `\`${completionPath}\``;
   const suffix = isDirectory ? "" : " ";
   return {
     text: `${text}${suffix}`,
-    cursorOffset: isDirectory && text.endsWith('"') ? text.length - 1 : text.length + suffix.length,
+    cursorOffset: isDirectory ? text.length - 1 : text.length + suffix.length,
   };
 }
