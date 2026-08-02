@@ -2,6 +2,8 @@
 
 let buffer = "";
 let sessionName = "E2E session";
+let entries = [];
+let entrySequence = 0;
 const sessionFile = `${process.cwd().replaceAll("\\", "/")}/.frostpi-e2e-session.jsonl`;
 
 process.stdin.setEncoding("utf8");
@@ -33,6 +35,14 @@ function handle(command) {
       });
       break;
     case "get_messages": respond(id, { messages: [] }); break;
+    case "get_entries": {
+      const sinceIndex = typeof command.since === "string" ? entries.findIndex((entry) => entry.id === command.since) : -1;
+      respond(id, {
+        entries: sinceIndex >= 0 ? entries.slice(sinceIndex + 1) : entries,
+        leafId: entries.at(-1)?.id ?? null,
+      });
+      break;
+    }
     case "get_available_models":
       respond(id, { models: [{ provider: "e2e", id: "model", name: "E2E Model", supportsImages: true, reasoning: true }] });
       break;
@@ -75,13 +85,65 @@ function handle(command) {
       });
       respond(id, { summary: "Compacted context", tokensBefore: 42_000 });
       break;
-    case "prompt":
+    case "prompt": {
+      const timestamp = ++entrySequence * 10;
+      const parentId = entries.at(-1)?.id ?? null;
+      const userId = `user-${entrySequence}`;
+      const userMessage = { role: "user", content: command.message, timestamp };
       respond(id);
       event({ type: "agent_start" });
-      event({ type: "message_start", message: { role: "assistant", timestamp: Date.now(), content: [{ type: "text", text: "E2E response" }] } });
-      event({ type: "message_end", message: { role: "assistant", timestamp: Date.now(), stopReason: "stop", content: [{ type: "text", text: "E2E response" }] } });
+      event({ type: "message_start", message: userMessage });
+
+      if (command.message === "retry") {
+        const failedId = `assistant-failed-${entrySequence}`;
+        const successId = `assistant-success-${entrySequence}`;
+        const failedMessage = {
+          role: "assistant",
+          timestamp: timestamp + 1,
+          stopReason: "error",
+          errorMessage: "Transient provider error",
+          content: [{ type: "text", text: "Partial response" }],
+        };
+        const successMessage = {
+          role: "assistant",
+          timestamp: timestamp + 2,
+          stopReason: "stop",
+          content: [{ type: "text", text: "E2E response" }],
+        };
+        event({ type: "message_start", message: failedMessage });
+        event({ type: "message_end", message: failedMessage });
+        event({ type: "agent_end", messages: [], willRetry: true });
+        event({ type: "auto_retry_start", attempt: 2, maxAttempts: 3, delayMs: 0, errorMessage: "Transient provider error" });
+        event({ type: "agent_start" });
+        event({ type: "message_start", message: successMessage });
+        event({ type: "message_end", message: successMessage });
+        event({ type: "agent_end", messages: [], willRetry: false });
+        entries = [
+          ...entries,
+          { type: "message", id: userId, parentId, timestamp, message: userMessage },
+          { type: "message", id: failedId, parentId: userId, timestamp: timestamp + 1, message: failedMessage },
+          { type: "message", id: successId, parentId: failedId, timestamp: timestamp + 2, message: successMessage },
+        ];
+      } else {
+        const assistantId = `assistant-${entrySequence}`;
+        const assistantMessage = {
+          role: "assistant",
+          timestamp: timestamp + 1,
+          stopReason: "stop",
+          content: [{ type: "text", text: "E2E response" }],
+        };
+        event({ type: "message_start", message: assistantMessage });
+        event({ type: "message_end", message: assistantMessage });
+        event({ type: "agent_end", messages: [], willRetry: false });
+        entries = [
+          ...entries,
+          { type: "message", id: userId, parentId, timestamp, message: userMessage },
+          { type: "message", id: assistantId, parentId: userId, timestamp: timestamp + 1, message: assistantMessage },
+        ];
+      }
       event({ type: "agent_settled" });
       break;
+    }
     default: respond(id);
   }
 }

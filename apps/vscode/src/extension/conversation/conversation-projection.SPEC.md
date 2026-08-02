@@ -5,7 +5,7 @@ scope:
   - /apps/vscode/src/extension/conversation/**
   - /apps/vscode/src/extension/sessions/SessionEntryState.ts
   - /apps/vscode/src/shared/model/conversationModel.ts
-updated: 2026-07-27
+updated: 2026-08-01
 ---
 
 # Conversation Projection
@@ -21,8 +21,8 @@ The Host emits one ordered `conversationItems` collection. A visual turn has its
 ## Persisted entries
 
 - A user `message` opens a visual turn and supplies its stable `sourceEntryId`.
-- Assistant content becomes reasoning, response, and tool activities in protocol order.
-- A tool result updates the activity identified by `toolCallId`; it is not a second visible activity.
+- Assistant content becomes reasoning, response, and tool activities in protocol order. The persisted assistant identity is the session entry ID; a Pi message ID or timestamp is only a live-to-persisted correlation clue and never merges two persisted entries.
+- A tool result updates the activity identified by `toolCallId`; it is not a second visible activity. Assistant takeover relocates all reasoning, response, and embedded tool-call parts as one ownership unit, including the tool location. Once a persisted tool result arrives, delayed live tool events cannot replace its stable content.
 - `compaction`, `branch_summary`, and `custom_message` are independent items at their active-path positions.
 - Compaction never removes or hides earlier active-path items. Nested `retainedTail` values are LLM-context metadata and are not expanded into transcript items.
 - Every `custom_message` with `display: true` renders generic text and image blocks. `display: false` messages and plain `custom` state entries are omitted.
@@ -34,12 +34,20 @@ A branch control represents an active parent-child tree edge. Its identity is de
 
 Optimistic prompts, streaming assistant content, tools, queued follow-ups, and notices appear before persistence refresh. A live turn becomes eligible for persisted user identity only after Pi emits its user message event. Eligible live turns pair with newly appended user entries in protocol FIFO order; text and timestamp equality are never identity rules. Rejected prompts and immediate extension commands without a Pi user event remain ineligible.
 
-Reconciliation preserves the live turn's view identity, attaches the entry id as source identity, and updates assistant/tool activities through stable protocol identities. A live compaction pairs with the next persisted compaction without duplication. Newly persisted custom messages and boundaries appear even when no user identity is attached.
+Reconciliation preserves the live turn's view identity, attaches the entry id as source identity, and updates assistant/tool activities through stable protocol identities. Persisted takeover owns the final physical location; a delayed live replay is ignored and cannot create an orphan turn or move an item back. Live and persisted compaction correlate only through `firstKeptEntryId`, never summary text. An incrementally appended compaction without that structural key requires full replacement, which discards provisional state and projects the persisted entry independently. Newly persisted custom messages and boundaries appear even when no user identity is attached.
 
-Incremental entries are accepted only when the reported leaf connects to the previous active leaf through the returned batch. Branch movement, an incomplete connecting chain, or a newly discovered control whose edge belongs before the appended segment requires a complete reload.
+Incremental ownership is preflighted before branch controls or conversation items are changed. If one live representation could be adopted by multiple persisted entries, reconciliation returns the existing reload result with the visible projection unchanged. Full replacement then projects every persisted entry independently by entry ID.
+
+Incremental entries are accepted only when the reported leaf connects to the previous active leaf through the returned batch. Branch movement, an incomplete connecting chain, a correlation conflict, or a newly discovered control whose edge belongs before the appended segment requires a complete reload.
 
 ## Turn lifecycle
 
+A persisted user message closes the preceding visual turn and opens a user-anchored turn. Assistant `toolUse` keeps it active; an assistant error keeps an `error-awaiting-continuation` anchor so provider retry or context-overflow compaction continuation remains in that turn. A later success or abort closes it. A replacement, a new user entry, or the refresh after `agent_settled` finalizes an error that received no continuation.
+
+Live `message_end(error)` displays the error activity but leaves the turn running until `agent_end` decides whether Pi will retry. `agent_end(willRetry: true)` keeps the running turn and `auto_retry_start` adds a notice; `willRetry: false` commits the pending error. This uses the existing turn statuses and does not persist retry notices.
+
 While an agent run is active, queued follow-ups remain outside persisted conversation order. Pi may emit a follow-up user message without another `agent_start`; promotion follows protocol FIFO order and closes the prior visual turn. Abort, process stop, and process failure clear the local queue.
 
-Live activity updates replace existing view objects instead of mutating them. This is required for bridge deltas and Webview-owned disclosure state. Notices emitted during an active turn remain inside its ordered items; idle notices are top-level conversation items.
+Live activity updates replace existing view objects instead of mutating them. This is required for bridge deltas and Webview-owned disclosure state. Documented assistant events provide an ID or timestamp correlation clue; a malformed live assistant without either is omitted until persisted refresh rather than emitted as an uncorrelatable duplicate. Notices emitted during an active turn remain inside its ordered items; idle notices are top-level conversation items.
+
+A completed turn has one turn-wide collapsible work trace before its final response. Failed assistant activities and notices on either side of a visible structural boundary belong to that trace; the boundary itself remains visible and is never counted or hidden as a work step.

@@ -1,7 +1,7 @@
 ---
 title: Conversation Projection Convergence
 created: 2026-08-01
-status: clarifying
+status: implemented
 terminology: ./TERMS.md
 scope:
   - /apps/vscode/src/extension/conversation/**
@@ -193,11 +193,14 @@ retry backoff 期间显示 `Retrying`，不先显示不可逆的最终 `Failed`�
 - 生产环境 timestamp-derived assistant identity 必须进入测试矩阵；本变更不假设测试专用显式 id 总是存在。
 - durable lifecycle 与 projection 保证在实现时同步更新现有模块 SPEC。
 
-### 待技术方案确定
+### 实际落地
 
-- 历史投影如何用一个明确规则识别 Pi 核心的自动重试与上下文压缩后自动继续；该规则无需解释缺失来源信息的任意 Pi 扩展独立执行。
-- 临时界面状态如何利用 `willRetry` 与 `auto_retry_*` 表达 `Retrying`，以及是否只需保持现有运行状态并增加提示，还是确实需要共享 ViewModel 状态。
-- 在 `message_end(error)` 早于 `agent_end(willRetry)` 的事件顺序下，如何以最低复杂度避免或缩短错误的最终 `Failed` 呈现。
+- `ConversationItemStore` 独占有序会话项以及 assistant、tool、compaction 的位置和 persisted 接管状态；`ConversationProjection` 保留 Pi 生命周期、用户回合分组、冲突和 reload 决策。
+- persisted assistant 使用 entry ID 作为最终身份。显式 message ID 或 timestamp 只关联 live 表示；一次增量批次中多个 persisted entries 竞争同一 live 表示时，在任何可见写入前返回 `reload`。full replacement 按 entry ID 保留全部 persisted entries。
+- persisted assistant error 将当前回合标记为 `error-awaiting-continuation`。后续 assistant、tool 或 overflow compaction 继续使用该回合；新 user、replacement 或 `agent_settled` 后刷新负责最终关闭未继续的错误。
+- live `message_end(error)` 立即发布错误 activity，但保持现有 `running` 状态。`agent_end(willRetry: true)` 保持 running，`auto_retry_start` 增加 notice，`willRetry: false` 才提交最终 error。
+- compaction 仅以 `firstKeptEntryId` 关联 live/persisted 表示。增量 entry 缺失该字段时必须在可见写入前要求 full replacement，由 persisted entry 独立重建；不得按 summary 猜测。迟到 assistant 或 compaction replay 在 persisted 接管后成为无操作。
+- 没有新增 shared `retrying` 枚举、通知持久化、Host-Webview 字段、Webview 去重、Pi 协议或 FrostPi sidecar，也没有拆分 persisted base/live overlay。
 
 ### 架构升级门槛
 

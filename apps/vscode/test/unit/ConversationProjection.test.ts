@@ -190,12 +190,17 @@ describe("ConversationProjection", () => {
     const projection = new ConversationProjection();
     projection.applyEvent({
       type: "compaction_end",
-      result: { summary: "Compact", tokensBefore: 500 },
+      result: { summary: "Compact", tokensBefore: 500, firstKeptEntryId: "kept-1" },
     });
     const liveId = projection.read().items[0]?.id;
 
     projection.reconcileEntries([
-      entry("compaction", "c1", null, { summary: "Compact", tokensBefore: 500, timestamp: 1 }),
+      entry("compaction", "c1", null, {
+        summary: "Compact",
+        tokensBefore: 500,
+        firstKeptEntryId: "kept-1",
+        timestamp: 1,
+      }),
     ], []);
 
     expect(projection.read().items).toEqual([
@@ -242,7 +247,290 @@ describe("ConversationProjection", () => {
     ])).toBe("reload");
     expect(projection.read().items.some((item) => item.id === "custom1")).toBe(false);
   });
+
+  it("keeps provider retry in one user turn and converges to full replacement", () => {
+    const entries = [
+      userEntry("u1", null, "Retry", 1),
+      assistantEntry("a1", "u1", [{ type: "text", text: "partial" }], "error", 2, undefined, "transient"),
+      assistantEntry("a2", "a1", [{ type: "text", text: "final" }], "stop", 3),
+    ];
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("Retry", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "Retry", timestamp: 1 } });
+    projection.applyEvent({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "text", text: "partial" }], stopReason: "error", errorMessage: "transient", timestamp: 2 },
+    });
+    projection.applyEvent({ type: "agent_end", willRetry: true, messages: [] });
+    projection.applyEvent({ type: "auto_retry_start", attempt: 2, maxAttempts: 3, delayMs: 0, errorMessage: "transient" });
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "text", text: "final" }], stopReason: "stop", timestamp: 3 },
+    });
+    projection.applyEvent({ type: "agent_end", willRetry: false, messages: [] });
+    projection.applyEvent({ type: "agent_settled" });
+
+    expect(projection.reconcileEntries(entries, [])).toBe("applied");
+    const [turn] = turns(projection.read().items);
+    expect(turn?.status).toBe("completed");
+    expect(turn?.items.filter((item) => item.type === "response").map(responseText)).toEqual([
+      "partial",
+      "transient",
+      "final",
+    ]);
+    expect(turn?.items.filter((item) => item.type === "notice")).toHaveLength(1);
+
+    const replacement = new ConversationProjection();
+    replacement.replaceEntries(entries, []);
+    expect(normalizePersistedProjection(projection)).toEqual(normalizePersistedProjection(replacement));
+  });
+
+  it("finalizes a retry error only when Pi will not continue", () => {
+    const entries = [
+      userEntry("u1", null, "Fail", 1),
+      assistantEntry("a1", "u1", [{ type: "text", text: "partial" }], "error", 2, undefined, "failed"),
+    ];
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("Fail", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "Fail", timestamp: 1 } });
+    projection.applyEvent({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "text", text: "partial" }], stopReason: "error", errorMessage: "failed", timestamp: 2 },
+    });
+    expect(turns(projection.read().items)[0]?.status).toBe("running");
+    projection.applyEvent({ type: "agent_end", willRetry: false, messages: [] });
+    expect(turns(projection.read().items)[0]?.status).toBe("error");
+    projection.applyEvent({ type: "agent_settled" });
+    projection.reconcileEntries(entries, []);
+
+    const replacement = new ConversationProjection();
+    replacement.replaceEntries(entries, []);
+    expect(normalizePersistedProjection(projection)).toEqual(normalizePersistedProjection(replacement));
+    expect(turns(replacement.read().items)[0]?.status).toBe("error");
+  });
+
+  it("returns reload before mutation when two persisted entries could adopt one timestamp identity", () => {
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("Collision", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "Collision", timestamp: 1 } });
+    projection.applyEvent({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "text", text: "live" }], stopReason: "stop", timestamp: 2 },
+    });
+    const before = projection.read().items;
+    const entries = [
+      userEntry("u1", null, "Collision", 1),
+      assistantEntry("a1", "u1", [{ type: "text", text: "first" }], "stop", 2),
+      assistantEntry("a2", "a1", [{ type: "text", text: "second" }], "stop", 2),
+    ];
+
+    expect(projection.reconcileEntries(entries, [])).toBe("reload");
+    expect(projection.read().items).toBe(before);
+
+    projection.replaceEntries(entries, []);
+    expect(turns(projection.read().items).flatMap((turn) => turn.items).filter((item) => item.type === "response")).toHaveLength(2);
+  });
+
+  it("keeps no-live timestamp collisions incremental and distinct", () => {
+    const entries = [
+      userEntry("u1", null, "Collision", 1),
+      assistantEntry("a1", "u1", [{ type: "text", text: "first" }], "stop", 2),
+      assistantEntry("a2", "a1", [{ type: "text", text: "second" }], "stop", 2),
+    ];
+    const projection = new ConversationProjection();
+
+    expect(projection.reconcileEntries(entries, [])).toBe("applied");
+    expect(turns(projection.read().items).flatMap((turn) => turn.items).filter((item) => item.type === "response")).toHaveLength(2);
+
+    const replacement = new ConversationProjection();
+    replacement.replaceEntries(entries, []);
+    expect(normalizePersistedProjection(projection)).toEqual(normalizePersistedProjection(replacement));
+  });
+
+  it("ignores stale assistant and compaction replay after persisted replacement", () => {
+    const projection = new ConversationProjection();
+    projection.replaceEntries([
+      userEntry("u1", null, "Done", 1),
+      assistantEntry("a1", "u1", [{ type: "toolCall", id: "t1", name: "read", arguments: {} }], "toolUse", 2),
+      toolResultEntry("r1", "a1", "t1", "body", 3),
+      assistantEntry("a2", "r1", [{ type: "text", text: "answer" }], "stop", 4),
+      entry("compaction", "c1", "a2", {
+        summary: "compact",
+        tokensBefore: 100,
+        firstKeptEntryId: "kept-1",
+        timestamp: 5,
+      }),
+    ], []);
+    projection.applyEvent({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "text", text: "answer" }], stopReason: "stop", timestamp: 4 },
+    });
+    projection.applyEvent({
+      type: "tool_execution_end",
+      toolCallId: "t1",
+      toolName: "read",
+      result: [{ type: "text", text: "late body" }],
+      isError: false,
+    });
+    projection.applyEvent({
+      type: "compaction_end",
+      result: { summary: "compact", tokensBefore: 100, firstKeptEntryId: "kept-1" },
+    });
+
+    const [turn] = turns(projection.read().items);
+    expect(turns(projection.read().items)).toHaveLength(1);
+    expect(turn?.items.filter((item) => item.type === "response")).toHaveLength(1);
+    const tools = turn?.items.filter((item) => item.type === "tool") ?? [];
+    expect(tools).toHaveLength(1);
+    expect(tools[0]?.tool.id).toBe("t1");
+    expect(tools[0]?.tool.output).toBe("body");
+    expect(projection.read().items.filter((item) => item.type === "compaction")).toHaveLength(1);
+  });
+
+  it("does not create an empty turn when a buffered lifecycle is already persisted", () => {
+    const projection = new ConversationProjection();
+    projection.replaceEntries([
+      userEntry("u1", null, "Done", 1),
+      assistantEntry("a1", "u1", [{ type: "text", text: "answer" }], "stop", 2),
+    ], []);
+
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "Done", timestamp: 1 } });
+    projection.applyEvent({
+      type: "message_start",
+      message: { role: "assistant", content: [{ type: "text", text: "answer" }], stopReason: "stop", timestamp: 2 },
+    });
+    projection.applyEvent({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "text", text: "answer" }], stopReason: "stop", timestamp: 2 },
+    });
+    projection.applyEvent({ type: "agent_settled" });
+
+    expect(turns(projection.read().items)).toHaveLength(1);
+    expect(turns(projection.read().items)[0]?.items.filter((item) => item.type === "response")).toHaveLength(1);
+  });
+
+  it("reloads before reconciling a compaction without a structural correlation key", () => {
+    const projection = new ConversationProjection();
+    projection.applyEvent({
+      type: "compaction_end",
+      result: { summary: "live", tokensBefore: 100, firstKeptEntryId: "kept" },
+    });
+    const before = projection.read().items;
+    const persisted = entry("compaction", "c1", null, {
+      summary: "persisted",
+      tokensBefore: 100,
+      timestamp: 1,
+    });
+
+    expect(projection.reconcileEntries([persisted], [])).toBe("reload");
+    expect(projection.read().items).toBe(before);
+
+    projection.replaceEntries([persisted], []);
+    expect(projection.read().items).toEqual([
+      expect.objectContaining({ id: "c1", type: "compaction", summary: "persisted" }),
+    ]);
+  });
+
+  it("keeps overflow continuation through an empty refresh after live success", () => {
+    const prefix = [
+      userEntry("u1", null, "Long", 1),
+      assistantEntry("a1", "u1", [{ type: "text", text: "overflow" }], "error", 2),
+      entry("compaction", "c1", "a1", {
+        summary: "compact",
+        tokensBefore: 100,
+        firstKeptEntryId: "kept-1",
+        timestamp: 3,
+      }),
+    ];
+    const success = assistantEntry("a2", "c1", [{ type: "text", text: "final" }], "stop", 4);
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("Long", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "Long", timestamp: 1 } });
+    projection.applyEvent({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "text", text: "overflow" }], stopReason: "error", timestamp: 2 },
+    });
+    projection.applyEvent({ type: "agent_end", willRetry: false, messages: [] });
+    projection.applyEvent({
+      type: "compaction_end",
+      willRetry: true,
+      result: { summary: "compact", tokensBefore: 100, firstKeptEntryId: "kept-1" },
+    });
+    expect(projection.reconcileEntries(prefix, [])).toBe("applied");
+
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "text", text: "final" }], stopReason: "stop", timestamp: 4 },
+    });
+    projection.applyEvent({ type: "agent_settled" });
+    expect(projection.reconcileEntries([], [])).toBe("applied");
+    expect(projection.reconcileEntries([success], [])).toBe("applied");
+
+    const [turn] = turns(projection.read().items);
+    expect(turns(projection.read().items)).toHaveLength(1);
+    expect(turn?.status).toBe("completed");
+    expect(turn?.items.map((item) => item.type)).toEqual(["response", "compaction", "response"]);
+  });
+
+  it("keeps overflow compaction continuation in one turn with stable activity order", () => {
+    const entries = [
+      userEntry("u1", null, "Long", 1),
+      assistantEntry("a1", "u1", [{ type: "text", text: "overflow" }], "error", 2),
+      entry("compaction", "c1", "a1", {
+        summary: "compact",
+        tokensBefore: 100,
+        firstKeptEntryId: "kept-1",
+        timestamp: 3,
+      }),
+      assistantEntry("a2", "c1", [{ type: "text", text: "final" }], "stop", 4),
+    ];
+    const projection = new ConversationProjection();
+    expect(projection.reconcileEntries(entries.slice(0, 2), [])).toBe("applied");
+    expect(turns(projection.read().items)[0]?.status).toBe("running");
+    expect(projection.reconcileEntries(entries.slice(2, 3), [])).toBe("applied");
+    expect(projection.reconcileEntries(entries.slice(3), [])).toBe("applied");
+
+    const [turn] = turns(projection.read().items);
+    expect(turn?.status).toBe("completed");
+    expect(turn?.items.map((item) => item.type)).toEqual(["response", "compaction", "response"]);
+    expect(projection.read().items).toHaveLength(1);
+
+    const replacement = new ConversationProjection();
+    replacement.replaceEntries(entries, []);
+    expect(normalizePersistedProjection(projection)).toEqual(normalizePersistedProjection(replacement));
+  });
 });
+
+function responseText(item: Extract<AgentTurnView["items"][number], { type: "response" }>): string {
+  return item.blocks.map((block) => block.type === "text" || block.type === "error" ? block.text : "").join("");
+}
+
+function normalizePersistedProjection(projection: ConversationProjection): unknown {
+  return projection.read().items.map((item) => {
+    if (item.type !== "turn") return { type: item.type };
+    return {
+      type: "turn",
+      sourceEntryId: item.userMessage?.sourceEntryId,
+      status: item.status,
+      items: item.items.filter((turnItem) => turnItem.type !== "notice").map((turnItem) => {
+        if (turnItem.type === "response") {
+          return { type: turnItem.type, status: turnItem.status, text: responseText(turnItem) };
+        }
+        if (turnItem.type === "reasoning") return { type: turnItem.type, status: turnItem.status, text: turnItem.text };
+        if (turnItem.type === "tool") return { type: turnItem.type, toolId: turnItem.tool.id, status: turnItem.tool.status };
+        if (turnItem.type === "compaction") return { type: turnItem.type, summary: turnItem.summary };
+        return { type: turnItem.type };
+      }),
+    };
+  });
+}
 
 function runLiveTurn(
   projection: ConversationProjection,
@@ -290,13 +578,21 @@ function assistantEntry(
   stopReason: string,
   timestamp: number,
   messageId?: string,
+  errorMessage?: string,
 ): RpcSessionEntry {
   return {
     type: "message",
     id,
     parentId,
     timestamp,
-    message: { ...(messageId ? { id: messageId } : {}), role: "assistant", content, stopReason, timestamp },
+    message: {
+      ...(messageId ? { id: messageId } : {}),
+      ...(errorMessage ? { errorMessage } : {}),
+      role: "assistant",
+      content,
+      stopReason,
+      timestamp,
+    },
   };
 }
 

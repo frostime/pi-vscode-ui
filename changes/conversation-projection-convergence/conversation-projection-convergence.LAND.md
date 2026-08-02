@@ -1,6 +1,12 @@
+---
+title: 会话投影收敛落点说明
+status: implemented
+implemented: 2026-08-01
+---
+
 # 会话投影收敛落点说明
 
-> **Pass 0 remains current.** 新模块的 Pass 1 接口骨架已写入工作树；既有 `ConversationProjection` 的嵌入式 Pass 1 尚未重做。本文件只用于审查改动幅度和文件落点，不继续扩写成设计文档。
+> **Implemented.** 本文件保留为已批准落点的历史记录；实际合同以模块 SPEC 和代码为准，不再继续维护。
 
 本变更保留 `ConversationProjection` 的公开接口、`SessionRuntime` 调用方式和 Host-Webview 数据结构。`ConversationProjection` 继续解释 Pi 生命周期并决定用户回合归属；新增一个 Host 内部的 `ConversationItemStore`，集中拥有有序会话项、消息位置、工具位置和持久化接管状态，使“从旧位置删除并写入新位置”成为一次原子操作。自动重试通过用户回合的自动继续锚点留在同一回合，`Retrying` 复用现有 running 状态与 notice，不建立第二套历史模型或新的持久化机制。
 
@@ -77,19 +83,13 @@ changes/conversation-projection-convergence/
 - `ConversationItemStore` 独占以下物理状态：`ConversationItemView[]`、message/tool location、同一消息的全部 activity parts、persisted owner 标记。调用方不能直接维护平行 location map。
 - persisted assistant 的最终身份使用 entry ID；live message ID/timestamp 只作为关联线索。关联线索碰撞不得合并两个 persisted entries。
 - `ConversationItemStore` 检测无法安全完成的关联时返回显式冲突；`ConversationProjection.reconcileEntries()` 把它转换为现有 `"reload"` 结果，不能部分写入后再失败。
-- compaction 使用 `firstKeptEntryId` 关联 live 与 persisted 对象；summary 正文不参与身份判断。
+- compaction 使用 `firstKeptEntryId` 关联 live 与 persisted 对象；summary 正文不参与身份判断。增量 entry 缺失该字段时要求 full replacement，清除 provisional compaction 后按 entry ID 独立投影。
 - persisted 位置接管后，迟到 live message/compaction event 只能成为无操作或更新同一权威位置，不能创建 orphan 副本。
 - shared `AgentTurnStatus` 保持 `running | completed | aborted | error`；retry backoff 通过 `running` + notice 表达。
 
-## Pass 1 审查入口
+## 实现结果
 
-```bash
-rg -n '<conversation-projection-convergence>::TODO' \
-  apps/vscode/src/extension/conversation/ConversationProjection.ts \
-  apps/vscode/src/extension/conversation/ConversationItemStore.ts
-```
-
-这些标记只覆盖不能交给实现者重新决定的枢纽：状态搬迁、增量预检、持久化 assistant、live retry、compaction 关联、刷新终结和身份拆分。正式实现的预期语义 diff 是：`ConversationProjection` 删除位置 map 与直接 activity 迁移，保留生命周期和用户回合分组；`ConversationItemStore` 接收这些物理状态并提供四个受控操作。未标记的内容转换、图片校验、普通 turn helper、queued follow-up 和 branch-control 机械逻辑默认保持现状。
+`ConversationProjection` 已删除位置 map 与直接 activity 迁移，保留生命周期和用户回合分组；`ConversationItemStore` 已接管物理状态和四个受控操作。内容转换、图片校验、queued follow-up 和 branch-control 行为保持原有边界。
 
 ## 明确不落地
 

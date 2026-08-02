@@ -1,7 +1,7 @@
 ---
 title: 会话投影收敛执行计划
 created: 2026-08-01
-status: awaiting-approval
+status: implemented
 spec: ./DEV_SPEC.md
 terminology: ./TERMS.md
 skeleton: ./conversation-projection-convergence.LAND.md
@@ -64,16 +64,16 @@ subagent 必须：
 - `ConversationProjection.ts` 当前只有注释与保持 no-op 的 `agent_end` 接入点，没有删除既有实现。
 - `rg -n '<conversation-projection-convergence>::TODO' apps/vscode/src/extension/conversation/ConversationProjection.ts apps/vscode/src/extension/conversation/ConversationItemStore.ts` 可定位全部关键节点。
 
-### Phase 1: 实现唯一位置存储 ⏳ pending
+### Phase 1: 实现唯一位置存储 ✅ done
 
-- [ ] 在 `ConversationItemStore` 中迁入 `#items`、assistant ownership、tool location 和 compaction ownership。
-- [ ] 从现有 Projection 机械迁入 append/find/turn metadata/branch-control 等 Store 所需 helper；不重新设计其语义。
-- [ ] 实现 `preflightPersistedOwnership()`：只有当一个 live 表示需要被多个 persisted entries 采用时才报告歧义；预检不得修改公开状态。
-- [ ] 实现 `placeAssistant()`：选择或沿用 view message ID，原子删除旧位置的全部 reasoning/response/tool-call parts，再发布新位置并同步 tool location。
-- [ ] 实现 persisted owner guard：一旦 persisted 接管，迟到 live update 返回 `ignored-persisted-owner`，不能创建 orphan turn。
-- [ ] 实现 `upsertTool()`：tool result/update 始终作用于唯一权威位置。
-- [ ] 实现 `placeCompaction()`：live/persisted 只按 `firstKeptEntryId` 关联；不同 persisted entry ID 永远保持独立。
-- [ ] 按 `ConversationItemStore.test.ts` 的行为清单补最小高价值测试，不测试私有 map、调用顺序或 trivial forwarding。
+- [x] 在 `ConversationItemStore` 中迁入 `#items`、assistant ownership、tool location 和 compaction ownership。
+- [x] 从现有 Projection 机械迁入 append/find/turn metadata/branch-control 等 Store 所需 helper；不重新设计其语义。
+- [x] 实现 `preflightPersistedOwnership()`：只有当一个 live 表示需要被多个 persisted entries 采用时才报告歧义；预检不得修改公开状态。
+- [x] 实现 `placeAssistant()`：选择或沿用 view message ID，原子删除旧位置的全部 reasoning/response/tool-call parts，再发布新位置并同步 tool location。
+- [x] 实现 persisted owner guard：一旦 persisted 接管，迟到 live update 返回 `ignored-persisted-owner`，不能创建 orphan turn。
+- [x] 实现 `upsertTool()`：tool result/update 始终作用于唯一权威位置。
+- [x] 实现 `placeCompaction()`：live/persisted 只按 `firstKeptEntryId` 关联；不同 persisted entry ID 永远保持独立；增量 entry 缺失关联字段时要求 full replacement。
+- [x] 按 `ConversationItemStore.test.ts` 的行为清单补最小高价值测试，不测试私有 map、调用顺序或 trivial forwarding。
 
 **Agent Check**:
 
@@ -81,15 +81,15 @@ subagent 必须：
 - 测试证明跨 turn 迁移后旧位置没有任何消息 part，tool 不会复活旧位置，timestamp 碰撞不合并 persisted entries，迟到 live replay 幂等。
 - `pnpm --dir apps/vscode exec tsc --noEmit --pretty false`
 
-### Phase 2: Projection 切换到 Store ⏳ pending
+### Phase 2: Projection 切换到 Store ✅ done
 
-- [ ] 在 `ConversationProjection` 中实例化 Store，并让 `read()` 保持现有 snapshot 形状。
-- [ ] 将 `#items`、`#messageItems`、`#toolItems`、`#pendingCompactionIds` 的直接所有权迁出 Projection。
-- [ ] 将 ordinary append/find/turn status/branch-control 调用改为 Store 操作，保持既有排序和 view identity 行为。
-- [ ] 删除 `ItemLocation`、`#replaceMessageItems()`、旧 `#upsertTool()` 及其他已被 Store 完整接管的 helper。
-- [ ] replacement 重置 Store；incremental 在任何 branch-control 或 persisted ownership 写入前完成全部预检。
-- [ ] 预检冲突保持当前 projection 不变并返回 `"reload"`；full replacement 按 entry ID 显示所有 persisted entries。
-- [ ] 保持 user prompt FIFO、queued follow-up、extension command、图片校验和 branch edge 的现有行为。
+- [x] 在 `ConversationProjection` 中实例化 Store，并让 `read()` 保持现有 snapshot 形状。
+- [x] 将 `#items`、`#messageItems`、`#toolItems`、`#pendingCompactionIds` 的直接所有权迁出 Projection。
+- [x] 将 ordinary append/find/turn status/branch-control 调用改为 Store 操作，保持既有排序和 view identity 行为。
+- [x] 删除 `ItemLocation`、`#replaceMessageItems()`、旧 `#upsertTool()` 及其他已被 Store 完整接管的 helper。
+- [x] replacement 重置 Store；incremental 在任何 branch-control 或 persisted ownership 写入前完成全部预检。
+- [x] 预检冲突保持当前 projection 不变并返回 `"reload"`；full replacement 按 entry ID 显示所有 persisted entries。
+- [x] 保持 user prompt FIFO、queued follow-up、extension command、图片校验和 branch edge 的现有行为。
 
 **Agent Check**:
 
@@ -98,15 +98,15 @@ subagent 必须：
 - `pnpm --dir apps/vscode exec vitest run test/unit/ConversationProjection.test.ts`
 - `pnpm --dir apps/vscode exec tsc --noEmit --pretty false`
 
-### Phase 3: Assistant 身份、迁移与迟到事件收敛 ⏳ pending
+### Phase 3: Assistant 身份、迁移与迟到事件收敛 ✅ done
 
-- [ ] 将 view message ID 生成与 live correlation key 推导拆开。
-- [ ] live correlation 优先使用显式 message ID；缺失时使用 timestamp；没有安全线索时不从正文推断。
-- [ ] persisted assistant 始终以 entry ID 作为 durable identity，并通过 Store 尝试采用匹配的 live view ID。
-- [ ] 对同一 correlation key 的多个 persisted entries保持独立；存在 live adoption 歧义时 incremental 返回 reload。
-- [ ] history replacement 已包含 assistant 后，重放相同 live message event 只成为 no-op，不移动 persisted 权威位置。
-- [ ] 同一 assistant 的 reasoning、response 和 embedded tool call 作为一个所有权单元迁移并保持 part 顺序。
-- [ ] 增加原始 BUG 回归：成功回复从旧 live turn 迁移后只出现一次。
+- [x] 将 view message ID 生成与 live correlation key 推导拆开。
+- [x] live correlation 优先使用显式 message ID；缺失时使用 timestamp；没有安全线索时不从正文推断。
+- [x] persisted assistant 始终以 entry ID 作为 durable identity，并通过 Store 尝试采用匹配的 live view ID。
+- [x] 对同一 correlation key 的多个 persisted entries保持独立；存在 live adoption 歧义时 incremental 返回 reload。
+- [x] history replacement 已包含 assistant 后，重放相同 live message event 只成为 no-op，不移动 persisted 权威位置。
+- [x] 同一 assistant 的 reasoning、response 和 embedded tool call 作为一个所有权单元迁移并保持 part 顺序。
+- [x] 增加原始 BUG 回归：成功回复从旧 live turn 迁移后只出现一次。
 
 **Agent Check**:
 
@@ -114,18 +114,18 @@ subagent 必须：
 - 对同一 active path，incremental 与 full replacement 的归一化结果相同。
 - `pnpm --dir apps/vscode exec vitest run test/unit/ConversationItemStore.test.ts test/unit/ConversationProjection.test.ts`
 
-### Phase 4: 自动重试与上下文压缩后的自动继续 ⏳ pending
+### Phase 4: 自动重试与上下文压缩后的自动继续 ✅ done
 
-- [ ] 将 persisted turn 状态改为 `{ turnId, phase: "active" | "error-awaiting-continuation" }`。
-- [ ] persisted user entry 关闭此前回合并开启新回合。
-- [ ] persisted assistant `toolUse` 保持 active；`error` 保留自动继续锚点；success/abort 完成回合。
-- [ ] error 后的 overflow compaction 放入同一用户回合并保留 continuation；普通 compaction 继续保持当前 active-path 位置。
-- [ ] 中途 compaction refresh 不清除 error continuation；replacement 或 `agent_settled` 后刷新才最终完成。
-- [ ] 接入 `agent_end(willRetry)`：`true` 保持 running；`false` 才将 pending assistant error 设为最终 Failed。
-- [ ] `message_end(error)` 立即显示错误 activity，但不提前把用户回合稳定显示为 Failed。
-- [ ] `auto_retry_start` 在当前用户回合追加 retry notice；下一次 `agent_start` 复用同一回合。
-- [ ] 最终成功为 Worked，全部 retry 失败为 Failed；不新增 `retrying` shared status。
-- [ ] live 与 persisted compaction 均通过 `firstKeptEntryId` 收敛，移除 FIFO pending-id 机制。
+- [x] 将 persisted turn 状态改为 `{ turnId, phase: "active" | "error-awaiting-continuation" }`。
+- [x] persisted user entry 关闭此前回合并开启新回合。
+- [x] persisted assistant `toolUse` 保持 active；`error` 保留自动继续锚点；success/abort 完成回合。
+- [x] error 后的 overflow compaction 放入同一用户回合并保留 continuation；普通 compaction 继续保持当前 active-path 位置。
+- [x] 中途 compaction refresh 不清除 error continuation；replacement 或 `agent_settled` 后刷新才最终完成。
+- [x] 接入 `agent_end(willRetry)`：`true` 保持 running；`false` 才将 pending assistant error 设为最终 Failed。
+- [x] `message_end(error)` 立即显示错误 activity，但不提前把用户回合稳定显示为 Failed。
+- [x] `auto_retry_start` 在当前用户回合追加 retry notice；下一次 `agent_start` 复用同一回合。
+- [x] 最终成功为 Worked，全部 retry 失败为 Failed；不新增 `retrying` shared status。
+- [x] live 与 persisted compaction 均通过 `firstKeptEntryId` 收敛，移除 FIFO pending-id 机制；字段缺失时 full replacement 负责 persisted-only recovery。
 
 **Agent Check**:
 
@@ -133,41 +133,41 @@ subagent 必须：
 - 每个场景均断言一个 user-anchored turn、正确最终状态、最终成功回复一次，以及 incremental/full/reload 等价。
 - `pnpm --dir apps/vscode exec vitest run test/unit/ConversationProjection.test.ts`
 
-### Phase 5: 工作记录折叠与错误摘要 ⏳ pending
+### Phase 5: 工作记录折叠与错误摘要 ✅ done
 
-- [ ] 修改 `collapseTurnTrace.ts`，让最终回复之前的失败 assistant activity 和 turn 内 notice 可以进入折叠工作记录。
-- [ ] 默认折叠状态只展示最终成功回复；展开后保留失败尝试、错误和 retry notice。
-- [ ] error count 包含失败 tool、assistant error activity 和 error-level notice，不只计算 tool failure。
-- [ ] branch control、compaction、custom message 等结构性边界不因普通 trace 折叠规则被错误隐藏。
-- [ ] 不修改 shared conversation model；不根据错误正文识别 retry notice。
-- [ ] 按公开 `planTurnItems()` 结果编写行为测试，不测试 Svelte 内部状态。
+- [x] 修改 `collapseTurnTrace.ts`，让最终回复之前的失败 assistant activity 和 turn 内 notice 可以进入折叠工作记录。
+- [x] 默认折叠状态只展示最终成功回复；展开后保留失败尝试、错误和 retry notice。
+- [x] error count 包含失败 tool、assistant error activity 和 error-level notice，不只计算 tool failure。
+- [x] branch control、compaction、custom message 等结构性边界不因普通 trace 折叠规则被错误隐藏。
+- [x] 不修改 shared conversation model；不根据错误正文识别 retry notice。
+- [x] 按公开 `planTurnItems()` 结果编写行为测试，不测试 Svelte 内部状态。
 
 **Agent Check**:
 
 - `pnpm --dir apps/vscode exec vitest run test/unit/collapseTurnTrace.test.ts`
 - 测试证明成功 retry 默认只见最终回复，展开可见失败过程，结构性边界仍在正确位置。
 
-### Phase 6: Runtime 与 fake Pi 生命周期验证 ⏳ pending
+### Phase 6: Runtime 与 fake Pi 生命周期验证 ✅ done
 
-- [ ] 在 `fake-pi.cjs` 增加确定性 fixture：user → failed assistant → `agent_end(willRetry)` → `auto_retry_start` → next `agent_start` → successful assistant → `agent_settled`，并返回对应 persisted entries。
-- [ ] 在 `SessionRuntime.test.ts` 验证 settle 后增量刷新只产生一个用户回合和一份最终回复。
-- [ ] 增加 history snapshot 已包含 assistant/compaction 后 replay buffered event 的测试。
-- [ ] 验证 runtime completion notification 只在最终正常完成时触发，不在中间 retry error 触发。
-- [ ] 原则上不修改 `SessionRuntime.ts` 主流程；若测试证明现有事件顺序无法传递已确认语义，暂停并提交证据。
+- [x] 在 `fake-pi.cjs` 增加确定性 fixture：user → failed assistant → `agent_end(willRetry)` → `auto_retry_start` → next `agent_start` → successful assistant → `agent_settled`，并返回对应 persisted entries。
+- [x] 在 `SessionRuntime.test.ts` 验证 settle 后增量刷新只产生一个用户回合和一份最终回复。
+- [x] 增加 history snapshot 已包含 assistant/compaction 后 replay buffered event 的测试。
+- [x] 验证 runtime completion notification 只在最终正常完成时触发，不在中间 retry error 触发。
+- [x] 原则上不修改 `SessionRuntime.ts` 主流程；若测试证明现有事件顺序无法传递已确认语义，暂停并提交证据。
 
 **Agent Check**:
 
 - `pnpm --dir apps/vscode exec vitest run test/unit/SessionRuntime.test.ts`
 - fake Pi fixture 可重复运行，不依赖真实网络、模型或时钟竞争。
 
-### Phase 7: 合同收尾与完整验证 ⏳ pending
+### Phase 7: 合同收尾与完整验证 ✅ done
 
-- [ ] 更新 `conversation-projection.SPEC.md`：用户回合自动继续、entry ID 权威、唯一位置、预检冲突、迟到 live event 和 compaction 关联。
-- [ ] 更新 `session-lifecycle.SPEC.md`：`agent_end(willRetry)`、`agent_settled` 与 retry 通知的责任边界。
-- [ ] 将 `DEV_SPEC.md` 的技术决策从待定更新为实际落地，并记录没有采用的额外状态机制。
-- [ ] 解析并删除全部 `<conversation-projection-convergence>::TODO` 标记；自然 helper 不留下 change 专用 TODO。
-- [ ] 删除或标记 `conversation-projection-convergence.LAND.md` 为 implemented/superseded；不继续维护为长期设计文档。
-- [ ] 检查 diff，确认没有 Pi 协议、shared ViewModel、Webview 去重、sidecar 或无关重构。
+- [x] 更新 `conversation-projection.SPEC.md`：用户回合自动继续、entry ID 权威、唯一位置、预检冲突、迟到 live event 和 compaction 关联。
+- [x] 更新 `session-lifecycle.SPEC.md`：`agent_end(willRetry)`、`agent_settled` 与 retry 通知的责任边界。
+- [x] 将 `DEV_SPEC.md` 的技术决策从待定更新为实际落地，并记录没有采用的额外状态机制。
+- [x] 解析并删除全部 `<conversation-projection-convergence>::TODO` 标记；自然 helper 不留下 change 专用 TODO。
+- [x] 删除或标记 `conversation-projection-convergence.LAND.md` 为 implemented/superseded；不继续维护为长期设计文档。
+- [x] 检查 diff，确认没有 Pi 协议、shared ViewModel、Webview 去重、sidecar 或无关重构。
 
 **Agent Check**:
 
@@ -202,5 +202,5 @@ rg -n '<conversation-projection-convergence>::TODO' apps/vscode/src apps/vscode/
 - 需要让 Webview 按正文、时间或相邻关系去重；
 - 需要把 `SessionRuntime` 改造成新的事件协调状态机；
 - 需要完整拆分 persisted base/live overlay 才能满足已确认不变量；
-- 实现发现 `firstKeptEntryId` 在目标 Pi RPC 版本中不可用；
+- `firstKeptEntryId` 不可用且 full replacement 也无法安全恢复唯一 persisted compaction；
 - 现有 branch、follow-up、extension-command 或 fork 行为必须改变。

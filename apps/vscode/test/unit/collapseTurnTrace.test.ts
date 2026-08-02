@@ -50,6 +50,27 @@ describe("planTurnItems", () => {
     expect(formatTraceSummaryLabel(plan.summary)).toBe("2 steps · 1 error · 4s");
   });
 
+  it("folds turn-wide retry work while leaving an intervening structural boundary visible", () => {
+    const items = [
+      response("partial", "error"),
+      notice("provider-error", "error"),
+      compaction("compact"),
+      notice("retry", "info"),
+      response("final"),
+    ];
+    const plan = planTurnItems(turn("completed", items, 0, 2_000), true);
+
+    expect(plan).toMatchObject({
+      mode: "collapsed",
+      stateLabel: "Worked",
+      anchorItemId: "final",
+      summary: { steps: 3, errors: 2, durationLabel: "2s" },
+    });
+    if (plan.mode !== "collapsed") return;
+    expect([...plan.collapsedItemIds]).toEqual(["partial", "provider-error", "retry"]);
+    expect(plan.collapsedItemIds.has("compact")).toBe(false);
+  });
+
   it("stays flat when collapse is disabled or no activity precedes the anchor", () => {
     expect(planTurnItems(turn("completed", [response("final")]), true)).toEqual({ mode: "flat" });
     expect(planTurnItems(turn("completed", [tool("t1"), response("final")]), false)).toEqual({ mode: "flat" });
@@ -98,8 +119,16 @@ function reasoning(id: string): AgentTurnItemView {
   return { id, type: "reasoning", text: "thinking", status: "complete", timestamp: 0 };
 }
 
-function response(id: string): AgentTurnItemView {
-  return { id, type: "response", blocks: [{ type: "text", text: id }], status: "complete", timestamp: 0 };
+function response(id: string, status: "complete" | "error" = "complete"): AgentTurnItemView {
+  return { id, type: "response", blocks: [{ type: "text", text: id }], status, timestamp: 0 };
+}
+
+function notice(id: string, level: "info" | "error"): AgentTurnItemView {
+  return { id, type: "notice", text: id, level, timestamp: 0 };
+}
+
+function compaction(id: string): AgentTurnItemView {
+  return { id, type: "compaction", summary: id, tokensBefore: 100, timestamp: 0 };
 }
 
 function branchControl(id: string): AgentTurnItemView {

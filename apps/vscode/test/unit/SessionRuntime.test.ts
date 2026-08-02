@@ -53,16 +53,21 @@ process.stdin.on("data", chunk => {
       process.stdout.write(JSON.stringify({ type: "extension_ui_request", id: "notice-during-history", method: "notify", message: "Notice during history load" }) + "\n");
       process.stdout.write(JSON.stringify({ type: "message_start", message: { id: "live-assistant", role: "assistant", timestamp: 2, content: [{ type: "text", text: "Live response" }] } }) + "\n");
       process.stdout.write(JSON.stringify({ type: "message_end", message: { id: "live-assistant", role: "assistant", timestamp: 2, stopReason: "stop", content: [{ type: "text", text: "Live response" }] } }) + "\n");
+      process.stdout.write(JSON.stringify({ type: "compaction_end", result: { summary: "History compact", tokensBefore: 100, firstKeptEntryId: "kept-history" } }) + "\n");
       setTimeout(() => {
         base.data = {
-          entries: [{ type: "message", id: "history-user-entry", parentId: null, message: { role: "user", content: "Earlier request", timestamp: 1 } }],
-          leafId: "history-user-entry",
+          entries: [
+            { type: "message", id: "history-user-entry", parentId: null, message: { role: "user", content: "Earlier request", timestamp: 1 } },
+            { type: "message", id: "history-assistant-entry", parentId: "history-user-entry", message: { id: "live-assistant", role: "assistant", timestamp: 2, stopReason: "stop", content: [{ type: "text", text: "Live response" }] } },
+            { type: "compaction", id: "history-compaction-entry", parentId: "history-assistant-entry", summary: "History compact", tokensBefore: 100, firstKeptEntryId: "kept-history", timestamp: 3 },
+          ],
+          leafId: "history-compaction-entry",
         };
         process.stdout.write(JSON.stringify(base) + "\n");
       }, 25);
       continue;
     }
-    else if (command.type === "get_entries") base.data = { entries: [], leafId: "history-user-entry" };
+    else if (command.type === "get_entries") base.data = { entries: [], leafId: "history-compaction-entry" };
     else if (command.type === "get_available_models") base.data = { models: [] };
     else if (command.type === "get_commands") base.data = { commands: [] };
     else if (command.type === "get_session_stats") base.data = { sessionFile, sessionId: "history-test", userMessages: 1, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 1, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 };
@@ -108,10 +113,11 @@ process.on("SIGTERM", () => process.exit(0));
     const explicitLoad = runtime.loadHistory(true);
     await Promise.all([repeatedAutomaticLoad, explicitLoad]);
     expect(runtime.view.historyStatus).toBe("loaded");
-    expect(conversationTurns(runtime.view)).toHaveLength(2);
-    expect(conversationTurns(runtime.view).flatMap((turn) => turn.items)).toContainEqual(
+    expect(conversationTurns(runtime.view)).toHaveLength(1);
+    expect(conversationTurns(runtime.view).flatMap((turn) => turn.items).filter((item) => item.type === "response")).toEqual([
       expect.objectContaining({ type: "response", blocks: [{ type: "text", text: "Live response" }] }),
-    );
+    ]);
+    expect(runtime.view.conversationItems.filter((item) => item.type === "compaction")).toHaveLength(1);
     expect(conversationNotices(runtime.view)).toEqual([
       expect.objectContaining({ text: "Notice during history load" }),
     ]);
@@ -590,6 +596,53 @@ process.on("SIGTERM", () => process.exit(0));
 
     await runtime.stop();
     await expect(access(launch.resultDirectory)).rejects.toThrow();
+  });
+
+  it("reconciles a complete retry lifecycle after settlement without duplicate completion", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-retry-runtime-"));
+    const configuration = {
+      piExecutable: join(process.cwd(), "test", "e2e", "fake-pi.cjs"),
+      piArguments: [],
+      startSessionOnOpen: true,
+      streamingBehavior: "followUp" as const,
+      collapseTurnTrace: true,
+      questionToolEnabled: false,
+      maxImageBytes: 10 * 1024 * 1024,
+      diagnosticsLevel: "info" as const,
+      experimentalNotificationsEnabled: true,
+      proxy: { mode: "inherit" as const },
+      fileMentionRespectSearchExclude: true,
+      fileMentionRespectIgnoreFiles: true,
+      fileMentionFollowSymlinks: true,
+    };
+    const onAgentTurnCompleted = vi.fn();
+    const runtime = new SessionRuntime(
+      "retry-session",
+      dir,
+      "Retry",
+      Date.now(),
+      () => configuration,
+      new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
+      { error: vi.fn(), info: vi.fn() } as never,
+      { onChange: vi.fn(), onEditorText: vi.fn(), onAgentTurnCompleted },
+    );
+    runtimes.push(runtime);
+
+    await runtime.start();
+    await runtime.sendPrompt("retry", []);
+    await waitFor(() => runtime.view.status === "ready" && onAgentTurnCompleted.mock.calls.length === 1);
+    await waitFor(() => conversationTurns(runtime.view)[0]?.userMessage?.sourceEntryId !== undefined);
+
+    const projectedTurns = conversationTurns(runtime.view);
+    expect(projectedTurns).toHaveLength(1);
+    expect(projectedTurns[0]?.status).toBe("completed");
+    expect(projectedTurns[0]?.items.filter((item) => item.type === "response").map((item) => (
+      item.type === "response"
+        ? item.blocks.map((block) => block.type === "text" || block.type === "error" ? block.text : "").join("")
+        : ""
+    ))).toEqual(["Partial response", "Transient provider error", "E2E response"]);
+    expect(projectedTurns[0]?.items.filter((item) => item.type === "notice")).toHaveLength(1);
+    expect(onAgentTurnCompleted).toHaveBeenCalledTimes(1);
   });
 
   it("applies the Question tool setting only to the started Pi process", async () => {
