@@ -48,6 +48,10 @@ export class ConversationProjection {
   #queuedFollowUps: QueuedFollowUpView[] = [];
   #activeTurnId: string | null = null;
   #persistedTurnId: string | null = null;
+  // <conversation-projection-convergence>::TODO [turn-state]
+  // Replace #persistedTurnId with { turnId, phase: "active" | "error-awaiting-continuation" }.
+  // Add private live retry state that records a pending error until agent_end says
+  // whether Pi will retry. No shared AgentTurnStatus value is added.
   #streamingMessageId: string | null = null;
   #sequence = 0;
   #updatedAt = Date.now();
@@ -57,6 +61,10 @@ export class ConversationProjection {
   readonly #messageItems = new Map<string, ItemLocation[]>();
   readonly #toolItems = new Map<string, ItemLocation>();
   readonly #pendingCompactionIds: string[] = [];
+  // <conversation-projection-convergence>::TODO [store-cutover]
+  // Replace #items and the three ownership collections above with one
+  // ConversationItemStore. Expected diff: keep lifecycle/grouping fields here;
+  // move physical item mutation and location ownership, not Pi event policy.
   #maxImageBytes: number;
   #maxImages: number;
 
@@ -74,6 +82,10 @@ export class ConversationProjection {
   }
 
   replaceEntries(entries: readonly RpcSessionEntry[], branchEdges: readonly ActiveBranchEdge[]): void {
+    // <conversation-projection-convergence>::TODO [replacement-boundary]
+    // Reset the Store, then project persisted entries by entry ID. Keep correlation
+    // keys so stale buffered live events are ignored, but never merge persisted
+    // entries that share a timestamp.
     this.#items = [];
     this.#activeTurnId = null;
     this.#persistedTurnId = null;
@@ -94,6 +106,10 @@ export class ConversationProjection {
     entries: readonly RpcSessionEntry[],
     branchEdges: readonly ActiveBranchEdge[],
   ): ConversationReconcileResult {
+    // <conversation-projection-convergence>::TODO [incremental-preflight]
+    // Build persisted assistant/compaction sources and call Store preflight before
+    // refreshBranchControls or any visible write. Conflict returns "reload" with
+    // the current projection untouched.
     const appendedEntryIds = new Set(entries.map((entry) => entry.id));
     const existingControlIds = new Set(this.#conversationItems().filter(isBranchControl).map((control) => control.id));
     for (const edge of branchEdges) {
@@ -184,6 +200,12 @@ export class ConversationProjection {
       case "agent_start":
         this.#startAgentTurn();
         break;
+      case "agent_end":
+        // <conversation-projection-convergence>::TODO [retry-decision]
+        // Route to a private handler: willRetry=true keeps the current turn
+        // running; willRetry=false commits a pending assistant error as Failed.
+        // Return preserves today's no-op behavior until implementation.
+        return;
       case "agent_settled":
         this.#settleAgentTurn();
         break;
@@ -291,6 +313,11 @@ export class ConversationProjection {
     }
 
     if (message.role === "assistant") {
+      // <conversation-projection-convergence>::TODO [persisted-assistant]
+      // Use entry.id as durable identity and message id/timestamp only as a live
+      // correlation key. Store.placeAssistant owns adoption and atomic relocation.
+      // stopReason=error retains the persisted turn in error-awaiting-continuation;
+      // toolUse keeps it active; success/abort closes it.
       const turn = this.#persistedTurn(entry.id, timestamp);
       const messageId = rawMessageId(message, `assistant-${entry.id}`);
       const status = assistantMessageStatus(message.stopReason);
@@ -337,6 +364,10 @@ export class ConversationProjection {
   }
 
   #projectCompactionEntry(entry: RpcSessionEntry): void {
+    // <conversation-projection-convergence>::TODO [persisted-compaction]
+    // Replace FIFO pendingCompactionIds with Store.placeCompaction keyed by
+    // firstKeptEntryId. Only an error-awaiting-continuation cursor places this
+    // boundary inside the prior user turn; otherwise preserve current path order.
     const timestamp = entryTimestamp(entry);
     const pendingId = this.#pendingCompactionIds.shift();
     if (pendingId) this.#removeItem(pendingId);
@@ -384,6 +415,10 @@ export class ConversationProjection {
     }
 
     const delta = isRecord(event.assistantMessageEvent) ? event.assistantMessageEvent : {};
+    // <conversation-projection-convergence>::TODO [live-assistant]
+    // Store.placeAssistant receives a live correlation source. An error activity
+    // becomes visible immediately, but the turn remains running until agent_end
+    // decides retry versus final failure. A persisted owner makes stale replay a no-op.
     const status: MessageStatus = event.type === "message_end"
       ? assistantMessageStatus(message.stopReason)
       : delta.type === "error"
@@ -448,6 +483,9 @@ export class ConversationProjection {
   }
 
   #applyLiveCompaction(event: RpcEvent): void {
+    // <conversation-projection-convergence>::TODO [live-compaction]
+    // Require result.firstKeptEntryId and delegate identity ownership to the Store.
+    // Do not correlate by summary/tokens or keep a FIFO pending-id queue.
     const result = recordValue(event.result);
     if (typeof result.summary !== "string" || typeof result.tokensBefore !== "number") return;
     const timestamp = Date.now();
@@ -579,6 +617,10 @@ export class ConversationProjection {
   }
 
   #completePersistedTurn(endedAt = Date.now()): void {
+    // <conversation-projection-convergence>::TODO [refresh-finalization]
+    // Mid-run compaction refresh preserves an error-awaiting-continuation cursor.
+    // Replacement or the refresh following agent_settled finalizes it. This is
+    // the only reason persisted grouping may survive one incremental batch.
     if (!this.#persistedTurnId) return;
     const turn = this.#findTurn(this.#persistedTurnId);
     if (turn?.status === "running") this.#setTurnStatus(turn.id, "completed", endedAt);
@@ -624,6 +666,10 @@ export class ConversationProjection {
     };
   }
 
+  // <conversation-projection-convergence>::TODO [location-cutover]
+  // Move #upsertTool and #replaceMessageItems into ConversationItemStore.
+  // Expected diff: delete ItemLocation and all direct message/tool map writes here;
+  // assistant parts relocate as one ownership unit, including embedded tool calls.
   #upsertTool(
     fallbackTurnId: string,
     id: string,
@@ -896,6 +942,9 @@ function toImageViews(
   });
 }
 
+// <conversation-projection-convergence>::TODO [identity-split]
+// Keep view-message ID generation separate from live correlation-key derivation.
+// Persisted identity is always entry.id; text and temporal proximity are never keys.
 function rawMessageId(message: Record<string, unknown>, fallback: string): string {
   if (typeof message.id === "string") return message.id;
   if (typeof message.timestamp === "number") return `assistant-${message.timestamp}`;
