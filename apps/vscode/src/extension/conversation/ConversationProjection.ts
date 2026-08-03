@@ -188,6 +188,7 @@ export class ConversationProjection {
     if (this.#activeTurnId === turnId) {
       this.#activeTurnId = null;
       this.#streamingMessageId = null;
+      this.#streamingCorrelationKey = null;
     }
     this.#touch();
     return true;
@@ -595,6 +596,7 @@ export class ConversationProjection {
       if (prior.status === "running") this.#setTurnStatus(prior.id, "completed", Date.now());
     }
     this.#streamingMessageId = null;
+    this.#streamingCorrelationKey = null;
 
     const timestamp = numericValue(message.timestamp) ?? promoted.timestamp;
     const turn = this.#createUserTurn(promoted.text, promoted.images, timestamp);

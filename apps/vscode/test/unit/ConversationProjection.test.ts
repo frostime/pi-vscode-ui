@@ -170,6 +170,30 @@ describe("ConversationProjection", () => {
     expect(projection.read().queuedFollowUps).toEqual([]);
   });
 
+  it("does not reuse a completed turn's assistant correlation for the next turn", () => {
+    const projection = new ConversationProjection();
+    const firstTurnId = projection.appendUserPrompt("first", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "first", timestamp: 1 } });
+    projection.applyEvent({
+      type: "message_start",
+      message: { role: "assistant", content: [{ type: "text", text: "partial" }], timestamp: 10 },
+    });
+    expect(projection.completeTurn(firstTurnId, "error", 11)).toBe(true);
+
+    projection.appendUserPrompt("second", [], 2);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "second", timestamp: 2 } });
+    projection.applyEvent({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "text", text: "final" }], stopReason: "stop", timestamp: 20 },
+    });
+
+    expect(turns(projection.read().items).map((turn) => (
+      turn.items.filter((item) => item.type === "response").map(responseText)
+    ))).toEqual([["partial"], ["final"]]);
+  });
+
   it("does not attach a rejected optimistic prompt to a later identical persisted prompt", () => {
     const projection = new ConversationProjection();
     const rejectedTurnId = projection.appendUserPrompt("repeat", [], 10);

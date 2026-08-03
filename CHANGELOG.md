@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - File path completion now inserts relative paths as Markdown code spans (`` `path` `` / `` `path:start-end` ``) instead of `@`-prefixed mentions; `@` remains only as the completion trigger. The built-in `Selection`/`CurrentFile` rows and the editor context commands use the same format. Paths with whitespace stay inside one code span.
 
+### Fixed
+
+- Keep a Pi request and its automatic retries in one conversation turn, preserve failed attempts in the expandable work trace, and prevent the final response from appearing twice during history reconciliation or reload.
+
 ## [0.10.1] - 2026-07-28
 
 ### Changed
