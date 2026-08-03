@@ -1,4 +1,10 @@
-import type { AgentActivityView, AgentTurnStatus, AgentTurnView } from "$shared/model/conversationModel";
+import type {
+  AgentActivityView,
+  AgentTurnItemView,
+  AgentTurnStatus,
+  AgentTurnView,
+  SessionNoticeView,
+} from "$shared/model/conversationModel";
 
 export interface TurnTraceSummary {
   steps: number;
@@ -40,7 +46,7 @@ export function planTurnItems(
   const anchorIndex = traceAnchorIndex(turn.status, activityLocations, lastResponseIndex);
   if (anchorIndex === undefined) return { mode: "flat" };
 
-  const collapsed = activityLocations.filter(({ itemIndex }) => itemIndex < anchorIndex).map(({ item }) => item);
+  const collapsed = turn.items.slice(0, anchorIndex).filter(isTraceItem);
   const anchor = turn.items[anchorIndex];
   if (collapsed.length === 0 || !anchor || !isAgentActivity(anchor)) return { mode: "flat" };
 
@@ -107,6 +113,14 @@ function isAgentActivity(item: AgentTurnView["items"][number]): item is AgentAct
   return item.type === "reasoning" || item.type === "response" || item.type === "tool";
 }
 
-function countTraceErrors(activities: readonly AgentActivityView[]): number {
-  return activities.filter((activity) => activity.type === "tool" && (activity.tool.isError || activity.tool.status === "error")).length;
+function isTraceItem(item: AgentTurnItemView): item is AgentActivityView | SessionNoticeView {
+  return isAgentActivity(item) || item.type === "notice";
+}
+
+function countTraceErrors(items: readonly (AgentActivityView | SessionNoticeView)[]): number {
+  return items.filter((item) => {
+    if (item.type === "notice") return item.level === "error";
+    if (item.type === "tool") return item.tool.isError || item.tool.status === "error";
+    return item.status === "error";
+  }).length;
 }

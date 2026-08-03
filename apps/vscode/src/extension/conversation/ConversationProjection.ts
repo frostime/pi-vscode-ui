@@ -20,8 +20,13 @@ import type {
   SessionNoticeLevel,
   SessionNoticeView,
 } from "../../shared/model/conversationModel.js";
-import type { ToolCallView } from "../../shared/model/toolCallModel.js";
 import { validateProjectedImageAttachments } from "../attachments/normalizeImageAttachment.js";
+import {
+  ConversationItemStore,
+  type AssistantMessageSource,
+  type CompactionSource,
+  type MessageCorrelationKey,
+} from "./ConversationItemStore.js";
 import { contentToBlocks, createToolView, extractText, isRecord, recordValue, stringValue } from "./messageAssembler.js";
 
 export interface ActiveBranchEdge {
@@ -38,25 +43,24 @@ export interface ConversationProjectionSnapshot {
 
 export type ConversationReconcileResult = "applied" | "reload";
 
-interface ItemLocation {
+interface PersistedTurnState {
   turnId: string;
-  itemId: string;
+  phase: "active" | "error-awaiting-continuation";
 }
 
 export class ConversationProjection {
-  #items: ConversationItemView[] = [];
+  readonly #store = new ConversationItemStore();
   #queuedFollowUps: QueuedFollowUpView[] = [];
   #activeTurnId: string | null = null;
-  #persistedTurnId: string | null = null;
+  #persistedTurn: PersistedTurnState | null = null;
+  #pendingLiveErrorTurnId: string | null = null;
   #streamingMessageId: string | null = null;
+  #streamingCorrelationKey: MessageCorrelationKey | null = null;
   #sequence = 0;
   #updatedAt = Date.now();
   readonly #persistedEntryIds = new Set<string>();
   readonly #eligibleLiveTurnIds: string[] = [];
   readonly #eligibleLiveTurnIdSet = new Set<string>();
-  readonly #messageItems = new Map<string, ItemLocation[]>();
-  readonly #toolItems = new Map<string, ItemLocation>();
-  readonly #pendingCompactionIds: string[] = [];
   #maxImageBytes: number;
   #maxImages: number;
 
@@ -67,26 +71,25 @@ export class ConversationProjection {
 
   read(): ConversationProjectionSnapshot {
     return {
-      items: this.#items,
+      items: this.#store.read(),
       queuedFollowUps: this.#queuedFollowUps,
       updatedAt: this.#updatedAt,
     };
   }
 
   replaceEntries(entries: readonly RpcSessionEntry[], branchEdges: readonly ActiveBranchEdge[]): void {
-    this.#items = [];
+    this.#store.reset();
     this.#activeTurnId = null;
-    this.#persistedTurnId = null;
+    this.#persistedTurn = null;
+    this.#pendingLiveErrorTurnId = null;
     this.#streamingMessageId = null;
+    this.#streamingCorrelationKey = null;
     this.#persistedEntryIds.clear();
     this.#eligibleLiveTurnIds.length = 0;
     this.#eligibleLiveTurnIdSet.clear();
-    this.#messageItems.clear();
-    this.#toolItems.clear();
-    this.#pendingCompactionIds.length = 0;
 
     this.#projectEntries(entries, branchEdges);
-    this.#completePersistedTurn();
+    this.#completePersistedTurn(true);
     this.#touch();
   }
 
@@ -94,6 +97,17 @@ export class ConversationProjection {
     entries: readonly RpcSessionEntry[],
     branchEdges: readonly ActiveBranchEdge[],
   ): ConversationReconcileResult {
+    const newEntries = entries.filter((entry) => !this.#persistedEntryIds.has(entry.id));
+    // Incremental compaction cannot safely adopt a live view without Pi's
+    // structural correlation key. Full replacement clears provisional state and
+    // projects the persisted entry independently.
+    if (newEntries.some(hasCompactionWithoutCorrelationKey)) return "reload";
+    const ownershipConflict = this.#store.preflightPersistedOwnership({
+      assistantSources: newEntries.flatMap((entry) => persistedAssistantSource(entry) ?? []),
+      compactionSources: newEntries.flatMap((entry) => persistedCompactionSource(entry) ?? []),
+    });
+    if (ownershipConflict) return "reload";
+
     const appendedEntryIds = new Set(entries.map((entry) => entry.id));
     const existingControlIds = new Set(this.#conversationItems().filter(isBranchControl).map((control) => control.id));
     for (const edge of branchEdges) {
@@ -104,7 +118,7 @@ export class ConversationProjection {
 
     this.#refreshBranchControls(branchEdges);
     this.#projectEntries(entries, branchEdges);
-    this.#completePersistedTurn();
+    this.#completePersistedTurn(false);
     this.#touch();
     return "applied";
   }
@@ -115,7 +129,7 @@ export class ConversationProjection {
   }
 
   userMessage(sourceEntryId: string): ConversationMessageView | undefined {
-    for (const item of this.#items) {
+    for (const item of this.#store.read()) {
       if (item.type === "turn" && item.userMessage?.sourceEntryId === sourceEntryId) return item.userMessage;
     }
     return undefined;
@@ -123,7 +137,7 @@ export class ConversationProjection {
 
   appendUserPrompt(text: string, images: WebviewImageInput[], timestamp = Date.now()): string {
     const turn = this.#createUserTurn(text, images, timestamp);
-    this.#items = [...this.#items, turn];
+    this.#store.appendItem(turn);
     this.#activeTurnId = turn.id;
     this.#touch();
     return turn.id;
@@ -174,6 +188,7 @@ export class ConversationProjection {
     if (this.#activeTurnId === turnId) {
       this.#activeTurnId = null;
       this.#streamingMessageId = null;
+      this.#streamingCorrelationKey = null;
     }
     this.#touch();
     return true;
@@ -183,6 +198,9 @@ export class ConversationProjection {
     switch (event.type) {
       case "agent_start":
         this.#startAgentTurn();
+        break;
+      case "agent_end":
+        this.#endAgentAttempt(event.willRetry === true);
         break;
       case "agent_settled":
         this.#settleAgentTurn();
@@ -213,6 +231,7 @@ export class ConversationProjection {
         this.appendNotice(`Extension error: ${stringValue(event.error, "Unknown extension error")}`, "error");
         return;
       case "auto_retry_start":
+        if (this.#activeTurnId) this.#setTurnStatus(this.#activeTurnId, "running");
         this.appendNotice(`Retrying after a transient provider error (attempt ${retryAttempt(event.attempt)}).`);
         return;
       case "auto_retry_end":
@@ -268,7 +287,7 @@ export class ConversationProjection {
     const timestamp = entryTimestamp(entry, message);
 
     if (message.role === "user") {
-      this.#completePersistedTurn(timestamp);
+      this.#completePersistedTurn(true, timestamp);
       const eligibleTurnId = this.#takeEligibleLiveTurnId();
       const eligibleTurn = eligibleTurnId ? this.#findTurn(eligibleTurnId) : undefined;
       if (eligibleTurn?.userMessage) {
@@ -277,41 +296,52 @@ export class ConversationProjection {
           userMessage: { ...eligibleTurn.userMessage, sourceEntryId: entry.id, timestamp },
           startedAt: timestamp,
         });
-        this.#persistedTurnId = eligibleTurn.id;
+        this.#persistedTurn = { turnId: eligibleTurn.id, phase: "active" };
       } else {
         const turn = persistedUserTurn(
           entry,
           timestamp,
           this.#validatedBlocks(message.content, message.attachments, entry.id),
         );
-        this.#items = [...this.#items, turn];
-        this.#persistedTurnId = turn.id;
+        this.#store.appendItem(turn);
+        this.#persistedTurn = { turnId: turn.id, phase: "active" };
       }
       return;
     }
 
     if (message.role === "assistant") {
-      const turn = this.#persistedTurn(entry.id, timestamp);
-      const messageId = rawMessageId(message, `assistant-${entry.id}`);
+      const turn = this.#persistedTurnFor(entry.id, timestamp);
+      const source = persistedAssistantSource(entry);
+      if (!source) return;
       const status = assistantMessageStatus(message.stopReason);
-      this.#validatedBlocks(message.content, undefined, messageId);
-      this.#replaceMessageItems(
-        turn.id,
-        messageId,
-        assistantActivities(messageId, message, status, timestamp, (content, idPrefix) => (
-          this.#validatedBlocks(content, undefined, idPrefix)
-        )),
-      );
-      if (message.stopReason !== "toolUse") {
+      this.#validatedBlocks(message.content, undefined, source.fallbackViewMessageId);
+      const placement = this.#store.placeAssistant({
+        turnId: turn.id,
+        source,
+        buildActivities: (viewMessageId) => assistantActivities(
+          viewMessageId,
+          message,
+          status,
+          timestamp,
+          (content, idPrefix) => this.#validatedBlocks(content, undefined, idPrefix),
+        ),
+      });
+      if (placement.kind === "conflict") throw new Error(`Persisted assistant placement conflict: ${placement.reason}`);
+      if (message.stopReason === "error") {
+        this.#persistedTurn = { turnId: turn.id, phase: "error-awaiting-continuation" };
+      } else if (message.stopReason !== "toolUse") {
         this.#setTurnStatus(turn.id, statusToTurnStatus(status), timestamp);
-        this.#persistedTurnId = null;
+        this.#persistedTurn = null;
       }
       return;
     }
 
     if (message.role === "toolResult" && typeof message.toolCallId === "string") {
-      const turn = this.#persistedTurn(entry.id, timestamp);
-      this.#upsertTool(turn.id, message.toolCallId, {
+      const turn = this.#persistedTurnFor(entry.id, timestamp);
+      this.#store.upsertTool({
+        source: { kind: "persisted", entryId: entry.id },
+        fallbackTurnId: turn.id,
+        toolCallId: message.toolCallId,
         name: stringValue(message.toolName, "tool"),
         args: {},
         status: message.isError === true ? "error" : "complete",
@@ -338,50 +368,88 @@ export class ConversationProjection {
 
   #projectCompactionEntry(entry: RpcSessionEntry): void {
     const timestamp = entryTimestamp(entry);
-    const pendingId = this.#pendingCompactionIds.shift();
-    if (pendingId) this.#removeItem(pendingId);
-    const compaction: CompactionView = {
-      id: pendingId ?? entry.id,
-      type: "compaction",
-      summary: stringValue(entry.summary, ""),
-      tokensBefore: numericValue(entry.tokensBefore) ?? 0,
-      timestamp,
-    };
-    this.#appendPersistedItem(compaction);
+    const source = persistedCompactionSource(entry);
+    if (!source) return;
+    const continuationTurnId = this.#persistedTurn?.phase === "error-awaiting-continuation"
+      ? this.#persistedTurn.turnId
+      : undefined;
+    const placement = this.#store.placeCompaction({
+      turnId: continuationTurnId,
+      source,
+      buildItem: (viewId): CompactionView => ({
+        id: viewId,
+        type: "compaction",
+        summary: stringValue(entry.summary, ""),
+        tokensBefore: numericValue(entry.tokensBefore) ?? 0,
+        timestamp,
+      }),
+    });
+    if (placement.kind === "conflict") throw new Error(`Persisted compaction placement conflict: ${placement.reason}`);
   }
 
   #startAgentTurn(): void {
     let active = this.#activeTurn();
     if (this.#queuedFollowUps.length > 0 && active?.status === "running" && active.items.length === 0) {
-      this.#items = this.#items.filter((item) => item.id !== active!.id);
+      this.#store.removeTopLevelItem(active.id);
       this.#activeTurnId = null;
       active = undefined;
     }
     const turn = active?.status === "running"
       ? active
-      : this.#promoteQueuedFollowUp() ?? active ?? this.#ensureLiveTurn(Date.now());
+      : this.#promoteQueuedFollowUp() ?? active;
+    if (!turn) {
+      this.#activeTurnId = null;
+      return;
+    }
     this.#activeTurnId = turn.id;
     this.#setTurnStatus(turn.id, "running");
+  }
+
+  #endAgentAttempt(willRetry: boolean): void {
+    if (!this.#pendingLiveErrorTurnId) return;
+    if (willRetry) {
+      this.#setTurnStatus(this.#pendingLiveErrorTurnId, "running");
+      return;
+    }
+    this.#setTurnStatus(this.#pendingLiveErrorTurnId, "error", Date.now());
+    this.#pendingLiveErrorTurnId = null;
   }
 
   #settleAgentTurn(): void {
     if (this.#activeTurnId) {
       const turn = this.#turn(this.#activeTurnId);
-      if (turn.status === "running") this.#setTurnStatus(turn.id, "completed", Date.now());
+      if (turn.status === "running") {
+        this.#setTurnStatus(turn.id, this.#pendingLiveErrorTurnId === turn.id ? "error" : "completed", Date.now());
+      }
     }
+    this.#pendingLiveErrorTurnId = null;
     this.#activeTurnId = null;
     this.#streamingMessageId = null;
+    this.#streamingCorrelationKey = null;
   }
 
   #applyAssistantMessageEvent(event: RpcEvent): void {
     const message = event.message;
     if (!isRecord(message) || message.role !== "assistant") return;
     const timestamp = numericValue(message.timestamp) ?? Date.now();
+    const correlationKey = this.#streamingCorrelationKey ?? messageCorrelationKey(message);
+    // Documented Pi assistant events always include timestamp. A malformed event
+    // without ID or timestamp is omitted until persisted refresh rather than shown
+    // as an uncorrelatable live duplicate.
+    if (!correlationKey) return;
+    if (this.#store.hasPersistedAssistantOwnership(correlationKey)) {
+      if (event.type === "message_end") {
+        this.#streamingMessageId = null;
+        this.#streamingCorrelationKey = null;
+      }
+      return;
+    }
+    if (!this.#streamingMessageId) {
+      this.#streamingMessageId = viewMessageId(message, `assistant-live-${timestamp}-${++this.#sequence}`);
+    }
+    this.#streamingCorrelationKey = correlationKey;
     const turn = this.#activeTurn() ?? this.#ensureLiveTurn(timestamp);
     this.#activeTurnId = turn.id;
-    if (!this.#streamingMessageId) {
-      this.#streamingMessageId = rawMessageId(message, `assistant-live-${timestamp}-${++this.#sequence}`);
-    }
 
     const delta = isRecord(event.assistantMessageEvent) ? event.assistantMessageEvent : {};
     const status: MessageStatus = event.type === "message_end"
@@ -389,28 +457,47 @@ export class ConversationProjection {
       : delta.type === "error"
         ? delta.reason === "aborted" ? "aborted" : "error"
         : "streaming";
-    this.#replaceMessageItems(
-      turn.id,
-      this.#streamingMessageId,
-      assistantActivities(
-        this.#streamingMessageId,
+    const fallbackViewMessageId = this.#streamingMessageId;
+    this.#store.placeAssistant({
+      turnId: turn.id,
+      source: {
+        kind: "live",
+        correlationKey,
+        fallbackViewMessageId,
+      },
+      buildActivities: (viewId) => assistantActivities(
+        viewId,
         message,
         status,
         timestamp,
         (content, idPrefix) => this.#validatedBlocks(content, undefined, idPrefix),
       ),
-    );
+    });
     if (status === "streaming") this.#setTurnStatus(turn.id, "running");
-    else if (status === "aborted" || status === "error") this.#setTurnStatus(turn.id, statusToTurnStatus(status), Date.now());
-    else if (message.stopReason !== "toolUse") this.#setTurnStatus(turn.id, "completed", Date.now());
-    if (event.type === "message_end") this.#streamingMessageId = null;
+    else if (status === "error") {
+      this.#pendingLiveErrorTurnId = turn.id;
+      this.#setTurnStatus(turn.id, "running");
+    } else if (status === "aborted") {
+      this.#pendingLiveErrorTurnId = null;
+      this.#setTurnStatus(turn.id, "aborted", Date.now());
+    } else if (message.stopReason !== "toolUse") {
+      this.#pendingLiveErrorTurnId = null;
+      this.#setTurnStatus(turn.id, "completed", Date.now());
+    }
+    if (event.type === "message_end") {
+      this.#streamingMessageId = null;
+      this.#streamingCorrelationKey = null;
+    }
   }
 
   #applyToolStart(event: RpcEvent): void {
     if (typeof event.toolCallId !== "string") return;
-    const turn = this.#activeTurn() ?? this.#ensureLiveTurn(Date.now());
-    this.#activeTurnId = turn.id;
-    this.#upsertTool(turn.id, event.toolCallId, {
+    const turn = this.#liveToolTurnOrCreate(event.toolCallId);
+    if (turn) this.#activeTurnId = turn.id;
+    this.#store.upsertTool({
+      source: { kind: "live" },
+      fallbackTurnId: turn?.id,
+      toolCallId: event.toolCallId,
       name: stringValue(event.toolName, "tool"),
       args: recordValue(event.args),
       status: "running",
@@ -421,8 +508,11 @@ export class ConversationProjection {
 
   #applyToolUpdate(event: RpcEvent): void {
     if (typeof event.toolCallId !== "string") return;
-    const turn = this.#activeTurn() ?? this.#ensureLiveTurn(Date.now());
-    this.#upsertTool(turn.id, event.toolCallId, {
+    const turn = this.#liveToolTurnOrCreate(event.toolCallId);
+    this.#store.upsertTool({
+      source: { kind: "live" },
+      fallbackTurnId: turn?.id,
+      toolCallId: event.toolCallId,
       name: stringValue(event.toolName, "tool"),
       args: recordValue(event.args),
       status: "running",
@@ -434,9 +524,12 @@ export class ConversationProjection {
 
   #applyToolEnd(event: RpcEvent): void {
     if (typeof event.toolCallId !== "string") return;
-    const turn = this.#activeTurn() ?? this.#ensureLiveTurn(Date.now());
+    const turn = this.#liveToolTurnOrCreate(event.toolCallId);
     const isError = event.isError === true;
-    this.#upsertTool(turn.id, event.toolCallId, {
+    this.#store.upsertTool({
+      source: { kind: "live" },
+      fallbackTurnId: turn?.id,
+      toolCallId: event.toolCallId,
       name: stringValue(event.toolName, "tool"),
       args: recordValue(event.args),
       status: isError ? "error" : "complete",
@@ -447,19 +540,37 @@ export class ConversationProjection {
     });
   }
 
+  #liveToolTurnOrCreate(toolCallId: string): AgentTurnView | undefined {
+    return this.#activeTurn() ?? (this.#store.hasTool(toolCallId) ? undefined : this.#ensureLiveTurn(Date.now()));
+  }
+
   #applyLiveCompaction(event: RpcEvent): void {
     const result = recordValue(event.result);
-    if (typeof result.summary !== "string" || typeof result.tokensBefore !== "number") return;
+    if (
+      typeof result.summary !== "string"
+      || typeof result.tokensBefore !== "number"
+      || typeof result.firstKeptEntryId !== "string"
+    ) return;
     const timestamp = Date.now();
-    const compaction: CompactionView = {
-      id: `compaction-live-${timestamp}-${++this.#sequence}`,
-      type: "compaction",
-      summary: result.summary,
-      tokensBefore: result.tokensBefore,
-      timestamp,
+    if (event.willRetry === true && this.#activeTurnId) {
+      this.#setTurnStatus(this.#activeTurnId, "running");
+    }
+    const source: CompactionSource = {
+      kind: "live",
+      firstKeptEntryId: result.firstKeptEntryId,
+      fallbackViewId: `compaction-live-${timestamp}-${++this.#sequence}`,
     };
-    this.#appendLiveItem(compaction);
-    this.#pendingCompactionIds.push(compaction.id);
+    this.#store.placeCompaction({
+      turnId: this.#activeTurnId ?? undefined,
+      source,
+      buildItem: (viewId): CompactionView => ({
+        id: viewId,
+        type: "compaction",
+        summary: result.summary as string,
+        tokensBefore: result.tokensBefore as number,
+        timestamp,
+      }),
+    });
   }
 
   #alignActiveTurnAwaitingUserMessage(event: RpcEvent): boolean {
@@ -485,10 +596,11 @@ export class ConversationProjection {
       if (prior.status === "running") this.#setTurnStatus(prior.id, "completed", Date.now());
     }
     this.#streamingMessageId = null;
+    this.#streamingCorrelationKey = null;
 
     const timestamp = numericValue(message.timestamp) ?? promoted.timestamp;
     const turn = this.#createUserTurn(promoted.text, promoted.images, timestamp);
-    this.#items = [...this.#items, turn];
+    this.#store.appendItem(turn);
     this.#activeTurnId = turn.id;
     this.#markLiveTurnEligible(turn.id);
     return true;
@@ -532,13 +644,13 @@ export class ConversationProjection {
     if (!next) return undefined;
     this.#queuedFollowUps = remaining;
     const turn = this.#createUserTurn(next.text, next.images, next.timestamp);
-    this.#items = [...this.#items, turn];
+    this.#store.appendItem(turn);
     return turn;
   }
 
   #refreshBranchControls(branchEdges: readonly ActiveBranchEdge[]): void {
     const controls = new Map(branchEdges.map((edge) => [branchControlId(edge), branchControlView(edge)]));
-    this.#items = this.#items.map((item) => {
+    this.#store.mapItems((item) => {
       if (item.type === "branchControl") return controls.get(item.id) ?? item;
       if (item.type !== "turn") return item;
       return {
@@ -549,23 +661,23 @@ export class ConversationProjection {
   }
 
   #appendPersistedItem(item: ConversationAnnotationView | BranchControlView): void {
-    if (this.#persistedTurnId) {
-      this.#upsertTurnItem(this.#persistedTurnId, item);
+    if (this.#persistedTurn) {
+      this.#store.upsertTurnItem(this.#persistedTurn.turnId, item);
       return;
     }
-    this.#items = [...this.#items, item];
+    this.#store.appendItem(item);
   }
 
   #appendLiveItem(item: ConversationAnnotationView | BranchControlView): void {
     if (this.#activeTurnId) {
-      this.#upsertTurnItem(this.#activeTurnId, item);
+      this.#store.upsertTurnItem(this.#activeTurnId, item);
       return;
     }
-    this.#items = [...this.#items, item];
+    this.#store.appendItem(item);
   }
 
-  #persistedTurn(entryId: string, timestamp: number): AgentTurnView {
-    if (this.#persistedTurnId) return this.#turn(this.#persistedTurnId);
+  #persistedTurnFor(entryId: string, timestamp: number): AgentTurnView {
+    if (this.#persistedTurn) return this.#turn(this.#persistedTurn.turnId);
     const turn: AgentTurnView = {
       id: `turn-${entryId}`,
       type: "turn",
@@ -573,16 +685,26 @@ export class ConversationProjection {
       status: "running",
       startedAt: timestamp,
     };
-    this.#items = [...this.#items, turn];
-    this.#persistedTurnId = turn.id;
+    this.#store.appendItem(turn);
+    this.#persistedTurn = { turnId: turn.id, phase: "active" };
     return turn;
   }
 
-  #completePersistedTurn(endedAt = Date.now()): void {
-    if (!this.#persistedTurnId) return;
-    const turn = this.#findTurn(this.#persistedTurnId);
-    if (turn?.status === "running") this.#setTurnStatus(turn.id, "completed", endedAt);
-    this.#persistedTurnId = null;
+  #completePersistedTurn(force: boolean, endedAt = Date.now()): void {
+    if (!this.#persistedTurn) return;
+    const turn = this.#findTurn(this.#persistedTurn.turnId);
+    // Intermediate refreshes keep the cursor while the live turn can still
+    // continue. A forced boundary or a live-finalized error closes it.
+    if (
+      this.#persistedTurn.phase === "error-awaiting-continuation"
+      && !force
+      && turn?.status !== "error"
+    ) return;
+    if (turn?.status === "running") {
+      const status = this.#persistedTurn.phase === "error-awaiting-continuation" ? "error" : "completed";
+      this.#setTurnStatus(turn.id, status, endedAt);
+    }
+    this.#persistedTurn = null;
   }
 
   #ensureLiveTurn(timestamp: number): AgentTurnView {
@@ -593,7 +715,7 @@ export class ConversationProjection {
       status: "running",
       startedAt: timestamp,
     };
-    this.#items = [...this.#items, turn];
+    this.#store.appendItem(turn);
     this.#activeTurnId = turn.id;
     return turn;
   }
@@ -624,85 +746,8 @@ export class ConversationProjection {
     };
   }
 
-  #upsertTool(
-    fallbackTurnId: string,
-    id: string,
-    update: {
-      name: string;
-      args: Record<string, unknown>;
-      status: ToolCallView["status"];
-      output?: string;
-      isError: boolean;
-      endedAt?: number;
-      timestamp: number;
-    },
-  ): void {
-    const location = this.#toolItems.get(id);
-    const turnId = location?.turnId ?? fallbackTurnId;
-    const current = location ? this.#turnItem(turnId, location.itemId) : undefined;
-    const currentTool = current?.type === "tool" ? current.tool : undefined;
-    const args = Object.keys(update.args).length > 0 ? update.args : currentTool?.args ?? {};
-    const created = createToolView(id, update.name || currentTool?.name || "tool", args, currentTool?.startedAt ?? update.timestamp);
-    const tool: ToolCallView = {
-      ...created,
-      ...currentTool,
-      name: update.name || currentTool?.name || created.name,
-      args,
-      status: update.status,
-      isError: update.isError,
-      ...(update.output !== undefined ? { output: update.output } : currentTool?.output !== undefined ? { output: currentTool.output } : {}),
-      ...(update.endedAt !== undefined ? { endedAt: update.endedAt } : currentTool?.endedAt !== undefined ? { endedAt: currentTool.endedAt } : {}),
-    };
-    const activity: AgentActivityView = {
-      id: location?.itemId ?? `tool-${id}`,
-      type: "tool",
-      tool,
-      timestamp: current?.type === "tool" ? current.timestamp : tool.startedAt,
-    };
-    this.#upsertTurnItem(turnId, activity);
-    this.#toolItems.set(id, { turnId, itemId: activity.id });
-  }
-
-  #replaceMessageItems(turnId: string, messageId: string, items: AgentActivityView[]): void {
-    const previousIds = new Set((this.#messageItems.get(messageId) ?? []).map((location) => location.itemId));
-    const replacements = new Map(items.map((item) => [item.id, item]));
-    const observedIds = new Set<string>();
-    const turn = this.#turn(turnId);
-    const nextItems = turn.items.flatMap((current) => {
-      const replacement = replacements.get(current.id);
-      if (replacement) {
-        observedIds.add(current.id);
-        return [replacement];
-      }
-      return previousIds.has(current.id) ? [] : [current];
-    });
-    for (const item of items) {
-      if (!observedIds.has(item.id)) nextItems.push(item);
-    }
-    this.#replaceTurn({ ...turn, items: nextItems });
-
-    this.#messageItems.set(messageId, items.map((item) => ({ turnId, itemId: item.id })));
-    for (const item of items) {
-      if (item.type === "tool") this.#toolItems.set(item.tool.id, { turnId, itemId: item.id });
-    }
-  }
-
-  #upsertTurnItem(turnId: string, item: AgentTurnView["items"][number]): void {
-    const turn = this.#turn(turnId);
-    const itemIndex = turn.items.findIndex((current) => current.id === item.id);
-    const items = [...turn.items];
-    if (itemIndex === -1) items.push(item);
-    else items[itemIndex] = item;
-    this.#replaceTurn({ ...turn, items });
-  }
-
   #setTurnStatus(turnId: string, status: AgentTurnStatus, endedAt?: number): void {
-    const turn = this.#turn(turnId);
-    this.#replaceTurn({
-      ...turn,
-      status,
-      ...(endedAt === undefined ? {} : { endedAt }),
-    });
+    this.#store.setTurnStatus(turnId, status, endedAt);
   }
 
   #activeTurn(): AgentTurnView | undefined {
@@ -710,43 +755,23 @@ export class ConversationProjection {
   }
 
   #findTurn(turnId: string): AgentTurnView | undefined {
-    const item = this.#items.find((candidate) => candidate.id === turnId);
-    return item?.type === "turn" ? item : undefined;
+    return this.#store.findTurn(turnId);
   }
 
   #turn(turnId: string): AgentTurnView {
-    const turn = this.#findTurn(turnId);
-    if (!turn) throw new Error(`Unknown projected turn: ${turnId}`);
-    return turn;
+    return this.#store.turn(turnId);
   }
 
   #replaceTurn(next: AgentTurnView): void {
-    this.#items = this.#items.map((item) => item.id === next.id ? next : item);
+    this.#store.replaceTurn(next);
   }
 
   #replaceTurnAtEnd(next: AgentTurnView): void {
-    this.#items = [...this.#items.filter((item) => item.id !== next.id), next];
-  }
-
-  #turnItem(turnId: string, itemId: string): AgentTurnView["items"][number] | undefined {
-    return this.#findTurn(turnId)?.items.find((item) => item.id === itemId);
-  }
-
-  #removeItem(itemId: string): void {
-    const items: ConversationItemView[] = [];
-    for (const item of this.#items) {
-      if (item.id === itemId) continue;
-      if (item.type === "turn") {
-        items.push({ ...item, items: item.items.filter((turnItem) => turnItem.id !== itemId) });
-      } else {
-        items.push(item);
-      }
-    }
-    this.#items = items;
+    this.#store.replaceTurnAtEnd(next);
   }
 
   #conversationItems(): Array<ConversationAnnotationView | BranchControlView | AgentActivityView> {
-    return this.#items.flatMap((item) => item.type === "turn" ? item.items : [item]);
+    return this.#store.conversationItems();
   }
 
   #validatedBlocks(content: unknown, attachments: unknown, idPrefix: string): MessageBlockView[] {
@@ -896,10 +921,51 @@ function toImageViews(
   });
 }
 
-function rawMessageId(message: Record<string, unknown>, fallback: string): string {
+function viewMessageId(message: Record<string, unknown>, fallback: string): string {
   if (typeof message.id === "string") return message.id;
   if (typeof message.timestamp === "number") return `assistant-${message.timestamp}`;
   return fallback;
+}
+
+function messageCorrelationKey(message: Record<string, unknown>): MessageCorrelationKey | undefined {
+  if (typeof message.id === "string") return `id:${message.id}`;
+  if (typeof message.timestamp === "number" && Number.isFinite(message.timestamp)) {
+    return `timestamp:${message.timestamp}`;
+  }
+  return undefined;
+}
+
+function persistedAssistantSource(
+  entry: RpcSessionEntry,
+): Extract<AssistantMessageSource, { kind: "persisted" }> | undefined {
+  if (entry.type !== "message" || !isRecord(entry.message) || entry.message.role !== "assistant") return undefined;
+  const correlationKey = messageCorrelationKey(entry.message);
+  return {
+    kind: "persisted",
+    entryId: entry.id,
+    ...(correlationKey ? { correlationKey } : {}),
+    fallbackViewMessageId: `assistant-${entry.id}`,
+  };
+}
+
+function hasCompactionWithoutCorrelationKey(entry: RpcSessionEntry): boolean {
+  return entry.type === "compaction" && typeof entry.firstKeptEntryId !== "string";
+}
+
+function persistedCompactionSource(
+  entry: RpcSessionEntry,
+): Extract<CompactionSource, { kind: "persisted" }> | undefined {
+  if (entry.type !== "compaction") return undefined;
+  return {
+    kind: "persisted",
+    entryId: entry.id,
+    // Full replacement has no provisional compaction to adopt, so an entry-local
+    // fallback preserves distinct persisted records from newer session formats.
+    firstKeptEntryId: typeof entry.firstKeptEntryId === "string"
+      ? entry.firstKeptEntryId
+      : `persisted-entry:${entry.id}`,
+    fallbackViewId: entry.id,
+  };
 }
 
 function assistantMessageStatus(stopReason: unknown): MessageStatus {

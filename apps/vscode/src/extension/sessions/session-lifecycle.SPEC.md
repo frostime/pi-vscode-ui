@@ -5,7 +5,7 @@ scope:
   - /apps/vscode/src/extension/sessions/**
   - /apps/vscode/src/extension/conversation/**
   - /apps/vscode/src/extension/extension-ui/**
-updated: 2026-07-28
+updated: 2026-08-01
 ---
 
 # Pi Session Lifecycle
@@ -32,7 +32,9 @@ stopped ─ request ─> queued ─> starting ─ handshake ─> ready ─ agent
    └──────── stop <────────── stopping     failed <───┴──── agent_settled ─┘
 ```
 
-`failed` ends the current child process but leaves retryable metadata. Queued/starting sessions reject submission and model mutation while retaining session actions; running sessions keep the Composer editable and expose Stop. Prompt RPC success means accepted, not completed; only `agent_settled` returns a running session to ready. Assistant protocol errors remain errors even if settling follows, while a tool failure remains visible without by itself failing the whole turn.
+`failed` ends the current child process but leaves retryable metadata. Queued/starting sessions reject submission and model mutation while retaining session actions; running sessions keep the Composer editable and expose Stop. Prompt RPC success means accepted, not completed; only `agent_settled` returns a running session to ready.
+
+`agent_end` closes one model attempt, not necessarily the user turn. With `willRetry: true`, the session remains running and conversation projection keeps the pending assistant error in the same user turn; `auto_retry_start` supplies the transient retry notice. With `willRetry: false`, the pending error may become final. `agent_settled` is the completion boundary: Runtime returns the session to ready, refreshes persisted entries, and may issue the one normal-completion notification. Assistant protocol errors remain errors when no continuation succeeds, while a tool failure remains visible without by itself failing the whole turn.
 
 `abort` stops the current run and keeps the process. A restart cancels pending extension UI, stops the child, and starts Pi with the recorded session file; active streams, tools, and pending requests do not survive. Disruptive explicit restart requires confirmation.
 
