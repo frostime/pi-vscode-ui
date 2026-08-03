@@ -155,7 +155,7 @@
     return autocompletion({
       activateOnTyping: true,
       activateOnTypingDelay: 40,
-      maxRenderedOptions: 18,
+      maxRenderedOptions: 100,
       optionClass: (completion) => completion.type === "frostpi-status" ? "frostpi-completion-status" : "",
       override: [commandCompletion(commands), fileCompletion(sessionId)],
     });
@@ -182,7 +182,7 @@
       if (!match) return null;
       const raw = match.text.slice(1);
       const query = raw.startsWith('"') ? raw.slice(1) : raw;
-      const request = requestWorkspaceFileSuggestions(sessionId, query, 20);
+      const request = requestWorkspaceFileSuggestions(sessionId, query, 32);
       context.addEventListener("abort", request.cancel, { onDocChange: true });
       const result = await request.promise;
       if (context.aborted) return null;

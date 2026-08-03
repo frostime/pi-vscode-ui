@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Expand slash-command completion to render up to 100 options and raise workspace `@` file candidates to 32, making larger skill and file lists easier to browse.
+
 ## [0.10.2] - 2026-08-03
 
 ### Changed
