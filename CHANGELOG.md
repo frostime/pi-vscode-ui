@@ -6,8 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-08-03
+
 ### Changed
 
+- Optimize Resume discovery with ripgrep when available, recovering titles from `session_info` records anywhere in a Pi session file while retaining bounded metadata fallback.
 - File path completion now inserts relative paths as Markdown code spans (`` `path` `` / `` `path:start-end` ``) instead of `@`-prefixed mentions; `@` remains only as the completion trigger. The built-in `Selection`/`CurrentFile` rows and the editor context commands use the same format. Paths with whitespace stay inside one code span.
 
 ### Fixed

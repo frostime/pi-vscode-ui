@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, normalize, resolve } from "node:path";
 
@@ -17,6 +17,7 @@ vi.mock("vscode", () => ({
 import { QuickPickItemKind } from "vscode";
 import { discoverPiSessions, prioritizeSessionRoots, readPiSessionMetadata, resolveSessionRoots } from "../../src/extension/sessions/catalog/SessionCatalog.js";
 import { buildSessionQuickPickItems } from "../../src/extension/sessions/catalog/SessionCatalogPicker.js";
+import { sessionPathKey, type SessionFileScanResult } from "../../src/extension/sessions/catalog/SessionFileScanner.js";
 import type { SessionWorkingDirectory } from "../../src/extension/sessions/SessionWorkingDirectories.js";
 
 describe("Pi session metadata", () => {
@@ -90,6 +91,113 @@ describe("Pi session metadata", () => {
 });
 
 describe("session discovery across worktrees", () => {
+  it("uses a complete fast scan without reading transcript previews", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-fast-session-"));
+    const path = join(dir, "middle-title.jsonl");
+    await writeFile(path, [
+      JSON.stringify({ type: "session", version: 3, id: "fast", cwd: dir }),
+      JSON.stringify({ type: "message", message: { role: "user", content: "preview omitted on fast path" } }),
+      JSON.stringify({ type: "session_info", name: "Fast title" }),
+    ].join("\n"));
+    const directories = [workingDirectory(dir)];
+
+    const sessions = await discoverPiSessions(
+      directories,
+      [],
+      () => Promise.resolve([dir]),
+      () => completeScan(path, dir, { name: "Fast title" }),
+    );
+
+    expect(sessions).toMatchObject([{ path, cwd: dir, title: "Fast title", sessionId: "fast" }]);
+    expect(sessions[0]?.preview).toBeUndefined();
+  });
+
+  it("uses the existing preview fallback when a fast scan finds no title", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-fallback-session-"));
+    const path = join(dir, "untitled.jsonl");
+    await writeFile(path, [
+      JSON.stringify({ type: "session", version: 3, id: "untitled", cwd: dir }),
+      JSON.stringify({ type: "message", message: { role: "user", content: "Fallback preview" } }),
+    ].join("\n"));
+
+    const sessions = await discoverPiSessions(
+      [workingDirectory(dir)],
+      [],
+      () => Promise.resolve([dir]),
+      () => completeScan(path, dir),
+    );
+
+    expect(sessions[0]).toMatchObject({ title: "Fallback preview", preview: "Fallback preview" });
+  });
+
+  it("uses the existing bounded reader when the fast scanner rejects", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-incomplete-scan-"));
+    const path = join(dir, "fallback.jsonl");
+    await writeFile(path, [
+      JSON.stringify({ type: "session", version: 3, id: "fallback", cwd: dir }),
+      JSON.stringify({ type: "message", message: { role: "user", content: "Existing fallback" } }),
+      JSON.stringify({ type: "session_info", name: "Existing title" }),
+    ].join("\n"));
+
+    const sessions = await discoverPiSessions(
+      [workingDirectory(dir)],
+      [],
+      () => Promise.resolve([dir]),
+      () => Promise.reject(new Error("scanner failed")),
+    );
+
+    expect(sessions[0]).toMatchObject({ title: "Existing title", preview: "Existing fallback" });
+  });
+
+  it("does not restore an old title after a fast scan sees an explicit clear", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-cleared-session-"));
+    const path = join(dir, "cleared.jsonl");
+    await writeFile(path, [
+      JSON.stringify({ type: "session", version: 3, id: "cleared", cwd: dir }),
+      JSON.stringify({ type: "message", message: { role: "user", content: "Cleared fallback" } }),
+      JSON.stringify({ type: "session_info", name: "Old title" }),
+    ].join("\n"));
+
+    const sessions = await discoverPiSessions(
+      [workingDirectory(dir)],
+      [],
+      () => Promise.resolve([dir]),
+      () => completeScan(path, dir, { name: undefined }),
+    );
+
+    expect(sessions[0]).toMatchObject({ title: "Cleared fallback", preview: "Cleared fallback" });
+  });
+
+  it("falls back when a live session changes after the fast scan", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-changing-session-"));
+    const path = join(dir, "changing.jsonl");
+    await writeFile(path, [
+      JSON.stringify({ type: "session", version: 3, id: "changing", cwd: dir }),
+      JSON.stringify({ type: "message", message: { role: "user", content: "Preview" } }),
+      JSON.stringify({ type: "session_info", name: "   " }),
+    ].join("\n"));
+    const scannedBytes = (await stat(path)).size;
+
+    const sessions = await discoverPiSessions(
+      [workingDirectory(dir)],
+      [],
+      () => Promise.resolve([dir]),
+      async () => {
+        await appendFile(path, `\n${JSON.stringify({ type: "session_info", name: "Appended title" })}`);
+        return {
+          complete: true,
+          sessions: new Map([[sessionPathKey(path), {
+            cwd: dir,
+            bytesScanned: scannedBytes,
+            sessionInfo: { name: undefined },
+          }]]),
+        };
+      },
+    );
+
+    expect(sessions[0]?.title).toBe("Appended title");
+  });
+
   it("prioritizes linked-worktree roots before current and shared roots", () => {
     const main = resolve("/repo");
     const linkedA = resolve("/worktrees/a");
@@ -185,6 +293,26 @@ describe("session discovery across worktrees", () => {
     ]);
   });
 });
+
+function workingDirectory(cwd: string): SessionWorkingDirectory {
+  return { cwd, workspaceFolderCwd: cwd, worktreeRoot: cwd, directoryName: "workspace", isCurrent: true };
+}
+
+async function completeScan(
+  path: string,
+  cwd: string,
+  sessionInfo?: { name: string | undefined },
+): Promise<SessionFileScanResult> {
+  return {
+    complete: true,
+    sessions: new Map([[sessionPathKey(path), {
+      cwd,
+      bytesScanned: (await stat(path)).size,
+      sessionId: sessionInfo ? "fast" : "untitled",
+      ...(sessionInfo ? { sessionInfo } : {}),
+    }]]),
+  };
+}
 
 describe("session root resolution", () => {
   it("resolves project sessionDir relative to the workspace cwd, not the settings file directory", async () => {

@@ -20,9 +20,11 @@ Runtime extension hooks that rewrite storage are not discoverable; **Browse for 
 
 ## Bounded discovery and metadata
 
-Scanning is globally bounded to 2,000 JSONL files. Linked-worktree-only roots precede current-workspace-only roots, with shared roots last. Metadata reads use bounded head/tail windows; invalid, truncated, inaccessible, and non-session files are skipped without loading full transcripts.
+Discovery is globally bounded to 2,000 JSONL files. Linked-worktree-only roots precede current-workspace-only roots, with shared roots last. Invalid, truncated, inaccessible, and non-session files are skipped.
 
-The latest `session_info` by file offset is the display-name authority, including an empty value that clears the title. Recovery examines the 64 KiB head and 384 KiB tail, then falls back to the latest tail user-message preview and finally the file basename.
+When `rg` is available at Extension Host startup, the catalog scans the resolved roots for top-level `session` and `session_info` records. A complete scan supplies headers and the latest `session_info` by file offset without reading transcript messages; these fast-path entries intentionally omit the optional user-message preview. Files without a title use the bounded metadata reader for preview fallback. If `rg` is unavailable or its scan is incomplete, every discovered file uses that reader instead.
+
+The bounded reader examines the 64 KiB head and 384 KiB tail. The latest visible `session_info`, including an empty value that clears the title, wins before the latest tail user-message preview and file basename. A complete `rg` result is authoritative over an older title visible in those windows; an empty latest name still falls back to preview or basename rather than restoring the older title.
 
 ## Resume
 

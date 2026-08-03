@@ -6,6 +6,13 @@ import {
   findSessionWorkingDirectory,
   type SessionWorkingDirectory,
 } from "../SessionWorkingDirectories.js";
+import {
+  scanSessionFilesWithRipgrep,
+  SESSION_HEADER_BYTES,
+  sessionPathKey,
+  type ScannedSessionFile,
+  type SessionFileScanResult,
+} from "./SessionFileScanner.js";
 
 export interface PiSessionCatalogEntry {
   path: string;
@@ -17,20 +24,27 @@ export interface PiSessionCatalogEntry {
 }
 
 type SessionRootResolver = (cwd: string, piArguments: string[]) => Promise<string[]>;
+type SessionFileScanner = (roots: readonly string[]) => Promise<SessionFileScanResult>;
 
 const MAX_FILES = 2_000;
-const HEADER_BYTES = 64 * 1024;
 const TAIL_BYTES = 384 * 1024;
 
 export async function discoverPiSessions(
   directories: readonly SessionWorkingDirectory[],
   piArguments: string[],
   resolveRoots: SessionRootResolver = resolveSessionRoots,
+  scanFiles: SessionFileScanner = scanSessionFilesWithRipgrep,
 ): Promise<PiSessionCatalogEntry[]> {
   const rootsByDirectory = await Promise.all(directories.map((directory) => resolveRoots(directory.cwd, piArguments)));
   const roots = prioritizeSessionRoots(directories, rootsByDirectory);
+  const fastScanPromise = Promise.resolve()
+    .then(() => scanFiles(roots))
+    .catch((): SessionFileScanResult => ({ complete: false }));
   const paths = await findJsonlFiles(roots, MAX_FILES);
-  const entries = await mapConcurrent(paths, 12, readPiSessionMetadata);
+  const fastScan = await fastScanPromise;
+  const entries = fastScan.complete
+    ? await mapConcurrent(paths, 12, (path) => readFastOrFallbackMetadata(path, fastScan.sessions.get(sessionPathKey(path))))
+    : await mapConcurrent(paths, 12, readPiSessionMetadata);
   return entries
     .filter((entry): entry is PiSessionCatalogEntry => Boolean(entry && findSessionWorkingDirectory(directories, entry.cwd)));
 }
@@ -65,7 +79,7 @@ export async function readPiSessionMetadata(path: string): Promise<PiSessionCata
 
   const handle = await open(path, "r");
   try {
-    const headLength = Math.min(HEADER_BYTES, fileStat.size);
+    const headLength = Math.min(SESSION_HEADER_BYTES, fileStat.size);
     const head = Buffer.alloc(headLength);
     await handle.read(head, 0, headLength, 0);
     const headText = head.toString("utf8");
@@ -102,6 +116,38 @@ export async function readPiSessionMetadata(path: string): Promise<PiSessionCata
   } finally {
     await handle.close();
   }
+}
+
+async function readFastOrFallbackMetadata(
+  path: string,
+  scanned: ScannedSessionFile | undefined,
+): Promise<PiSessionCatalogEntry | undefined> {
+  if (!scanned?.sessionInfo) return readPiSessionMetadata(path);
+
+  let fileStat;
+  try {
+    fileStat = await stat(path);
+    if (!fileStat.isFile()) return undefined;
+  } catch {
+    return undefined;
+  }
+  // A live session may append a rename after rg finishes. Its changed size invalidates the fast result.
+  if (fileStat.size !== scanned.bytesScanned) return readPiSessionMetadata(path);
+
+  const name = scanned.sessionInfo.name;
+  if (!name) {
+    const fallback = await readPiSessionMetadata(path);
+    if (!fallback) return undefined;
+    return { ...fallback, title: fallback.preview ?? basename(path, ".jsonl") };
+  }
+
+  return {
+    path: resolve(path),
+    cwd: resolve(expandHome(scanned.cwd)),
+    title: name,
+    updatedAt: fileStat.mtimeMs,
+    ...(scanned.sessionId !== undefined ? { sessionId: scanned.sessionId } : {}),
+  };
 }
 
 export async function resolveSessionRoots(cwd: string, piArguments: string[]): Promise<string[]> {
