@@ -40,6 +40,10 @@ It runs your configured Pi through its native RPC mode. Pi remains responsible f
     <td><strong>Compaction for long sessions</strong><br><img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/compact.png" alt="FrostPi compaction record" width="100%"></td>
     <td><strong>Context and cost detail</strong><br><img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/context-usage.png" alt="FrostPi context usage details" width="100%"></td>
   </tr>
+  <tr>
+    <td><strong>Native Pi Session Tree</strong><br><img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/tree-button.png" alt="FrostPi Pi session tree branch controls" width="100%"></td>
+    <td><strong>Git Worktree Sessions</strong><br><img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/support-worktree.png" alt="FrostPi Git worktree session picker" width="100%"></td>
+  </tr>
 </table>
 
 ## Pi Session Tree and Fork
@@ -61,6 +65,8 @@ Pi remains authoritative for tree navigation and context reconstruction. FrostPi
 5. If `pi` is not on `PATH`, run **FrostPi: Configure Pi Executable**.
 
 The executable may be the `pi` command, an absolute native executable, or Pi's compiled `cli.js` path. Remote SSH, WSL, and Dev Container workspaces run Pi in the remote Extension Host.
+
+For best workspace and session discovery, install `fd` and `rg` on the Extension Host's `PATH`. `fd` is required for `@` workspace file completion; `rg` accelerates Resume session discovery and FrostPi falls back to bounded metadata scanning when it is unavailable.
 
 ## Important Behavior
 

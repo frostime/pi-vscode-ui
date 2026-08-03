@@ -45,6 +45,10 @@ It runs your configured Pi through its native RPC mode. Pi remains responsible f
     <td><strong>Compaction for long sessions</strong><br><img src="docs/assets/screenshots/compact.png" alt="FrostPi compaction record" width="100%"></td>
     <td><strong>Context and cost detail</strong><br><img src="docs/assets/screenshots/context-usage.png" alt="FrostPi context usage details" width="100%"></td>
   </tr>
+  <tr>
+    <td><strong>Native Pi Session Tree</strong><br><img src="docs/assets/screenshots/tree-button.png" alt="FrostPi Pi session tree branch controls" width="100%"></td>
+    <td><strong>Git Worktree Sessions</strong><br><img src="docs/assets/screenshots/support-worktree.png" alt="FrostPi Git worktree session picker" width="100%"></td>
+  </tr>
 </table>
 
 ## Requirements
@@ -53,6 +57,7 @@ It runs your configured Pi through its native RPC mode. Pi remains responsible f
 - A trusted file-system workspace.
 - Pi installed and configured in the same environment as the VS Code Extension Host.
 - Pi available as `pi` on `PATH`, or configured through `frostpi.pi.executable`.
+- Recommand to install `fd` and `rg` on the Extension Host's `PATH`: `fd` is required for `@` workspace file completion, while `rg` accelerates Resume session discovery.
 
 Remote SSH, WSL, and Dev Container workspaces run FrostPi and Pi in the remote workspace extension host. FrostPi does not bridge a local Pi process into a remote file system.
 
