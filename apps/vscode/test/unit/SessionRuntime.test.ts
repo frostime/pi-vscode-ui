@@ -234,6 +234,93 @@ process.on("SIGTERM", () => process.exit(0));
     }
   });
 
+  it("warns when a known extension command has not confirmed completion before the prompt deadline", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-runtime-unconfirmed-command-"));
+    const fakePi = join(dir, "fake-pi.cjs");
+    await writeFile(fakePi, String.raw`#!/usr/bin/env node
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => {
+  input += chunk;
+  while (input.includes("\n")) {
+    const index = input.indexOf("\n");
+    const command = JSON.parse(input.slice(0, index));
+    input = input.slice(index + 1);
+    const response = { type: "response", id: command.id, success: true };
+    if (command.type === "get_state") {
+      response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, pendingMessageCount: 0, sessionId: "unconfirmed-command" };
+    } else if (command.type === "get_commands") {
+      response.data = { commands: [{ name: "external-command", source: "extension" }] };
+    } else if (command.type === "get_available_models") response.data = { models: [] };
+    else if (command.type === "get_entries") response.data = { entries: [], leafId: null };
+    else if (command.type === "get_session_stats") {
+      response.data = {
+        sessionId: "unconfirmed-command",
+        userMessages: 0,
+        assistantMessages: 0,
+        toolCalls: 0,
+        toolResults: 0,
+        totalMessages: 0,
+        tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        cost: 0,
+      };
+    } else if (command.type === "prompt") continue;
+    process.stdout.write(JSON.stringify(response) + "\n");
+  }
+});
+process.on("SIGTERM", () => process.exit(0));
+`);
+
+    const configuration = {
+      piExecutable: fakePi,
+      piArguments: [],
+      startSessionOnOpen: true,
+      streamingBehavior: "followUp" as const,
+      collapseTurnTrace: true,
+      questionToolEnabled: false,
+      maxImageBytes: 10 * 1024 * 1024,
+      diagnosticsLevel: "info" as const,
+      experimentalNotificationsEnabled: true,
+      proxy: { mode: "inherit" as const },
+      fileMentionRespectSearchExclude: true,
+      fileMentionRespectIgnoreFiles: true,
+      fileMentionFollowSymlinks: true,
+    };
+    const warnings: string[] = [];
+    const runtime = new SessionRuntime(
+      "session",
+      dir,
+      "Unconfirmed command",
+      Date.now(),
+      () => configuration,
+      new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
+      { error: vi.fn(), info: vi.fn() } as never,
+      {
+        onChange: vi.fn(),
+        onEditorText: vi.fn(),
+        onExtensionCommandCompletionUnconfirmed: (_runtime, message) => warnings.push(message),
+      },
+    );
+    runtimes.push(runtime);
+
+    await runtime.start();
+    await waitFor(() => runtime.view.commands.some((command) => command.name === "external-command"));
+
+    vi.useFakeTimers();
+    try {
+      const submission = runtime.sendPrompt("/external-command", []);
+      await vi.advanceTimersByTimeAsync(30_000);
+      await expect(submission).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const warning = "FrostPi has not confirmed that /external-command completed. Pi may still be waiting for input or may finish later; the session is still running.";
+    expect(warnings).toEqual([warning]);
+    expect(conversationTurns(runtime.view)[0]?.status).toBe("completed");
+    expect(conversationNotices(runtime.view)).toContainEqual(expect.objectContaining({ level: "warning", text: warning }));
+  });
+
   it("does not force-complete a known non-extension slash that starts an agent run", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-runtime-prompt-"));
     const fakePi = join(dir, "fake-pi.cjs");

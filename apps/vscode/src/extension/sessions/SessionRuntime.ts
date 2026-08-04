@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 
 import {
   PiRpcApi,
+  PiRpcCommandError,
   PiRpcConnection,
   isExtensionUiRequest,
   type RpcEvent,
@@ -42,6 +43,7 @@ export interface SessionRuntimeHooks {
   onChange(runtime: SessionRuntime): void;
   onEditorText(runtime: SessionRuntime, text: string): void;
   onAgentTurnCompleted?(runtime: SessionRuntime): void;
+  onExtensionCommandCompletionUnconfirmed?(runtime: SessionRuntime, message: string): void;
 }
 
 export type ForkExecutionResult =
@@ -221,6 +223,14 @@ export class SessionRuntime {
       });
       if (extensionCommand) await this.#finishImmediateExtensionCommand(turnId);
     } catch (error) {
+      if (extensionCommand && isExtensionCommandCompletionUnconfirmed(error)) {
+        const warning = extensionCommandCompletionUnconfirmedMessage(extensionCommand);
+        this.#conversation.appendNotice(warning, "warning");
+        this.#conversation.completeTurn(turnId);
+        this.#hooks.onExtensionCommandCompletionUnconfirmed?.(this, warning);
+        this.#notifyChange();
+        return;
+      }
       const messageText = errorMessage(error);
       this.#conversation.appendNotice(messageText, "error");
       if (!this.view.isStreaming) this.#conversation.completeTurn(turnId, "error");
@@ -928,6 +938,16 @@ function shouldBufferDuringHistoryLoad(event: RpcEvent): boolean {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isExtensionCommandCompletionUnconfirmed(error: unknown): boolean {
+  return error instanceof PiRpcCommandError
+    && error.command === "prompt"
+    && /^Timed out waiting for prompt response after \d+ms$/.test(error.message);
+}
+
+function extensionCommandCompletionUnconfirmedMessage(commandName: string): string {
+  return `FrostPi has not confirmed that /${commandName} completed. Pi may still be waiting for input or may finish later; the session is still running.`;
 }
 
 function delay(ms: number): Promise<void> {

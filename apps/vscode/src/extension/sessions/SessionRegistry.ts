@@ -591,6 +591,7 @@ export class SessionRegistry implements vscode.Disposable {
       {
         onChange: (runtime) => this.#handleRuntimeChange(runtime),
         onAgentTurnCompleted: (runtime) => this.#showSystemNotification(runtime, "completed"),
+        onExtensionCommandCompletionUnconfirmed: (_runtime, message) => this.#toastEmitter.fire({ level: "warning", message }),
         onEditorText: (runtime, text) => {
           if (runtime.id === this.#activeSessionId) this.#setComposerTextEmitter.fire({ sessionId: runtime.id, text });
           else this.#pendingEditorText.set(runtime.id, text);

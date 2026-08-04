@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Show a warning, rather than a failed command, when a Pi extension command has not confirmed completion before FrostPi's prompt-response deadline; clarify that Pi may still be waiting for input or finish later.
+
 ### Changed
 
 - Expand slash-command completion to render up to 100 options and raise workspace `@` file candidates to 32, making larger skill and file lists easier to browse.
