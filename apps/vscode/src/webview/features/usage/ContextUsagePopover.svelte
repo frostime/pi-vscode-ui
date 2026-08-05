@@ -39,6 +39,7 @@
       <dl class="usage-grid">
         <dt>Input</dt><dd>{compactNumber(stats.tokens.input)}</dd>
         <dt>Output</dt><dd>{compactNumber(stats.tokens.output)}</dd>
+        <dt>Cache hit</dt><dd>{session.cacheHitPercent === undefined ? "—" : `${Math.round(session.cacheHitPercent)}%`}</dd>
         <dt>Cache read</dt><dd>{compactNumber(stats.tokens.cacheRead)}</dd>
         <dt>Cache write</dt><dd>{compactNumber(stats.tokens.cacheWrite)}</dd>
         <dt>Total</dt><dd>{compactNumber(stats.tokens.total)}</dd>

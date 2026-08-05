@@ -81,6 +81,8 @@ export interface SessionViewModel {
   isNavigatingTree: boolean;
   isSummarizingTree: boolean;
   stats?: RpcSessionStats;
+  /** Prompt-cache hit percentage for the latest assistant message on the active session path. */
+  cacheHitPercent?: number;
   error?: string;
   updatedAt: number;
 }

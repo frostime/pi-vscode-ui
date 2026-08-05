@@ -122,7 +122,7 @@ process.stdin.on("data", chunk => {
         base.data = {
           entries: [
             { type: "message", id: "history-user-entry", parentId: null, message: { role: "user", content: "Earlier request", timestamp: 1 } },
-            { type: "message", id: "history-assistant-entry", parentId: "history-user-entry", message: { id: "live-assistant", role: "assistant", timestamp: 2, stopReason: "stop", content: [{ type: "text", text: "Live response" }] } },
+            { type: "message", id: "history-assistant-entry", parentId: "history-user-entry", message: { id: "live-assistant", role: "assistant", timestamp: 2, stopReason: "stop", content: [{ type: "text", text: "Live response" }], usage: { input: 100, output: 20, cacheRead: 300, cacheWrite: 100 } } },
             { type: "compaction", id: "history-compaction-entry", parentId: "history-assistant-entry", summary: "History compact", tokensBefore: 100, firstKeptEntryId: "kept-history", timestamp: 3 },
           ],
           leafId: "history-compaction-entry",
@@ -182,6 +182,7 @@ process.on("SIGTERM", () => process.exit(0));
       expect.objectContaining({ type: "response", blocks: [{ type: "text", text: "Live response" }] }),
     ]);
     expect(runtime.view.conversationItems.filter((item) => item.type === "compaction")).toHaveLength(1);
+    expect(runtime.view.cacheHitPercent).toBe(60);
     expect(conversationNotices(runtime.view)).toEqual([
       expect.objectContaining({ text: "Notice during history load" }),
     ]);
@@ -624,9 +625,9 @@ fs.writeFileSync(${JSON.stringify(launchRecord)}, JSON.stringify({
 }));
 const entries = [
   { type: "message", id: "root", parentId: null, timestamp: "2026-01-01T00:00:01.000Z", message: { role: "user", content: "Start", timestamp: 1 } },
-  { type: "message", id: "answer", parentId: "root", timestamp: "2026-01-01T00:00:02.000Z", message: { role: "assistant", content: [{ type: "text", text: "Answer" }], timestamp: 2 } },
+  { type: "message", id: "answer", parentId: "root", timestamp: "2026-01-01T00:00:02.000Z", message: { role: "assistant", content: [{ type: "text", text: "Answer" }], timestamp: 2, usage: { input: 100, output: 20, cacheRead: 100, cacheWrite: 0 } } },
   { type: "message", id: "old-user", parentId: "answer", timestamp: "2026-01-01T00:00:03.000Z", message: { role: "user", content: "Old path", timestamp: 3 } },
-  { type: "message", id: "old-end", parentId: "old-user", timestamp: "2026-01-01T00:00:04.000Z", message: { role: "assistant", content: [{ type: "text", text: "Old end" }], timestamp: 4 } },
+  { type: "message", id: "old-end", parentId: "old-user", timestamp: "2026-01-01T00:00:04.000Z", message: { role: "assistant", content: [{ type: "text", text: "Old end" }], timestamp: 4, usage: { input: 0, output: 20, cacheRead: 300, cacheWrite: 100 } } },
   { type: "message", id: "target-user", parentId: "answer", timestamp: "2026-01-01T00:00:05.000Z", message: { role: "user", content: [{ type: "text", text: "Revise this" }, { type: "image", id: "image", fileName: "shot.png", mimeType: "image/png", data: "AA==", size: 1 }], timestamp: 5 } },
 ];
 let leafId = "old-end";
@@ -700,6 +701,7 @@ process.on("SIGTERM", () => process.exit(0));
 
     await runtime.start();
     await waitFor(() => runtime.view.sessionTreeAvailable);
+    await waitFor(() => runtime.view.cacheHitPercent === 75);
     const launch = JSON.parse(await readFile(launchRecord, "utf8")) as { artifactPath: string; resultDirectory: string; hasToken: boolean };
     expect(launch).toMatchObject({ artifactPath, hasToken: true });
     expect(runtime.view.commands.map((command) => command.name)).toEqual(["visible"]);
@@ -731,6 +733,7 @@ process.on("SIGTERM", () => process.exit(0));
 
     expect(runtime.id).toBe("session");
     expect(runtime.view.sessionId).toBe("tree-session");
+    expect(runtime.view.cacheHitPercent).toBe(50);
     expect(conversationTurns(runtime.view)).toHaveLength(1);
     expect(result).toEqual({
       cancelled: false,

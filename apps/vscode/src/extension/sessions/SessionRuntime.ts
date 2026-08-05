@@ -9,6 +9,7 @@ import {
   type RpcExtensionUiRequest,
   type RpcExtensionUiResponse,
   type RpcModel,
+  type RpcSessionEntry,
   type ThinkingLevel,
 } from "@frostime/pi-rpc";
 import * as vscode from "vscode";
@@ -802,7 +803,11 @@ export class SessionRuntime {
     const update = this.#entries.applyIncrement(incremental.entries, incremental.leafId);
     if (update.kind === "append") {
       const edges = projectActiveBranchEdges(update.index);
-      if (this.#conversation.reconcileEntries(update.activePathAppend, edges) === "applied") return;
+      if (this.#conversation.reconcileEntries(update.activePathAppend, edges) === "applied") {
+        const cacheHit = latestAssistantCacheHit(update.activePathAppend);
+        if (cacheHit.found) this.#viewState.setCacheHitPercent(cacheHit.percent);
+        return;
+      }
     }
 
     const complete = await api.getEntries();
@@ -816,6 +821,7 @@ export class SessionRuntime {
   ): void {
     const replacement = this.#entries.replace(entries, leafId);
     this.#conversation.replaceEntries(replacement.activePath, projectActiveBranchEdges(replacement.index));
+    this.#viewState.setCacheHitPercent(latestAssistantCacheHit(replacement.activePath).percent);
     this.#viewState.setHistoryStatus("loaded");
     this.#viewState.setSessionTreeAvailable(this.#sessionTreeBridge?.available ?? false);
   }
@@ -935,6 +941,30 @@ const IMMEDIATE_EXTENSION_UI_METHODS = new Set(["select", "confirm", "input", "e
 
 function shouldBufferDuringHistoryLoad(event: RpcEvent): boolean {
   return !isExtensionUiRequest(event) || !IMMEDIATE_EXTENSION_UI_METHODS.has(event.method);
+}
+
+function latestAssistantCacheHit(entries: readonly RpcSessionEntry[]): { found: boolean; percent?: number } {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (!entry || entry.type !== "message" || !isRecord(entry.message) || entry.message.role !== "assistant") continue;
+    if (!isRecord(entry.message.usage)) continue;
+
+    const { input, cacheRead, cacheWrite } = entry.message.usage;
+    if (
+      typeof input !== "number" || !Number.isFinite(input) || input < 0
+      || typeof cacheRead !== "number" || !Number.isFinite(cacheRead) || cacheRead < 0
+      || typeof cacheWrite !== "number" || !Number.isFinite(cacheWrite) || cacheWrite < 0
+    ) return { found: true };
+    const promptTokens = input + cacheRead + cacheWrite;
+    return promptTokens > 0
+      ? { found: true, percent: (cacheRead / promptTokens) * 100 }
+      : { found: true };
+  }
+  return { found: false };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function errorMessage(error: unknown): string {
