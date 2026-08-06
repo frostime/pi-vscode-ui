@@ -9,14 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add a Temporary mode launcher switch that creates ephemeral Pi conversations started with `--no-session`: Pi writes no session file, FrostPi persists no record, and the conversation is gone when VS Code closes. Temporary sessions show a badge, cannot be restarted or forked, and closing one that contains a prompt asks for confirmation.
+- Show the prompt-cache hit rate for the latest assistant response in the session usage panel.
 
 ### Fixed
 
 - Show a warning, rather than a failed command, when a Pi extension command has not confirmed completion before FrostPi's prompt-response deadline; clarify that Pi may still be waiting for input or finish later.
+- Clear the cache hit rate when the latest assistant response does not provide cache usage data instead of retaining an older value.
 
 ### Changed
 
 - Expand slash-command completion to render up to 100 options and raise workspace `@` file candidates to 32, making larger skill and file lists easier to browse.
+- Reorganize the context and session usage panel into compact, grouped sections with clearer hierarchy and more readable values.
 
 ## [0.10.2] - 2026-08-03
 

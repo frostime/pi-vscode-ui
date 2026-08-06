@@ -26,28 +26,47 @@
   {#if open && stats}
     <div class="context-usage-popover" role="dialog" tabindex="-1" aria-label="Context and session usage" onmouseenter={show} onmouseleave={scheduleClose}>
       <div class="usage-heading">
-        <strong>Context</strong>
-        <span>{session.isCompacting ? "Compacting" : session.status}</span>
+        <div class="usage-heading-copy">
+          <strong>Context window</strong>
+          <span>{session.isCompacting ? "Compacting" : session.status}</span>
+        </div>
+        <strong class="usage-percent">{context?.percent == null ? "—" : `${Math.round(context.percent)}%`}</strong>
       </div>
       <div class="usage-current">
-        <div>
+        <div class="usage-current-line">
           <span>In use</span>
           <strong>{context?.tokens == null ? "—" : compactNumber(context.tokens)} / {context ? compactNumber(context.contextWindow) : "—"}</strong>
         </div>
         <div class="usage-bar" aria-hidden="true"><span style={`width:${clamp(context?.percent ?? 0)}%`}></span></div>
       </div>
-      <dl class="usage-grid">
-        <dt>Input</dt><dd>{compactNumber(stats.tokens.input)}</dd>
-        <dt>Output</dt><dd>{compactNumber(stats.tokens.output)}</dd>
-        <dt>Cache hit</dt><dd>{session.cacheHitPercent === undefined ? "—" : `${Math.round(session.cacheHitPercent)}%`}</dd>
-        <dt>Cache read</dt><dd>{compactNumber(stats.tokens.cacheRead)}</dd>
-        <dt>Cache write</dt><dd>{compactNumber(stats.tokens.cacheWrite)}</dd>
-        <dt>Total</dt><dd>{compactNumber(stats.tokens.total)}</dd>
-        <dt>Messages</dt><dd title={`${stats.userMessages} user · ${stats.assistantMessages} assistant`}>{stats.userMessages}u · {stats.assistantMessages}a</dd>
-        <dt>Tools</dt><dd>{compactNumber(stats.toolCalls)}</dd>
-        <dt>Cost</dt><dd>${stats.cost.toFixed(3)}</dd>
-        <dt>Model</dt><dd title={session.model ? `${session.model.provider}/${session.model.id}` : ""}>{modelLabel}</dd>
-      </dl>
+      <div class="usage-highlights">
+        <div class="usage-highlight">
+          <span>Cache hit</span>
+          <strong>{session.cacheHitPercent === undefined ? "—" : `${Math.round(session.cacheHitPercent)}%`}</strong>
+        </div>
+        <div class="usage-highlight">
+          <span>Cost</span>
+          <strong>${stats.cost.toFixed(3)}</strong>
+        </div>
+      </div>
+      <div class="usage-section">
+        <span class="usage-section-title">Tokens</span>
+        <dl class="usage-grid">
+          <div class="usage-stat"><dt>Input</dt><dd>{compactNumber(stats.tokens.input)}</dd></div>
+          <div class="usage-stat"><dt>Output</dt><dd>{compactNumber(stats.tokens.output)}</dd></div>
+          <div class="usage-stat"><dt>Cache read</dt><dd>{compactNumber(stats.tokens.cacheRead)}</dd></div>
+          <div class="usage-stat"><dt>Cache write</dt><dd>{compactNumber(stats.tokens.cacheWrite)}</dd></div>
+          <div class="usage-stat usage-stat-wide"><dt>Total</dt><dd>{compactNumber(stats.tokens.total)}</dd></div>
+        </dl>
+      </div>
+      <div class="usage-section">
+        <span class="usage-section-title">Session</span>
+        <dl class="usage-grid">
+          <div class="usage-stat"><dt>Messages</dt><dd title={`${stats.userMessages} user · ${stats.assistantMessages} assistant`}>{stats.userMessages}u · {stats.assistantMessages}a</dd></div>
+          <div class="usage-stat"><dt>Tools</dt><dd>{compactNumber(stats.toolCalls)}</dd></div>
+          <div class="usage-stat usage-stat-wide"><dt>Model</dt><dd title={session.model ? `${session.model.provider}/${session.model.id}` : ""}>{modelLabel}</dd></div>
+        </dl>
+      </div>
     </div>
   {/if}
 </div>
@@ -84,45 +103,96 @@
   z-index: 70;
   right: 0;
   bottom: calc(100% + 6px);
-  width: min(200px, calc(100vw - 18px));
-  padding: 8px 9px 7px;
+  width: min(220px, calc(100vw - 18px));
+  padding: 10px;
   border: 1px solid var(--frost-border);
   border-radius: 8px;
   background: var(--frost-surface-raised);
   color: var(--frost-text);
   box-shadow: var(--frost-shadow);
-  font-size: 10px;
-  line-height: 1.3;
+  font-size: 11px;
+  line-height: 1.35;
 }
-.usage-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.usage-current > :global(div:first-child) { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.usage-heading { margin-bottom: 6px; }
-.usage-heading :global(strong) { font-size: 10.5px; font-weight: 600; }
-.usage-heading :global(span) { color: var(--frost-muted); font-size: 9.5px; text-transform: capitalize; }
-.usage-current { padding-bottom: 7px; border-bottom: 1px solid var(--frost-border-soft); }
-.usage-current > :global(div:first-child > span) { color: var(--frost-muted); }
-.usage-current :global(strong) { font-family: var(--font-mono); font-size: 9.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.usage-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.usage-heading-copy { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.usage-heading-copy > strong { font-size: 12px; font-weight: 600; }
+.usage-heading-copy > span { color: var(--frost-muted); font-size: 10px; text-transform: capitalize; }
+.usage-percent {
+  flex: none;
+  padding-top: 1px;
+  color: var(--frost-text);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.usage-current { padding-bottom: 8px; border-bottom: 1px solid var(--frost-border-soft); }
+.usage-current-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.usage-current-line > span { color: var(--frost-muted); font-size: 10.5px; }
+.usage-current-line > strong {
+  color: var(--frost-text);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 .usage-bar {
-  height: 3px;
-  margin-top: 5px;
+  height: 4px;
+  margin-top: 6px;
   overflow: hidden;
   border-radius: 99px;
   background: color-mix(in srgb, var(--frost-muted) 15%, transparent);
 }
 .usage-bar :global(span) { display: block; height: 100%; background: var(--frost-link); border-radius: inherit; }
-.usage-grid { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 3px 10px; margin: 6px 0 0; }
-.usage-grid :global(dt) { color: var(--frost-muted); font-size: 9.5px; }
-.usage-grid :global(dd) {
+.usage-highlights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 8px 0 7px;
+  border-bottom: 1px solid var(--frost-border-soft);
+}
+.usage-highlight { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.usage-highlight > span { color: var(--frost-muted); font-size: 10px; }
+.usage-highlight > strong {
+  color: var(--frost-text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.usage-section { padding-top: 8px; }
+.usage-section + .usage-section { margin-top: 7px; border-top: 1px solid var(--frost-border-soft); }
+.usage-section-title {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--frost-faint);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.usage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 10px; margin: 0; }
+.usage-stat { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 5px; }
+.usage-stat-wide { grid-column: 1 / -1; }
+.usage-grid dt { min-width: 0; overflow: hidden; color: var(--frost-muted); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.usage-grid dd {
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: right;
   color: color-mix(in srgb, var(--frost-text) 92%, var(--frost-muted));
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 430px) {
