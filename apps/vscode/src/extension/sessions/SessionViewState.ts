@@ -151,6 +151,12 @@ export class SessionViewState {
     this.#touch();
   }
 
+  setCacheHitPercent(cacheHitPercent: number | undefined): void {
+    if (cacheHitPercent === undefined) delete this.#view.cacheHitPercent;
+    else this.#view.cacheHitPercent = cacheHitPercent;
+    this.#touch();
+  }
+
   setTitle(title: string): void {
     this.#view.title = title || "Untitled session";
     this.#touch();
