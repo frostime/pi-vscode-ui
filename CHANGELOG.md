@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-08-06
+
 ### Added
 
 - Add a Temporary mode launcher switch that creates ephemeral Pi conversations started with `--no-session`: Pi writes no session file, FrostPi persists no record, and the conversation is gone when VS Code closes. Temporary sessions show a badge, cannot be restarted or forked, and closing one that contains a prompt asks for confirmation.
@@ -305,7 +307,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/frostpi/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/frostime/frostpi/compare/v0.10.3...HEAD
+[0.10.3]: https://github.com/frostime/frostpi/compare/v0.10.2...v0.10.3
+[0.10.2]: https://github.com/frostime/frostpi/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/frostime/frostpi/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/frostime/frostpi/compare/v0.9.0...v0.10.0
 [0.7.2]: https://github.com/frostime/frostpi/compare/v0.7.1...v0.7.2
