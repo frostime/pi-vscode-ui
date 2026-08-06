@@ -203,7 +203,7 @@ export class WebviewBridge implements vscode.Disposable {
         await vscode.commands.executeCommand("vscode.openFolder");
         break;
       case "createSession":
-        await this.#registry.createSession();
+        await this.#registry.createSession(message.ephemeral ?? false);
         break;
       case "resumeSession":
         await this.#registry.resumeSession();

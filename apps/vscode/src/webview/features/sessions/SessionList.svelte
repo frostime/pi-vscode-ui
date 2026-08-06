@@ -53,7 +53,7 @@
         >
           <span class="session-list-mark">{session.id === activeId ? "✓" : ""}</span>
           <span class="session-list-copy">
-            <strong class="session-list-title">{session.title}</strong>
+            <strong class="session-list-title"><span class="session-title-text">{session.title}</span>{#if session.isEphemeral}<span class="ephemeral-badge">临时</span>{/if}</strong>
             <small class:attention={session.requiresUserInput}>
               {#if session.workingDirectoryLabel}
                 <span class="session-cwd-pill">{session.workingDirectoryLabel}</span>
@@ -73,3 +73,9 @@
     <button type="button" onclick={onresume}><span class="codicon codicon-history" aria-hidden="true"></span> Resume session</button>
   </div>
 </div>
+
+<style>
+  .session-list-title { display: flex; align-items: center; gap: 5px; }
+  .session-title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .ephemeral-badge { flex: 0 0 auto; padding: 1px 4px; border: 1px solid var(--frost-border); border-radius: 4px; color: var(--frost-muted); font-size: 9px; line-height: 1.2; font-weight: 400; }
+</style>

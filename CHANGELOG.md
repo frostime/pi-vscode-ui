@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add a Temporary mode launcher switch that creates ephemeral Pi conversations started with `--no-session`: Pi writes no session file, FrostPi persists no record, and the conversation is gone when VS Code closes. Temporary sessions show a badge, cannot be restarted or forked, and closing one that contains a prompt asks for confirmation.
+
 ### Fixed
 
 - Show a warning, rather than a failed command, when a Pi extension command has not confirmed completion before FrostPi's prompt-response deadline; clarify that Pi may still be waiting for input or finish later.

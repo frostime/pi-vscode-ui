@@ -19,12 +19,14 @@ export class SessionViewState {
     attachmentLimits: AttachmentLimitsView = { maxImageBytes: 10 * 1024 * 1024, maxImages: 12 },
     initialUpdatedAt = Date.now(),
     collapseTurnTrace = true,
+    isEphemeral = false,
   ) {
     this.#view = {
       id,
       title,
       cwd,
       status: "stopped",
+      isEphemeral,
       isStreaming: false,
       isCompacting: false,
       isForking: false,

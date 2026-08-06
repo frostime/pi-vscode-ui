@@ -53,7 +53,7 @@ const openFileSchema = z.object({
 const payloadSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ready") }),
   z.object({ type: z.literal("openFolder") }),
-  z.object({ type: z.literal("createSession") }),
+  z.object({ type: z.literal("createSession"), ephemeral: z.boolean().optional() }),
   z.object({ type: z.literal("resumeSession") }),
   z.object({
     type: z.literal("openComposerEditor"),

@@ -4,7 +4,9 @@ let buffer = "";
 let sessionName = "E2E session";
 let entries = [];
 let entrySequence = 0;
-const sessionFile = `${process.cwd().replaceAll("\\", "/")}/.frostpi-e2e-session.jsonl`;
+const sessionFile = process.argv.includes("--no-session")
+  ? undefined
+  : `${process.cwd().replaceAll("\\", "/")}/.frostpi-e2e-session.jsonl`;
 
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => {
@@ -91,6 +93,10 @@ function handle(command) {
       const userId = `user-${entrySequence}`;
       const userMessage = { role: "user", content: command.message, timestamp };
       respond(id);
+      if (command.message === "fail-process") {
+        setTimeout(() => process.exit(1), 0);
+        break;
+      }
       event({ type: "agent_start" });
       event({ type: "message_start", message: userMessage });
 

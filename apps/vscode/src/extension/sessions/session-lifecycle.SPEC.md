@@ -42,6 +42,10 @@ stopped ─ request ─> queued ─> starting ─ handshake ─> ready ─ agent
 
 A new local session is temporary until Pi accepts its first non-empty prompt or the user renames it. Temporary sessions are visible but not persisted; selecting/creating/resuming another session closes the selected temporary session without confirmation. Resumed sessions are never temporary, and closing a temporary session does not delete Pi-created files. Automatic fork naming and `/compact` do not commit it.
 
+An ephemeral session is a separate, user-selected mode. It starts Pi with `--no-session`, never has a session file, never enters the temporary-session promotion or switch-discard lifecycle, and is excluded from FrostPi persistence for its entire lifetime. It remains available in memory until explicitly closed or the Extension Host exits; prompts and renames never make it persistent.
+
+A stopped or failed ephemeral process cannot restart because its conversation cannot be reconstructed. Single-session restart and automatic restart-on-send are rejected, bulk restart skips ephemeral sessions, and activation does not start a stopped ephemeral runtime. Fork is unavailable, while in-memory session-tree navigation remains available. Closing an ephemeral session that contains a user prompt always requires confirmation that its content will be permanently lost.
+
 ## Message Fork
 
 Fork requires the selected session to be idle, fully loaded, free of pending extension UI and queued follow-ups, and the target to be a completed projected user message with a Pi entry id. The target is identified by entry id, never text. Attachment/seed validation follows the Composer contract.

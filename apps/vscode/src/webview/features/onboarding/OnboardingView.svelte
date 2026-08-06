@@ -17,9 +17,11 @@
     <h1>Pi could not start</h1>
     <p class="onboarding-error">{session.error ?? "Unknown startup error"}</p>
     <div class="onboarding-actions">
-      <button class="primary" type="button" onclick={() => postToHost({ type: "retryStart", sessionId: session.id })}>
-        <span class="codicon codicon-refresh"></span> Retry
-      </button>
+      {#if !session.isEphemeral}
+        <button class="primary" type="button" onclick={() => postToHost({ type: "retryStart", sessionId: session.id })}>
+          <span class="codicon codicon-refresh"></span> Retry
+        </button>
+      {/if}
       <button type="button" onclick={() => postToHost({ type: "configureExecutable" })}>
         <span class="codicon codicon-terminal"></span> Configure Pi
       </button>

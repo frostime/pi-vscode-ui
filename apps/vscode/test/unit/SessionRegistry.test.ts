@@ -126,7 +126,8 @@ describe("FrostPi session collection", () => {
 const fs = require("node:fs");
 const path = require("node:path");
 const extensionPath = process.argv[process.argv.indexOf("-e") + 1];
-const sessionFile = process.argv[process.argv.indexOf("--session") + 1];
+const sessionIndex = process.argv.indexOf("--session");
+const sessionFile = sessionIndex >= 0 ? process.argv[sessionIndex + 1] : undefined;
 const entries = [
   { type: "message", id: "root", parentId: null, timestamp: "2026-01-01T00:00:01.000Z", message: { role: "user", content: "Start", timestamp: 1 } },
   { type: "message", id: "answer", parentId: "root", timestamp: "2026-01-01T00:00:02.000Z", message: { role: "assistant", content: [{ type: "text", text: "Answer" }], timestamp: 2 } },
@@ -370,7 +371,8 @@ process.on("SIGTERM", () => process.exit(0));
     await writeFile(fakePi, String.raw`#!/usr/bin/env node
 const fs = require("node:fs");
 const path = require("node:path");
-const sourceFile = process.argv[process.argv.indexOf("--session") + 1];
+const sessionIndex = process.argv.indexOf("--session");
+const sourceFile = sessionIndex >= 0 ? process.argv[sessionIndex + 1] : undefined;
 let sessionFile = sourceFile;
 let sessionId = "source";
 let sessionName = "Source";
@@ -537,6 +539,61 @@ process.on("SIGTERM", () => process.exit(0));
     const third = (await registry.createSession())!;
     expect(new Set(registry.snapshot().sessions.map((session) => session.id))).toEqual(new Set([second, third]));
     expect((persisted as { sessions: Array<{ id: string }> }).sessions.map((session) => session.id)).toEqual([second]);
+  });
+
+  it("keeps temporary sessions in memory and disables persistence, Fork, and restart", async () => {
+    testEnvironment.cwd = resolve("test/e2e/fixtures/workspace");
+    testEnvironment.piExecutable = resolve("test/e2e/fake-pi.cjs");
+    let persisted: unknown;
+    const context = createContext();
+    context.workspaceState.get = () => persisted;
+    context.workspaceState.update = (_key, value) => {
+      persisted = structuredClone(value);
+      return Promise.resolve();
+    };
+    const registry = new SessionRegistry(context as never, { error: vi.fn(), info: vi.fn() } as never);
+    registries.push(registry);
+    const toasts: string[] = [];
+    registry.onDidToast((toast) => toasts.push(toast.message));
+
+    const sessionId = (await registry.createSession(true))!;
+    await waitFor(() => registry.snapshot().activeSession?.status === "ready");
+    expect(registry.snapshot().activeSession).toMatchObject({ id: sessionId, isEphemeral: true });
+    expect(registry.snapshot().activeSession?.sessionFile).toBeUndefined();
+    expect(persisted).toMatchObject({ activeSessionId: null, sessions: [] });
+
+    await registry.sendPrompt(sessionId, "Keep only in memory", []);
+    await waitFor(() => conversationTurns(registry.snapshot().activeSession).at(-1)?.status === "completed");
+    await registry.rename(sessionId, "Still temporary");
+    expect(persisted).toMatchObject({ activeSessionId: null, sessions: [] });
+    await expect(registry.forkMessage(sessionId, "missing")).rejects.toThrow("Temporary sessions do not support Fork");
+
+    await registry.sendPrompt(sessionId, "fail-process", []);
+    await waitFor(() => registry.snapshot().activeSession?.status === "failed");
+    await expect(registry.sendPrompt(sessionId, "Do not restart", [])).rejects.toThrow("has stopped and cannot be restarted");
+    expect(registry.snapshot().activeSession?.status).toBe("failed");
+    await expect(registry.retrySession(sessionId)).rejects.toThrow("Temporary sessions cannot be restarted");
+
+    const regularId = (await registry.createSession())!;
+    await waitFor(() => registry.snapshot().activeSession?.status === "ready");
+    await registry.restartAllSessions();
+    expect(toasts).toContain("Skipped 1 temporary session.");
+    await registry.closeSession(regularId);
+
+    await registry.restartAllSessions();
+    expect(toasts).toContain("There are no sessions to restart.");
+
+    const restored = new SessionRegistry(context as never, { error: vi.fn(), info: vi.fn() } as never);
+    registries.push(restored);
+    expect(restored.snapshot().sessions).toEqual([]);
+
+    vscodeMocks.showWarningMessage.mockClear().mockResolvedValueOnce("Close session");
+    await registry.closeSession(sessionId);
+    expect(vscodeMocks.showWarningMessage).toHaveBeenCalledWith(
+      "Closing this temporary session will permanently discard its conversation. This cannot be undone.",
+      { modal: true },
+      "Close session",
+    );
   });
 
   it("uses experimental notifications for unfocused input, completion, and failure transitions", async () => {

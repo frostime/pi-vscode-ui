@@ -88,6 +88,7 @@ export class SessionRuntime {
     hooks: SessionRuntimeHooks,
     sessionTreeArtifactPath?: string,
     questionToolArtifactPath?: string,
+    readonly isEphemeral = false,
   ) {
     this.#id = id;
     const initialConfiguration = configurationProvider();
@@ -95,7 +96,7 @@ export class SessionRuntime {
     this.#viewState = new SessionViewState(id, cwd, title, {
       maxImageBytes: initialConfiguration.maxImageBytes,
       maxImages: 12,
-    }, updatedAt, initialConfiguration.collapseTurnTrace);
+    }, updatedAt, initialConfiguration.collapseTurnTrace, isEphemeral);
     this.#viewState.setQuestionTool({
       configuredEnabled: initialConfiguration.questionToolEnabled,
       appliedEnabled: initialConfiguration.questionToolEnabled,
@@ -538,7 +539,7 @@ export class SessionRuntime {
     if (configuration.questionToolEnabled) await this.#questionToolBridge?.prepare();
     const args = [
       ...configuration.piArguments,
-      ...(sessionFile ? ["--session", sessionFile] : []),
+      ...(this.isEphemeral ? ["--no-session"] : sessionFile ? ["--session", sessionFile] : []),
       ...(this.#sessionTreeBridge?.launchArguments() ?? []),
       ...(configuration.questionToolEnabled ? this.#questionToolBridge?.launchArguments() ?? [] : []),
     ];

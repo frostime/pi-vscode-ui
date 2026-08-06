@@ -3,6 +3,7 @@ export interface PersistedSessionRecord {
   title: string;
   cwd: string;
   sessionFile?: string;
+  ephemeral?: boolean;
   updatedAt: number;
 }
 

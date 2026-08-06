@@ -13,6 +13,7 @@ export interface SessionSummaryView {
   workingDirectoryLabel?: string;
   status: SessionRuntimeStatus;
   isActive: boolean;
+  isEphemeral: boolean;
   modelLabel?: string;
   thinkingLevel?: ThinkingLevel;
   historyStatus: SessionHistoryStatus;
@@ -53,6 +54,7 @@ export interface SessionViewModel {
   cwd: string;
   workingDirectoryLabel?: string;
   status: SessionRuntimeStatus;
+  isEphemeral: boolean;
   isStreaming: boolean;
   isCompacting: boolean;
   isForking: boolean;

@@ -128,6 +128,7 @@ export class SessionRegistry implements vscode.Disposable {
           ...this.#workingDirectoryLabel(view.cwd),
           status: view.status,
           isActive: view.id === this.#activeSessionId,
+          isEphemeral: view.isEphemeral,
           ...(view.model ? { modelLabel: view.model.name ?? `${view.model.provider}/${view.model.id}` } : {}),
           thinkingLevel: view.thinkingLevel,
           historyStatus: view.historyStatus,
@@ -147,14 +148,14 @@ export class SessionRegistry implements vscode.Disposable {
     };
   }
 
-  async createSession(): Promise<string | undefined> {
+  async createSession(ephemeral = false): Promise<string | undefined> {
     this.#assertNoForkOperation();
     const cwd = activeWorkspaceFolder()?.uri.fsPath;
     if (!cwd) throw new Error("Open a workspace folder before creating a Pi session.");
     const discovery = await this.#discoverWorkingDirectories(cwd);
     const directory = await pickSessionWorkingDirectory(discovery.directories);
     if (!directory) return undefined;
-    return this.#createSessionInDirectory(directory);
+    return this.#createSessionInDirectory(directory, ephemeral);
   }
 
   async resumeSession(): Promise<string | undefined> {
@@ -207,18 +208,19 @@ export class SessionRegistry implements vscode.Disposable {
     return id;
   }
 
-  async #createSessionInDirectory(directory: SessionWorkingDirectory): Promise<string> {
+  async #createSessionInDirectory(directory: SessionWorkingDirectory, ephemeral: boolean): Promise<string> {
     await this.#discardActiveTemporarySession();
     const id = randomUUID();
     const record: PersistedSessionRecord = {
       id,
       title: "New session",
       cwd: directory.cwd,
+      ...(ephemeral ? { ephemeral: true } : {}),
       updatedAt: Date.now(),
     };
     this.#records.set(id, record);
     this.#rememberWorkingDirectory(directory);
-    this.#temporarySessionIds.add(id);
+    if (!ephemeral) this.#temporarySessionIds.add(id);
     const runtime = this.#createRuntime(record);
     this.#runtimes.set(id, runtime);
     this.#activeSessionId = id;
@@ -241,7 +243,7 @@ export class SessionRegistry implements vscode.Disposable {
       this.#setComposerTextEmitter.fire({ sessionId, text: pendingText });
     }
     this.#emitChange();
-    if (runtime.view.status === "stopped") await this.#startRuntime(runtime);
+    if (runtime.view.status === "stopped" && !runtime.isEphemeral) await this.#startRuntime(runtime);
   }
 
   async closeSession(sessionId: string): Promise<void> {
@@ -262,6 +264,7 @@ export class SessionRegistry implements vscode.Disposable {
     const targetId = sessionId ?? this.#requireActiveId();
     this.#assertSessionOutsideFork(targetId);
     const runtime = this.#requireRuntime(targetId);
+    if (runtime.isEphemeral) throw new Error("Temporary sessions cannot be restarted.");
     if (!await confirmRestart([runtime])) return;
     await this.#restartRuntime(runtime);
   }
@@ -269,8 +272,20 @@ export class SessionRegistry implements vscode.Disposable {
   async restartAllSessions(): Promise<void> {
     this.#assertNoForkOperation();
     const runtimes = [...this.#runtimes.values()];
-    if (!await confirmRestart(runtimes)) return;
-    for (const runtime of runtimes) await this.#restartRuntime(runtime);
+    const restartable = runtimes.filter((runtime) => !runtime.isEphemeral);
+    const skipped = runtimes.length - restartable.length;
+    if (restartable.length === 0) {
+      this.#toastEmitter.fire({ level: "info", message: "There are no sessions to restart." });
+      return;
+    }
+    if (!await confirmRestart(restartable)) return;
+    for (const runtime of restartable) await this.#restartRuntime(runtime);
+    if (skipped > 0) {
+      this.#toastEmitter.fire({
+        level: "info",
+        message: `Skipped ${skipped} temporary ${skipped === 1 ? "session" : "sessions"}.`,
+      });
+    }
   }
 
   refreshConfigurationState(forceRestartRequired = false): void {
@@ -314,6 +329,7 @@ export class SessionRegistry implements vscode.Disposable {
     if (sessionId !== this.#activeSessionId) throw new Error("Activate the session before forking one of its messages.");
     const runtime = this.#requireRuntime(sessionId);
     const original = this.#records.get(sessionId);
+    if (original?.ephemeral) throw new Error("Temporary sessions do not support Fork.");
     if (!original?.sessionFile) throw new Error("Wait for Pi to save this session before forking.");
     await access(original.sessionFile).catch(() => {
       throw new Error("Wait for Pi to finish saving this session before forking.");
@@ -599,6 +615,7 @@ export class SessionRegistry implements vscode.Disposable {
       },
       this.#sessionTreeArtifactPath,
       this.#questionToolArtifactPath,
+      record.ephemeral === true,
     );
   }
 
@@ -710,6 +727,7 @@ export class SessionRegistry implements vscode.Disposable {
   }
 
   async #restartRuntime(runtime: SessionRuntime): Promise<void> {
+    if (runtime.isEphemeral) throw new Error("Temporary sessions cannot be restarted.");
     if (!await this.#validateRuntimeWorkingDirectory(runtime)) return;
     await runtime.stop().catch(() => undefined);
     await this.#startRuntime(runtime, true);
@@ -717,6 +735,9 @@ export class SessionRegistry implements vscode.Disposable {
 
   async #ensureRunning(runtime: SessionRuntime): Promise<void> {
     const status = runtime.view.status;
+    if (runtime.isEphemeral && (status === "stopped" || status === "failed")) {
+      throw new Error("This temporary session has stopped and cannot be restarted. Close it and create a new session.");
+    }
     if (status === "queued" || status === "stopped" || status === "failed") await this.#startRuntime(runtime);
     if (!this.#runtimes.has(runtime.id)) throw new Error("The session's worktree is no longer available.");
   }
@@ -768,7 +789,8 @@ export class SessionRegistry implements vscode.Disposable {
         id: runtime.id,
         title: view.title,
         cwd: view.cwd,
-        ...(sessionFile ? { sessionFile } : {}),
+        ...(previous.ephemeral ? { ephemeral: true } : {}),
+        ...(sessionFile && !previous.ephemeral ? { sessionFile } : {}),
         updatedAt: view.updatedAt,
       });
       void this.#persist();
@@ -814,8 +836,9 @@ export class SessionRegistry implements vscode.Disposable {
   }
 
   #persist(): Thenable<void> {
-    const sessions = [...this.#records.values()].filter((record) => !this.#temporarySessionIds.has(record.id));
-    const activeSessionId = this.#activeSessionId && !this.#temporarySessionIds.has(this.#activeSessionId)
+    const sessions = [...this.#records.values()].filter((record) => !record.ephemeral && !this.#temporarySessionIds.has(record.id));
+    const activeRecord = this.#activeSessionId ? this.#records.get(this.#activeSessionId) : undefined;
+    const activeSessionId = this.#activeSessionId && !activeRecord?.ephemeral && !this.#temporarySessionIds.has(this.#activeSessionId)
       ? this.#activeSessionId
       : null;
     const job = this.#persistenceQueue.catch(() => undefined).then(() => this.#persistence.save(activeSessionId, sessions));
@@ -915,11 +938,15 @@ function compactCommandInstructions(text: string): string | null {
 
 async function confirmClose(runtime: SessionRuntime): Promise<boolean> {
   const view = runtime.view;
-  if (!view.isStreaming && view.pendingExtensionUi.length === 0) return true;
+  const ephemeralWithPrompt = view.isEphemeral
+    && view.conversationItems.some((item) => item.type === "turn" && item.userMessage?.role === "user");
+  if (!ephemeralWithPrompt && !view.isStreaming && view.pendingExtensionUi.length === 0) return true;
   const choice = await vscode.window.showWarningMessage(
-    view.pendingExtensionUi.length > 0
-      ? "Closing this FrostPi session will cancel its pending user interaction and stop its Pi process. Persisted Pi history is retained."
-      : "Closing this FrostPi session will stop its active response and tools. Persisted Pi history is retained.",
+    ephemeralWithPrompt
+      ? "Closing this temporary session will permanently discard its conversation. This cannot be undone."
+      : view.pendingExtensionUi.length > 0
+        ? "Closing this FrostPi session will cancel its pending user interaction and stop its Pi process. Persisted Pi history is retained."
+        : "Closing this FrostPi session will stop its active response and tools. Persisted Pi history is retained.",
     { modal: true },
     "Close session",
   );
