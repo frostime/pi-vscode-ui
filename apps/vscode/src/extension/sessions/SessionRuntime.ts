@@ -947,7 +947,7 @@ function latestAssistantCacheHit(entries: readonly RpcSessionEntry[]): { found: 
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
     if (!entry || entry.type !== "message" || !isRecord(entry.message) || entry.message.role !== "assistant") continue;
-    if (!isRecord(entry.message.usage)) continue;
+    if (!isRecord(entry.message.usage)) return { found: true };
 
     const { input, cacheRead, cacheWrite } = entry.message.usage;
     if (

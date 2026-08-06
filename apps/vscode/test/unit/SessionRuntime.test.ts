@@ -607,7 +607,7 @@ process.on("SIGTERM", () => process.exit(0));
     expect(runtime.view.stats?.contextUsage?.tokens).toBeGreaterThan(100);
   });
 
-  it("loads the bundled capability and reconciles committed tree navigation in the same runtime", async () => {
+  it("derives cache rate from the latest assistant response while reconciling tree navigation", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-runtime-tree-"));
     const fakePi = join(dir, "fake-pi.cjs");
     const artifactPath = join(dir, "session-tree.js");
@@ -627,7 +627,7 @@ const entries = [
   { type: "message", id: "root", parentId: null, timestamp: "2026-01-01T00:00:01.000Z", message: { role: "user", content: "Start", timestamp: 1 } },
   { type: "message", id: "answer", parentId: "root", timestamp: "2026-01-01T00:00:02.000Z", message: { role: "assistant", content: [{ type: "text", text: "Answer" }], timestamp: 2, usage: { input: 100, output: 20, cacheRead: 100, cacheWrite: 0 } } },
   { type: "message", id: "old-user", parentId: "answer", timestamp: "2026-01-01T00:00:03.000Z", message: { role: "user", content: "Old path", timestamp: 3 } },
-  { type: "message", id: "old-end", parentId: "old-user", timestamp: "2026-01-01T00:00:04.000Z", message: { role: "assistant", content: [{ type: "text", text: "Old end" }], timestamp: 4, usage: { input: 0, output: 20, cacheRead: 300, cacheWrite: 100 } } },
+  { type: "message", id: "old-end", parentId: "old-user", timestamp: "2026-01-01T00:00:04.000Z", message: { role: "assistant", content: [{ type: "text", text: "Old end" }], timestamp: 4 } },
   { type: "message", id: "target-user", parentId: "answer", timestamp: "2026-01-01T00:00:05.000Z", message: { role: "user", content: [{ type: "text", text: "Revise this" }, { type: "image", id: "image", fileName: "shot.png", mimeType: "image/png", data: "AA==", size: 1 }], timestamp: 5 } },
 ];
 let leafId = "old-end";
@@ -701,7 +701,7 @@ process.on("SIGTERM", () => process.exit(0));
 
     await runtime.start();
     await waitFor(() => runtime.view.sessionTreeAvailable);
-    await waitFor(() => runtime.view.cacheHitPercent === 75);
+    expect(runtime.view.cacheHitPercent).toBeUndefined();
     const launch = JSON.parse(await readFile(launchRecord, "utf8")) as { artifactPath: string; resultDirectory: string; hasToken: boolean };
     expect(launch).toMatchObject({ artifactPath, hasToken: true });
     expect(runtime.view.commands.map((command) => command.name)).toEqual(["visible"]);
