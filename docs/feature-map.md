@@ -54,7 +54,7 @@ Use this map when the feature is known but its owner is not. Paths name owners a
 ## Models and thinking level
 
 - Owner: `apps/vscode/src/webview/features/models/`; start with `ModelPicker.svelte` and `thinkingLevels.ts`.
-- Contract: `apps/vscode/src/webview/features/models/thinking-levels.SPEC.md`.
+- Contracts: `apps/vscode/src/webview/features/models/thinking-levels.SPEC.md` and `apps/vscode/src/webview/features/models/model-picker.SPEC.md`.
 
 ## Extension UI and Question tool
 

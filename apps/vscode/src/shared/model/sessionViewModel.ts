@@ -64,6 +64,8 @@ export interface SessionViewModel {
   model: RpcModel | null;
   thinkingLevel: ThinkingLevel;
   availableModels: RpcModel[];
+  /** Models matched by Pi's enabledModels/--models scope; the full catalogue remains in availableModels. */
+  scopedModelIds: string[];
   commands: RpcCommandDescriptor[];
   attachmentLimits: AttachmentLimitsView;
   /** When true, completed turns collapse tool/reasoning/interim replies into one summary above the final response. */

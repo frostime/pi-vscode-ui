@@ -166,7 +166,13 @@
     />
     <div class="composer-toolbar">
       <div class="composer-toolbar-left">
-        <ModelPicker sessionId={session.id} model={session.model} models={session.availableModels} disabled={unavailable} />
+        <ModelPicker
+          sessionId={session.id}
+          model={session.model}
+          models={session.availableModels}
+          scopedModelIds={session.scopedModelIds}
+          disabled={unavailable}
+        />
         <ThinkingLevelPicker sessionId={session.id} model={session.model} level={session.thinkingLevel} disabled={unavailable} />
       </div>
       <div class="composer-toolbar-right">

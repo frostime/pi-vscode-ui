@@ -38,6 +38,7 @@ import {
   type BranchEndChoiceProjection,
 } from "./tree/sessionTreeProjection.js";
 import { SessionEntryState } from "./SessionEntryState.js";
+import { resolvePiModelScope } from "../models/resolvePiModelScope.js";
 import { SessionViewState } from "./SessionViewState.js";
 
 export interface SessionRuntimeHooks {
@@ -411,7 +412,9 @@ export class SessionRuntime {
 
   async refreshModels(): Promise<RpcModel[]> {
     const models = await this.#requireApi().getAvailableModels();
+    const scopedModelIds = await resolvePiModelScope(this.cwd, this.#configurationProvider().piArguments, models);
     this.#viewState.setModels(models);
+    this.#viewState.setScopedModelIds(scopedModelIds);
     this.#notifyChange();
     return models;
   }
@@ -637,7 +640,10 @@ export class SessionRuntime {
       api.getSessionStats().catch(() => undefined),
     ]);
     if (this.#disposed || api !== this.#api) return;
+    const scopedModelIds = await resolvePiModelScope(this.cwd, this.#configurationProvider().piArguments, models);
+    if (this.#disposed || api !== this.#api) return;
     this.#viewState.setModels(models);
+    this.#viewState.setScopedModelIds(scopedModelIds);
     this.#viewState.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
     if (stats) this.#viewState.setStats(stats);
     this.#viewState.setSessionTreeAvailable(this.#sessionTreeBridge?.available ?? false);

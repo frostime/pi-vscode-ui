@@ -34,6 +34,7 @@ export class SessionViewState {
       model: null,
       thinkingLevel: "off",
       availableModels: [],
+      scopedModelIds: [],
       commands: [],
       attachmentLimits,
       collapseTurnTrace,
@@ -138,6 +139,11 @@ export class SessionViewState {
 
   setModels(models: SessionViewModel["availableModels"]): void {
     this.#view.availableModels = models;
+    this.#touch();
+  }
+
+  setScopedModelIds(scopedModelIds: SessionViewModel["scopedModelIds"]): void {
+    this.#view.scopedModelIds = [...scopedModelIds];
     this.#touch();
   }
 
