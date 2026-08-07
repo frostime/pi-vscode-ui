@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 
 import { minimatch } from "minimatch";
 
@@ -39,8 +39,8 @@ export function resolveModelScopePatterns(
 
 /**
  * Select patterns with the same precedence Pi uses: --models, project settings,
- * then global settings. A present project enabledModels array, including an
- * empty array, overrides the global array.
+ * then global settings. A present project enabledModels value, including an
+ * empty or invalid value, overrides the global value.
  */
 export function selectModelPatterns(
   piArguments: readonly string[],
@@ -61,8 +61,9 @@ export async function resolvePiModelScope(
   piArguments: readonly string[],
   models: readonly RpcModel[],
 ): Promise<string[]> {
+  // This is a display-only mirror; project trust is intentionally not reproduced here.
   const [globalSettings, projectSettings] = await Promise.all([
-    readSettings(join(piAgentDir(), "settings.json")),
+    readSettings(join(piAgentDir(cwd), "settings.json")),
     readSettings(join(cwd, ".pi", "settings.json")),
   ]);
   return resolveModelScopePatterns(selectModelPatterns(piArguments, globalSettings, projectSettings), models);
@@ -133,12 +134,14 @@ function modelKey(model: RpcModel): string {
   return `${model.provider}/${model.id}`;
 }
 
-function piAgentDir(): string {
+function piAgentDir(cwd: string): string {
   const configured = process.env.PI_CODING_AGENT_DIR?.trim();
   if (!configured) return join(homedir(), ".pi", "agent");
   if (configured === "~") return homedir();
-  if (configured.startsWith("~/") || configured.startsWith("~\\")) return join(homedir(), configured.slice(2));
-  return configured;
+  const expanded = configured.startsWith("~/") || configured.startsWith("~\\")
+    ? join(homedir(), configured.slice(2))
+    : configured;
+  return isAbsolute(expanded) ? expanded : join(cwd, expanded);
 }
 
 function modelsArgument(args: readonly string[]): string[] | undefined {
@@ -152,8 +155,9 @@ function modelsArgument(args: readonly string[]): string[] | undefined {
 }
 
 function enabledModels(value: unknown): string[] | undefined {
-  if (!isSettings(value) || !Array.isArray(value.enabledModels)) return undefined;
-  return value.enabledModels.filter((pattern): pattern is string => typeof pattern === "string");
+  if (!isSettings(value) || !("enabledModels" in value)) return undefined;
+  if (!Array.isArray(value.enabledModels) || !value.enabledModels.every((pattern) => typeof pattern === "string")) return [];
+  return value.enabledModels;
 }
 
 async function readSettings(path: string): Promise<PiSettings | undefined> {

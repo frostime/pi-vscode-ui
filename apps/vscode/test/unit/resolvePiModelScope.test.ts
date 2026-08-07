@@ -1,8 +1,12 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import type { RpcModel } from "@frostime/pi-rpc";
 
-import { resolveModelScopePatterns, selectModelPatterns } from "../../src/extension/models/resolvePiModelScope.js";
+import { resolveModelScopePatterns, resolvePiModelScope, selectModelPatterns } from "../../src/extension/models/resolvePiModelScope.js";
 
 const models: RpcModel[] = [
   { provider: "opencode-go", id: "glm-5.1", name: "GLM 5.1" },
@@ -41,10 +45,33 @@ describe("Pi model scope resolution", () => {
     )).toEqual(["cli/*"]);
   });
 
-  it("uses project settings before global settings, including an explicit empty list", () => {
+  it("uses project settings before global settings, including empty or invalid values", () => {
     expect(selectModelPatterns([], { enabledModels: ["global/*"] }, { enabledModels: ["project/*"] }))
       .toEqual(["project/*"]);
     expect(selectModelPatterns([], { enabledModels: ["global/*"] }, { enabledModels: [] }))
       .toEqual([]);
+    expect(selectModelPatterns([], { enabledModels: ["global/*"] }, { enabledModels: {} }))
+      .toEqual([]);
+    expect(selectModelPatterns([], { enabledModels: ["global/*"] }, { enabledModels: ["project/*", 42] }))
+      .toEqual([]);
+  });
+
+  it("resolves a relative PI_CODING_AGENT_DIR from the session cwd", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "frostpi-model-scope-"));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    try {
+      await mkdir(join(cwd, ".config", "pi"), { recursive: true });
+      await writeFile(
+        join(cwd, ".config", "pi", "settings.json"),
+        JSON.stringify({ enabledModels: ["opencode-go/glm-5.1"] }),
+      );
+      process.env.PI_CODING_AGENT_DIR = ".config/pi";
+
+      await expect(resolvePiModelScope(cwd, [], models)).resolves.toEqual(["opencode-go/glm-5.1"]);
+    } finally {
+      if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 });

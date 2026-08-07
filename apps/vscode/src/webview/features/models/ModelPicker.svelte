@@ -29,8 +29,9 @@
 
   const scopedIds = $derived.by(() => new Set(scopedModelIds));
   const hasScopedModels = $derived(scopedIds.size > 0);
+  const effectiveScope = $derived(scope === "scoped" && hasScopedModels ? "scoped" : "all");
   const visibleModels = $derived(
-    scope === "scoped" && hasScopedModels
+    effectiveScope === "scoped"
       ? models.filter((item) => scopedIds.has(`${item.provider}/${item.id}`))
       : models,
   );
@@ -45,7 +46,9 @@
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   });
 
-  const allVisibleOpen = $derived(groups.length > 0 && groups.every(([provider]) => query.trim().length > 0 || expandedProviders.has(provider)));
+  const hasExpandedProvider = $derived(
+    query.trim().length > 0 || groups.some(([provider]) => expandedProviders.has(provider)),
+  );
 
   function selectModel(next: RpcModel): void {
     open = false;
@@ -121,22 +124,22 @@
         <strong>Models</strong>
         {#if hasScopedModels}
           <div class="picker-scope" role="group" aria-label="Model scope">
-            <button class:active={scope === "scoped"} type="button" aria-pressed={scope === "scoped"} onclick={() => setScope("scoped")}>Scoped <span>{scopedModelIds.length}</span></button>
-            <button class:active={scope === "all"} type="button" aria-pressed={scope === "all"} onclick={() => setScope("all")}>All <span>{models.length}</span></button>
+            <button class:active={effectiveScope === "scoped"} type="button" aria-pressed={effectiveScope === "scoped"} onclick={() => setScope("scoped")}>Scoped <span class="picker-scope-count">{scopedModelIds.length}</span></button>
+            <button class:active={effectiveScope === "all"} type="button" aria-pressed={effectiveScope === "all"} onclick={() => setScope("all")}>All <span class="picker-scope-count">{models.length}</span></button>
           </div>
         {:else}
           <span class="picker-scope-label">All models</span>
         {/if}
         <div class="picker-header-actions">
-          <button type="button" aria-label={allVisibleOpen ? "Collapse all providers" : "Expand all providers"} title={allVisibleOpen ? "Collapse all" : "Expand all"} onclick={() => setAllExpanded(!allVisibleOpen)}>
-            <span class={`codicon codicon-${allVisibleOpen ? "collapse-all" : "expand-all"}`}></span>
+          <button type="button" aria-label={hasExpandedProvider ? "Collapse all providers" : "Expand all providers"} title={hasExpandedProvider ? "Collapse all" : "Expand all"} onclick={() => setAllExpanded(!hasExpandedProvider)}>
+            <span class={`codicon codicon-${hasExpandedProvider ? "collapse-all" : "expand-all"}`}></span>
           </button>
           <button type="button" aria-label="Refresh models" title="Refresh models" onclick={() => postToHost({ type: "refreshModels", sessionId })}><span class="codicon codicon-refresh"></span></button>
         </div>
       </div>
       <div class="picker-search">
         <span class="codicon codicon-search"></span>
-        <input bind:this={searchInput} bind:value={query} placeholder={scope === "scoped" ? "Search scoped models" : "Search all models"} aria-label={scope === "scoped" ? "Search scoped models" : "Search all models"} onkeydown={(event) => { if (event.key === "Escape") open = false; }} />
+        <input bind:this={searchInput} bind:value={query} placeholder={effectiveScope === "scoped" ? "Search scoped models" : "Search all models"} aria-label={effectiveScope === "scoped" ? "Search scoped models" : "Search all models"} onkeydown={(event) => { if (event.key === "Escape") open = false; }} />
       </div>
       <div class="picker-scroll" bind:this={scrollContainer}>
         {#if groups.length}
@@ -186,6 +189,10 @@
   .picker-scope button {
     width: auto;
     height: 21px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
     padding: 0 6px;
     border-radius: 3px;
     color: var(--frost-muted);
@@ -204,9 +211,10 @@
     color: var(--frost-text);
   }
 
-  .picker-scope button span {
+  .picker-scope-count {
     color: var(--frost-muted);
     font-size: 9px;
+    font-variant-numeric: tabular-nums;
   }
 
   .picker-scope-label {
@@ -224,7 +232,7 @@
       padding-right: 4px;
     }
 
-    .picker-scope button span {
+    .picker-scope-count {
       display: none;
     }
   }

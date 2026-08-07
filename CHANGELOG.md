@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Mirror Pi's `--models`/`enabledModels` model scope in the picker with a read-only default `Scoped` view and an `All`-models toggle.
+
+### Changed
+
+- Improve model picker scope spacing and make the provider control default to collapsing expanded providers.
+
+### Fixed
+
+- Prevent invalid project `enabledModels` values from falling through to global scope, resolve relative `PI_CODING_AGENT_DIR` paths from the session directory, and keep picker scope labels synchronized when scoped models disappear.
+
 ## [0.10.3] - 2026-08-06
 
 ### Added
