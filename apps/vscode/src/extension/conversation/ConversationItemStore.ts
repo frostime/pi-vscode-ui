@@ -143,6 +143,19 @@ export class ConversationItemStore {
     return this.#toolItems.has(toolCallId);
   }
 
+  finalizeUnresolvedTools(): void {
+    for (const owner of this.#toolItems.values()) {
+      const { turnId, itemId } = owner.location;
+      if (!turnId) continue;
+      const item = this.turnItem(turnId, itemId);
+      if (item?.type !== "tool" || item.tool.status !== "running") continue;
+      this.upsertTurnItem(turnId, {
+        ...item,
+        tool: { ...item.tool, status: "cancelled", isError: false },
+      });
+    }
+  }
+
   /** Detects ambiguous live adoption before any public item is mutated. */
   preflightPersistedOwnership(input: PersistedOwnershipPreflight): PlacementConflict | undefined {
     const assistantCounts = countByKey(input.assistantSources, (source) => source.correlationKey);
@@ -182,7 +195,11 @@ export class ConversationItemStore {
 
     const existing = this.#persistedAssistants.get(source.entryId);
     if (existing) {
-      this.#publishAssistant(existing, input.turnId, input.buildActivities(existing.viewMessageId));
+      this.#publishAssistant(
+        existing,
+        input.turnId,
+        this.#preserveToolExecutionState(input.buildActivities(existing.viewMessageId)),
+      );
       return { kind: "placed", viewMessageId: existing.viewMessageId };
     }
 
@@ -202,7 +219,11 @@ export class ConversationItemStore {
       addSetValue(this.#persistedAssistantKeys, source.correlationKey, source.entryId);
       if (liveOwner) this.#liveAssistants.set(source.correlationKey, owner);
     }
-    this.#publishAssistant(owner, input.turnId, input.buildActivities(owner.viewMessageId));
+    this.#publishAssistant(
+      owner,
+      input.turnId,
+      this.#preserveToolExecutionState(input.buildActivities(owner.viewMessageId)),
+    );
     return { kind: "placed", viewMessageId: owner.viewMessageId };
   }
 
@@ -331,6 +352,25 @@ export class ConversationItemStore {
 
   conversationItems(): AgentTurnItemView[] {
     return this.#items.flatMap((item) => item.type === "turn" ? item.items : [item]);
+  }
+
+  #preserveToolExecutionState(activities: AgentActivityView[]): AgentActivityView[] {
+    return activities.map((activity) => {
+      if (activity.type !== "tool") return activity;
+      const owner = this.#toolItems.get(activity.tool.id);
+      const current = owner ? this.turnItem(owner.location.turnId, owner.location.itemId) : undefined;
+      if (current?.type !== "tool") return activity;
+      return {
+        ...activity,
+        tool: {
+          ...activity.tool,
+          status: current.tool.status,
+          isError: current.tool.isError,
+          ...(current.tool.output !== undefined ? { output: current.tool.output } : {}),
+          ...(current.tool.endedAt !== undefined ? { endedAt: current.tool.endedAt } : {}),
+        },
+      };
+    });
   }
 
   #publishAssistant(owner: AssistantOwner, turnId: string, activities: AgentActivityView[]): void {

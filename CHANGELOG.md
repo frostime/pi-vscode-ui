@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Stop unresolved tool cards from remaining or returning to a running state after history restoration or session termination; preserve partial output and indicate that the final tool result was not recorded.
 - Prevent invalid project `enabledModels` values from falling through to global scope, resolve relative `PI_CODING_AGENT_DIR` paths from the session directory, and keep picker scope labels synchronized when scoped models disappear.
 
 ## [0.10.3] - 2026-08-06

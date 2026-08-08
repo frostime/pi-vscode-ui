@@ -9,7 +9,24 @@
 
   const tool = $derived(activity.tool);
   const icon = $derived(toolIcon(tool.name));
-  const statusIcon = $derived(tool.status === "running" ? "loading codicon-modifier-spin" : tool.status === "error" ? "error" : "check");
+  const statusIcon = $derived(
+    tool.status === "running"
+      ? "loading codicon-modifier-spin"
+      : tool.status === "error"
+        ? "error"
+        : tool.status === "cancelled"
+          ? "warning"
+          : "check",
+  );
+  const statusLabel = $derived(
+    tool.status === "cancelled"
+      ? "Final tool result was not received; execution may have been interrupted."
+      : tool.status === "running"
+        ? "Tool is running"
+        : tool.status === "error"
+          ? "Tool failed"
+          : "Tool completed",
+  );
   const errorSummary = $derived(tool.status === "error" ? firstLine(tool.output) : "");
 </script>
 
@@ -19,7 +36,11 @@
     <span class="tool-activity-name">{tool.name}</span>
     <span class="tool-activity-label" title={tool.label}>{tool.label}</span>
     {#if errorSummary}<span class="tool-error-summary" title={tool.output}>{errorSummary}</span>{/if}
-    <span class={`codicon codicon-${statusIcon} activity-status`} aria-hidden="true"></span>
+    <span
+      class={`codicon codicon-${statusIcon} activity-status${tool.status === "cancelled" ? " tool-status-cancelled" : ""}`}
+      title={statusLabel}
+      aria-label={statusLabel}
+    ></span>
     <span class={`codicon codicon-chevron-${open ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
   </Collapsible.Trigger>
   <Collapsible.Content class="activity-content tool-activity-content">
@@ -160,6 +181,7 @@
   color: var(--frost-muted);
   font: 10.5px/1.35 var(--font-mono);
 }
+.tool-status-cancelled { color: var(--frost-warning); }
 .tool-error-summary {
   min-width: 0;
   max-width: 38%;

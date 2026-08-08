@@ -799,6 +799,65 @@ process.on("SIGTERM", () => process.exit(0));
     expect(onAgentTurnCompleted).toHaveBeenCalledTimes(1);
   });
 
+  it("finalizes running tools when stopping or losing the Pi process", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-unresolved-tool-"));
+    const fakePi = join(dir, "fake-pi.cjs");
+    await writeFile(fakePi, String.raw`#!/usr/bin/env node
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => {
+  input += chunk;
+  while (input.includes("\n")) {
+    const index = input.indexOf("\n");
+    const command = JSON.parse(input.slice(0, index));
+    input = input.slice(index + 1);
+    const response = { type: "response", id: command.id, success: true };
+    if (command.type === "get_state") response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionId: "tool-runtime" };
+    else if (command.type === "get_entries") response.data = { entries: [], leafId: null };
+    else if (command.type === "get_available_models") response.data = { models: [] };
+    else if (command.type === "get_commands") response.data = { commands: [] };
+    else if (command.type === "get_session_stats") response.data = { sessionId: "tool-runtime", userMessages: 1, assistantMessages: 1, toolCalls: 1, toolResults: 0, totalMessages: 2, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 };
+    else if (command.type === "prompt") {
+      process.stdout.write(JSON.stringify(response) + "\n");
+      process.stdout.write(JSON.stringify({ type: "agent_start" }) + "\n");
+      process.stdout.write(JSON.stringify({ type: "tool_execution_start", toolCallId: "t1", toolName: "read", args: { path: "a.ts" } }) + "\n");
+      process.stdout.write(JSON.stringify({ type: "tool_execution_update", toolCallId: "t1", toolName: "read", args: { path: "a.ts" }, partialResult: [{ type: "text", text: "partial" }] }) + "\n");
+      if (command.message === "crash") setTimeout(() => process.exit(7), 20);
+      continue;
+    }
+    process.stdout.write(JSON.stringify(response) + "\n");
+  }
+});
+process.on("SIGTERM", () => process.exit(0));
+`);
+    const configuration = runtimeConfiguration(fakePi);
+    const createRuntime = (id: string) => new SessionRuntime(
+      id,
+      dir,
+      "Tool runtime",
+      Date.now(),
+      () => configuration,
+      new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
+      { error: vi.fn(), info: vi.fn() } as never,
+      { onChange: vi.fn(), onEditorText: vi.fn() },
+    );
+
+    const stopped = createRuntime("stopped-tool");
+    runtimes.push(stopped);
+    await stopped.start();
+    await stopped.sendPrompt("stop", []);
+    await waitFor(() => projectedTools(stopped.view)[0]?.status === "running");
+    await stopped.stop();
+    expect(projectedTools(stopped.view)[0]).toMatchObject({ status: "cancelled", output: "partial", isError: false });
+
+    const failed = createRuntime("failed-tool");
+    runtimes.push(failed);
+    await failed.start();
+    await failed.sendPrompt("crash", []);
+    await waitFor(() => failed.view.status === "failed");
+    expect(projectedTools(failed.view)[0]).toMatchObject({ status: "cancelled", output: "partial", isError: false });
+  });
+
   it("applies the Question tool setting only to the started Pi process", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-question-runtime-"));
     const launchRecord = join(dir, "launch.json");
@@ -885,12 +944,37 @@ function conversationTurns(view: Readonly<SessionViewModel>): AgentTurnView[] {
   return view.conversationItems.filter((item): item is AgentTurnView => item.type === "turn");
 }
 
+function projectedTools(view: Readonly<SessionViewModel>) {
+  return conversationTurns(view)
+    .flatMap((turn) => turn.items)
+    .filter((item) => item.type === "tool")
+    .map((item) => item.tool);
+}
+
 function conversationNotices(view: Readonly<SessionViewModel>): SessionNoticeView[] {
   return view.conversationItems.flatMap((item) => {
     if (item.type === "notice") return [item];
     if (item.type !== "turn") return [];
     return item.items.filter((turnItem): turnItem is SessionNoticeView => turnItem.type === "notice");
   });
+}
+
+function runtimeConfiguration(piExecutable: string) {
+  return {
+    piExecutable,
+    piArguments: [],
+    startSessionOnOpen: true,
+    streamingBehavior: "followUp" as const,
+    collapseTurnTrace: true,
+    questionToolEnabled: false,
+    maxImageBytes: 10 * 1024 * 1024,
+    diagnosticsLevel: "info" as const,
+    experimentalNotificationsEnabled: true,
+    proxy: { mode: "inherit" as const },
+    fileMentionRespectSearchExclude: true,
+    fileMentionRespectIgnoreFiles: true,
+    fileMentionFollowSymlinks: true,
+  };
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {

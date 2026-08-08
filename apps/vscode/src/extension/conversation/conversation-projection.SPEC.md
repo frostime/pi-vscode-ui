@@ -23,6 +23,7 @@ The Host emits one ordered `conversationItems` collection. A visual turn has its
 - A user `message` opens a visual turn and supplies its stable `sourceEntryId`.
 - Assistant content becomes reasoning, response, and tool activities in protocol order. The persisted assistant identity is the session entry ID; a Pi message ID or timestamp is only a live-to-persisted correlation clue and never merges two persisted entries.
 - A tool result updates the activity identified by `toolCallId`; it is not a second visible activity. Assistant takeover relocates all reasoning, response, and embedded tool-call parts as one ownership unit, including the tool location. Once a persisted tool result arrives, delayed live tool events cannot replace its stable content.
+- A complete history replacement finalizes every tool still marked `running` as `cancelled`: FrostPi no longer has live tracking and did not receive a final result. This local status preserves partial output and may be replaced by a later persisted tool result.
 - `compaction`, `branch_summary`, and `custom_message` are independent items at their active-path positions.
 - Compaction never removes or hides earlier active-path items. Nested `retainedTail` values are LLM-context metadata and are not expanded into transcript items.
 - Every `custom_message` with `display: true` renders generic text and image blocks. `display: false` messages and plain `custom` state entries are omitted.
@@ -46,7 +47,7 @@ A persisted user message closes the preceding visual turn and opens a user-ancho
 
 Live `message_end(error)` displays the error activity but leaves the turn running until `agent_end` decides whether Pi will retry. `agent_end(willRetry: true)` keeps the running turn and `auto_retry_start` adds a notice; `willRetry: false` commits the pending error. This uses the existing turn statuses and does not persist retry notices.
 
-While an agent run is active, queued follow-ups remain outside persisted conversation order. Pi may emit a follow-up user message without another `agent_start`; promotion follows protocol FIFO order and closes the prior visual turn. Abort, process stop, and process failure clear the local queue.
+While an agent run is active, queued follow-ups remain outside persisted conversation order. Pi may emit a follow-up user message without another `agent_start`; promotion follows protocol FIFO order and closes the prior visual turn. Abort, process stop, and process failure clear the local queue. `agent_settled`, process stop, and process failure also finalize unresolved running tools as `cancelled`; they do not infer a tool error or alter the turn status.
 
 Live activity updates replace existing view objects instead of mutating them. This is required for bridge deltas and Webview-owned disclosure state. Documented assistant events provide an ID or timestamp correlation clue; a malformed live assistant without either is omitted until persisted refresh rather than emitted as an uncorrelatable duplicate. Notices emitted during an active turn remain inside its ordered items; idle notices are top-level conversation items.
 

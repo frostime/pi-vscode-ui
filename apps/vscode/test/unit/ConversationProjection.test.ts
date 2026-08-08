@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { ConversationProjection } from "../../src/extension/conversation/ConversationProjection.js";
 import type { AgentTurnView } from "../../src/shared/model/conversationModel.js";
+import type { ToolCallView } from "../../src/shared/model/toolCallModel.js";
 
 describe("ConversationProjection", () => {
   it("preserves active-path order across turns, branch edges, boundaries, and custom blocks", () => {
@@ -375,6 +376,79 @@ describe("ConversationProjection", () => {
     expect(normalizePersistedProjection(projection)).toEqual(normalizePersistedProjection(replacement));
   });
 
+  it("finalizes unresolved tools after complete history replacement without inventing a result", () => {
+    const projection = new ConversationProjection();
+    projection.replaceEntries([
+      userEntry("u1", null, "Inspect", 1),
+      assistantEntry("a1", "u1", [{ type: "toolCall", id: "t1", name: "read", arguments: { path: "a.ts" } }], "toolUse", 2),
+    ], []);
+
+    const [tool] = turns(projection.read().items)[0]?.items.filter((item) => item.type === "tool") ?? [];
+    expect(tool?.tool).toMatchObject({
+      id: "t1",
+      status: "cancelled",
+      args: { path: "a.ts" },
+      isError: false,
+    });
+    expect(tool?.tool.output).toBeUndefined();
+    expect(tool?.tool.endedAt).toBeUndefined();
+  });
+
+  it("preserves settled tool state through assistant takeover and accepts a later authoritative result", () => {
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("Inspect", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "Inspect", timestamp: 1 } });
+    projection.applyEvent({
+      type: "message_end",
+      message: {
+        id: "assistant-1",
+        role: "assistant",
+        content: [{ type: "toolCall", id: "t1", name: "read", arguments: { path: "a.ts" } }],
+        stopReason: "toolUse",
+        timestamp: 2,
+      },
+    });
+    projection.applyEvent({
+      type: "tool_execution_update",
+      toolCallId: "t1",
+      toolName: "read",
+      args: { path: "a.ts" },
+      partialResult: [{ type: "text", text: "partial" }],
+    });
+    projection.applyEvent({ type: "agent_settled" });
+    expect(projectedTool(projection, "t1")).toMatchObject({ status: "cancelled", output: "partial", isError: false });
+
+    expect(projection.reconcileEntries([
+      userEntry("u1", null, "Inspect", 1),
+      assistantEntry(
+        "a1",
+        "u1",
+        [{ type: "toolCall", id: "t1", name: "read", arguments: { path: "a.ts" } }],
+        "toolUse",
+        2,
+        "assistant-1",
+      ),
+    ], [])).toBe("applied");
+    expect(projectedTool(projection, "t1")).toMatchObject({ status: "cancelled", output: "partial", isError: false });
+
+    expect(projection.reconcileEntries([
+      toolResultEntry("r1", "a1", "t1", "final", 3),
+    ], [])).toBe("applied");
+    expect(projectedTool(projection, "t1")).toMatchObject({ status: "complete", output: "final", isError: false, endedAt: 3 });
+  });
+
+  it("keeps persisted tool failures authoritative", () => {
+    const projection = new ConversationProjection();
+    projection.replaceEntries([
+      userEntry("u1", null, "Inspect", 1),
+      assistantEntry("a1", "u1", [{ type: "toolCall", id: "t1", name: "read", arguments: {} }], "toolUse", 2),
+      toolResultEntry("r1", "a1", "t1", "failed", 3, true),
+    ], []);
+
+    expect(projectedTool(projection, "t1")).toMatchObject({ status: "error", output: "failed", isError: true, endedAt: 3 });
+  });
+
   it("ignores stale assistant and compaction replay after persisted replacement", () => {
     const projection = new ConversationProjection();
     projection.replaceEntries([
@@ -532,6 +606,15 @@ describe("ConversationProjection", () => {
   });
 });
 
+function projectedTool(projection: ConversationProjection, toolCallId: string): ToolCallView | undefined {
+  for (const turn of turns(projection.read().items)) {
+    for (const item of turn.items) {
+      if (item.type === "tool" && item.tool.id === toolCallId) return item.tool;
+    }
+  }
+  return undefined;
+}
+
 function responseText(item: Extract<AgentTurnView["items"][number], { type: "response" }>): string {
   return item.blocks.map((block) => block.type === "text" || block.type === "error" ? block.text : "").join("");
 }
@@ -626,13 +709,14 @@ function toolResultEntry(
   toolCallId: string,
   output: string,
   timestamp: number,
+  isError = false,
 ): RpcSessionEntry {
   return {
     type: "message",
     id,
     parentId,
     timestamp,
-    message: { role: "toolResult", toolCallId, toolName: "read", content: [{ type: "text", text: output }], timestamp },
+    message: { role: "toolResult", toolCallId, toolName: "read", content: [{ type: "text", text: output }], isError, timestamp },
   };
 }
 

@@ -90,6 +90,7 @@ export class ConversationProjection {
 
     this.#projectEntries(entries, branchEdges);
     this.#completePersistedTurn(true);
+    this.#store.finalizeUnresolvedTools();
     this.#touch();
   }
 
@@ -192,6 +193,11 @@ export class ConversationProjection {
     }
     this.#touch();
     return true;
+  }
+
+  finalizeUnresolvedTools(): void {
+    this.#store.finalizeUnresolvedTools();
+    this.#touch();
   }
 
   applyEvent(event: RpcEvent): void {
@@ -416,6 +422,7 @@ export class ConversationProjection {
   }
 
   #settleAgentTurn(): void {
+    this.#store.finalizeUnresolvedTools();
     if (this.#activeTurnId) {
       const turn = this.#turn(this.#activeTurnId);
       if (turn.status === "running") {

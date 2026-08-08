@@ -151,6 +151,7 @@ export class SessionRuntime {
 
   async stop(): Promise<void> {
     this.#lifecycleVersion += 1;
+    this.#conversation.finalizeUnresolvedTools();
     this.#viewState.setStatus("stopping");
     this.#stopLiveStatsRefresh();
     this.#notifyChange();
@@ -595,6 +596,7 @@ export class SessionRuntime {
     connection.onFailure((error) => {
       this.#logger.error(`Session ${this.id} failed`, error);
       this.#stopLiveStatsRefresh();
+      this.#conversation.finalizeUnresolvedTools();
       this.#conversation.clearQueuedFollowUps();
       this.#viewState.setStatus("failed", errorMessage(error));
       this.#notifyChange();
