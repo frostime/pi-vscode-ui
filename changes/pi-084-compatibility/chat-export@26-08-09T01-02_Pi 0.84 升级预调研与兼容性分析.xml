@@ -1,0 +1,324 @@
+<ChatThread>
+<Meta cwd="H:\SrcCode\playground\FrostPi" sessionFile="C:\Users\EEG\.pi\agent\sessions\--H--SrcCode-playground-FrostPi--\2026-08-08T16-45-02-917Z_019fe243-8245-7c5b-8ea4-d1b4b01d968b.jsonl" exportedAt="2026-08-08T17:17:41.320Z" entryCount="151" chunkCount="54" />
+<Role-user data-chunk-idx="0">
+阅读 pi 0.84 的 changelog https://pi.dev/news/releases/0.84.0
+
+弄清楚：break change 部分改了什么，当前框架下是否有相关涉及到的部分；如果有，需要怎么兼容。
+
+这一轮做预调研，标准是要全面完善，而非想出良好的解决办法 —— 我会将这一轮的调研和前期讨论的结果作为后续任务模型的输入
+</Role-user>
+
+<Role-toolCall-Logs data-chunk-idx="1">
+<ToolCalls omitted="26" />
+</Role-toolCall-Logs>
+
+<Role-toolCall-Logs data-chunk-idx="16">
+<ToolCalls omitted="65" />
+</Role-toolCall-Logs>
+
+<Role-assistant data-chunk-idx="50">
+# Pi 0.84.0 Breaking Changes 预调研
+
+本轮只读调查，**未修改文件**。
+
+## 结论先行
+
+- Pi 0.84.0 的 Breaking Changes 共 **12 项**。
+- 对 FrostPi 自有代码有直接影响的只有 **1 项：`message_update` 事件格式变化**。
+- 其余 11 项属于 Pi SDK、Provider、OAuth、Harness、Remote Client API；FrostPi 没有直接依赖。
+- 当前环境的 `pi --version` 是 **0.83.0**。FrostPi 不捆绑、不锁定 Pi，而是启动外部 `pi --mode rpc`，因此必须兼容不同外部 Pi 版本。
+
+---
+
+## 1. Breaking Changes 清单与相关性
+
+| Pi 0.84 改动 | FrostPi 是否涉及 | 结论 |
+|---|---:|---|
+| `ModelsStreamTransforms` 改名为 `ModelsRequestTransforms` | 否 | 无 Provider/SDK 类型依赖 |
+| RPC/JSON 的 `message_update` 移除累计 `message` 和 `assistantMessageEvent.partial`，只发送 delta | **是** | 当前实时流式渲染会丢失中间内容 |
+| `ModelRegistry.getApiKeyAndHeaders()` 支持 `string \| null` | 否 | FrostPi 不读取/转发 Pi provider headers |
+| `ModelRegistry.refresh()` 参数和返回值改变 | 否 | FrostPi 的 `refreshModels()` 是内部 RPC 调用，不是该 API |
+| `ModelRuntime.setRuntimeApiKey()` 参数改变 | 否 | 无 ModelRuntime 依赖 |
+| OAuth `refreshToken(credentials, signal)` 必须接受 AbortSignal | 否 | FrostPi 不注册 OAuth Provider |
+| Provider refresh context 从 `context.store` 改为 `context.stored`/`context.publish()` | 否 | 无 `registerProvider`/`refreshModels` Provider 实现 |
+| pi-agent-core Harness 改为 v4 lane-based Session/SessionStorage/SessionRepo | 否 | 不 import pi-agent-core，Pi 进程内部处理 |
+| v2 Session/`AgentHarness` 改为默认导出，移除 experimental 子路径 | 否 | 没有 SDK import |
+| 移除 legacy JSONL/in-memory repository API | 否 | FrostPi 使用 Pi CLI/RPC，不使用 repository API |
+| 自定义 Harness FileSystem 必须提供 `renameFile()` | 否 | FrostPi 不提供 Harness FileSystem |
+| RemoteSession 列表改用 `SessionMetadata`，运行态信息移入 `SessionSnapshot` | 否 | FrostPi 不使用 Pi RemoteSession/CBOR/Unix socket client |
+
+### 需要特别区分
+
+FrostPi 虽然有：
+
+- `SessionRegistry`
+- `SessionRuntime`
+- `SessionPersistence`
+- session JSONL 扫描器
+- `SessionTreeExtensionBridge`
+
+但这些是 FrostPi 自己的 Host 层结构，不是 Pi 0.84 的 `SessionRepo`、`RemoteSession` 或 `SessionSnapshot`。
+
+FrostPi 仍然只是：
+
+```text
+VS Code Extension Host
+        ↓
+pi --mode rpc
+        ↓
+Pi 自己管理 Session / JSONL / Provider / Extensions
+```
+
+---
+
+# 2. 直接影响：`message_update` 格式
+
+## Pi 0.83
+
+旧格式大致是：
+
+```json
+{
+  "type": "message_update",
+  "message": {
+    "role": "assistant",
+    "content": [{ "type": "text", "text": "Hello" }]
+  },
+  "assistantMessageEvent": {
+    "type": "text_delta",
+    "delta": "Hello",
+    "partial": {}
+  }
+}
+```
+
+## Pi 0.84
+
+新格式是：
+
+```json
+{
+  "type": "message_update",
+  "assistantMessageEvent": {
+    "type": "text_delta",
+    "contentIndex": 0,
+    "delta": "Hello"
+  }
+}
+```
+
+完整消息生命周期变为：
+
+```text
+message_start(message: 初始消息)
+    ↓
+message_update(各种 delta)
+    ↓
+message_end(message: 最终权威消息)
+```
+
+Pi 官方要求客户端根据 `contentIndex` 自己组装中间消息；`message_end.message` 是最终权威结果。
+
+---
+
+## FrostPi 当前问题
+
+关键代码：
+
+- `apps/vscode/src/extension/conversation/ConversationProjection.ts:214-225`
+- `ConversationProjection.ts:438-498`
+
+当前逻辑首先读取：
+
+```ts
+const message = event.message;
+if (!isRecord(message) || message.role !== "assistant") return;
+```
+
+因此 Pi 0.84 的 delta-only `message_update` 会被直接忽略。
+
+### 实际后果
+
+| 行为 | 当前结果 |
+|---|---|
+| 最终 `message_end` | 通常仍能正确显示最终回复 |
+| 实时文本流 | 丢失，直到 `message_end` 才一次性出现 |
+| thinking 流 | 丢失 |
+| assistant tool-call 增量 | 丢失 |
+| 独立 `tool_execution_*` 事件 | 仍可工作 |
+| RPC 连接 | 不会断开 |
+| 历史 JSONL / `get_entries` | 通常不受影响 |
+
+这是**静默行为回归**，不是协议崩溃。
+
+---
+
+## 为什么传输层没发现问题
+
+`packages/pi-rpc` 的 RPC 事件类型是开放结构：
+
+```ts
+export interface RpcEvent {
+  type: string;
+  [key: string]: unknown;
+}
+```
+
+`PiRpcConnection` 只校验顶层 `type`，不会要求 `message` 字段存在。
+
+因此：
+
+- `packages/pi-rpc` 能接收 Pi 0.84 事件；
+- 但 `ConversationProjection` 仍假设 `message_update.message` 存在。
+
+现有 `packages/pi-rpc/test/PiRpcConnection.test.ts` 已经发送了一个新格式事件，但它只验证传输事件到达，没有经过会话投影，所以测试不会暴露问题。
+
+另外：
+
+- `ConversationProjection.test.ts` 基本只测试 `message_start`/`message_end`；
+- `apps/vscode/test/e2e/fake-pi.cjs` 没有发送真实的 `message_update` 流。
+
+因此当前测试覆盖不足。
+
+---
+
+# 3. 后续兼容工作的必要条件
+
+后续实现不能只支持 0.84，还应保留 0.83 兼容，因为 FrostPi 不锁定 Pi 版本。
+
+建议后续任务至少满足以下契约：
+
+1. **按事件形状兼容，而不是按 Pi 版本分支**
+   - 有 `event.message`：按旧版累计快照处理；
+   - 无 `event.message`：按新版 delta 组装。
+
+2. **从 `message_start` 初始化临时 assistant message**
+   - 保留 role、id、timestamp 等关联信息；
+   - 以 `contentIndex` 管理多个内容块。
+
+3. **支持新版 delta**
+   - `text_start` / `text_delta` / `text_end`
+   - `thinking_start` / `thinking_delta` / `thinking_end`
+   - `toolcall_start` / `toolcall_delta` / `toolcall_end`
+
+4. **工具调用需要单独缓存参数 delta**
+   - `toolcall_delta.delta` 只是参数片段；
+   - `toolcall_end.toolCall` 才是完整工具调用。
+
+5. **`message_end.message` 必须覆盖临时消息**
+   - 不应把临时组装结果当成持久化权威；
+   - 最终结果仍由 Pi 的 `message_end` 和 `get_entries` 决定。
+
+6. **不能破坏现有 Store 的所有权规则**
+   - live assistant 与 persisted assistant 的 correlation；
+   - tool execution 状态和 partial output；
+   - persisted takeover；
+   - retry/error/abort 生命周期。
+
+7. **旧版 0.83 的 `error` delta 仍需兼容**
+   - 0.84 已不再使用旧的 `start`/`done`/`error` assistant delta；
+   - 新版错误主要通过 `message_end.message.stopReason` 表达。
+
+---
+
+# 4. Session / JSONL 相关审计
+
+## 当前代码涉及的部分
+
+- `SessionRuntime.ts:545-550`：启动时传入 `--session` 或 `--no-session`
+- `SessionRuntime.ts:677-682`：通过 RPC `get_entries` 恢复历史
+- `SessionRuntime.ts:806-834`：增量/完整刷新 entries
+- `SessionCatalog.ts:71-115`：读取 JSONL 的 `session`、`session_info`、用户消息预览
+- `SessionFileScanner.ts`：扫描 JSONL 文件头部记录
+- `SessionPersistence.ts`：只保存 FrostPi 自己的 session 元数据
+
+Pi 0.83 与 0.84 的 `session-format.md` 内容没有变化，仍是 v3 JSONL 格式。0.84 的 `renameFile()` 主要改变 Pi 写入 JSONL 的原子发布方式，不改变 FrostPi 读取的格式。
+
+因此目前判断：
+
+- session JSONL 发现：无直接兼容问题；
+- `--session`/`--no-session`：无变化；
+- `get_entries`/`fork`/`get_state`：RPC 文档无相关破坏性变化；
+- FrostPi 自有 session metadata：无变化。
+
+## `renameFile()` 的误区
+
+FrostPi 两个内置 Pi Extension 中使用的：
+
+```ts
+node:fs/promises.rename
+```
+
+只是：
+
+- Question tool 请求文件发布；
+- Session-tree 结果文件发布。
+
+它们不是 Pi Harness 的 `FileSystem` 实现，因此不需要因为该 Breaking Change 修改。
+
+---
+
+# 5. 内置 Pi Extensions 审计
+
+当前内置扩展：
+
+- `apps/vscode/pi-extensions/question-tool.ts`
+  - 使用 `registerTool`
+  - 使用 `ctx.ui.input(..., { signal })`
+- `apps/vscode/pi-extensions/session-tree.ts`
+  - 使用 `registerCommand`
+  - 使用 `context.waitForIdle()`
+  - 使用 `context.navigateTree()`
+  - 使用 `context.sessionManager.getLeafId()`
+
+对比 Pi 0.83/0.84 的 ExtensionCommandContext 和 `ReadonlySessionManager`，这些接口仍存在，暂未发现受 Breaking Change 影响的调用。
+
+---
+
+# 6. 适合作为后续任务输入的文件范围
+
+真正需要实现兼容时，优先涉及：
+
+- `apps/vscode/src/extension/conversation/ConversationProjection.ts`
+- `apps/vscode/src/extension/conversation/ConversationItemStore.ts`
+- `apps/vscode/test/unit/ConversationProjection.test.ts`
+- `apps/vscode/test/e2e/fake-pi.cjs`
+- `apps/vscode/src/extension/conversation/conversation-projection.SPEC.md`
+- `docs/protocol/pi-rpc-compatibility.md`
+- `packages/pi-rpc/SPEC.md`
+
+暂时不需要修改：
+
+- `PiRpcConnection`
+- `PiRpcApi`
+- `SessionCatalog`
+- `SessionFileScanner`
+- `SessionPersistence`
+- `pi-extensions` 中的 Provider/Harness 相关代码
+
+---
+
+## 外部依据
+
+- Pi 0.84.0 Release Notes：&lt;https://pi.dev/news/releases/0.84.0&gt;
+- Pi RPC 文档：&lt;https://pi.dev/docs/latest/rpc&gt;
+- Pi 0.84 RPC 文档：&lt;https://github.com/earendil-works/pi/blob/v0.84.0/packages/coding-agent/docs/rpc.md&gt;
+- Pi 0.84 JSON event 转换实现：&lt;https://github.com/earendil-works/pi/blob/v0.84.0/packages/coding-agent/src/modes/json-event.ts&gt;
+- FrostPi RPC 兼容策略：`docs/protocol/pi-rpc-compatibility.md`
+</Role-assistant>
+
+<Role-user data-chunk-idx="51">
+创建一个空的 changes/&lt;slug&gt; 目录
+</Role-user>
+
+<Role-toolCall-Logs data-chunk-idx="52">
+<ToolCalls omitted="1" />
+</Role-toolCall-Logs>
+
+<Role-assistant data-chunk-idx="53">
+已创建空目录：
+
+`changes/pi-084-compatibility-research/`
+</Role-assistant>
+
+</ChatThread>
