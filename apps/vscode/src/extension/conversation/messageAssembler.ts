@@ -1,5 +1,5 @@
 import type { ImageAttachmentView, MessageBlockView } from "../../shared/model/conversationModel.js";
-import type { ToolCallView } from "../../shared/model/toolCallModel.js";
+import type { BoundToolCallView } from "../../shared/model/toolCallModel.js";
 
 export function contentToBlocks(content: unknown, attachments: unknown, idPrefix: string): MessageBlockView[] {
   const blocks: MessageBlockView[] = [];
@@ -28,11 +28,11 @@ export function contentToBlocks(content: unknown, attachments: unknown, idPrefix
   return blocks.length ? blocks : [{ type: "text", text: "" }];
 }
 
-// pi-084-message-streaming::shape — this factory will create only the bound-tool variant.
-export function createToolView(id: string, name: string, args: Record<string, unknown>, startedAt = Date.now()): ToolCallView {
+export function createToolView(id: string, name: string, args: Record<string, unknown>, startedAt = Date.now()): BoundToolCallView {
   const filePath = toolFilePath(args);
   const line = numericValue(args.line) ?? numericValue(args.start_line) ?? numericValue(args.startLine);
   return {
+    state: "bound",
     id,
     name,
     label: toolLabel(name, args),

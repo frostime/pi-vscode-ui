@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { ConversationProjection } from "../../src/extension/conversation/ConversationProjection.js";
 import type { AgentTurnView } from "../../src/shared/model/conversationModel.js";
-import type { ToolCallView } from "../../src/shared/model/toolCallModel.js";
+import type { BoundToolCallView } from "../../src/shared/model/toolCallModel.js";
 
 describe("ConversationProjection", () => {
   it("preserves active-path order across turns, branch edges, boundaries, and custom blocks", () => {
@@ -385,13 +385,15 @@ describe("ConversationProjection", () => {
 
     const [tool] = turns(projection.read().items)[0]?.items.filter((item) => item.type === "tool") ?? [];
     expect(tool?.tool).toMatchObject({
+      state: "bound",
       id: "t1",
       status: "cancelled",
       args: { path: "a.ts" },
       isError: false,
     });
-    expect(tool?.tool.output).toBeUndefined();
-    expect(tool?.tool.endedAt).toBeUndefined();
+    if (tool?.tool.state !== "bound") throw new Error("Expected a bound tool");
+    expect(tool.tool.output).toBeUndefined();
+    expect(tool.tool.endedAt).toBeUndefined();
   });
 
   it("preserves settled tool state through assistant takeover and accepts a later authoritative result", () => {
@@ -484,8 +486,7 @@ describe("ConversationProjection", () => {
     expect(turn?.items.filter((item) => item.type === "response")).toHaveLength(1);
     const tools = turn?.items.filter((item) => item.type === "tool") ?? [];
     expect(tools).toHaveLength(1);
-    expect(tools[0]?.tool.id).toBe("t1");
-    expect(tools[0]?.tool.output).toBe("body");
+    expect(tools[0]?.tool).toMatchObject({ state: "bound", id: "t1", output: "body" });
     expect(projection.read().items.filter((item) => item.type === "compaction")).toHaveLength(1);
   });
 
@@ -604,19 +605,198 @@ describe("ConversationProjection", () => {
     replacement.replaceEntries(entries, []);
     expect(normalizePersistedProjection(projection)).toEqual(normalizePersistedProjection(replacement));
   });
+
+  it("projects one indexed tool card through preparation, binding, execution, final replacement, and persisted takeover", () => {
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("Inspect", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "Inspect", timestamp: 1 } });
+    projection.applyEvent({ type: "message_start", message: { role: "assistant", content: [], timestamp: 2 } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "thinking_start", contentIndex: 2 } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", contentIndex: 2, delta: "Reason" } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "Draft" } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "toolcall_start", contentIndex: 1 } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "toolcall_delta", contentIndex: 1, delta: '{"path":' } });
+
+    let [turn] = turns(projection.read().items);
+    expect(turn?.items.map((item) => item.id)).toEqual([
+      "assistant-2:response:0",
+      "assistant-2:tool:1",
+      "assistant-2:reasoning:2",
+    ]);
+    expect(turn?.items[1]).toMatchObject({
+      id: "assistant-2:tool:1",
+      tool: { state: "preparing", rawArguments: '{"path":' },
+    });
+
+    const toolCall = { type: "toolCall", id: "call-1", name: "read", arguments: { path: "a.ts" } };
+    projection.applyEvent({
+      type: "message_update",
+      assistantMessageEvent: { type: "toolcall_end", contentIndex: 1, toolCall },
+    });
+    projection.applyEvent({ type: "tool_execution_start", toolCallId: "call-1", toolName: "read", args: { path: "a.ts" } });
+    projection.applyEvent({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Final" },
+          toolCall,
+          { type: "thinking", thinking: "Reasoned" },
+        ],
+        stopReason: "toolUse",
+        timestamp: 2,
+      },
+    });
+    projection.applyEvent({
+      type: "tool_execution_end",
+      toolCallId: "call-1",
+      toolName: "read",
+      result: [{ type: "text", text: "body" }],
+      isError: false,
+    });
+
+    [turn] = turns(projection.read().items);
+    expect(turn?.items.map((item) => item.id)).toEqual([
+      "assistant-2:response:0",
+      "assistant-2:tool:1",
+      "assistant-2:reasoning:2",
+    ]);
+    expect(turn?.items[1]).toMatchObject({
+      id: "assistant-2:tool:1",
+      tool: { state: "bound", id: "call-1", status: "complete", output: "body" },
+    });
+    expect(responseTexts(projection)).toContain("Final");
+
+    const persisted = [
+      userEntry("u1", null, "Inspect", 1),
+      assistantEntry("a1", "u1", [
+        { type: "text", text: "Final" },
+        toolCall,
+        { type: "thinking", thinking: "Reasoned" },
+      ], "toolUse", 2),
+      toolResultEntry("r1", "a1", "call-1", "persisted body", 3),
+    ];
+    expect(projection.reconcileEntries(persisted, [])).toBe("applied");
+    projection.applyEvent({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "text", text: "late" }], stopReason: "stop", timestamp: 2 },
+    });
+
+    [turn] = turns(projection.read().items);
+    expect(turn?.items.filter((item) => item.type === "tool")).toHaveLength(1);
+    expect(turn?.items.find((item) => item.type === "tool")).toMatchObject({
+      id: "assistant-2:tool:1",
+      tool: { state: "bound", id: "call-1", output: "persisted body" },
+    });
+    expect(responseTexts(projection)).toContain("Final");
+    expect(responseTexts(projection)).not.toContain("late");
+  });
+
+  it("removes a provisional tool when the authoritative final message omits it", () => {
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("Draft", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "assistant", content: [], timestamp: 2 } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "toolcall_start", contentIndex: 0 } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "toolcall_delta", contentIndex: 0, delta: "partial" } });
+    expect(projectedToolsInProjection(projection)).toHaveLength(1);
+
+    projection.applyEvent({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "No tool needed" }],
+        stopReason: "stop",
+        timestamp: 2,
+      },
+    });
+
+    projection.applyEvent({
+      type: "message_update",
+      message: { role: "assistant", content: [{ type: "text", text: "late cumulative" }], timestamp: 2 },
+      assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "late cumulative" },
+    });
+
+    expect(projectedToolsInProjection(projection)).toHaveLength(0);
+    expect(responseTexts(projection).at(-1)).toBe("No tool needed");
+  });
+
+  it("does not carry an unfinished indexed retry attempt into the successful attempt", () => {
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("Retry", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "assistant", content: [], timestamp: 2 } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "failed partial" } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "error", reason: "error" } });
+    projection.applyEvent({ type: "agent_end", willRetry: true });
+    projection.applyEvent({ type: "auto_retry_start", attempt: 2 });
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "assistant", content: [], timestamp: 3 } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "success" } });
+    projection.applyEvent({
+      type: "message_end",
+      message: { role: "assistant", content: [{ type: "text", text: "success" }], stopReason: "stop", timestamp: 3 },
+    });
+
+    expect(responseTexts(projection)).toEqual(["failed partial", "success"]);
+  });
+
+  it("isolates indexed partial content at every Projection reset boundary", () => {
+    const boundaries: Array<{ name: string; apply(projection: ConversationProjection, turnId: string): void }> = [
+      { name: "replacement start", apply: (projection) => projection.applyEvent({ type: "message_start", message: { role: "assistant", content: [], timestamp: 50 } }) },
+      { name: "agent settled", apply: (projection) => projection.applyEvent({ type: "agent_settled" }) },
+      { name: "completed turn", apply: (projection, turnId) => { projection.completeTurn(turnId); } },
+      { name: "history replacement", apply: (projection) => projection.replaceEntries([], []) },
+    ];
+
+    for (const [index, boundary] of boundaries.entries()) {
+      const projection = new ConversationProjection();
+      const turnId = projection.appendUserPrompt(boundary.name, [], index + 1);
+      projection.applyEvent({ type: "agent_start" });
+      projection.applyEvent({ type: "message_start", message: { role: "assistant", content: [], timestamp: 10 + index } });
+      projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
+      projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "old" } });
+
+      boundary.apply(projection, turnId);
+      const beforeLateUpdate = responseTexts(projection);
+      projection.applyEvent({
+        type: "message_update",
+        assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "late" },
+      });
+      expect(responseTexts(projection), boundary.name).toEqual(beforeLateUpdate);
+
+      projection.applyEvent({ type: "message_start", message: { role: "assistant", content: [], timestamp: 100 + index } });
+      projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 1 } });
+      projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 1, delta: "new" } });
+
+      expect(responseTexts(projection).at(-1), boundary.name).toBe("new");
+    }
+  });
 });
 
-function projectedTool(projection: ConversationProjection, toolCallId: string): ToolCallView | undefined {
+function projectedTool(projection: ConversationProjection, toolCallId: string): BoundToolCallView | undefined {
   for (const turn of turns(projection.read().items)) {
     for (const item of turn.items) {
-      if (item.type === "tool" && item.tool.id === toolCallId) return item.tool;
+      if (item.type === "tool" && item.tool.state === "bound" && item.tool.id === toolCallId) return item.tool;
     }
   }
   return undefined;
 }
 
+function projectedToolsInProjection(projection: ConversationProjection) {
+  return turns(projection.read().items).flatMap((turn) => turn.items.filter((item) => item.type === "tool"));
+}
+
 function responseText(item: Extract<AgentTurnView["items"][number], { type: "response" }>): string {
   return item.blocks.map((block) => block.type === "text" || block.type === "error" ? block.text : "").join("");
+}
+
+function responseTexts(projection: ConversationProjection): string[] {
+  return turns(projection.read().items).flatMap((turn) => turn.items.flatMap((item) => item.type === "response" ? responseText(item) : []));
 }
 
 function normalizePersistedProjection(projection: ConversationProjection): unknown {
@@ -631,7 +811,13 @@ function normalizePersistedProjection(projection: ConversationProjection): unkno
           return { type: turnItem.type, status: turnItem.status, text: responseText(turnItem) };
         }
         if (turnItem.type === "reasoning") return { type: turnItem.type, status: turnItem.status, text: turnItem.text };
-        if (turnItem.type === "tool") return { type: turnItem.type, toolId: turnItem.tool.id, status: turnItem.tool.status };
+        if (turnItem.type === "tool") {
+          return {
+            type: turnItem.type,
+            toolId: turnItem.tool.state === "bound" ? turnItem.tool.id : undefined,
+            status: turnItem.tool.status,
+          };
+        }
         if (turnItem.type === "compaction") return { type: turnItem.type, summary: turnItem.summary };
         return { type: turnItem.type };
       }),

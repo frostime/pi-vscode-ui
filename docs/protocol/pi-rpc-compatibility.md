@@ -4,7 +4,7 @@ description: Cross-module policy for Pi native RPC surface, authority, failures,
 scope:
   - /packages/pi-rpc/**
   - /apps/vscode/src/extension/**
-updated: 2026-07-28
+updated: 2026-08-09
 ---
 
 # Pi RPC Compatibility
@@ -15,7 +15,8 @@ FrostPi targets the current documented Pi native RPC mode and launches `pi --mod
 
 - Startup requires `get_state`; product features use prompt/abort, compaction, entries, fork, commands, models, thinking level, naming, statistics, and extension UI responses.
 - Runtime projection consumes documented agent, message, tool, compaction, and extension UI events. Unknown additive events or fields are accepted unless a required invariant becomes impossible.
-- Malformed JSONL, invalid envelopes, stdin/stdout failure, startup timeout, and unexpected process exit remain visible connection failures.
+- Pi 0.83 cumulative `message_update.message` and Pi 0.84 delta-only `message_update.assistantMessageEvent` are both supported by shape. Delta assembly is extension conversation policy; the transport forwards either form unchanged.
+- Malformed JSONL, invalid envelopes, stdin/stdout failure, startup timeout, and unexpected process exit remain visible connection failures. Malformed assistant content deltas are ignored locally and do not weaken transport failures.
 
 Private adapters for capability gaps such as session-tree navigation and the Question tool remain product modules above the generic transport. Availability is capability-based; missing capability is visible and never inferred away by a silent fallback.
 

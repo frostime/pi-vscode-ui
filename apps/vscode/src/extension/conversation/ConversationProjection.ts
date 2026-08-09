@@ -27,7 +27,12 @@ import {
   type CompactionSource,
   type MessageCorrelationKey,
 } from "./ConversationItemStore.js";
-import { PiAssistantMessageAdapter } from "./PiAssistantMessageAdapter.js";
+import {
+  type AdaptedAssistantMessage,
+  type AdaptedAssistantPart,
+  assistantPartsFromMessage,
+  PiAssistantMessageAdapter,
+} from "./PiAssistantMessageAdapter.js";
 import { contentToBlocks, createToolView, extractText, isRecord, recordValue, stringValue } from "./messageAssembler.js";
 
 export interface ActiveBranchEdge {
@@ -51,14 +56,11 @@ interface PersistedTurnState {
 
 export class ConversationProjection {
   readonly #store = new ConversationItemStore();
-  // pi-084-message-streaming::shape — this is the sole owner of Pi-version message state.
   readonly #assistantMessageAdapter = new PiAssistantMessageAdapter();
   #queuedFollowUps: QueuedFollowUpView[] = [];
   #activeTurnId: string | null = null;
   #persistedTurn: PersistedTurnState | null = null;
   #pendingLiveErrorTurnId: string | null = null;
-  #streamingMessageId: string | null = null;
-  #streamingCorrelationKey: MessageCorrelationKey | null = null;
   #sequence = 0;
   #updatedAt = Date.now();
   readonly #persistedEntryIds = new Set<string>();
@@ -198,7 +200,6 @@ export class ConversationProjection {
 
   finalizeLiveState(): void {
     this.#store.finalizeUnresolvedTools();
-    // Keep legacy placement fields unchanged until adapter results replace them.
     this.#assistantMessageAdapter.reset();
     this.#touch();
   }
@@ -329,7 +330,8 @@ export class ConversationProjection {
         source,
         buildActivities: (viewMessageId) => assistantActivities(
           viewMessageId,
-          message,
+          assistantPartsFromMessage(message),
+          typeof message.errorMessage === "string" ? message.errorMessage : undefined,
           status,
           timestamp,
           (content, idPrefix) => this.#validatedBlocks(content, undefined, idPrefix),
@@ -439,49 +441,31 @@ export class ConversationProjection {
 
   #resetStreamingAssistant(): void {
     this.#assistantMessageAdapter.reset();
-    // These placement fields disappear once adapter results provide stable message metadata.
-    this.#streamingMessageId = null;
-    this.#streamingCorrelationKey = null;
   }
 
   #applyAssistantMessageEvent(event: RpcEvent): void {
-    // pi-084-message-streaming::shape — adapt here before turn/status/Store policy is applied.
-    const message = event.message;
-    if (!isRecord(message) || message.role !== "assistant") return;
-    const timestamp = numericValue(message.timestamp) ?? Date.now();
-    const correlationKey = this.#streamingCorrelationKey ?? messageCorrelationKey(message);
-    // Documented Pi assistant events always include timestamp. A malformed event
-    // without ID or timestamp is omitted until persisted refresh rather than shown
-    // as an uncorrelatable live duplicate.
-    if (!correlationKey) return;
-    if (this.#store.hasPersistedAssistantOwnership(correlationKey)) {
-      if (event.type === "message_end") this.#resetStreamingAssistant();
-      return;
-    }
-    if (!this.#streamingMessageId) {
-      this.#streamingMessageId = viewMessageId(message, `assistant-live-${timestamp}-${++this.#sequence}`);
-    }
-    this.#streamingCorrelationKey = correlationKey;
+    const message = this.#assistantMessageAdapter.adapt(event);
+    if (!message) return;
+    const correlationKey = adaptedCorrelationKey(message);
+    if (!correlationKey || this.#store.hasPersistedAssistantOwnership(correlationKey)) return;
+
+    const timestamp = message.timestamp ?? Date.now();
     const turn = this.#activeTurn() ?? this.#ensureLiveTurn(timestamp);
     this.#activeTurnId = turn.id;
-
-    const delta = isRecord(event.assistantMessageEvent) ? event.assistantMessageEvent : {};
-    const status: MessageStatus = event.type === "message_end"
+    const status: MessageStatus = message.phase === "final"
       ? assistantMessageStatus(message.stopReason)
-      : delta.type === "error"
-        ? delta.reason === "aborted" ? "aborted" : "error"
-        : "streaming";
-    const fallbackViewMessageId = this.#streamingMessageId;
+      : message.legacyFailure ?? "streaming";
     this.#store.placeAssistant({
       turnId: turn.id,
       source: {
         kind: "live",
         correlationKey,
-        fallbackViewMessageId,
+        fallbackViewMessageId: adaptedViewMessageId(message, `assistant-live-${timestamp}-${++this.#sequence}`),
       },
       buildActivities: (viewId) => assistantActivities(
         viewId,
-        message,
+        message.parts,
+        message.errorMessage,
         status,
         timestamp,
         (content, idPrefix) => this.#validatedBlocks(content, undefined, idPrefix),
@@ -498,7 +482,6 @@ export class ConversationProjection {
       this.#pendingLiveErrorTurnId = null;
       this.#setTurnStatus(turn.id, "completed", Date.now());
     }
-    if (event.type === "message_end") this.#resetStreamingAssistant();
   }
 
   #applyToolStart(event: RpcEvent): void {
@@ -818,52 +801,55 @@ function persistedUserTurn(
   };
 }
 
-// pi-084-message-streaming::shape — consume adapted indexed parts here; both live and
-// persisted messages must use messageId + contentIndex for stable activity IDs.
 function assistantActivities(
   messageId: string,
-  message: Record<string, unknown>,
+  parts: readonly AdaptedAssistantPart[],
+  errorMessage: string | undefined,
   status: MessageStatus,
   timestamp: number,
   blocksFromContent: (content: unknown, idPrefix: string) => MessageBlockView[],
 ): AgentActivityView[] {
   const activities: AgentActivityView[] = [];
-  let partIndex = 0;
-  if (typeof message.content === "string") {
-    if (message.content) activities.push(responseActivity(messageId, partIndex++, [{ type: "text", text: message.content }], status, timestamp));
-  } else {
-    for (const part of arrayValue(message.content)) {
-      if (!isRecord(part) || typeof part.type !== "string") continue;
-      if (part.type === "thinking" && typeof part.thinking === "string") {
-        activities.push({
-          id: `${messageId}:reasoning:${partIndex++}`,
-          type: "reasoning",
-          text: part.thinking,
-          status,
-          timestamp,
-        });
-      } else if (part.type === "text" && typeof part.text === "string" && part.text) {
-        activities.push(responseActivity(messageId, partIndex++, [{ type: "text", text: part.text }], status, timestamp));
-      } else if (part.type === "image" && typeof part.data === "string" && typeof part.mimeType === "string") {
-        activities.push(responseActivity(
-          messageId,
-          partIndex,
-          blocksFromContent([part], `${messageId}-${partIndex}`),
-          status,
-          timestamp,
-        ));
-        partIndex += 1;
-      } else if (part.type === "toolCall" && typeof part.id === "string") {
-        // pi-084-message-streaming::shape — outer activity ID becomes messageId + contentIndex;
-        // part.id remains only the real Pi execution lookup key.
-        const tool = createToolView(part.id, stringValue(part.name, "tool"), recordValue(part.arguments), timestamp);
-        activities.push({ id: `tool-${part.id}`, type: "tool", tool, timestamp });
-        partIndex += 1;
-      }
+  for (const part of parts) {
+    if (part.type === "thinking") {
+      activities.push({
+        id: `${messageId}:reasoning:${part.contentIndex}`,
+        type: "reasoning",
+        text: part.text,
+        status,
+        timestamp,
+      });
+    } else if (part.type === "text" && part.text) {
+      activities.push(responseActivity(messageId, part.contentIndex, [{ type: "text", text: part.text }], status, timestamp));
+    } else if (part.type === "image") {
+      activities.push(responseActivity(
+        messageId,
+        part.contentIndex,
+        blocksFromContent([part.content], `${messageId}-${part.contentIndex}`),
+        status,
+        timestamp,
+      ));
+    } else if (part.type === "tool") {
+      const tool = part.tool.state === "preparing"
+        ? {
+            state: "preparing" as const,
+            rawArguments: part.tool.rawArguments,
+            status: "running" as const,
+            isError: false,
+            startedAt: timestamp,
+          }
+        : createToolView(part.tool.id, part.tool.name, part.tool.arguments, timestamp);
+      activities.push({
+        id: `${messageId}:tool:${part.contentIndex}`,
+        type: "tool",
+        tool,
+        timestamp,
+      });
     }
   }
-  if (status === "error" && typeof message.errorMessage === "string" && message.errorMessage) {
-    activities.push(responseActivity(messageId, partIndex, [{ type: "error", text: message.errorMessage }], status, timestamp));
+  if (status === "error" && errorMessage) {
+    const errorIndex = Math.max(-1, ...parts.map((part) => part.contentIndex)) + 1;
+    activities.push(responseActivity(messageId, errorIndex, [{ type: "error", text: errorMessage }], status, timestamp));
   }
   return activities;
 }
@@ -935,10 +921,16 @@ function toImageViews(
   });
 }
 
-function viewMessageId(message: Record<string, unknown>, fallback: string): string {
-  if (typeof message.id === "string") return message.id;
-  if (typeof message.timestamp === "number") return `assistant-${message.timestamp}`;
+function adaptedViewMessageId(message: AdaptedAssistantMessage, fallback: string): string {
+  if (message.id !== undefined) return message.id;
+  if (message.timestamp !== undefined) return `assistant-${message.timestamp}`;
   return fallback;
+}
+
+function adaptedCorrelationKey(message: AdaptedAssistantMessage): MessageCorrelationKey | undefined {
+  if (message.id !== undefined) return `id:${message.id}`;
+  if (message.timestamp !== undefined) return `timestamp:${message.timestamp}`;
+  return undefined;
 }
 
 function messageCorrelationKey(message: Record<string, unknown>): MessageCorrelationKey | undefined {
@@ -1011,8 +1003,4 @@ function retryAttempt(value: unknown): string | number {
 
 function numericValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function arrayValue(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
 }

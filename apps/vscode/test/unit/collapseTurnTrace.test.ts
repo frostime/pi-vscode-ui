@@ -104,6 +104,7 @@ function tool(id: string, isError = false): AgentTurnItemView {
     type: "tool",
     timestamp: 0,
     tool: {
+      state: "bound",
       id,
       name: "bash",
       args: {},

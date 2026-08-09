@@ -13,8 +13,52 @@ import type {
 const correlation = "timestamp:42" as const;
 
 describe("ConversationItemStore", () => {
-  // pi-084-message-streaming::shape — preparing tools are visible but absent from #toolItems.
-  it.todo("cancels a preparing tool that has no real Pi execution ID");
+  it("cancels an unbound preparing tool and binds its real execution ID in place", () => {
+    const store = storeWithTurns("live");
+    const outerId = "live-message:tool:0";
+    store.placeAssistant({
+      turnId: "live",
+      source: liveSource("live-message"),
+      buildActivities: () => [preparingTool(outerId, '{"path":')],
+    });
+
+    expect(store.hasTool("call-1")).toBe(false);
+    store.finalizeUnresolvedTools();
+    const [cancelled] = store.turn("live").items;
+    expect(cancelled?.id).toBe(outerId);
+    expect(cancelled?.type === "tool" ? cancelled.tool : undefined).toMatchObject({
+      state: "preparing",
+      status: "cancelled",
+      rawArguments: '{"path":',
+    });
+
+    store.placeAssistant({
+      turnId: "live",
+      source: liveSource("live-message"),
+      buildActivities: () => [boundTool(outerId)],
+    });
+    expect(store.hasTool("call-1")).toBe(true);
+    store.upsertTool({
+      source: { kind: "live" },
+      fallbackTurnId: "live",
+      toolCallId: "call-1",
+      name: "read",
+      args: {},
+      status: "complete",
+      output: "body",
+      isError: false,
+      endedAt: 2,
+      timestamp: 2,
+    });
+    const [completed] = store.turn("live").items;
+    expect(completed?.id).toBe(outerId);
+    expect(completed?.type === "tool" ? completed.tool : undefined).toMatchObject({
+      state: "bound",
+      id: "call-1",
+      status: "complete",
+      output: "body",
+    });
+  });
 
   it("moves every assistant part on persisted takeover and ignores a late live replay", () => {
     const store = storeWithTurns("live", "persisted");
@@ -211,6 +255,7 @@ function assistantParts(messageId: string): AgentActivityView[] {
       type: "tool",
       timestamp: 1,
       tool: {
+        state: "bound",
         id: "call-1",
         name: "read",
         label: "read",
@@ -225,6 +270,33 @@ function assistantParts(messageId: string): AgentActivityView[] {
 
 function response(id: string, text: string): AgentActivityView {
   return { id, type: "response", blocks: [{ type: "text", text }], status: "complete", timestamp: 1 };
+}
+
+function preparingTool(id: string, rawArguments: string): AgentActivityView {
+  return {
+    id,
+    type: "tool",
+    timestamp: 1,
+    tool: { state: "preparing", rawArguments, status: "running", isError: false, startedAt: 1 },
+  };
+}
+
+function boundTool(id: string): AgentActivityView {
+  return {
+    id,
+    type: "tool",
+    timestamp: 1,
+    tool: {
+      state: "bound",
+      id: "call-1",
+      name: "read",
+      label: "read",
+      args: { path: "a.ts" },
+      status: "running",
+      isError: false,
+      startedAt: 1,
+    },
+  };
 }
 
 function compaction(id: string, summary: string): CompactionView {

@@ -20,10 +20,47 @@ const { ProxySecretStore } = await import("../../src/extension/network/ProxySecr
 const { SessionRuntime } = await import("../../src/extension/sessions/SessionRuntime.js");
 
 describe("Pi session startup and conversation history", () => {
-  // pi-084-message-streaming::shape — verify this through the real child-process path.
-  it.todo("cancels a preparing tool and isolates adapter state across stop, failure, and restart");
-
   const runtimes: InstanceType<typeof SessionRuntime>[] = [];
+
+  it("projects a Pi 0.84 stream through the child-process path and persisted takeover", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-stream-084-"));
+    const runtime = new SessionRuntime(
+      "stream-084",
+      dir,
+      "Streaming",
+      Date.now(),
+      () => runtimeConfiguration(join(process.cwd(), "test", "e2e", "fake-pi.cjs")),
+      new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
+      { error: vi.fn(), info: vi.fn() } as never,
+      { onChange: vi.fn(), onEditorText: vi.fn() },
+    );
+    runtimes.push(runtime);
+
+    await runtime.start();
+    await runtime.sendPrompt("stream-084", []);
+    await waitFor(() => projectedTools(runtime.view).some((tool) => tool.state === "preparing" && tool.rawArguments.includes("stream.ts")));
+
+    const preparingActivity = conversationTurns(runtime.view)
+      .flatMap((turn) => turn.items)
+      .find((item) => item.type === "tool");
+    expect(preparingActivity?.id).toContain(":tool:2");
+    expect(preparingActivity?.type === "tool" ? preparingActivity.tool : undefined).toMatchObject({
+      state: "preparing",
+      status: "running",
+    });
+    expect(conversationText(runtime.view)).toEqual(expect.arrayContaining(["Checking", "Streaming"]));
+
+    await waitFor(() => runtime.view.status === "ready" && projectedTools(runtime.view).some((tool) => tool.state === "bound" && tool.status === "complete"));
+    await waitFor(() => conversationTurns(runtime.view)[0]?.userMessage?.sourceEntryId !== undefined);
+    const finalActivity = conversationTurns(runtime.view)
+      .flatMap((turn) => turn.items)
+      .find((item) => item.type === "tool");
+    expect(finalActivity).toMatchObject({
+      id: preparingActivity?.id,
+      tool: { state: "bound", status: "complete", output: "file body" },
+    });
+    expect(conversationText(runtime.view)).toEqual(expect.arrayContaining(["Checked the file", "Streaming response"]));
+  });
 
   afterEach(async () => {
     await Promise.all(runtimes.splice(0).map((runtime) => runtime.dispose()));
@@ -821,11 +858,22 @@ process.stdin.on("data", chunk => {
     else if (command.type === "get_commands") response.data = { commands: [] };
     else if (command.type === "get_session_stats") response.data = { sessionId: "tool-runtime", userMessages: 1, assistantMessages: 1, toolCalls: 1, toolResults: 0, totalMessages: 2, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 };
     else if (command.type === "prompt") {
+      const timestamp = command.message === "restart" ? 20 : 10;
       process.stdout.write(JSON.stringify(response) + "\n");
       process.stdout.write(JSON.stringify({ type: "agent_start" }) + "\n");
-      process.stdout.write(JSON.stringify({ type: "tool_execution_start", toolCallId: "t1", toolName: "read", args: { path: "a.ts" } }) + "\n");
-      process.stdout.write(JSON.stringify({ type: "tool_execution_update", toolCallId: "t1", toolName: "read", args: { path: "a.ts" }, partialResult: [{ type: "text", text: "partial" }] }) + "\n");
-      if (command.message === "crash") setTimeout(() => process.exit(7), 20);
+      process.stdout.write(JSON.stringify({ type: "message_start", message: { role: "user", content: command.message, timestamp: timestamp - 1 } }) + "\n");
+      process.stdout.write(JSON.stringify({ type: "message_start", message: { role: "assistant", content: [], timestamp } }) + "\n");
+      process.stdout.write(JSON.stringify({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 0 } }) + "\n");
+      process.stdout.write(JSON.stringify({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: command.message === "restart" ? "new" : "old" } }) + "\n");
+      if (command.message === "restart") {
+        process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "new" }], stopReason: "stop", timestamp } }) + "\n");
+        process.stdout.write(JSON.stringify({ type: "agent_end", messages: [], willRetry: false }) + "\n");
+        process.stdout.write(JSON.stringify({ type: "agent_settled" }) + "\n");
+      } else {
+        process.stdout.write(JSON.stringify({ type: "message_update", assistantMessageEvent: { type: "toolcall_start", contentIndex: 1 } }) + "\n");
+        process.stdout.write(JSON.stringify({ type: "message_update", assistantMessageEvent: { type: "toolcall_delta", contentIndex: 1, delta: '{"path":"partial.ts"' } }) + "\n");
+        if (command.message === "crash") setTimeout(() => process.exit(7), 20);
+      }
       continue;
     }
     process.stdout.write(JSON.stringify(response) + "\n");
@@ -849,16 +897,31 @@ process.on("SIGTERM", () => process.exit(0));
     runtimes.push(stopped);
     await stopped.start();
     await stopped.sendPrompt("stop", []);
-    await waitFor(() => projectedTools(stopped.view)[0]?.status === "running");
+    await waitFor(() => projectedTools(stopped.view)[0]?.state === "preparing");
     await stopped.stop();
-    expect(projectedTools(stopped.view)[0]).toMatchObject({ status: "cancelled", output: "partial", isError: false });
+    expect(projectedTools(stopped.view)[0]).toMatchObject({
+      state: "preparing",
+      status: "cancelled",
+      rawArguments: '{"path":"partial.ts"',
+      isError: false,
+    });
+
+    await stopped.start();
+    await stopped.sendPrompt("restart", []);
+    await waitFor(() => stopped.view.status === "ready" && conversationText(stopped.view).at(-1) === "new");
+    expect(conversationText(stopped.view)).not.toContain("oldnew");
 
     const failed = createRuntime("failed-tool");
     runtimes.push(failed);
     await failed.start();
     await failed.sendPrompt("crash", []);
     await waitFor(() => failed.view.status === "failed");
-    expect(projectedTools(failed.view)[0]).toMatchObject({ status: "cancelled", output: "partial", isError: false });
+    expect(projectedTools(failed.view)[0]).toMatchObject({
+      state: "preparing",
+      status: "cancelled",
+      rawArguments: '{"path":"partial.ts"',
+      isError: false,
+    });
   });
 
   it("applies the Question tool setting only to the started Pi process", async () => {
@@ -952,6 +1015,14 @@ function projectedTools(view: Readonly<SessionViewModel>) {
     .flatMap((turn) => turn.items)
     .filter((item) => item.type === "tool")
     .map((item) => item.tool);
+}
+
+function conversationText(view: Readonly<SessionViewModel>): string[] {
+  return conversationTurns(view).flatMap((turn) => turn.items.flatMap((item) => {
+    if (item.type === "reasoning") return [item.text];
+    if (item.type !== "response") return [];
+    return item.blocks.flatMap((block) => block.type === "text" || block.type === "error" ? block.text : []);
+  }));
 }
 
 function conversationNotices(view: Readonly<SessionViewModel>): SessionNoticeView[] {

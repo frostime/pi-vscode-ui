@@ -5,7 +5,7 @@ scope:
   - /apps/vscode/src/extension/sessions/**
   - /apps/vscode/src/extension/conversation/**
   - /apps/vscode/src/extension/extension-ui/**
-updated: 2026-08-08
+updated: 2026-08-09
 ---
 
 # Pi Session Lifecycle
@@ -36,7 +36,7 @@ stopped ─ request ─> queued ─> starting ─ handshake ─> ready ─ agent
 
 `agent_end` closes one model attempt, not necessarily the user turn. With `willRetry: true`, the session remains running and conversation projection keeps the pending assistant error in the same user turn; `auto_retry_start` supplies the transient retry notice. With `willRetry: false`, the pending error may become final. `agent_settled` is the completion boundary: Runtime returns the session to ready, refreshes persisted entries, and may issue the one normal-completion notification. Assistant protocol errors remain errors when no continuation succeeds, while a tool failure remains visible without by itself failing the whole turn. Unresolved tool semantics and finalization boundaries belong to [`conversation-projection.SPEC.md`](../conversation/conversation-projection.SPEC.md#unresolved-tool-results).
 
-`abort` stops the current run and keeps the process. A restart cancels pending extension UI, stops the child, and starts Pi with the recorded session file; active streams, tools, and pending requests do not survive. Disruptive explicit restart requires confirmation.
+`abort` stops the current run and keeps the process. Process stop or connection failure first marks unresolved bound and preparing tools `cancelled`, preserving received arguments, then clears temporary assistant delta assembly. A restart cancels pending extension UI, stops the child, and starts Pi with the recorded session file; active streams, tools, pending requests, and partial assembly state do not survive. Disruptive explicit restart requires confirmation.
 
 ## Temporary sessions
 

@@ -1,7 +1,7 @@
 ---
 title: Pi 0.84 Message Streaming Context Map
 created: 2026-08-09T12:09:51+08:00
-updated: 2026-08-09T12:52:21+08:00
+updated: 2026-08-09T18:05:50+08:00
 ---
 
 # Pi 0.84 Message Streaming Context Map
@@ -14,11 +14,11 @@ updated: 2026-08-09T12:52:21+08:00
 
 ## Core Files
 
-- `apps/vscode/src/extension/conversation/PiAssistantMessageAdapter.ts` — shaped architecture contract for adapting Pi 0.83 cumulative events and Pi 0.84 indexed deltas into one internal assistant-message form.
+- `apps/vscode/src/extension/conversation/PiAssistantMessageAdapter.ts` — adapts Pi 0.83 cumulative events and Pi 0.84 indexed deltas into one internal assistant-message form; owns the single active assembly state.
 - `apps/vscode/src/extension/conversation/ConversationProjection.ts` — turns Pi events and persisted entries into conversation activities.
   - `applyEvent()` — dispatches live Pi message and tool events.
-  - `#applyAssistantMessageEvent()` — current live assistant path; currently requires a complete `event.message`.
-  - `assistantActivities()` — converts complete assistant content into reasoning, response, and tool activities.
+  - `#applyAssistantMessageEvent()` — consumes adapted complete/assembled messages before applying turn, status, and persisted-ownership policy.
+  - `assistantActivities()` — converts adapted content-indexed parts into stable reasoning, response, and tool activities for both live and persisted messages.
   - `replaceEntries()` and `completeTurn()` — important reset and finalization boundaries.
 - `apps/vscode/src/extension/conversation/ConversationItemStore.ts` — owns stable assistant placement, live-to-persisted takeover, and tool activity locations.
   - `placeAssistant()` — preserves one assistant owner across live updates and persisted takeover.
@@ -54,17 +54,17 @@ updated: 2026-08-09T12:52:21+08:00
 
 ## Tests and Fakes
 
-- `apps/vscode/test/unit/PiAssistantMessageAdapter.test.ts` — shaped behavior waypoints for version adaptation, indexed content, pending tools, final authority, malformed events, and reset isolation.
-- `apps/vscode/test/unit/ConversationProjection.test.ts` — unit coverage for live and persisted conversation behavior; currently lacks Pi 0.84 delta-only assistant sequences.
+- `apps/vscode/test/unit/PiAssistantMessageAdapter.test.ts` — direct behavior coverage for version adaptation, indexed content, pending tools, final authority, malformed events, and reset isolation.
+- `apps/vscode/test/unit/ConversationProjection.test.ts` — unit coverage for Pi 0.83/0.84 live streams, indexed activity identity, final replacement, persisted takeover, reset boundaries, retries, and existing persisted conversation behavior.
 - `apps/vscode/test/unit/ConversationItemStore.test.ts` — ownership, takeover, same-turn replacement, notices, and tool-state preservation.
 - `apps/vscode/test/unit/SessionRuntime.test.ts` — process event forwarding, history loading, stop, and failure behavior.
 - `packages/pi-rpc/test/PiRpcConnection.test.ts` — proves a message-less `message_update` crosses the transport boundary, but not that it is projected.
-- `apps/vscode/test/e2e/fake-pi.cjs` — fake Pi process used by VS Code end-to-end tests; currently emits complete start/end messages without realistic streaming updates.
+- `apps/vscode/test/e2e/fake-pi.cjs` — fake Pi process used by VS Code and `SessionRuntime` tests; the `stream-084` prompt emits delayed delta-only text, thinking, preparing/bound tool, execution, persistence, and settlement events.
 - `apps/vscode/test/e2e/` — product-level tests that can verify a fake Pi delta sequence reaches the rendered conversation.
 
 ## Navigation
 
-- To understand why Pi 0.84 updates are currently dropped → read `ConversationProjection.applyEvent()` and `#applyAssistantMessageEvent()`.
+- To understand how Pi 0.83 cumulative and Pi 0.84 delta-only messages share one projection path → read `PiAssistantMessageAdapter.adapt()`, then `ConversationProjection.applyEvent()` and `#applyAssistantMessageEvent()`.
 - To understand how repeated assistant updates keep one visible identity → read `ConversationItemStore.placeAssistant()` then `#replaceAssistantInTurn()`.
 - To understand how an embedded tool call becomes the target of `tool_execution_*` events → read `assistantActivities()`, `#recordAssistantLocations()`, then `upsertTool()`.
 - To understand why changing an activity ID loses expansion state → read `AgentTurn.svelte`, `ToolActivity.svelte`, `collectionDelta.ts`, then `applyHostMessage.ts`.

@@ -39,7 +39,7 @@ export function workspaceFileBoosts(session: SessionViewModel): Set<string> {
   for (const item of session.conversationItems) {
     if (item.type !== "turn") continue;
     for (const turnItem of item.items) {
-      if (turnItem.type === "tool") add(turnItem.tool.filePath);
+      if (turnItem.type === "tool" && turnItem.tool.state === "bound") add(turnItem.tool.filePath);
     }
   }
   return boosts;
