@@ -28,6 +28,7 @@ export function contentToBlocks(content: unknown, attachments: unknown, idPrefix
   return blocks.length ? blocks : [{ type: "text", text: "" }];
 }
 
+// pi-084-message-streaming::shape — this factory will create only the bound-tool variant.
 export function createToolView(id: string, name: string, args: Record<string, unknown>, startedAt = Date.now()): ToolCallView {
   const filePath = toolFilePath(args);
   const line = numericValue(args.line) ?? numericValue(args.start_line) ?? numericValue(args.startLine);

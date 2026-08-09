@@ -144,6 +144,8 @@ export class ConversationItemStore {
   }
 
   finalizeUnresolvedTools(): void {
+    // pi-084-message-streaming::shape — finalization must also scan visible preparing
+    // tools, which intentionally have no entry in the real-ID execution lookup.
     for (const owner of this.#toolItems.values()) {
       const { turnId, itemId } = owner.location;
       if (!turnId) continue;
@@ -391,6 +393,8 @@ export class ConversationItemStore {
 
   /** Same-turn streaming updates preserve notices observed between message parts. */
   #replaceAssistantInTurn(owner: AssistantOwner, turnId: string, activities: AgentActivityView[]): void {
+    // pi-084-message-streaming::shape — merge new indexed activities in source order
+    // while retaining notices at their observed positions.
     const previousIds = new Set(owner.locations.map((location) => location.itemId));
     const replacements = new Map(activities.map((activity) => [activity.id, activity]));
     const observedIds = new Set<string>();
@@ -423,6 +427,8 @@ export class ConversationItemStore {
   }
 
   #recordAssistantLocations(owner: AssistantOwner, turnId: string, activities: AgentActivityView[]): void {
+    // pi-084-message-streaming::shape — preparing tools have no execution lookup;
+    // register this location only after the inner tool becomes bound to a real Pi ID.
     owner.locations = activities.map((activity) => ({ turnId, itemId: activity.id }));
     for (const activity of activities) {
       if (activity.type === "tool") {

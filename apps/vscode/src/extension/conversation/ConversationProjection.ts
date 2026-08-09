@@ -27,6 +27,7 @@ import {
   type CompactionSource,
   type MessageCorrelationKey,
 } from "./ConversationItemStore.js";
+import { PiAssistantMessageAdapter } from "./PiAssistantMessageAdapter.js";
 import { contentToBlocks, createToolView, extractText, isRecord, recordValue, stringValue } from "./messageAssembler.js";
 
 export interface ActiveBranchEdge {
@@ -50,6 +51,8 @@ interface PersistedTurnState {
 
 export class ConversationProjection {
   readonly #store = new ConversationItemStore();
+  // pi-084-message-streaming::shape — this is the sole owner of Pi-version message state.
+  readonly #assistantMessageAdapter = new PiAssistantMessageAdapter();
   #queuedFollowUps: QueuedFollowUpView[] = [];
   #activeTurnId: string | null = null;
   #persistedTurn: PersistedTurnState | null = null;
@@ -82,8 +85,7 @@ export class ConversationProjection {
     this.#activeTurnId = null;
     this.#persistedTurn = null;
     this.#pendingLiveErrorTurnId = null;
-    this.#streamingMessageId = null;
-    this.#streamingCorrelationKey = null;
+    this.#resetStreamingAssistant();
     this.#persistedEntryIds.clear();
     this.#eligibleLiveTurnIds.length = 0;
     this.#eligibleLiveTurnIdSet.clear();
@@ -188,15 +190,16 @@ export class ConversationProjection {
     this.#setTurnStatus(turnId, status, endedAt);
     if (this.#activeTurnId === turnId) {
       this.#activeTurnId = null;
-      this.#streamingMessageId = null;
-      this.#streamingCorrelationKey = null;
+      this.#resetStreamingAssistant();
     }
     this.#touch();
     return true;
   }
 
-  finalizeUnresolvedTools(): void {
+  finalizeLiveState(): void {
     this.#store.finalizeUnresolvedTools();
+    // Keep legacy placement fields unchanged until adapter results replace them.
+    this.#assistantMessageAdapter.reset();
     this.#touch();
   }
 
@@ -431,11 +434,18 @@ export class ConversationProjection {
     }
     this.#pendingLiveErrorTurnId = null;
     this.#activeTurnId = null;
+    this.#resetStreamingAssistant();
+  }
+
+  #resetStreamingAssistant(): void {
+    this.#assistantMessageAdapter.reset();
+    // These placement fields disappear once adapter results provide stable message metadata.
     this.#streamingMessageId = null;
     this.#streamingCorrelationKey = null;
   }
 
   #applyAssistantMessageEvent(event: RpcEvent): void {
+    // pi-084-message-streaming::shape — adapt here before turn/status/Store policy is applied.
     const message = event.message;
     if (!isRecord(message) || message.role !== "assistant") return;
     const timestamp = numericValue(message.timestamp) ?? Date.now();
@@ -445,10 +455,7 @@ export class ConversationProjection {
     // as an uncorrelatable live duplicate.
     if (!correlationKey) return;
     if (this.#store.hasPersistedAssistantOwnership(correlationKey)) {
-      if (event.type === "message_end") {
-        this.#streamingMessageId = null;
-        this.#streamingCorrelationKey = null;
-      }
+      if (event.type === "message_end") this.#resetStreamingAssistant();
       return;
     }
     if (!this.#streamingMessageId) {
@@ -491,10 +498,7 @@ export class ConversationProjection {
       this.#pendingLiveErrorTurnId = null;
       this.#setTurnStatus(turn.id, "completed", Date.now());
     }
-    if (event.type === "message_end") {
-      this.#streamingMessageId = null;
-      this.#streamingCorrelationKey = null;
-    }
+    if (event.type === "message_end") this.#resetStreamingAssistant();
   }
 
   #applyToolStart(event: RpcEvent): void {
@@ -602,8 +606,7 @@ export class ConversationProjection {
       const prior = this.#turn(this.#activeTurnId);
       if (prior.status === "running") this.#setTurnStatus(prior.id, "completed", Date.now());
     }
-    this.#streamingMessageId = null;
-    this.#streamingCorrelationKey = null;
+    this.#resetStreamingAssistant();
 
     const timestamp = numericValue(message.timestamp) ?? promoted.timestamp;
     const turn = this.#createUserTurn(promoted.text, promoted.images, timestamp);
@@ -815,6 +818,8 @@ function persistedUserTurn(
   };
 }
 
+// pi-084-message-streaming::shape — consume adapted indexed parts here; both live and
+// persisted messages must use messageId + contentIndex for stable activity IDs.
 function assistantActivities(
   messageId: string,
   message: Record<string, unknown>,
@@ -849,6 +854,8 @@ function assistantActivities(
         ));
         partIndex += 1;
       } else if (part.type === "toolCall" && typeof part.id === "string") {
+        // pi-084-message-streaming::shape — outer activity ID becomes messageId + contentIndex;
+        // part.id remains only the real Pi execution lookup key.
         const tool = createToolView(part.id, stringValue(part.name, "tool"), recordValue(part.arguments), timestamp);
         activities.push({ id: `tool-${part.id}`, type: "tool", tool, timestamp });
         partIndex += 1;

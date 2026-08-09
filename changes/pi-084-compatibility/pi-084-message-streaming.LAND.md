@@ -2,7 +2,7 @@
 title: Pi 0.84 Message Streaming Landing Shape
 created: 2026-08-09T12:09:51+08:00
 updated: 2026-08-09T12:52:21+08:00
-status: proposed-for-review
+status: contracts-shaped-for-review
 spec: pi-084-message-streaming.SPEC.md
 map: pi-084-message-streaming.MAP.md
 ---
@@ -187,4 +187,4 @@ Stop and re-review this LAND before continuing if implementation requires any of
 
 # Review Checkpoint
 
-This LAND fixes the top-level ownership and dependency direction. After approval, the next shaping pass should create the adapter's real type/signature skeleton and mark the exact Projection, Store, Runtime, shared-model, and Svelte insertion points. Full behavior implementation should wait until those contracts are reviewed.
+This LAND fixes the top-level ownership and dependency direction. The first code-shaping pass now provides the adapter's real type/signature skeleton, centralizes Projection/Runtime live-state finalization, and marks the exact Store, shared-model, activity-construction, and Svelte insertion points. Full behavior implementation should wait until this shaped diff is reviewed.

@@ -20,6 +20,9 @@ const { ProxySecretStore } = await import("../../src/extension/network/ProxySecr
 const { SessionRuntime } = await import("../../src/extension/sessions/SessionRuntime.js");
 
 describe("Pi session startup and conversation history", () => {
+  // pi-084-message-streaming::shape — verify this through the real child-process path.
+  it.todo("cancels a preparing tool and isolates adapter state across stop, failure, and restart");
+
   const runtimes: InstanceType<typeof SessionRuntime>[] = [];
 
   afterEach(async () => {

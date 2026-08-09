@@ -7,6 +7,8 @@
   let { activity }: { activity: ToolActivityView } = $props();
   let open = $state(false);
 
+  // pi-084-message-streaming::shape — render explicit preparing/bound tool data;
+  // keep this component instance and its `open` state across the transition.
   const tool = $derived(activity.tool);
   const icon = $derived(toolIcon(tool.name));
   const statusIcon = $derived(

@@ -1,7 +1,7 @@
 ---
 title: Pi 0.84 Message Streaming Context Map
 created: 2026-08-09T12:09:51+08:00
-updated: 2026-08-09T12:09:51+08:00
+updated: 2026-08-09T12:52:21+08:00
 ---
 
 # Pi 0.84 Message Streaming Context Map
@@ -14,6 +14,7 @@ updated: 2026-08-09T12:09:51+08:00
 
 ## Core Files
 
+- `apps/vscode/src/extension/conversation/PiAssistantMessageAdapter.ts` — shaped architecture contract for adapting Pi 0.83 cumulative events and Pi 0.84 indexed deltas into one internal assistant-message form.
 - `apps/vscode/src/extension/conversation/ConversationProjection.ts` — turns Pi events and persisted entries into conversation activities.
   - `applyEvent()` — dispatches live Pi message and tool events.
   - `#applyAssistantMessageEvent()` — current live assistant path; currently requires a complete `event.message`.
@@ -53,6 +54,7 @@ updated: 2026-08-09T12:09:51+08:00
 
 ## Tests and Fakes
 
+- `apps/vscode/test/unit/PiAssistantMessageAdapter.test.ts` — shaped behavior waypoints for version adaptation, indexed content, pending tools, final authority, malformed events, and reset isolation.
 - `apps/vscode/test/unit/ConversationProjection.test.ts` — unit coverage for live and persisted conversation behavior; currently lacks Pi 0.84 delta-only assistant sequences.
 - `apps/vscode/test/unit/ConversationItemStore.test.ts` — ownership, takeover, same-turn replacement, notices, and tool-state preservation.
 - `apps/vscode/test/unit/SessionRuntime.test.ts` — process event forwarding, history loading, stop, and failure behavior.

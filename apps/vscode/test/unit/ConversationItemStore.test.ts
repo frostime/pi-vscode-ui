@@ -13,6 +13,9 @@ import type {
 const correlation = "timestamp:42" as const;
 
 describe("ConversationItemStore", () => {
+  // pi-084-message-streaming::shape — preparing tools are visible but absent from #toolItems.
+  it.todo("cancels a preparing tool that has no real Pi execution ID");
+
   it("moves every assistant part on persisted takeover and ignores a late live replay", () => {
     const store = storeWithTurns("live", "persisted");
     store.placeAssistant({
