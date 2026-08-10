@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-08-10
+
+### Added
+
+- Support Pi 0.84 assistant streaming events, rendering text, thinking, and tool-call arguments as they arrive.
+- Keep each streamed tool call as one activity while it moves from argument preparation to execution and persisted result.
+
+### Fixed
+
+- Reconcile live streamed assistant messages with final and persisted history without duplicating content or allowing late updates to overwrite the final response.
+
 ## [0.10.4] - 2026-08-08
 
 ### Added
@@ -322,7 +333,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/frostpi/compare/v0.10.4...HEAD
+[Unreleased]: https://github.com/frostime/frostpi/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/frostime/frostpi/compare/v0.10.4...v0.11.0
 [0.10.4]: https://github.com/frostime/frostpi/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/frostime/frostpi/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/frostime/frostpi/compare/v0.10.1...v0.10.2

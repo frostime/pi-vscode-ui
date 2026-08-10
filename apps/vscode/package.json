@@ -2,7 +2,7 @@
   "name": "frostpi",
   "displayName": "FrostPi — Visual UI for Pi Coding Agent",
   "description": "A polished VS Code interface for Pi's RPC mode, with streaming conversations, tool activity, image prompts, extension commands, and extension UI requests.",
-  "version": "0.10.4",
+  "version": "0.11.0",
   "publisher": "frostime",
   "license": "AGPL-3.0-only",
   "private": false,
