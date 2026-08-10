@@ -100,6 +100,11 @@ function handle(command) {
       event({ type: "agent_start" });
       event({ type: "message_start", message: userMessage });
 
+      if (command.message === "stream-084") {
+        stream084({ timestamp, parentId, userId, userMessage });
+        break;
+      }
+
       if (command.message === "retry") {
         const failedId = `assistant-failed-${entrySequence}`;
         const successId = `assistant-success-${entrySequence}`;
@@ -152,6 +157,65 @@ function handle(command) {
     }
     default: respond(id);
   }
+}
+
+function stream084({ timestamp, parentId, userId, userMessage }) {
+  const assistantId = `assistant-${entrySequence}`;
+  const toolResultId = `tool-result-${entrySequence}`;
+  const toolCall = { type: "toolCall", id: `tool-${entrySequence}`, name: "read", arguments: { path: "stream.ts" } };
+  const assistantMessage = {
+    role: "assistant",
+    timestamp: timestamp + 1,
+    stopReason: "toolUse",
+    content: [
+      { type: "thinking", thinking: "Checked the file" },
+      { type: "text", text: "Streaming response" },
+      toolCall,
+    ],
+  };
+
+  event({ type: "message_start", message: { role: "assistant", timestamp: timestamp + 1, content: [] } });
+  event({ type: "message_update", assistantMessageEvent: { type: "thinking_start", contentIndex: 0 } });
+  event({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", contentIndex: 0, delta: "Checking" } });
+  event({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 1 } });
+  event({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 1, delta: "Streaming" } });
+  event({ type: "message_update", assistantMessageEvent: { type: "toolcall_start", contentIndex: 2 } });
+  event({ type: "message_update", assistantMessageEvent: { type: "toolcall_delta", contentIndex: 2, delta: '{"path":"stream.ts"' } });
+
+  setTimeout(() => {
+    event({ type: "message_update", assistantMessageEvent: { type: "thinking_end", contentIndex: 0, content: "Checked the file" } });
+    event({ type: "message_update", assistantMessageEvent: { type: "text_end", contentIndex: 1, content: "Streaming response" } });
+    event({ type: "message_update", assistantMessageEvent: { type: "toolcall_end", contentIndex: 2, toolCall } });
+    event({ type: "message_end", message: assistantMessage });
+    event({ type: "tool_execution_start", toolCallId: toolCall.id, toolName: toolCall.name, args: toolCall.arguments });
+  }, 120);
+
+  setTimeout(() => {
+    const toolResultMessage = {
+      role: "toolResult",
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      content: [{ type: "text", text: "file body" }],
+      isError: false,
+      timestamp: timestamp + 2,
+    };
+    event({
+      type: "tool_execution_end",
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      args: toolCall.arguments,
+      result: toolResultMessage.content,
+      isError: false,
+    });
+    entries = [
+      ...entries,
+      { type: "message", id: userId, parentId, timestamp, message: userMessage },
+      { type: "message", id: assistantId, parentId: userId, timestamp: timestamp + 1, message: assistantMessage },
+      { type: "message", id: toolResultId, parentId: assistantId, timestamp: timestamp + 2, message: toolResultMessage },
+    ];
+    event({ type: "agent_end", messages: [], willRetry: false });
+    event({ type: "agent_settled" });
+  }, 240);
 }
 
 function respond(id, data) {

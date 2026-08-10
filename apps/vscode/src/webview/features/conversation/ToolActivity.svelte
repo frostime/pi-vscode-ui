@@ -8,7 +8,9 @@
   let open = $state(false);
 
   const tool = $derived(activity.tool);
-  const icon = $derived(toolIcon(tool.name));
+  const name = $derived(tool.state === "preparing" ? "Preparing tool call" : tool.name);
+  const label = $derived(tool.state === "preparing" ? "Generating arguments…" : tool.label);
+  const icon = $derived(tool.state === "preparing" ? "tools" : toolIcon(tool.name));
   const statusIcon = $derived(
     tool.status === "running"
       ? "loading codicon-modifier-spin"
@@ -27,15 +29,15 @@
           ? "Tool failed"
           : "Tool completed",
   );
-  const errorSummary = $derived(tool.status === "error" ? firstLine(tool.output) : "");
+  const errorSummary = $derived(tool.status === "error" && tool.state === "bound" ? firstLine(tool.output) : "");
 </script>
 
 <Collapsible.Root bind:open class={`activity-row tool-activity${tool.isError ? " activity-error" : ""}`}>
   <Collapsible.Trigger class="activity-trigger tool-activity-trigger">
     <span class={`codicon codicon-${icon} activity-leading`} aria-hidden="true"></span>
-    <span class="tool-activity-name">{tool.name}</span>
-    <span class="tool-activity-label" title={tool.label}>{tool.label}</span>
-    {#if errorSummary}<span class="tool-error-summary" title={tool.output}>{errorSummary}</span>{/if}
+    <span class="tool-activity-name">{name}</span>
+    <span class="tool-activity-label" title={label}>{label}</span>
+    {#if errorSummary && tool.state === "bound"}<span class="tool-error-summary" title={tool.output}>{errorSummary}</span>{/if}
     <span
       class={`codicon codicon-${statusIcon} activity-status${tool.status === "cancelled" ? " tool-status-cancelled" : ""}`}
       title={statusLabel}
@@ -44,38 +46,43 @@
     <span class={`codicon codicon-chevron-${open ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
   </Collapsible.Trigger>
   <Collapsible.Content class="activity-content tool-activity-content">
-    <div class="tool-actions">
-      {#if tool.filePath}
-        <button type="button" onclick={() => postToHost({ type: "openFile", path: tool.filePath!, ...(tool.line ? { line: tool.line } : {}) })}>
-          <span class="codicon codicon-go-to-file"></span> Open file
-        </button>
-        {#if tool.name === "edit" || tool.name === "write"}
-          <button type="button" onclick={() => postToHost({ type: "openDiff", path: tool.filePath! })}>
-            <span class="codicon codicon-diff"></span> Open diff
+    {#if tool.state === "preparing"}
+      <div class="tool-section-label">Input (raw)</div>
+      <pre class="tool-json">{tool.rawArguments}</pre>
+    {:else}
+      <div class="tool-actions">
+        {#if tool.filePath}
+          <button type="button" onclick={() => postToHost({ type: "openFile", path: tool.filePath!, ...(tool.line ? { line: tool.line } : {}) })}>
+            <span class="codicon codicon-go-to-file"></span> Open file
           </button>
-        {/if}
-      {/if}
-    </div>
-    {#if Object.keys(tool.args).length}
-      <div class="tool-section-label">Input</div>
-      <div class="tool-input">
-        {#each Object.entries(tool.args) as [key, value] (key)}
-          {@const rendered = renderArg(value)}
-          {#if rendered.kind === "block"}
-            <div class="tool-section-label">{key}</div>
-            <pre class="tool-json">{rendered.text}</pre>
-          {:else}
-            <div class="tool-input-row">
-              <span class="tool-input-key">{key}:</span>
-              <span class="tool-input-value">{rendered.text}</span>
-            </div>
+          {#if tool.name === "edit" || tool.name === "write"}
+            <button type="button" onclick={() => postToHost({ type: "openDiff", path: tool.filePath! })}>
+              <span class="codicon codicon-diff"></span> Open diff
+            </button>
           {/if}
-        {/each}
+        {/if}
       </div>
-    {/if}
-    {#if tool.output}
-      <div class="tool-section-label">Output</div>
-      <pre class="tool-output">{tool.output}</pre>
+      {#if Object.keys(tool.args).length}
+        <div class="tool-section-label">Input</div>
+        <div class="tool-input">
+          {#each Object.entries(tool.args) as [key, value] (key)}
+            {@const rendered = renderArg(value)}
+            {#if rendered.kind === "block"}
+              <div class="tool-section-label">{key}</div>
+              <pre class="tool-json">{rendered.text}</pre>
+            {:else}
+              <div class="tool-input-row">
+                <span class="tool-input-key">{key}:</span>
+                <span class="tool-input-value">{rendered.text}</span>
+              </div>
+            {/if}
+          {/each}
+        </div>
+      {/if}
+      {#if tool.output}
+        <div class="tool-section-label">Output</div>
+        <pre class="tool-output">{tool.output}</pre>
+      {/if}
     {/if}
   </Collapsible.Content>
 </Collapsible.Root>

@@ -144,16 +144,12 @@ export class ConversationItemStore {
   }
 
   finalizeUnresolvedTools(): void {
-    for (const owner of this.#toolItems.values()) {
-      const { turnId, itemId } = owner.location;
-      if (!turnId) continue;
-      const item = this.turnItem(turnId, itemId);
-      if (item?.type !== "tool" || item.tool.status !== "running") continue;
-      this.upsertTurnItem(turnId, {
-        ...item,
-        tool: { ...item.tool, status: "cancelled", isError: false },
-      });
-    }
+    this.#items = this.#items.map((item) => item.type !== "turn" ? item : {
+      ...item,
+      items: item.items.map((turnItem) => turnItem.type !== "tool" || turnItem.tool.status !== "running"
+        ? turnItem
+        : { ...turnItem, tool: { ...turnItem.tool, status: "cancelled", isError: false } }),
+    });
   }
 
   /** Detects ambiguous live adoption before any public item is mutated. */
@@ -234,7 +230,7 @@ export class ConversationItemStore {
     const turnId = location?.turnId ?? input.fallbackTurnId;
     if (!turnId) return;
     const current = location ? this.turnItem(turnId, location.itemId) : undefined;
-    const currentTool = current?.type === "tool" ? current.tool : undefined;
+    const currentTool = current?.type === "tool" && current.tool.state === "bound" ? current.tool : undefined;
     const args = Object.keys(input.args).length > 0 ? input.args : currentTool?.args ?? {};
     const created = createToolView(
       input.toolCallId,
@@ -356,10 +352,10 @@ export class ConversationItemStore {
 
   #preserveToolExecutionState(activities: AgentActivityView[]): AgentActivityView[] {
     return activities.map((activity) => {
-      if (activity.type !== "tool") return activity;
+      if (activity.type !== "tool" || activity.tool.state !== "bound") return activity;
       const owner = this.#toolItems.get(activity.tool.id);
       const current = owner ? this.turnItem(owner.location.turnId, owner.location.itemId) : undefined;
-      if (current?.type !== "tool") return activity;
+      if (current?.type !== "tool" || current.tool.state !== "bound") return activity;
       return {
         ...activity,
         tool: {
@@ -393,18 +389,17 @@ export class ConversationItemStore {
   #replaceAssistantInTurn(owner: AssistantOwner, turnId: string, activities: AgentActivityView[]): void {
     const previousIds = new Set(owner.locations.map((location) => location.itemId));
     const replacements = new Map(activities.map((activity) => [activity.id, activity]));
-    const observedIds = new Set<string>();
     const turn = this.turn(turnId);
     const items = turn.items.flatMap((item) => {
       const replacement = replacements.get(item.id);
-      if (replacement) {
-        observedIds.add(item.id);
-        return [replacement];
-      }
+      if (replacement) return [replacement];
       return previousIds.has(item.id) ? [] : [item];
     });
-    for (const activity of activities) {
-      if (!observedIds.has(activity.id)) items.push(activity);
+    for (const [activityIndex, activity] of activities.entries()) {
+      if (items.some((item) => item.id === activity.id)) continue;
+      const nextId = activities.slice(activityIndex + 1).find((candidate) => items.some((item) => item.id === candidate.id))?.id;
+      const insertionIndex = nextId ? items.findIndex((item) => item.id === nextId) : items.length;
+      items.splice(insertionIndex, 0, activity);
     }
     for (const location of owner.locations) {
       for (const [toolCallId, toolOwner] of this.#toolItems) {
@@ -425,7 +420,7 @@ export class ConversationItemStore {
   #recordAssistantLocations(owner: AssistantOwner, turnId: string, activities: AgentActivityView[]): void {
     owner.locations = activities.map((activity) => ({ turnId, itemId: activity.id }));
     for (const activity of activities) {
-      if (activity.type === "tool") {
+      if (activity.type === "tool" && activity.tool.state === "bound") {
         this.#toolItems.set(activity.tool.id, { location: { turnId, itemId: activity.id } });
       }
     }

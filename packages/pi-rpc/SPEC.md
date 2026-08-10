@@ -3,7 +3,7 @@ title: Pi RPC Transport Contract
 description: Stable process, framing, request-correlation, and failure semantics for the Pi subprocess client.
 scope:
   - /packages/pi-rpc/**
-updated: 2026-07-19
+updated: 2026-08-09
 ---
 
 # Pi RPC Transport Contract
@@ -11,6 +11,8 @@ updated: 2026-07-19
 ## Boundary
 
 `@frostime/pi-rpc` owns the subprocess and JSONL transport only. Product policy—session lists, UI state, retries, prompts, permissions, persistence, and presentation—belongs to the VS Code extension.
+
+Assistant `message_update` records are forwarded unchanged whether they contain a cumulative `message` or only an indexed `assistantMessageEvent`. This package must not assemble deltas or synthesize legacy events.
 
 ## Framing invariants
 
