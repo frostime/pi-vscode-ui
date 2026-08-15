@@ -18,4 +18,6 @@ On `ready` and supported VS Code Chat typography changes, the Host sends `setCha
 
 `BRIDGE_VERSION` is an opaque identifier compared for exact equality in both directions. Unknown versions are rejected; required-field or delta-semantic changes require a new value. Every Webview action is validated as a complete discriminated union with bounded payloads. Prompt, file-search, Fork, and other request/response flows use correlation ids; stale or unknown responses have no effect. Invalid, oversized, unknown, or incompatible messages perform no Host action.
 
+`sendPrompt` carries the required per-submission streaming delivery (`steer` or `followUp`) in addition to its correlation id, text, and images. The Host ignores that delivery while idle and uses it when Pi is already running or an earlier local queue item still awaits promotion.
+
 File actions carry validated locations only; relative paths resolve from the active Session cwd. Session-tree actions carry stable ids and draft presence only: the Host refetches authoritative entries and owns native interaction. Complete entries, prompt/image content, private tokens, and summary content do not cross that action boundary. Host-projected Fork/tree Composer seeds are non-persisted and applied once per Webview mount until submission.

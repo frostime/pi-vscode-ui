@@ -155,6 +155,23 @@ describe("ConversationProjection", () => {
     ]);
   });
 
+  it("promotes steering prompts before follow-ups when Pi injects queued user messages", () => {
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("first", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "first", timestamp: 1 } });
+    projection.enqueueFollowUp("afterward", [], 2);
+    projection.enqueueSteer("redirect now", [], 3);
+
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "redirect now", timestamp: 3 } });
+    expect(projection.read().queuedSteers).toEqual([]);
+    expect(projection.read().queuedFollowUps.map((item) => item.text)).toEqual(["afterward"]);
+
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "afterward", timestamp: 2 } });
+    expect(turns(projection.read().items).map((turn) => userText(turn))).toEqual(["first", "redirect now", "afterward"]);
+    expect(projection.read().queuedFollowUps).toEqual([]);
+  });
+
   it("promotes queued follow-ups from consecutive user events without agent_start", () => {
     const projection = new ConversationProjection();
     projection.appendUserPrompt("first", [], 1);

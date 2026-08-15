@@ -70,6 +70,7 @@ const payloadSchema = z.discriminatedUnion("type", [
     sessionId: z.string().min(1).max(128),
     text: z.string().max(2_000_000),
     images: z.array(imageSchema).max(12),
+    streamingBehavior: z.enum(["steer", "followUp"]),
   }),
   z.object({ type: z.literal("abort"), sessionId: z.string().min(1).max(128) }),
   z.object({ type: z.literal("cancelFork"), sessionId: z.string().min(1).max(128) }),

@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Choose Steer or Queue for each prompt submitted while Pi is streaming, with per-session delivery memory, dedicated shortcuts, and visible pending states for both queues.
+
 ## [0.11.0] - 2026-08-10
 
 ### Added

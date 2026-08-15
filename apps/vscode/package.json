@@ -193,7 +193,7 @@
           ],
           "default": "followUp",
           "scope": "resource",
-          "description": "How a normal prompt is queued when Pi is already streaming. Extension commands execute immediately."
+          "description": "Default delivery for normal prompts submitted while Pi is streaming. The Composer can override it per session; extension commands execute immediately."
         },
         "frostpi.conversation.collapseTurnTrace": {
           "type": "boolean",

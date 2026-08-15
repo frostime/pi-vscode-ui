@@ -1,10 +1,11 @@
 <script lang="ts">
-  import type { RpcModel } from "@frostime/pi-rpc";
+  import type { RpcModel, StreamingBehavior } from "@frostime/pi-rpc";
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
   import { postToHost } from "../../bridge/vscodeBridge";
   import { clearDraft, composerDrafts, getDraft, setDraft, updateDraft, type DraftImage, type SessionDraft } from "../../features/composer/composerDraftStore.svelte";
   import { promptSubmissionResult } from "../../features/composer/promptSubmissionStore.svelte";
+  import { composerStreamingBehaviors, setComposerStreamingBehavior } from "../../features/composer/composerStreamingBehaviorStore.svelte";
   import { composerFocusTick, showToast } from "../../state/sessionViewStore.svelte";
   import { createId } from "../../utils/createId";
   import { composerEditorPrefill } from "./editorCommand";
@@ -14,6 +15,7 @@
 
   import AttachmentStrip from "./AttachmentStrip.svelte";
   import PromptEditor from "./PromptEditor.svelte";
+  import StreamingSendButton from "./StreamingSendButton.svelte";
 
   let { session }: { session: SessionViewModel } = $props();
   let editor: PromptEditor;
@@ -23,6 +25,7 @@
 
   const draft = $derived($composerDrafts[session.id] ?? { text: "", images: [] });
   const commands = $derived(withFrostPiCommands(session.commands));
+  const streamingBehavior = $derived($composerStreamingBehaviors[session.id] ?? session.composerStreamingBehavior);
   const unavailable = $derived(
     session.status === "queued" || session.status === "starting" || session.status === "stopping" || session.status === "failed"
     || session.historyStatus === "queued" || session.historyStatus === "loading" || session.isCompacting || session.isForking || session.isNavigatingTree,
@@ -74,7 +77,7 @@
     requestAnimationFrame(() => editor?.focus());
   }
 
-  function submit(): void {
+  function submit(requestedStreamingBehavior: StreamingBehavior = streamingBehavior): void {
     if (!canSend) return;
     if (draft.images.length === 0 && draft.text.trim() === "/resume") {
       clearDraft(session.id);
@@ -103,6 +106,7 @@
       sessionId: session.id,
       text,
       images,
+      streamingBehavior: requestedStreamingBehavior,
     });
   }
 
@@ -159,8 +163,9 @@
       sessionId={session.id}
       value={draft.text}
       {commands}
-      placeholder={session.isNavigatingTree ? "Switching conversation branch…" : session.isStreaming || session.queuedFollowUps.length > 0 ? "Queue a follow-up…" : "Ask Pi about this workspace…"}
+      placeholder={session.isNavigatingTree ? "Switching conversation branch…" : session.isStreaming || session.queuedSteers.length > 0 || session.queuedFollowUps.length > 0 ? "Steer or queue a message…" : "Ask Pi about this workspace…"}
       onchange={setText}
+      currentStreamingBehavior={streamingBehavior}
       onsubmit={submit}
       onpasteimages={handlePastedImages}
     />
@@ -182,11 +187,18 @@
             <span class="codicon codicon-debug-stop"></span>
           </button>
         {:else if session.isStreaming}
+          {#if canSend}
+            <StreamingSendButton
+              selected={streamingBehavior}
+              onselect={(behavior) => setComposerStreamingBehavior(session.id, behavior)}
+              onsubmit={submit}
+            />
+          {/if}
           <button class="send-button stop-button" type="button" aria-label="Stop Pi" title="Stop current run" onclick={() => postToHost({ type: "abort", sessionId: session.id })}>
             <span class="codicon codicon-debug-stop"></span>
           </button>
         {:else}
-          <button class="send-button" type="button" aria-label="Send to Pi" title="Send (Ctrl+Enter)" disabled={!canSend} onclick={submit}>
+          <button class="send-button" type="button" aria-label="Send to Pi" title="Send (Ctrl+Enter)" disabled={!canSend} onclick={() => submit()}>
             <span class="codicon codicon-arrow-up"></span>
           </button>
         {/if}

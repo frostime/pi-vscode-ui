@@ -491,7 +491,7 @@ process.on("SIGTERM", () => process.exit(0));
     expect(conversationTurns(runtime.view)[0]?.userMessage?.blocks).toEqual([{ type: "text", text: "/inspect src" }]);
   });
 
-  it("parks follow-up prompts while streaming and clears them on abort", async () => {
+  it("parks explicit steering and follow-up prompts while streaming and clears them on abort", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-runtime-followup-"));
     const fakePi = join(dir, "fake-pi.cjs");
     await writeFile(fakePi, String.raw`#!/usr/bin/env node
@@ -517,7 +517,7 @@ process.stdin.on("data", chunk => {
       if (!streaming) {
         streaming = true;
         process.stdout.write(JSON.stringify({ type: "agent_start" }) + "\n");
-      } else {
+      } else if (command.message === "queued later") {
         streaming = false;
         process.stdout.write(JSON.stringify({ type: "agent_settled" }) + "\n");
       }
@@ -562,13 +562,16 @@ process.on("SIGTERM", () => process.exit(0));
     await waitFor(() => runtime.view.isStreaming);
     expect(conversationTurns(runtime.view)).toHaveLength(1);
 
-    await runtime.sendPrompt("queued later", []);
+    await runtime.sendPrompt("redirect now", [], "steer");
+    await runtime.sendPrompt("queued later", [], "followUp");
     await waitFor(() => runtime.view.status === "ready");
     expect(conversationTurns(runtime.view)).toHaveLength(1);
+    expect(runtime.view.queuedSteers.map((item) => item.text)).toEqual(["redirect now"]);
     expect(runtime.view.queuedFollowUps.map((item) => item.text)).toEqual(["queued later"]);
-    await expect(runtime.executeFork("any-entry")).rejects.toThrow("Wait for queued follow-ups to settle");
+    await expect(runtime.executeFork("any-entry")).rejects.toThrow("Wait for queued prompts to settle");
 
     await runtime.abort();
+    expect(runtime.view.queuedSteers).toEqual([]);
     expect(runtime.view.queuedFollowUps).toEqual([]);
   });
 

@@ -7,15 +7,16 @@ describe("Webview bridge validation", () => {
   it("accepts a correlated image prompt", () => {
     const parsed = webviewToHostSchema.safeParse({
       bridgeVersion: BRIDGE_VERSION, type: "sendPrompt", requestId: "request-1", sessionId: "session-1", text: "inspect",
-      images: [{ id: "image-1", name: "shot.png", mimeType: "image/png", data: "AA==", size: 1 }],
+      images: [{ id: "image-1", name: "shot.png", mimeType: "image/png", data: "AA==", size: 1 }], streamingBehavior: "steer",
     });
     expect(parsed.success).toBe(true);
   });
 
   it("rejects uncorrelated prompt submissions and excessive attachments", () => {
-    expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "sendPrompt", sessionId: "s", text: "x", images: [] }).success).toBe(false);
+    expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "sendPrompt", sessionId: "s", text: "x", images: [], streamingBehavior: "followUp" }).success).toBe(false);
     const images = Array.from({ length: 13 }, (_, index) => ({ id: String(index), name: `${index}.png`, mimeType: "image/png", data: "AA==", size: 1 }));
-    expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "sendPrompt", requestId: "r", sessionId: "s", text: "x", images }).success).toBe(false);
+    expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "sendPrompt", requestId: "r", sessionId: "s", text: "x", images, streamingBehavior: "followUp" }).success).toBe(false);
+    expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "sendPrompt", requestId: "r", sessionId: "s", text: "x", images: [], streamingBehavior: "later" }).success).toBe(false);
   });
 
   it("accepts local session, history, copy, composer-editor, and correlated message-fork actions", () => {
