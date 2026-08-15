@@ -32,7 +32,7 @@
       {disabled}
       onclick={() => onsubmit(selected)}
     >
-      <span class="codicon codicon-arrow-up"></span>
+      <span class={`codicon ${selected === "steer" ? "codicon-zap" : "codicon-list-ordered"}`}></span>
     </button>
     <button
       class="streaming-send-menu"
@@ -57,7 +57,7 @@
         <span class="option-check">{#if selected === "steer"}<span class="codicon codicon-check"></span>{/if}</span>
       </button>
       <button type="button" role="option" aria-selected={selected === "followUp"} onclick={() => choose("followUp")}>
-        <span class="codicon codicon-clock" aria-hidden="true"></span>
+        <span class="codicon codicon-list-ordered" aria-hidden="true"></span>
         <span><strong>Queue</strong><small>Wait until current work finishes</small></span>
         <span class="option-check">{#if selected === "followUp"}<span class="codicon codicon-check"></span>{/if}</span>
       </button>
