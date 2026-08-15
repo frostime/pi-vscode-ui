@@ -7,7 +7,7 @@ import type {
   SessionViewModel,
 } from "../../shared/model/sessionViewModel.js";
 
-type SessionScalarView = Omit<SessionViewModel, "conversationItems" | "queuedFollowUps">;
+type SessionScalarView = Omit<SessionViewModel, "conversationItems" | "queuedSteers" | "queuedFollowUps">;
 
 export class SessionViewState {
   readonly #view: SessionScalarView;
@@ -38,6 +38,7 @@ export class SessionViewState {
       commands: [],
       attachmentLimits,
       collapseTurnTrace,
+      composerStreamingBehavior: "followUp",
       networkProxy: { mode: "inherit", label: "Inherited", restartRequired: false },
       questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
       pendingExtensionUi: [],
@@ -54,6 +55,7 @@ export class SessionViewState {
     return {
       ...this.#view,
       conversationItems: [...conversation.items],
+      queuedSteers: [...conversation.queuedSteers],
       queuedFollowUps: [...conversation.queuedFollowUps],
       updatedAt: Math.max(this.#view.updatedAt, conversation.updatedAt),
     };
@@ -185,6 +187,11 @@ export class SessionViewState {
 
   setCollapseTurnTrace(collapseTurnTrace: boolean): void {
     this.#view.collapseTurnTrace = collapseTurnTrace;
+    this.#touch();
+  }
+
+  setComposerStreamingBehavior(streamingBehavior: SessionViewModel["composerStreamingBehavior"]): void {
+    this.#view.composerStreamingBehavior = streamingBehavior;
     this.#touch();
   }
 

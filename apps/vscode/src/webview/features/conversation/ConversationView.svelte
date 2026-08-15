@@ -21,6 +21,10 @@
   let resizeObserver: ResizeObserver | null = null;
 
   const turnCount = $derived(session.conversationItems.filter((item) => item.type === "turn").length);
+  const queuedPrompts = $derived([
+    ...session.queuedSteers.map((item) => ({ item, delivery: "Steer" as const })),
+    ...session.queuedFollowUps.map((item) => ({ item, delivery: "Queue" as const })),
+  ]);
 
   onMount(() => {
     resizeObserver = new ResizeObserver(() => {
@@ -109,18 +113,18 @@
           <span class="thinking-pulse" aria-hidden="true"></span>
         </div>
       {/if}
-      {#if session.queuedFollowUps.length}
-        <div class="queued-follow-ups" aria-label="Queued follow-ups">
-          {#each session.queuedFollowUps as item (item.id)}
+      {#if queuedPrompts.length}
+        <div class="queued-follow-ups" aria-label="Queued prompts">
+          {#each queuedPrompts as queued (queued.item.id)}
             <article class="message message-user message-queued">
               <div class="user-bubble queued-bubble">
-                {#if item.text}<div class="queued-text">{item.text}</div>{/if}
-                {#if item.images.length}
-                  <div class="queued-images">{item.images.length} image{item.images.length === 1 ? "" : "s"}</div>
+                {#if queued.item.text}<div class="queued-text">{queued.item.text}</div>{/if}
+                {#if queued.item.images.length}
+                  <div class="queued-images">{queued.item.images.length} image{queued.item.images.length === 1 ? "" : "s"}</div>
                 {/if}
-                <div class="queued-badge">
+                <div class:queued-badge-steer={queued.delivery === "Steer"} class="queued-badge">
                   <span class="thinking-pulse" aria-hidden="true"></span>
-                  <span>Queued</span>
+                  <span>{queued.delivery}</span>
                 </div>
               </div>
             </article>
@@ -183,6 +187,7 @@
   font-size: 10px;
   font-weight: 500;
 }
+.queued-badge-steer { color: var(--frost-link); }
 .session-progress {
   margin: 5px 0 12px;
   min-height: 34px;

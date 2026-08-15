@@ -10,6 +10,7 @@ import {
   type RpcExtensionUiResponse,
   type RpcModel,
   type RpcSessionEntry,
+  type StreamingBehavior,
   type ThinkingLevel,
 } from "@frostime/pi-rpc";
 import * as vscode from "vscode";
@@ -99,6 +100,7 @@ export class SessionRuntime {
       maxImageBytes: initialConfiguration.maxImageBytes,
       maxImages: 12,
     }, updatedAt, initialConfiguration.collapseTurnTrace, isEphemeral);
+    this.#viewState.setComposerStreamingBehavior(initialConfiguration.streamingBehavior);
     this.#viewState.setQuestionTool({
       configuredEnabled: initialConfiguration.questionToolEnabled,
       appliedEnabled: initialConfiguration.questionToolEnabled,
@@ -169,8 +171,8 @@ export class SessionRuntime {
     this.#appliedProxyFingerprint = null;
     this.#proxyRestartForced = false;
     this.#appliedQuestionToolEnabled = null;
-    // Local follow-up bubbles are ephemeral; a dead process cannot promote them.
-    this.#conversation.clearQueuedFollowUps();
+    // Local queue bubbles are ephemeral; a dead process cannot promote them.
+    this.#conversation.clearQueuedPrompts();
     this.#viewState.setForking(false);
     this.#viewState.setStatus("stopped");
     this.refreshConfigurationState(false);
@@ -181,7 +183,7 @@ export class SessionRuntime {
     await this.stop();
   }
 
-  async sendPrompt(text: string, images: WebviewImageInput[]): Promise<void> {
+  async sendPrompt(text: string, images: WebviewImageInput[], requestedStreamingBehavior?: StreamingBehavior): Promise<void> {
     if (this.view.isForking) throw new Error("Wait for the session fork to finish before sending a prompt.");
     const api = this.#requireApi();
     const configuration = this.#configurationProvider();
@@ -192,22 +194,24 @@ export class SessionRuntime {
     if (!message && normalizedImages.length === 0) return;
 
     const extensionCommand = await this.#resolveImmediateExtensionCommand(message);
-    // Park while streaming or while earlier follow-ups still await promotion; otherwise an idle-gap
-    // appendUserPrompt steals the next agent_start and leaves Queued bubbles stuck.
-    const queueAsFollowUp = !extensionCommand
-      && configuration.streamingBehavior === "followUp"
-      && (this.view.isStreaming || this.view.queuedFollowUps.length > 0);
+    // Park while streaming or while an earlier prompt still awaits promotion; otherwise an idle-gap
+    // appendUserPrompt can steal the next agent_start and leave queue bubbles stuck.
+    const hasQueuedPrompts = this.view.queuedSteers.length > 0 || this.view.queuedFollowUps.length > 0;
+    const queuePrompt = !extensionCommand && (this.view.isStreaming || hasQueuedPrompts);
 
-    if (queueAsFollowUp) {
-      const queuedId = this.#conversation.enqueueFollowUp(message, images);
+    if (queuePrompt) {
+      const streamingBehavior = requestedStreamingBehavior ?? configuration.streamingBehavior;
+      const queuedId = streamingBehavior === "steer"
+        ? this.#conversation.enqueueSteer(message, images)
+        : this.#conversation.enqueueFollowUp(message, images);
       this.#notifyChange();
       try {
         await api.prompt(message, {
           ...(normalizedImages.length ? { images: normalizedImages } : {}),
-          streamingBehavior: "followUp",
+          streamingBehavior,
         });
       } catch (error) {
-        this.#conversation.removeQueuedFollowUp(queuedId);
+        this.#conversation.removeQueuedPrompt(queuedId);
         this.#conversation.appendNotice(errorMessage(error), "error");
         this.#notifyChange();
         throw error;
@@ -221,9 +225,6 @@ export class SessionRuntime {
     try {
       await api.prompt(message, {
         ...(normalizedImages.length ? { images: normalizedImages } : {}),
-        ...(this.view.isStreaming && !extensionCommand
-          ? { streamingBehavior: configuration.streamingBehavior }
-          : {}),
       });
       if (extensionCommand) await this.#finishImmediateExtensionCommand(turnId);
     } catch (error) {
@@ -256,8 +257,8 @@ export class SessionRuntime {
       this.#abortRequested = false;
       throw error;
     }
-    // Abort cancels the active run; pending local follow-up UI is no longer trustworthy.
-    this.#conversation.clearQueuedFollowUps();
+    // Abort cancels the active run; pending local queue UI is no longer trustworthy.
+    this.#conversation.clearQueuedPrompts();
     this.#notifyChange();
   }
 
@@ -272,7 +273,7 @@ export class SessionRuntime {
     if (!this.#sessionTreeBridge?.available) throw new Error("Session tree navigation is unavailable in this Pi process. Update Pi, restart the session, and check FrostPi diagnostics.");
     if (this.view.status !== "ready" || this.view.isStreaming || this.view.isCompacting) throw new Error("Wait for the current Pi operation to finish before switching branches.");
     if (this.view.historyStatus !== "loaded") throw new Error("Load conversation history before switching branches.");
-    if (this.view.pendingExtensionUi.length > 0 || this.view.queuedFollowUps.length > 0) throw new Error("Wait for the current Pi interaction to finish before switching branches.");
+    if (this.view.pendingExtensionUi.length > 0 || this.view.queuedSteers.length > 0 || this.view.queuedFollowUps.length > 0) throw new Error("Wait for the current Pi interaction to finish before switching branches.");
 
     const api = this.#requireApi();
     const beforeNavigation = await api.getEntries();
@@ -319,7 +320,7 @@ export class SessionRuntime {
     }
     if (this.view.historyStatus !== "loaded") throw new Error("Load conversation history before forking a message.");
     if (this.view.pendingExtensionUi.length > 0) throw new Error("Answer the pending Pi request before forking.");
-    if (this.view.queuedFollowUps.length > 0) throw new Error("Wait for queued follow-ups to settle before forking.");
+    if (this.view.queuedSteers.length > 0 || this.view.queuedFollowUps.length > 0) throw new Error("Wait for queued prompts to settle before forking.");
     const selectedMessage = this.#conversation.userMessage(entryId);
     if (!selectedMessage) throw new Error("The selected message is no longer available for forking.");
     const projectedImages = selectedMessage.blocks.flatMap((block) => block.type === "images" ? block.images : []);
@@ -496,6 +497,7 @@ export class SessionRuntime {
     this.#conversation.setImageLimits(configuration.maxImageBytes, 12);
     this.#viewState.setAttachmentLimits({ maxImageBytes: configuration.maxImageBytes, maxImages: 12 });
     this.#viewState.setCollapseTurnTrace(configuration.collapseTurnTrace);
+    this.#viewState.setComposerStreamingBehavior(configuration.streamingBehavior);
     this.#viewState.setNetworkProxy({
       mode: configuration.proxy.mode,
       label: appliedLabel,
@@ -597,7 +599,7 @@ export class SessionRuntime {
       this.#logger.error(`Session ${this.id} failed`, error);
       this.#stopLiveStatsRefresh();
       this.#conversation.finalizeLiveState();
-      this.#conversation.clearQueuedFollowUps();
+      this.#conversation.clearQueuedPrompts();
       this.#viewState.setStatus("failed", errorMessage(error));
       this.#notifyChange();
     });

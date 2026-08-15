@@ -226,7 +226,7 @@ export class WebviewBridge implements vscode.Disposable {
         break;
       case "sendPrompt":
         try {
-          await this.#registry.sendPrompt(message.sessionId, message.text, message.images);
+          await this.#registry.sendPrompt(message.sessionId, message.text, message.images, message.streamingBehavior);
           this.post({ type: "promptResult", requestId: message.requestId, ok: true });
         } catch (error) {
           const errorText = error instanceof Error ? error.message : String(error);

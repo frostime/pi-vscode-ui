@@ -11,7 +11,7 @@
   import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
   import { Compartment, EditorState } from "@codemirror/state";
   import { EditorView, keymap, placeholder as editorPlaceholder, tooltips } from "@codemirror/view";
-  import type { RpcCommandDescriptor } from "@frostime/pi-rpc";
+  import type { RpcCommandDescriptor, StreamingBehavior } from "@frostime/pi-rpc";
   import { onMount } from "svelte";
 
   import { shouldStartPromptCompletion } from "./completionPolicy";
@@ -27,6 +27,7 @@
     commands,
     placeholder,
     onchange,
+    currentStreamingBehavior,
     onsubmit,
     onpasteimages,
   }: {
@@ -35,7 +36,8 @@
     commands: RpcCommandDescriptor[];
     placeholder: string;
     onchange: (value: string) => void;
-    onsubmit: () => void;
+    currentStreamingBehavior: StreamingBehavior;
+    onsubmit: (streamingBehavior: StreamingBehavior) => void;
     onpasteimages: (files: File[]) => void | Promise<void>;
   } = $props();
 
@@ -93,9 +95,10 @@
           ...completionKeymap,
           { key: "Tab", run: acceptCompletion },
           { key: "Tab", run: indentPromptWithTab, shift: outdentPromptWithShiftTab },
+          { key: "Alt-Enter", run: () => { onsubmit("followUp"); return true; } },
           { key: "Enter", run: insertPromptNewline },
           ...historyKeymap,
-          { key: "Mod-Enter", run: () => { onsubmit(); return true; } },
+          { key: "Mod-Enter", run: () => { onsubmit(currentStreamingBehavior); return true; } },
           ...defaultKeymap,
         ]),
         EditorView.lineWrapping,

@@ -1,6 +1,6 @@
-import type { RpcCommandDescriptor, RpcModel, RpcSessionStats, ThinkingLevel } from "@frostime/pi-rpc";
+import type { RpcCommandDescriptor, RpcModel, RpcSessionStats, StreamingBehavior, ThinkingLevel } from "@frostime/pi-rpc";
 
-import type { ConversationItemView, ImageAttachmentView, QueuedFollowUpView } from "./conversationModel.js";
+import type { ConversationItemView, ImageAttachmentView, QueuedPromptView } from "./conversationModel.js";
 import type { ExtensionStatusView, ExtensionWidgetView, PendingExtensionUiView } from "./extensionUiModel.js";
 
 export type SessionRuntimeStatus = "queued" | "starting" | "ready" | "running" | "stopping" | "stopped" | "failed";
@@ -70,11 +70,15 @@ export interface SessionViewModel {
   attachmentLimits: AttachmentLimitsView;
   /** When true, completed turns collapse tool/reasoning/interim replies into one summary above the final response. */
   collapseTurnTrace: boolean;
+  /** Default streaming delivery selected for this session's Composer. */
+  composerStreamingBehavior: StreamingBehavior;
   networkProxy: NetworkProxyView;
   questionTool: QuestionToolStateView;
   conversationItems: ConversationItemView[];
-  /** Follow-ups accepted while streaming in followUp mode; shown at the conversation tail until promoted. */
-  queuedFollowUps: QueuedFollowUpView[];
+  /** Steering prompts accepted while streaming; shown at the conversation tail until injected. */
+  queuedSteers: QueuedPromptView[];
+  /** Follow-ups accepted while streaming; shown at the conversation tail until promoted. */
+  queuedFollowUps: QueuedPromptView[];
   pendingExtensionUi: PendingExtensionUiView[];
   extensionStatuses: ExtensionStatusView[];
   extensionWidgets: ExtensionWidgetView[];

@@ -112,8 +112,8 @@ export interface AgentTurnView {
 
 export type ConversationItemView = AgentTurnView | ConversationAnnotationView | BranchControlView;
 
-/** Local follow-up waiting for the current agent run to settle. It is not part of persisted conversation order. */
-export interface QueuedFollowUpView {
+/** Local prompt accepted into one of Pi's streaming queues. It is not yet part of persisted conversation order. */
+export interface QueuedPromptView {
   id: string;
   text: string;
   images: ImageAttachmentView[];

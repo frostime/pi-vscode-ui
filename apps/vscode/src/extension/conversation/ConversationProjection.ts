@@ -15,7 +15,7 @@ import type {
   ImageAttachmentView,
   MessageBlockView,
   MessageStatus,
-  QueuedFollowUpView,
+  QueuedPromptView,
   ResponseActivityView,
   SessionNoticeLevel,
   SessionNoticeView,
@@ -43,7 +43,8 @@ export interface ActiveBranchEdge {
 
 export interface ConversationProjectionSnapshot {
   items: readonly ConversationItemView[];
-  queuedFollowUps: readonly QueuedFollowUpView[];
+  queuedSteers: readonly QueuedPromptView[];
+  queuedFollowUps: readonly QueuedPromptView[];
   updatedAt: number;
 }
 
@@ -57,7 +58,8 @@ interface PersistedTurnState {
 export class ConversationProjection {
   readonly #store = new ConversationItemStore();
   readonly #assistantMessageAdapter = new PiAssistantMessageAdapter();
-  #queuedFollowUps: QueuedFollowUpView[] = [];
+  #queuedSteers: QueuedPromptView[] = [];
+  #queuedFollowUps: QueuedPromptView[] = [];
   #activeTurnId: string | null = null;
   #persistedTurn: PersistedTurnState | null = null;
   #pendingLiveErrorTurnId: string | null = null;
@@ -77,6 +79,7 @@ export class ConversationProjection {
   read(): ConversationProjectionSnapshot {
     return {
       items: this.#store.read(),
+      queuedSteers: this.#queuedSteers,
       queuedFollowUps: this.#queuedFollowUps,
       updatedAt: this.#updatedAt,
     };
@@ -148,28 +151,33 @@ export class ConversationProjection {
     return turn.id;
   }
 
-  enqueueFollowUp(text: string, images: WebviewImageInput[], timestamp = Date.now()): string {
-    const id = `queued-follow-up-${timestamp}-${++this.#sequence}`;
-    this.#queuedFollowUps = [...this.#queuedFollowUps, {
-      id,
-      text,
-      images: toImageViews(images),
-      timestamp,
-    }];
+  enqueueSteer(text: string, images: WebviewImageInput[], timestamp = Date.now()): string {
+    const id = `queued-steer-${timestamp}-${++this.#sequence}`;
+    this.#queuedSteers = [...this.#queuedSteers, queuedPrompt(id, text, images, timestamp)];
     this.#touch();
     return id;
   }
 
-  clearQueuedFollowUps(): void {
-    if (this.#queuedFollowUps.length === 0) return;
+  enqueueFollowUp(text: string, images: WebviewImageInput[], timestamp = Date.now()): string {
+    const id = `queued-follow-up-${timestamp}-${++this.#sequence}`;
+    this.#queuedFollowUps = [...this.#queuedFollowUps, queuedPrompt(id, text, images, timestamp)];
+    this.#touch();
+    return id;
+  }
+
+  clearQueuedPrompts(): void {
+    if (this.#queuedSteers.length === 0 && this.#queuedFollowUps.length === 0) return;
+    this.#queuedSteers = [];
     this.#queuedFollowUps = [];
     this.#touch();
   }
 
-  removeQueuedFollowUp(id: string): boolean {
-    const next = this.#queuedFollowUps.filter((item) => item.id !== id);
-    if (next.length === this.#queuedFollowUps.length) return false;
-    this.#queuedFollowUps = next;
+  removeQueuedPrompt(id: string): boolean {
+    const nextSteers = this.#queuedSteers.filter((item) => item.id !== id);
+    const nextFollowUps = this.#queuedFollowUps.filter((item) => item.id !== id);
+    if (nextSteers.length === this.#queuedSteers.length && nextFollowUps.length === this.#queuedFollowUps.length) return false;
+    this.#queuedSteers = nextSteers;
+    this.#queuedFollowUps = nextFollowUps;
     this.#touch();
     return true;
   }
@@ -400,14 +408,14 @@ export class ConversationProjection {
 
   #startAgentTurn(): void {
     let active = this.#activeTurn();
-    if (this.#queuedFollowUps.length > 0 && active?.status === "running" && active.items.length === 0) {
+    if (this.#hasQueuedPrompts() && active?.status === "running" && active.items.length === 0) {
       this.#store.removeTopLevelItem(active.id);
       this.#activeTurnId = null;
       active = undefined;
     }
     const turn = active?.status === "running"
       ? active
-      : this.#promoteQueuedFollowUp() ?? active;
+      : this.#promoteNextQueuedPrompt() ?? active;
     if (!turn) {
       this.#activeTurnId = null;
       return;
@@ -578,13 +586,12 @@ export class ConversationProjection {
   }
 
   #tryPromoteQueuedUserMessage(event: RpcEvent): boolean {
-    if (this.#queuedFollowUps.length === 0) return false;
+    if (!this.#hasQueuedPrompts()) return false;
     const message = event.message;
     if (!isRecord(message) || message.role !== "user") return false;
 
-    const [promoted, ...remaining] = this.#queuedFollowUps;
+    const promoted = this.#takeNextQueuedPrompt();
     if (!promoted) return false;
-    this.#queuedFollowUps = remaining;
     if (this.#activeTurnId) {
       const prior = this.#turn(this.#activeTurnId);
       if (prior.status === "running") this.#setTurnStatus(prior.id, "completed", Date.now());
@@ -632,13 +639,27 @@ export class ConversationProjection {
     return undefined;
   }
 
-  #promoteQueuedFollowUp(): AgentTurnView | undefined {
-    const [next, ...remaining] = this.#queuedFollowUps;
+  #promoteNextQueuedPrompt(): AgentTurnView | undefined {
+    const next = this.#takeNextQueuedPrompt();
     if (!next) return undefined;
-    this.#queuedFollowUps = remaining;
     const turn = this.#createUserTurn(next.text, next.images, next.timestamp);
     this.#store.appendItem(turn);
     return turn;
+  }
+
+  #takeNextQueuedPrompt(): QueuedPromptView | undefined {
+    const steer = this.#queuedSteers[0];
+    if (steer) {
+      this.#queuedSteers = this.#queuedSteers.slice(1);
+      return steer;
+    }
+    const followUp = this.#queuedFollowUps[0];
+    if (followUp) this.#queuedFollowUps = this.#queuedFollowUps.slice(1);
+    return followUp;
+  }
+
+  #hasQueuedPrompts(): boolean {
+    return this.#queuedSteers.length > 0 || this.#queuedFollowUps.length > 0;
   }
 
   #refreshBranchControls(branchEdges: readonly ActiveBranchEdge[]): void {
@@ -907,6 +928,15 @@ function isBranchControl(
   item: ConversationAnnotationView | BranchControlView | AgentActivityView,
 ): item is BranchControlView {
   return item.type === "branchControl";
+}
+
+function queuedPrompt(
+  id: string,
+  text: string,
+  images: WebviewImageInput[],
+  timestamp: number,
+): QueuedPromptView {
+  return { id, text, images: toImageViews(images), timestamp };
 }
 
 function toImageViews(

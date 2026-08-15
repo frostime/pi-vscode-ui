@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { access } from "node:fs/promises";
 import { basename, normalize, resolve } from "node:path";
 
-import type { RpcExtensionUiResponse, ThinkingLevel } from "@frostime/pi-rpc";
+import type { RpcExtensionUiResponse, StreamingBehavior, ThinkingLevel } from "@frostime/pi-rpc";
 import * as vscode from "vscode";
 
 import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
@@ -292,7 +292,7 @@ export class SessionRegistry implements vscode.Disposable {
     for (const runtime of this.#runtimes.values()) runtime.refreshConfigurationState(forceRestartRequired);
   }
 
-  async sendPrompt(sessionId: string, text: string, images: WebviewImageInput[]): Promise<void> {
+  async sendPrompt(sessionId: string, text: string, images: WebviewImageInput[], streamingBehavior?: StreamingBehavior): Promise<void> {
     this.#assertSessionOutsideFork(sessionId);
     if (!text.trim() && images.length === 0) return;
     const runtime = this.#requireRuntime(sessionId);
@@ -304,7 +304,7 @@ export class SessionRegistry implements vscode.Disposable {
     const compactInstructions = compactCommandInstructions(text);
     if (compactInstructions !== null && images.length > 0) throw new Error("/compact does not support image attachments.");
     if (compactInstructions !== null) await runtime.compact(compactInstructions || undefined);
-    else await runtime.sendPrompt(text, images);
+    else await runtime.sendPrompt(text, images, streamingBehavior);
     runtime.clearComposerSeed();
     if (compactInstructions === null && this.#temporarySessionIds.delete(sessionId)) await this.#persist();
   }

@@ -64,9 +64,11 @@ Failure or cancellation before Pi confirms commit preserves history and Composer
 
 FrostPi persists only local session id, title, cwd, Pi session-file path, last-updated time, and active session id. It excludes messages, reasoning, tool output, images, credentials, keys, worktree/branch data, and anchor folder. Restoration rebuilds conversation from Pi `get_entries`; see `apps/vscode/src/extension/conversation/conversation-projection.SPEC.md`.
 
-## Follow-ups and slash commands
+## Streaming queues and slash commands
 
-In default `followUp` mode, a normal prompt accepted during streaming is parked as a session-level queued follow-up. Later normal prompts stay parked while that local queue exists, including after settle; Pi user-message events promote them in FIFO order, with `agent_start` only a post-settle fallback. `steer` enters the live conversation immediately. Abort, stop, or process failure clears the queue; extension slash commands are not parked.
+A normal prompt accepted during streaming is parked in the session-level Steer or Queue projection selected by that submission. The Composer initializes its per-session selection from `frostpi.composer.streamingBehavior`; Ctrl/Cmd+Enter uses that selection and Alt+Enter explicitly selects Queue for one submission. Pi user-message events promote pending steering messages before follow-ups, matching Pi's delivery priority, with `agent_start` only an idle-gap fallback. Later normal prompts remain parked while either local queue exists. Abort, stop, or process failure clears the local projection; extension slash commands are not parked.
+
+Current Pi RPC exposes queue updates but no dequeue or clear command. FrostPi therefore does not present a per-message remove action or claim that removing a local bubble would cancel Pi-side delivery.
 
 Composer normalizes slash input. Host-local `/compact`, `/resume`, and `/editor` do not become ordinary user prompts; other slash commands use `prompt`. Manual compaction follows Pi semantics and may abort an active run; while compacting, submission is disabled and status is not persisted in the timeline. Success preserves prior turns and adds a summary boundary; failure preserves conversation and reports Pi's error. Pi extension commands may finish without `agent_start`/`agent_settled`, so cached command classification plus idle `get_state` checks closes their local turn. If a known Pi extension command exceeds the ordinary `prompt` response deadline while the process remains live, its completion is unconfirmed rather than failed: FrostPi closes the local turn and shows a warning that Pi may still be waiting for input or finish later. Prompt templates and skills remain ordinary agent turns.
 

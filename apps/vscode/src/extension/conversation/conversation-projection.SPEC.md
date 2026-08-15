@@ -5,7 +5,7 @@ scope:
   - /apps/vscode/src/extension/conversation/**
   - /apps/vscode/src/extension/sessions/SessionEntryState.ts
   - /apps/vscode/src/shared/model/conversationModel.ts
-updated: 2026-08-09
+updated: 2026-08-15
 ---
 
 # Conversation Projection
@@ -32,7 +32,7 @@ A branch control represents an active parent-child tree edge. Its identity is de
 
 ## Live reconciliation
 
-Optimistic prompts, streaming assistant content, tools, queued follow-ups, and notices appear before persistence refresh. A live turn becomes eligible for persisted user identity only after Pi emits its user message event. Eligible live turns pair with newly appended user entries in protocol FIFO order; text and timestamp equality are never identity rules. Rejected prompts and immediate extension commands without a Pi user event remain ineligible.
+Optimistic prompts, streaming assistant content, tools, queued steering/follow-up prompts, and notices appear before persistence refresh. A live turn becomes eligible for persisted user identity only after Pi emits its user message event. Eligible live turns pair with newly appended user entries in protocol FIFO order; text and timestamp equality are never identity rules. Rejected prompts and immediate extension commands without a Pi user event remain ineligible.
 
 Live assistant projection accepts both cumulative assistant messages and indexed delta-only updates. A complete assistant `event.message` wins for its event; its accompanying delta is not appended. Otherwise text, thinking, and tool arguments assemble independently by non-negative `contentIndex`. The first valid text or thinking end replaces temporary content and closes that part; later deltas and repeated ends for the part are ignored. Unknown, malformed, conflicting, or out-of-order deltas are ignored without a notice. `message_end.message` is the live final authority and can be projected without an observed start; persisted `get_entries` remains higher authority.
 
@@ -60,7 +60,7 @@ A persisted user message closes the preceding visual turn and opens a user-ancho
 
 Live `message_end(error)` displays the error activity but leaves the turn running until `agent_end` decides whether Pi will retry. `agent_end(willRetry: true)` keeps the running turn and `auto_retry_start` adds a notice; `willRetry: false` commits the pending error. This uses the existing turn statuses and does not persist retry notices.
 
-While an agent run is active, queued follow-ups remain outside persisted conversation order. Pi may emit a follow-up user message without another `agent_start`; promotion follows protocol FIFO order and closes the prior visual turn. Abort, process stop, and process failure clear the local queue. Tool tracking at these lifecycle boundaries follows [Unresolved tool results](#unresolved-tool-results).
+While an agent run is active, queued steering and follow-up prompts remain outside persisted conversation order in separate local projections. Pi may emit queued user messages without another `agent_start`; steering is promoted FIFO before follow-ups, matching Pi's queue priority, and each promotion closes the prior visual turn. Abort, process stop, and process failure clear both local projections. Tool tracking at these lifecycle boundaries follows [Unresolved tool results](#unresolved-tool-results).
 
 Live activity updates replace existing view objects instead of mutating them. This is required for bridge deltas and Webview-owned disclosure state. Documented assistant events provide an ID or timestamp correlation clue; a malformed live assistant without either is omitted until persisted refresh rather than emitted as an uncorrelatable duplicate. Within one valid assistant stream, timestamp and any ID present at start remain stable through end. Mid-stream identity changes are unsupported malformed input and recover only through authoritative history refresh; the Store does not maintain cross-clue aliases. Notices emitted during an active turn remain inside its ordered items; idle notices are top-level conversation items.
 
