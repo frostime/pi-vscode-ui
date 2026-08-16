@@ -15,7 +15,7 @@
   let scroller: HTMLDivElement;
   let content: HTMLDivElement;
   let followState = $state({ ...INITIAL_SCROLL_FOLLOW_STATE });
-  let lastUpdatedAt = 0;
+  let lastConversationContentRevision = 0;
   let lastTurnCount = 0;
   let programmaticScroll = false;
   let resizeObserver: ResizeObserver | null = null;
@@ -37,10 +37,10 @@
   onDestroy(() => resizeObserver?.disconnect());
 
   $effect(() => {
-    const updatedAt = session.updatedAt;
-    if (!scroller || updatedAt === lastUpdatedAt) return;
+    const contentRevision = session.conversationContentRevision;
+    if (!scroller || contentRevision === lastConversationContentRevision) return;
     const isNewTurn = turnCount > lastTurnCount;
-    lastUpdatedAt = updatedAt;
+    lastConversationContentRevision = contentRevision;
     lastTurnCount = turnCount;
     if (isNewTurn) {
       followState = reduceScrollFollow(followState, { type: "contentUpdate", newTurn: true });

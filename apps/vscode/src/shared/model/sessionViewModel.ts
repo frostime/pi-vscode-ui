@@ -18,7 +18,7 @@ export interface SessionSummaryView {
   thinkingLevel?: ThinkingLevel;
   historyStatus: SessionHistoryStatus;
   requiresUserInput: boolean;
-  updatedAt: number;
+  lastViewStateChangeAt: number;
 }
 
 
@@ -90,7 +90,7 @@ export interface SessionViewModel {
   /** Prompt-cache hit percentage for the latest assistant message on the active session path. */
   cacheHitPercent?: number;
   error?: string;
-  updatedAt: number;
+  conversationContentRevision: number;
 }
 
 export interface WorkspaceViewModel {

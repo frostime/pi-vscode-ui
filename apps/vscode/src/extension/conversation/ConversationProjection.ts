@@ -45,7 +45,7 @@ export interface ConversationProjectionSnapshot {
   items: readonly ConversationItemView[];
   queuedSteers: readonly QueuedPromptView[];
   queuedFollowUps: readonly QueuedPromptView[];
-  updatedAt: number;
+  contentRevision: number;
 }
 
 export type ConversationReconcileResult = "applied" | "reload";
@@ -64,7 +64,7 @@ export class ConversationProjection {
   #persistedTurn: PersistedTurnState | null = null;
   #pendingLiveErrorTurnId: string | null = null;
   #sequence = 0;
-  #updatedAt = Date.now();
+  #contentRevision = 0;
   readonly #persistedEntryIds = new Set<string>();
   readonly #eligibleLiveTurnIds: string[] = [];
   readonly #eligibleLiveTurnIdSet = new Set<string>();
@@ -81,7 +81,7 @@ export class ConversationProjection {
       items: this.#store.read(),
       queuedSteers: this.#queuedSteers,
       queuedFollowUps: this.#queuedFollowUps,
-      updatedAt: this.#updatedAt,
+      contentRevision: this.#contentRevision,
     };
   }
 
@@ -98,7 +98,7 @@ export class ConversationProjection {
     this.#projectEntries(entries, branchEdges);
     this.#completePersistedTurn(true);
     this.#store.finalizeUnresolvedTools();
-    this.#touch();
+    this.#markContentChanged();
   }
 
   reconcileEntries(
@@ -127,7 +127,7 @@ export class ConversationProjection {
     this.#refreshBranchControls(branchEdges);
     this.#projectEntries(entries, branchEdges);
     this.#completePersistedTurn(false);
-    this.#touch();
+    this.#markContentChanged();
     return "applied";
   }
 
@@ -147,21 +147,21 @@ export class ConversationProjection {
     const turn = this.#createUserTurn(text, images, timestamp);
     this.#store.appendItem(turn);
     this.#activeTurnId = turn.id;
-    this.#touch();
+    this.#markContentChanged();
     return turn.id;
   }
 
   enqueueSteer(text: string, images: WebviewImageInput[], timestamp = Date.now()): string {
     const id = `queued-steer-${timestamp}-${++this.#sequence}`;
     this.#queuedSteers = [...this.#queuedSteers, queuedPrompt(id, text, images, timestamp)];
-    this.#touch();
+    this.#markContentChanged();
     return id;
   }
 
   enqueueFollowUp(text: string, images: WebviewImageInput[], timestamp = Date.now()): string {
     const id = `queued-follow-up-${timestamp}-${++this.#sequence}`;
     this.#queuedFollowUps = [...this.#queuedFollowUps, queuedPrompt(id, text, images, timestamp)];
-    this.#touch();
+    this.#markContentChanged();
     return id;
   }
 
@@ -169,7 +169,7 @@ export class ConversationProjection {
     if (this.#queuedSteers.length === 0 && this.#queuedFollowUps.length === 0) return;
     this.#queuedSteers = [];
     this.#queuedFollowUps = [];
-    this.#touch();
+    this.#markContentChanged();
   }
 
   removeQueuedPrompt(id: string): boolean {
@@ -178,7 +178,7 @@ export class ConversationProjection {
     if (nextSteers.length === this.#queuedSteers.length && nextFollowUps.length === this.#queuedFollowUps.length) return false;
     this.#queuedSteers = nextSteers;
     this.#queuedFollowUps = nextFollowUps;
-    this.#touch();
+    this.#markContentChanged();
     return true;
   }
 
@@ -191,7 +191,7 @@ export class ConversationProjection {
       timestamp,
     };
     this.#appendLiveItem(notice);
-    this.#touch();
+    this.#markContentChanged();
   }
 
   completeTurn(turnId: string, status: AgentTurnStatus = "completed", endedAt = Date.now()): boolean {
@@ -202,14 +202,14 @@ export class ConversationProjection {
       this.#activeTurnId = null;
       this.#resetStreamingAssistant();
     }
-    this.#touch();
+    this.#markContentChanged();
     return true;
   }
 
   finalizeLiveState(): void {
     this.#store.finalizeUnresolvedTools();
     this.#assistantMessageAdapter.reset();
-    this.#touch();
+    this.#markContentChanged();
   }
 
   applyEvent(event: RpcEvent): void {
@@ -261,7 +261,7 @@ export class ConversationProjection {
       default:
         return;
     }
-    this.#touch();
+    this.#markContentChanged();
   }
 
   #projectEntries(entries: readonly RpcSessionEntry[], branchEdges: readonly ActiveBranchEdge[]): void {
@@ -795,8 +795,8 @@ export class ConversationProjection {
     return blocks;
   }
 
-  #touch(): void {
-    this.#updatedAt = Math.max(Date.now(), this.#updatedAt + 1);
+  #markContentChanged(): void {
+    this.#contentRevision += 1;
   }
 }
 

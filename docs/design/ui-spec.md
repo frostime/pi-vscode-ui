@@ -21,7 +21,7 @@ FrostPi uses a first-party VS Code visual language: compact, low-noise, keyboard
 ## User-owned interaction state
 
 - Disclosure and conversation scroll position are user-owned. Live or persisted updates do not reopen collapsed content, resume paused following, or otherwise replace those choices.
-- Initial/session-switch/new-turn navigation may follow output; after the user scrolls away, updates preserve the viewport and expose a jump-to-latest control.
+- Initial/session-switch/new-turn navigation may follow output; after the user scrolls away, projected conversation-content updates preserve the viewport and expose a jump-to-latest control. Stats and other scalar session updates do not count as conversation updates.
 - Collapsing a Question request or hiding the session shell does not cancel Host-owned work or pending input.
 
 ## Accessibility

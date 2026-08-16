@@ -16,7 +16,7 @@ Pi `get_entries` plus `leafId` is the persisted conversation authority. FrostPi 
 
 Parent-chain order is presentation order. Append order is only an incremental cursor; timestamps are display metadata. A missing or cyclic selected parent chain fails history loading instead of falling back to append order.
 
-The Host emits one ordered `conversationItems` collection. A visual turn has its own ordered `items`, allowing a branch edge or persisted boundary to occur between agent activities. The Webview renders this order directly and owns only disclosure and scrolling.
+The Host emits one ordered `conversationItems` collection. A visual turn has its own ordered `items`, allowing a branch edge or persisted boundary to occur between agent activities. The projection owns the monotonic content revision consumed by presentation behavior; unrelated session state does not advance it. The Webview renders this order directly and owns only disclosure and scrolling.
 
 ## Persisted entries
 
