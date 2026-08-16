@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.3] - 2026-08-17
+
+### Fixed
+
+- Prevent stats and other session-state refreshes from being counted as new conversation updates.
+
 ## [0.11.2] - 2026-08-16
 
 ### Fixed
@@ -345,7 +351,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/frostpi/compare/v0.11.2...HEAD
+[Unreleased]: https://github.com/frostime/frostpi/compare/v0.11.3...HEAD
+[0.11.3]: https://github.com/frostime/frostpi/compare/v0.11.2...v0.11.3
 [0.11.2]: https://github.com/frostime/frostpi/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/frostime/frostpi/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/frostime/frostpi/compare/v0.10.4...v0.11.0

@@ -84,7 +84,6 @@ export class SessionRuntime {
     id: string,
     readonly cwd: string,
     title: string,
-    updatedAt: number,
     configurationProvider: () => FrostPiConfiguration,
     proxySecrets: ProxySecretStore,
     logger: DiagnosticLogger,
@@ -99,7 +98,7 @@ export class SessionRuntime {
     this.#viewState = new SessionViewState(id, cwd, title, {
       maxImageBytes: initialConfiguration.maxImageBytes,
       maxImages: 12,
-    }, updatedAt, initialConfiguration.collapseTurnTrace, isEphemeral);
+    }, initialConfiguration.collapseTurnTrace, isEphemeral);
     this.#viewState.setComposerStreamingBehavior(initialConfiguration.streamingBehavior);
     this.#viewState.setQuestionTool({
       configuredEnabled: initialConfiguration.questionToolEnabled,
@@ -300,7 +299,7 @@ export class SessionRuntime {
       ]);
       this.#viewState.applyState(state);
       this.#replacePersistedEntries(entryData.entries, entryData.leafId);
-      if (stats) this.#viewState.setStats(stats);
+      if (stats) this.#viewState.updateStats(stats);
       return seed ? { cancelled: false, seed } : { cancelled: false };
     } catch (error) {
       if (committed) {
@@ -362,7 +361,7 @@ export class SessionRuntime {
     ]);
     this.#viewState.applyState(state);
     this.#replacePersistedEntries(entryData.entries, entryData.leafId);
-    if (stats) this.#viewState.setStats(stats);
+    if (stats) this.#viewState.updateStats(stats);
     if (commands) this.#viewState.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
     this.#viewState.setComposerSeed(composerSeed);
     this.#viewState.setForking(false);
@@ -649,7 +648,7 @@ export class SessionRuntime {
     this.#viewState.setModels(models);
     this.#viewState.setScopedModelIds(scopedModelIds);
     this.#viewState.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
-    if (stats) this.#viewState.setStats(stats);
+    if (stats) this.#viewState.updateStats(stats);
     this.#viewState.setSessionTreeAvailable(this.#sessionTreeBridge?.available ?? false);
     if (this.#entries.initialized) {
       await this.#refreshPersistedEntries(api).catch((error) => {
@@ -750,7 +749,7 @@ export class SessionRuntime {
     if (!api) return;
     const stats = await api.getSessionStats().catch(() => undefined);
     if (this.#disposed || api !== this.#api) return;
-    if (stats) this.#viewState.setStats(stats);
+    if (stats) this.#viewState.updateStats(stats);
     await this.#refreshPersistedEntries(api).catch((error) => {
       this.#reportEntryRefreshFailure("Failed to reconcile Pi entries after compaction", error);
     });
@@ -781,10 +780,7 @@ export class SessionRuntime {
     if (!api || this.#disposed || version !== this.#liveStatsRefreshVersion || !this.view.isStreaming) return;
     const stats = await api.getSessionStats().catch(() => undefined);
     if (this.#disposed || api !== this.#api || version !== this.#liveStatsRefreshVersion || !this.view.isStreaming) return;
-    if (stats) {
-      this.#viewState.setStats(stats);
-      this.#notifyChange();
-    }
+    if (stats && this.#viewState.updateStats(stats)) this.#notifyChange();
     this.#scheduleLiveStatsRefresh();
   }
 
@@ -797,7 +793,7 @@ export class SessionRuntime {
       api.getCommands().catch(() => undefined),
     ]);
     if (state) this.#viewState.applyState(state);
-    if (stats) this.#viewState.setStats(stats);
+    if (stats) this.#viewState.updateStats(stats);
     if (commands) this.#viewState.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
     await this.#refreshPersistedEntries(api).catch((error) => {
       this.#reportEntryRefreshFailure("Failed to reconcile Pi session entries", error);

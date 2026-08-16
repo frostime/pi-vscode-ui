@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+
 import type { RpcEvent, RpcSessionState } from "@frostime/pi-rpc";
 
 import type { ConversationProjectionSnapshot } from "../conversation/ConversationProjection.js";
@@ -7,7 +9,10 @@ import type {
   SessionViewModel,
 } from "../../shared/model/sessionViewModel.js";
 
-type SessionScalarView = Omit<SessionViewModel, "conversationItems" | "queuedSteers" | "queuedFollowUps">;
+type SessionScalarView = Omit<
+  SessionViewModel,
+  "conversationItems" | "queuedSteers" | "queuedFollowUps" | "conversationContentRevision"
+>;
 
 export class SessionViewState {
   readonly #view: SessionScalarView;
@@ -17,7 +22,6 @@ export class SessionViewState {
     cwd: string,
     title: string,
     attachmentLimits: AttachmentLimitsView = { maxImageBytes: 10 * 1024 * 1024, maxImages: 12 },
-    initialUpdatedAt = Date.now(),
     collapseTurnTrace = true,
     isEphemeral = false,
   ) {
@@ -47,7 +51,6 @@ export class SessionViewState {
       sessionTreeAvailable: false,
       isNavigatingTree: false,
       isSummarizingTree: false,
-      updatedAt: initialUpdatedAt,
     };
   }
 
@@ -57,20 +60,18 @@ export class SessionViewState {
       conversationItems: [...conversation.items],
       queuedSteers: [...conversation.queuedSteers],
       queuedFollowUps: [...conversation.queuedFollowUps],
-      updatedAt: Math.max(this.#view.updatedAt, conversation.updatedAt),
+      conversationContentRevision: conversation.contentRevision,
     };
   }
 
   rebindSessionId(id: string): void {
     this.#view.id = id;
-    this.#touch();
   }
 
   setStatus(status: SessionRuntimeStatus, error?: string): void {
     this.#view.status = status;
     if (error) this.#view.error = error;
     else delete this.#view.error;
-    this.#touch();
   }
 
   applyState(state: RpcSessionState): void {
@@ -82,7 +83,6 @@ export class SessionViewState {
     if (state.sessionId) this.#view.sessionId = state.sessionId;
     if (state.sessionName) this.#view.title = state.sessionName;
     this.#view.status = state.isStreaming ? "running" : "ready";
-    this.#touch();
   }
 
   applyEvent(event: RpcEvent): void {
@@ -104,95 +104,79 @@ export class SessionViewState {
       default:
         return;
     }
-    this.#touch();
   }
 
   setForking(isForking: boolean): void {
     this.#view.isForking = isForking;
-    this.#touch();
   }
 
   setComposerSeed(seed: NonNullable<SessionViewModel["composerSeed"]>): void {
     this.#view.composerSeed = seed;
-    this.#touch();
   }
 
   clearComposerSeed(): void {
     if (!this.#view.composerSeed) return;
     delete this.#view.composerSeed;
-    this.#touch();
   }
 
   setSessionTreeAvailable(available: boolean): void {
     this.#view.sessionTreeAvailable = available;
-    this.#touch();
   }
 
   setNavigatingTree(isNavigatingTree: boolean, isSummarizingTree = false): void {
     this.#view.isNavigatingTree = isNavigatingTree;
     this.#view.isSummarizingTree = isNavigatingTree && isSummarizingTree;
-    this.#touch();
   }
 
   setHistoryStatus(status: SessionViewModel["historyStatus"]): void {
     this.#view.historyStatus = status;
-    this.#touch();
   }
 
   setModels(models: SessionViewModel["availableModels"]): void {
     this.#view.availableModels = models;
-    this.#touch();
   }
 
   setScopedModelIds(scopedModelIds: SessionViewModel["scopedModelIds"]): void {
     this.#view.scopedModelIds = [...scopedModelIds];
-    this.#touch();
   }
 
   setCommands(commands: SessionViewModel["commands"]): void {
     this.#view.commands = commands;
-    this.#touch();
   }
 
-  setStats(stats: NonNullable<SessionViewModel["stats"]>): void {
+  updateStats(stats: NonNullable<SessionViewModel["stats"]>): boolean {
+    if (isDeepStrictEqual(this.#view.stats, stats)) return false;
     this.#view.stats = stats;
-    this.#touch();
+    return true;
   }
 
   setCacheHitPercent(cacheHitPercent: number | undefined): void {
     if (cacheHitPercent === undefined) delete this.#view.cacheHitPercent;
     else this.#view.cacheHitPercent = cacheHitPercent;
-    this.#touch();
   }
 
   setTitle(title: string): void {
     this.#view.title = title || "Untitled session";
-    this.#touch();
   }
 
   setNetworkProxy(networkProxy: SessionViewModel["networkProxy"]): void {
     this.#view.networkProxy = networkProxy;
-    this.#touch();
   }
 
   setQuestionTool(questionTool: SessionViewModel["questionTool"]): void {
     this.#view.questionTool = questionTool;
-    this.#touch();
   }
 
   setAttachmentLimits(attachmentLimits: AttachmentLimitsView): void {
     this.#view.attachmentLimits = attachmentLimits;
-    this.#touch();
   }
 
   setCollapseTurnTrace(collapseTurnTrace: boolean): void {
     this.#view.collapseTurnTrace = collapseTurnTrace;
-    this.#touch();
   }
 
   setComposerStreamingBehavior(streamingBehavior: SessionViewModel["composerStreamingBehavior"]): void {
     this.#view.composerStreamingBehavior = streamingBehavior;
-    this.#touch();
   }
 
   setExtensionUi(
@@ -203,10 +187,5 @@ export class SessionViewState {
     this.#view.pendingExtensionUi = pending;
     this.#view.extensionStatuses = statuses;
     this.#view.extensionWidgets = widgets;
-    this.#touch();
-  }
-
-  #touch(): void {
-    this.#view.updatedAt = Math.max(Date.now(), this.#view.updatedAt + 1);
   }
 }

@@ -89,6 +89,12 @@ interface ItemLocation {
   itemId: string;
 }
 
+function isRunningToolActivity(
+  item: AgentTurnItemView,
+): item is Extract<AgentTurnItemView, { type: "tool" }> {
+  return item.type === "tool" && item.tool.status === "running";
+}
+
 interface AssistantOwner {
   viewMessageId: string;
   locations: ItemLocation[];
@@ -144,12 +150,18 @@ export class ConversationItemStore {
   }
 
   finalizeUnresolvedTools(): void {
-    this.#items = this.#items.map((item) => item.type !== "turn" ? item : {
-      ...item,
-      items: item.items.map((turnItem) => turnItem.type !== "tool" || turnItem.tool.status !== "running"
-        ? turnItem
-        : { ...turnItem, tool: { ...turnItem.tool, status: "cancelled", isError: false } }),
+    let changed = false;
+    const finalizedItems = this.#items.map((item) => {
+      if (item.type !== "turn" || !item.items.some(isRunningToolActivity)) return item;
+      changed = true;
+      return {
+        ...item,
+        items: item.items.map((turnItem) => isRunningToolActivity(turnItem)
+          ? { ...turnItem, tool: { ...turnItem.tool, status: "cancelled" as const, isError: false } }
+          : turnItem),
+      };
     });
+    if (changed) this.#items = finalizedItems;
   }
 
   /** Detects ambiguous live adoption before any public item is mutated. */
@@ -339,6 +351,7 @@ export class ConversationItemStore {
 
   setTurnStatus(turnId: string, status: AgentTurnStatus, endedAt?: number): void {
     const turn = this.turn(turnId);
+    if (turn.status === status && (endedAt === undefined || turn.endedAt === endedAt)) return;
     this.replaceTurn({ ...turn, status, ...(endedAt === undefined ? {} : { endedAt }) });
   }
 

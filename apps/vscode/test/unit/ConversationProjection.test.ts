@@ -6,6 +6,16 @@ import type { AgentTurnView } from "../../src/shared/model/conversationModel.js"
 import type { BoundToolCallView } from "../../src/shared/model/toolCallModel.js";
 
 describe("ConversationProjection", () => {
+  it("does not report content changes for lifecycle events with no projected effect", () => {
+    const projection = new ConversationProjection();
+    const initialRevision = projection.read().contentRevision;
+
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "agent_settled" });
+
+    expect(projection.read().contentRevision).toBe(initialRevision);
+  });
+
   it("preserves active-path order across turns, branch edges, boundaries, and custom blocks", () => {
     const projection = new ConversationProjection();
     projection.replaceEntries([
