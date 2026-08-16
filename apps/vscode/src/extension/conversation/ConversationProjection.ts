@@ -213,6 +213,10 @@ export class ConversationProjection {
   }
 
   applyEvent(event: RpcEvent): void {
+    const previousItems = this.#store.read();
+    const previousQueuedSteers = this.#queuedSteers;
+    const previousQueuedFollowUps = this.#queuedFollowUps;
+
     switch (event.type) {
       case "agent_start":
         this.#startAgentTurn();
@@ -261,7 +265,13 @@ export class ConversationProjection {
       default:
         return;
     }
-    this.#markContentChanged();
+    if (
+      this.#store.read() !== previousItems
+      || this.#queuedSteers !== previousQueuedSteers
+      || this.#queuedFollowUps !== previousQueuedFollowUps
+    ) {
+      this.#markContentChanged();
+    }
   }
 
   #projectEntries(entries: readonly RpcSessionEntry[], branchEdges: readonly ActiveBranchEdge[]): void {
