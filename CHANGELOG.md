@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-08-16
+
+### Fixed
+
+- Keep long Pi extension confirmation messages in a scrollable card while leaving the No and Yes actions visible and reachable.
+
 ## [0.11.1] - 2026-08-15
 
 ### Added
@@ -339,7 +345,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/frostpi/compare/v0.11.1...HEAD
+[Unreleased]: https://github.com/frostime/frostpi/compare/v0.11.2...HEAD
+[0.11.2]: https://github.com/frostime/frostpi/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/frostime/frostpi/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/frostime/frostpi/compare/v0.10.4...v0.11.0
 [0.10.4]: https://github.com/frostime/frostpi/compare/v0.10.3...v0.10.4

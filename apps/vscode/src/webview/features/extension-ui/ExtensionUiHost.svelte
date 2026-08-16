@@ -20,5 +20,5 @@
 {/if}
 
 <style>
-.extension-ui-host { width: 100%; max-width: var(--content-max-width); margin: 0 auto 7px; display: grid; gap: 6px; }
+.extension-ui-host { width: 100%; max-width: var(--content-max-width); max-height: min(40vh, 360px); min-height: 0; margin: 0 auto 7px; display: grid; gap: 6px; overflow-y: auto; }
 </style>

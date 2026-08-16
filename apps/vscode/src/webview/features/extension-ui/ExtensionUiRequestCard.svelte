@@ -24,41 +24,47 @@
 </script>
 
 <section class="extension-ui-card" aria-labelledby={`extension-ui-${request.id}`}>
-  <div class="extension-ui-heading">
-    <span class="codicon codicon-question"></span>
-    <div class="extension-ui-copy">
-      <strong id={`extension-ui-${request.id}`}>{request.title}</strong>
-      {#if request.message}<p>{request.message}</p>{/if}
-    </div>
+  <header class="extension-ui-heading">
+    <span class="codicon codicon-question" aria-hidden="true"></span>
+    <strong class="extension-ui-title" id={`extension-ui-${request.id}`}>{request.title}</strong>
     {#if canCancel}
       <IconButton icon="close" label="Cancel" onclick={cancel} />
     {/if}
+  </header>
+
+  <div
+    class="extension-ui-body"
+    role={request.method === "confirm" && request.message ? "region" : undefined}
+    aria-label={request.method === "confirm" && request.message ? "Confirmation message" : undefined}
+    tabindex={request.method === "confirm" && request.message ? 0 : undefined}
+  >
+    {#if request.message}<p class="extension-ui-message">{request.message}</p>{/if}
+
+    {#if request.method === "select"}
+      <div class="extension-select-options">
+        {#each request.options ?? [] as option (option)}
+          <button type="button" onclick={() => postToHost({ type: "respondExtensionUi", sessionId, requestId: request.id, response: { value: option } })}>{option}</button>
+        {/each}
+      </div>
+    {:else if request.method === "editor"}
+      <textarea class="extension-editor" bind:value rows="7" aria-label={request.title}></textarea>
+    {:else if request.method === "input"}
+      <input
+        class="extension-input"
+        bind:value
+        placeholder={request.placeholder ?? ""}
+        aria-label={request.title}
+        onkeydown={(event) => event.key === "Enter" && submitValue()}
+      />
+    {/if}
   </div>
 
-  {#if request.method === "select"}
-    <div class="extension-select-options">
-      {#each request.options ?? [] as option (option)}
-        <button type="button" onclick={() => postToHost({ type: "respondExtensionUi", sessionId, requestId: request.id, response: { value: option } })}>{option}</button>
-      {/each}
-    </div>
-  {:else if request.method === "confirm"}
+  {#if request.method === "confirm"}
     <div class="extension-ui-actions">
       <button class="secondary" type="button" onclick={() => postToHost({ type: "respondExtensionUi", sessionId, requestId: request.id, response: { confirmed: false } })}>No</button>
       <button class="primary" type="button" onclick={() => postToHost({ type: "respondExtensionUi", sessionId, requestId: request.id, response: { confirmed: true } })}>Yes</button>
     </div>
-  {:else if request.method === "editor"}
-    <textarea class="extension-editor" bind:value rows="7" aria-label={request.title}></textarea>
-    <div class="extension-ui-actions">
-      <button class="primary" type="button" onclick={submitValue}>Submit</button>
-    </div>
-  {:else}
-    <input
-      class="extension-input"
-      bind:value
-      placeholder={request.placeholder ?? ""}
-      aria-label={request.title}
-      onkeydown={(event) => event.key === "Enter" && submitValue()}
-    />
+  {:else if request.method !== "select"}
     <div class="extension-ui-actions">
       <button class="primary" type="button" onclick={submitValue}>Submit</button>
     </div>
@@ -67,19 +73,24 @@
 
 <style>
 .extension-ui-card {
+  max-height: min(40vh, 360px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 10px;
+  overflow: hidden;
   background: var(--frost-surface);
   border: 1px solid color-mix(in srgb, var(--frost-focus) 42%, var(--frost-border));
   border-radius: 8px;
   box-shadow: 0 4px 15px rgba(0,0,0,.08);
 }
-.extension-ui-heading { display: flex; gap: 8px; align-items: flex-start; }
+.extension-ui-heading { flex: 0 0 auto; display: flex; gap: 8px; align-items: flex-start; }
 .extension-ui-heading > :global(.codicon) { margin-top: 2px; color: var(--frost-link); }
-.extension-ui-copy { flex: 1; min-width: 0; }
-.extension-ui-heading :global(strong) { font-size: 11px; }
-.extension-ui-heading :global(p) { margin: 2px 0 0; color: var(--frost-muted); font-size: 10.5px; white-space: pre-wrap; }
+.extension-ui-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .extension-ui-heading :global(.icon-button) { flex-shrink: 0; margin: -4px -4px 0 0; }
-.extension-ui-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 9px; }
+.extension-ui-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.extension-ui-message { margin: 6px 0 0; color: var(--frost-muted); font-size: 10.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.extension-ui-actions { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 6px; margin-top: 9px; }
 .extension-ui-actions :global(button) {
   padding: 5px 10px;
   border-radius: 5px;
@@ -88,7 +99,10 @@
   font-size: 11px;
 }
 .extension-select-options :global(button) {
+  max-width: 100%;
+  min-width: 0;
   padding: 5px 10px;
+  overflow-wrap: anywhere;
   border-radius: 5px;
   background: var(--frost-secondary-bg);
   cursor: pointer;
