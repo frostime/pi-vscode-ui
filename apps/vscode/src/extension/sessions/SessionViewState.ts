@@ -16,18 +16,15 @@ type SessionScalarView = Omit<
 
 export class SessionViewState {
   readonly #view: SessionScalarView;
-  #lastViewStateChangeAt: number;
 
   constructor(
     id: string,
     cwd: string,
     title: string,
     attachmentLimits: AttachmentLimitsView = { maxImageBytes: 10 * 1024 * 1024, maxImages: 12 },
-    initialViewStateChangeAt = Date.now(),
     collapseTurnTrace = true,
     isEphemeral = false,
   ) {
-    this.#lastViewStateChangeAt = initialViewStateChangeAt;
     this.#view = {
       id,
       title,
@@ -57,10 +54,6 @@ export class SessionViewState {
     };
   }
 
-  get lastViewStateChangeAt(): number {
-    return this.#lastViewStateChangeAt;
-  }
-
   read(conversation: ConversationProjectionSnapshot): SessionViewModel {
     return {
       ...this.#view,
@@ -73,14 +66,12 @@ export class SessionViewState {
 
   rebindSessionId(id: string): void {
     this.#view.id = id;
-    this.#markViewStateChanged();
   }
 
   setStatus(status: SessionRuntimeStatus, error?: string): void {
     this.#view.status = status;
     if (error) this.#view.error = error;
     else delete this.#view.error;
-    this.#markViewStateChanged();
   }
 
   applyState(state: RpcSessionState): void {
@@ -92,7 +83,6 @@ export class SessionViewState {
     if (state.sessionId) this.#view.sessionId = state.sessionId;
     if (state.sessionName) this.#view.title = state.sessionName;
     this.#view.status = state.isStreaming ? "running" : "ready";
-    this.#markViewStateChanged();
   }
 
   applyEvent(event: RpcEvent): void {
@@ -114,97 +104,79 @@ export class SessionViewState {
       default:
         return;
     }
-    this.#markViewStateChanged();
   }
 
   setForking(isForking: boolean): void {
     this.#view.isForking = isForking;
-    this.#markViewStateChanged();
   }
 
   setComposerSeed(seed: NonNullable<SessionViewModel["composerSeed"]>): void {
     this.#view.composerSeed = seed;
-    this.#markViewStateChanged();
   }
 
   clearComposerSeed(): void {
     if (!this.#view.composerSeed) return;
     delete this.#view.composerSeed;
-    this.#markViewStateChanged();
   }
 
   setSessionTreeAvailable(available: boolean): void {
     this.#view.sessionTreeAvailable = available;
-    this.#markViewStateChanged();
   }
 
   setNavigatingTree(isNavigatingTree: boolean, isSummarizingTree = false): void {
     this.#view.isNavigatingTree = isNavigatingTree;
     this.#view.isSummarizingTree = isNavigatingTree && isSummarizingTree;
-    this.#markViewStateChanged();
   }
 
   setHistoryStatus(status: SessionViewModel["historyStatus"]): void {
     this.#view.historyStatus = status;
-    this.#markViewStateChanged();
   }
 
   setModels(models: SessionViewModel["availableModels"]): void {
     this.#view.availableModels = models;
-    this.#markViewStateChanged();
   }
 
   setScopedModelIds(scopedModelIds: SessionViewModel["scopedModelIds"]): void {
     this.#view.scopedModelIds = [...scopedModelIds];
-    this.#markViewStateChanged();
   }
 
   setCommands(commands: SessionViewModel["commands"]): void {
     this.#view.commands = commands;
-    this.#markViewStateChanged();
   }
 
   updateStats(stats: NonNullable<SessionViewModel["stats"]>): boolean {
     if (isDeepStrictEqual(this.#view.stats, stats)) return false;
     this.#view.stats = stats;
-    this.#markViewStateChanged();
     return true;
   }
 
   setCacheHitPercent(cacheHitPercent: number | undefined): void {
     if (cacheHitPercent === undefined) delete this.#view.cacheHitPercent;
     else this.#view.cacheHitPercent = cacheHitPercent;
-    this.#markViewStateChanged();
   }
 
   setTitle(title: string): void {
     this.#view.title = title || "Untitled session";
-    this.#markViewStateChanged();
   }
 
   setNetworkProxy(networkProxy: SessionViewModel["networkProxy"]): void {
     this.#view.networkProxy = networkProxy;
-    this.#markViewStateChanged();
   }
 
   setQuestionTool(questionTool: SessionViewModel["questionTool"]): void {
     this.#view.questionTool = questionTool;
-    this.#markViewStateChanged();
   }
 
   setAttachmentLimits(attachmentLimits: AttachmentLimitsView): void {
     this.#view.attachmentLimits = attachmentLimits;
-    this.#markViewStateChanged();
   }
 
   setCollapseTurnTrace(collapseTurnTrace: boolean): void {
     this.#view.collapseTurnTrace = collapseTurnTrace;
-    this.#markViewStateChanged();
   }
 
   setComposerStreamingBehavior(streamingBehavior: SessionViewModel["composerStreamingBehavior"]): void {
     this.#view.composerStreamingBehavior = streamingBehavior;
-    this.#markViewStateChanged();
   }
 
   setExtensionUi(
@@ -215,10 +187,5 @@ export class SessionViewState {
     this.#view.pendingExtensionUi = pending;
     this.#view.extensionStatuses = statuses;
     this.#view.extensionWidgets = widgets;
-    this.#markViewStateChanged();
-  }
-
-  #markViewStateChanged(): void {
-    this.#lastViewStateChangeAt = Math.max(Date.now(), this.#lastViewStateChangeAt + 1);
   }
 }

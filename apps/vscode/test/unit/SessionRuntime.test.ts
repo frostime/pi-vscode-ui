@@ -28,7 +28,6 @@ describe("Pi session startup and conversation history", () => {
       "stream-084",
       dir,
       "Streaming",
-      Date.now(),
       () => runtimeConfiguration(join(process.cwd(), "test", "e2e", "fake-pi.cjs")),
       new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
       { error: vi.fn(), info: vi.fn() } as never,
@@ -112,7 +111,7 @@ process.on("SIGTERM", () => process.exit(0));
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
     const hooks = { onChange: vi.fn(), onEditorText: vi.fn() };
     try {
-      const ephemeral = new SessionRuntime("temporary", dir, "Temporary", Date.now(), () => configuration, secrets, { error: vi.fn(), info: vi.fn() } as never, hooks, undefined, undefined, true);
+      const ephemeral = new SessionRuntime("temporary", dir, "Temporary", () => configuration, secrets, { error: vi.fn(), info: vi.fn() } as never, hooks, undefined, undefined, true);
       runtimes.push(ephemeral);
       await ephemeral.start(join(dir, "must-not-be-used.jsonl"));
       expect(JSON.parse(await readFile(argsFile, "utf8"))).toEqual(expect.arrayContaining(["--no-extensions", "--no-session"]));
@@ -120,7 +119,7 @@ process.on("SIGTERM", () => process.exit(0));
       await ephemeral.dispose();
       runtimes.splice(runtimes.indexOf(ephemeral), 1);
 
-      const regular = new SessionRuntime("regular", dir, "Regular", Date.now(), () => configuration, secrets, { error: vi.fn(), info: vi.fn() } as never, hooks);
+      const regular = new SessionRuntime("regular", dir, "Regular", () => configuration, secrets, { error: vi.fn(), info: vi.fn() } as never, hooks);
       runtimes.push(regular);
       await regular.start();
       expect(JSON.parse(await readFile(argsFile, "utf8"))).not.toContain("--no-session");
@@ -198,7 +197,7 @@ process.on("SIGTERM", () => process.exit(0));
     };
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
     const logger = { error: vi.fn(), info: vi.fn() };
-    const runtime = new SessionRuntime("session", dir, "History", Date.now(), () => configuration, secrets, logger as never, {
+    const runtime = new SessionRuntime("session", dir, "History", () => configuration, secrets, logger as never, {
       onChange: vi.fn(),
       onEditorText: vi.fn(),
     });
@@ -314,7 +313,7 @@ process.on("SIGTERM", () => process.exit(0));
     };
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
     const logger = { error: vi.fn(), info: vi.fn() };
-    const runtime = new SessionRuntime("session", dir, "Extension command", Date.now(), () => configuration, secrets, logger as never, {
+    const runtime = new SessionRuntime("session", dir, "Extension command", () => configuration, secrets, logger as never, {
       onChange: vi.fn(),
       onEditorText: vi.fn(),
     });
@@ -396,7 +395,6 @@ process.on("SIGTERM", () => process.exit(0));
       "session",
       dir,
       "Unconfirmed command",
-      Date.now(),
       () => configuration,
       new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
       { error: vi.fn(), info: vi.fn() } as never,
@@ -474,7 +472,7 @@ process.on("SIGTERM", () => process.exit(0));
     };
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
     const logger = { error: vi.fn(), info: vi.fn() };
-    const runtime = new SessionRuntime("session", dir, "Prompt command", Date.now(), () => configuration, secrets, logger as never, {
+    const runtime = new SessionRuntime("session", dir, "Prompt command", () => configuration, secrets, logger as never, {
       onChange: vi.fn(),
       onEditorText: vi.fn(),
     });
@@ -551,7 +549,7 @@ process.on("SIGTERM", () => process.exit(0));
     };
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
     const logger = { error: vi.fn(), info: vi.fn() };
-    const runtime = new SessionRuntime("session", dir, "Follow-up", Date.now(), () => configuration, secrets, logger as never, {
+    const runtime = new SessionRuntime("session", dir, "Follow-up", () => configuration, secrets, logger as never, {
       onChange: vi.fn(),
       onEditorText: vi.fn(),
     });
@@ -634,7 +632,7 @@ process.on("SIGTERM", () => process.exit(0));
     };
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
     const logger = { error: vi.fn(), info: vi.fn() };
-    const runtime = new SessionRuntime("session", dir, "Live stats", Date.now(), () => configuration, secrets, logger as never, {
+    const runtime = new SessionRuntime("session", dir, "Live stats", () => configuration, secrets, logger as never, {
       onChange: vi.fn(),
       onEditorText: vi.fn(),
     });
@@ -736,7 +734,7 @@ process.on("SIGTERM", () => process.exit(0));
       fileMentionFollowSymlinks: true,
     };
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
-    const runtime = new SessionRuntime("session", dir, "Tree", Date.now(), () => configuration, secrets, { error: vi.fn(), info: vi.fn() } as never, {
+    const runtime = new SessionRuntime("session", dir, "Tree", () => configuration, secrets, { error: vi.fn(), info: vi.fn() } as never, {
       onChange: vi.fn(),
       onEditorText: vi.fn(),
     }, artifactPath);
@@ -817,7 +815,6 @@ process.on("SIGTERM", () => process.exit(0));
       "retry-session",
       dir,
       "Retry",
-      Date.now(),
       () => configuration,
       new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
       { error: vi.fn(), info: vi.fn() } as never,
@@ -889,7 +886,6 @@ process.on("SIGTERM", () => process.exit(0));
       id,
       dir,
       "Tool runtime",
-      Date.now(),
       () => configuration,
       new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
       { error: vi.fn(), info: vi.fn() } as never,
@@ -980,7 +976,6 @@ process.on("SIGTERM", () => process.exit(0));
       "question-session",
       dir,
       "Question",
-      Date.now(),
       () => configuration,
       new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
       { error: vi.fn(), info: vi.fn() } as never,

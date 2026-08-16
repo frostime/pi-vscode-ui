@@ -84,7 +84,6 @@ export class SessionRuntime {
     id: string,
     readonly cwd: string,
     title: string,
-    initialViewStateChangeAt: number,
     configurationProvider: () => FrostPiConfiguration,
     proxySecrets: ProxySecretStore,
     logger: DiagnosticLogger,
@@ -99,7 +98,7 @@ export class SessionRuntime {
     this.#viewState = new SessionViewState(id, cwd, title, {
       maxImageBytes: initialConfiguration.maxImageBytes,
       maxImages: 12,
-    }, initialViewStateChangeAt, initialConfiguration.collapseTurnTrace, isEphemeral);
+    }, initialConfiguration.collapseTurnTrace, isEphemeral);
     this.#viewState.setComposerStreamingBehavior(initialConfiguration.streamingBehavior);
     this.#viewState.setQuestionTool({
       configuredEnabled: initialConfiguration.questionToolEnabled,
@@ -124,10 +123,6 @@ export class SessionRuntime {
 
   get snapshot(): SessionViewModel {
     return structuredClone(this.view);
-  }
-
-  get lastViewStateChangeAt(): number {
-    return this.#viewState.lastViewStateChangeAt;
   }
 
   get sessionFile(): string | undefined {

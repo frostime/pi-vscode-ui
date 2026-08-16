@@ -133,7 +133,6 @@ export class SessionRegistry implements vscode.Disposable {
           thinkingLevel: view.thinkingLevel,
           historyStatus: view.historyStatus,
           requiresUserInput: view.pendingExtensionUi.length > 0,
-          lastViewStateChangeAt: runtime.lastViewStateChangeAt,
         };
       });
     const piError = activeView?.status === "failed" ? activeView.error : undefined;
@@ -385,7 +384,7 @@ export class SessionRegistry implements vscode.Disposable {
       title: forkName,
       cwd: runtime.cwd,
       ...(forkFile ? { sessionFile: forkFile } : {}),
-      updatedAt: runtime.lastViewStateChangeAt,
+      updatedAt: Date.now(),
     });
     this.#finishForkOperation(operation);
     await Promise.resolve(this.#persist()).catch((error: unknown) => this.#logger.error("Failed to persist session collection after Fork", error));
@@ -600,7 +599,6 @@ export class SessionRegistry implements vscode.Disposable {
       record.id,
       record.cwd,
       record.title,
-      record.updatedAt,
       () => readConfiguration(workspaceUriForPath(this.#configurationScopeCwd(record.cwd))),
       this.#proxySecrets,
       this.#logger,
@@ -668,7 +666,7 @@ export class SessionRegistry implements vscode.Disposable {
       id: operation.forkId,
       title: forkName,
       cwd: original.cwd,
-      updatedAt: operation.runtime.lastViewStateChangeAt,
+      updatedAt: Date.now(),
     });
     this.#temporarySessionIds.add(operation.forkId);
 
@@ -791,7 +789,7 @@ export class SessionRegistry implements vscode.Disposable {
         cwd: view.cwd,
         ...(previous.ephemeral ? { ephemeral: true } : {}),
         ...(sessionFile && !previous.ephemeral ? { sessionFile } : {}),
-        updatedAt: runtime.lastViewStateChangeAt,
+        updatedAt: Date.now(),
       });
       void this.#persist();
     }

@@ -18,7 +18,6 @@ export interface SessionSummaryView {
   thinkingLevel?: ThinkingLevel;
   historyStatus: SessionHistoryStatus;
   requiresUserInput: boolean;
-  lastViewStateChangeAt: number;
 }
 
 

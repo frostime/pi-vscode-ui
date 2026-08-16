@@ -18,15 +18,13 @@ const STATS: RpcSessionStats = {
 describe("SessionViewState", () => {
   it("keeps stats refreshes separate from conversation content changes", () => {
     const conversation = new ConversationProjection();
-    const session = new SessionViewState("session", "/workspace", "Session", undefined, 1);
+    const session = new SessionViewState("session", "/workspace", "Session");
     const initialContentRevision = session.read(conversation.read()).conversationContentRevision;
 
     expect(session.updateStats(STATS)).toBe(true);
-    const firstStatsChangeAt = session.lastViewStateChangeAt;
     expect(session.read(conversation.read()).conversationContentRevision).toBe(initialContentRevision);
 
     expect(session.updateStats(structuredClone(STATS))).toBe(false);
-    expect(session.lastViewStateChangeAt).toBe(firstStatsChangeAt);
 
     conversation.appendNotice("Visible conversation update");
     expect(session.read(conversation.read()).conversationContentRevision).toBe(initialContentRevision + 1);
