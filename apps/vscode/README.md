@@ -1,52 +1,128 @@
 # FrostPi
 
-A VS Code GUI adapter for your existing Pi setup.
+**A VS Code GUI adapter for the Pi you already use.**
 
-FrostPi is designed for users who manage their own Pi configuration, extensions, models, and credentials, but want a graphical interface inside VS Code.
-
-It runs your configured Pi through its native RPC mode. Pi remains responsible for execution, configuration, extensions, and session data; FrostPi provides the GUI and VS Code integration.
+FrostPi brings your existing Pi workflow into VS Code without turning it into a different agent.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/preview.png" alt="FrostPi conversation view in VS Code" width="430">
+  <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/preview.png" alt="FrostPi conversation view" width="430">
 </p>
+
+[English](https://github.com/frostime/frostpi/blob/main/README.md) | [简体中文](https://github.com/frostime/frostpi/blob/main/README.zh-CN.md)
+
+## Why FrostPi
+
+If you already use Pi and have built your own workflow around it, getting a GUI shouldn't mean adopting another one.
+
+FrostPi uses **your Pi, your configuration, your extensions, your models, and your sessions**. It does not maintain a parallel Pi setup, inject a system prompt, or try to manage your workflow for you.
+
+**FrostPi handles the GUI. Pi stays in charge.**
 
 ## Highlights
 
-- Fork selected context into a separate Pi and FrostPi session when the continuation should remain independent.
-- Create, resume, switch, rename, and concurrently run independent Pi sessions.
-- Navigate Pi's session tree visually: revise earlier prompts with **Branch here**, switch existing paths, and optionally preserve context with branch summaries.
-- Worktree support: if the vscode workspace has git worktree, you can add new/resume session from it.
+**The Pi experience, not just the chat.**
+
+FrostPi keeps Pi's functional workflows available from the GUI:
+
 - Stream ordered reasoning, tool activity, command output, errors, and final responses.
 - Paste PNG, JPEG, or WebP images directly into prompts.
 - Use `/` completion for Pi extension commands, prompt templates, skills, and FrostPi-local actions.
 - Use `@Selection`, `@CurrentFile`, and workspace paths as explicit prompt references.
 - Switch provider/model and select only thinking levels supported by the active model's Pi metadata.
+- Resume sessions and use Pi's native `/compact` and session-summary behavior.
+- Render rich Markdown including Mermaid, compaction records, branch summaries, and Pi extension custom messages.
 - Review command output and tool details; open files and Git-base diffs in native VS Code editors.
 - Inspect context, token categories, tool/message counts, and estimated session cost.
-- Configure inherited, VS Code, custom, or direct proxy modes for Pi subprocesses.
-
-## Screenshots
 
 <table>
   <tr>
-    <td width="50%"><strong>Independent sessions</strong><br><img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/multi-session.png" alt="FrostPi session switcher" width="100%"></td>
-    <td width="50%"><strong>Model controls</strong><br><img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/model-picker.png" alt="FrostPi model picker" width="100%"></td>
+    <td width="50%" align="center">
+      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/model-picker.png" alt="Model picker" width="440">
+      <br>
+      <sub>Model and thinking controls</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/at-file.png" alt="Workspace references" width="440">
+      <br>
+      <sub>Workspace-aware prompting</sub>
+    </td>
   </tr>
   <tr>
-    <td><strong>Workspace-aware prompting</strong><br><img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/at-file.png" alt="FrostPi workspace file mention completion" width="100%"></td>
-    <td><strong>Slash commands</strong><br><img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/slash-command.png" alt="FrostPi slash command completion" width="100%"></td>
+    <td width="50%" align="center">
+      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/slash-command.png" alt="Slash commands" width="440">
+      <br>
+      <sub>Extension commands, prompts, and skills</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/compact.png" alt="Compaction" width="440">
+      <br>
+      <sub>Native compaction messages</sub>
+    </td>
   </tr>
   <tr>
-    <td><strong>Compaction for long sessions</strong><br><img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/compact.png" alt="FrostPi compaction record" width="100%"></td>
-    <td><strong>Context and cost detail</strong><br><img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/context-usage.png" alt="FrostPi context usage details" width="100%"></td>
-  </tr>
-  <tr>
-    <td><strong>Native Pi Session Tree</strong><br><img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/tree-button.png" alt="FrostPi Pi session tree branch controls" width="100%"></td>
-    <td><strong>Git Worktree Sessions</strong><br><img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/support-worktree.png" alt="FrostPi Git worktree session picker" width="100%"></td>
+    <td width="50%" align="center">
+      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/steer+queue.png" alt="Steer and queue controls" width="440">
+      <br>
+      <sub>Steer and queue controls</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/context-usage.png" alt="Context and cost detail" width="280">
+      <br>
+      <sub>Context, token usage, and estimated session cost</sub>
+    </td>
   </tr>
 </table>
 
-## Pi Session Tree and Fork
+**Pi's session tree, directly in the GUI.**
+
+Branch from an earlier prompt, move between existing paths, and optionally preserve context with Pi's branch summaries — all inside the current Pi session.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/tree-button.png" alt="Pi session tree in FrostPi" width="900">
+</p>
+
+**Fork into an independent session.**
+
+Fork selected context when you want the continuation to have its own Pi process, lifecycle, and session history instead of becoming another path in the current tree.
+
+**Multiple sessions and Git worktrees.**
+
+Create, resume, switch, rename, and concurrently run independent Pi sessions. If the current repository has Git worktrees, new and resumed sessions can run from them as well.
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/multi-session.png" alt="Multiple Pi sessions" width="440">
+      <br>
+      <sub>Independent concurrent sessions</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/support-worktree.png" alt="Git worktree sessions" width="440">
+      <br>
+      <sub>Sessions across Git worktrees</sub>
+    </td>
+  </tr>
+</table>
+
+
+
+## Getting Started
+
+1. Install and configure Pi in the same local or remote environment where VS Code runs workspace extensions.
+2. Open a trusted file-system workspace.
+3. Open FrostPi from the Activity Bar. The view may be dragged to VS Code's Secondary Sidebar.
+4. Start a new session, resume an existing Pi session, or paste a prompt into the composer.
+5. If `pi` is not on `PATH`, run **FrostPi: Configure Pi Executable**.
+
+The executable may be the `pi` command, an absolute native executable, or Pi's compiled `cli.js` path.
+
+Remote SSH, WSL, and Dev Container workspaces run Pi in the remote Extension Host.
+
+For best workspace and session discovery, install `fd` and `rg` on the Extension Host's `PATH`. `fd` is required for `@` workspace file completion; `rg` accelerates Resume session discovery, with bounded metadata scanning used as a fallback when it is unavailable.
+
+## Reference
+
+### Pi Session Tree and Fork
 
 FrostPi exposes Pi's session-tree workflow as graphical conversation controls:
 
@@ -56,37 +132,62 @@ FrostPi exposes Pi's session-tree workflow as graphical conversation controls:
 
 Pi remains authoritative for tree navigation and context reconstruction. FrostPi provides the GUI compatibility layer and keeps Tree navigation distinct from Fork's independent-session lifecycle.
 
-## Requirements and Setup
+For tree operations that Pi RPC cannot expose directly, FrostPi loads a small process-local adapter through Pi's extension mechanism.
 
-1. Install and configure Pi in the same local or remote environment where VS Code runs workspace extensions.
-2. Open a trusted file-system workspace.
-3. Open **FrostPi** from the Activity Bar. The view may be dragged to VS Code's Secondary Sidebar.
-4. Start a new session, resume an existing Pi session, or paste a prompt into the composer.
-5. If `pi` is not on `PATH`, run **FrostPi: Configure Pi Executable**.
+### Question tool
 
-The executable may be the `pi` command, an absolute native executable, or Pi's compiled `cli.js` path. Remote SSH, WSL, and Dev Container workspaces run Pi in the remote Extension Host.
+FrostPi includes an optional bundled `question` tool for answering Pi question requests directly inside the Webview. It is **disabled by default**.
 
-For best workspace and session discovery, install `fd` and `rg` on the Extension Host's `PATH`. `fd` is required for `@` workspace file completion; `rg` accelerates Resume session discovery and FrostPi falls back to bounded metadata scanning when it is unavailable.
+Enable it with:
 
-## Important Behavior
+```text
+frostpi.questionTool.enabled
+```
 
-Pi edits the workspace immediately, as it does in RPC mode. FrostPi's Diff action compares the current file with its Git `HEAD` version; it is review, not pre-apply authorization.
+The bundled extension is injected when a Pi session process starts, so restart running sessions after changing the setting.
 
-Multiple sessions can modify the same workspace concurrently. FrostPi isolates their processes and UI state but does not serialize or reconcile conflicting changes.
+Question requests appear in a bounded, collapsible panel below the conversation. Every question requires an explicit answer and **Submit**, including single-question requests.
 
-Proxy configuration is resolved when a Pi process starts. Changing proxy settings does not update an already-running session. Restart the affected session to apply the new environment. Proxy environment variables are also inherited by commands launched by Pi.
+Pi loads project and global extensions before FrostPi's explicit bundled extension. If another extension has already registered `question`, that registration keeps priority.
 
-FrostPi injects `PI_INSIDE_FROSTPI=1` and `PI_INSIDE_FROSTPI_VERSION=<extension version>` into every Pi child process. Pi extensions can read these to detect that they are running under FrostPi and which version launched them.
+FrostPi injects the following environment variables into **every** Pi child process:
 
-## Settings
+```text
+PI_INSIDE_FROSTPI=1
+PI_INSIDE_FROSTPI_VERSION=<extension version>
+```
+
+Pi extensions can use them to detect that they are running under FrostPi and which FrostPi version launched them.
+
+A third-party question extension can, for example, conditionally skip registration when the user wants FrostPi's Webview question tool instead. However, `PI_INSIDE_FROSTPI` is present regardless of whether `frostpi.questionTool.enabled` is on, so extensions should **not** use the variable as an unconditional signal to disable themselves.
+
+### Network and diagnostics
+
+FrostPi supports inherited, VS Code, custom, and direct proxy modes for Pi subprocesses.
+
+Custom mode accepts:
+
+- `host:port`
+- `http://...` or `https://...`
+- `socks5://...`
+
+Use **FrostPi: Configure Network Proxy** or the session menu to choose User/Workspace scope and configure the active mode.
+
+Proxy usernames and passwords are stored in VS Code SecretStorage rather than in `settings.json`. Running sessions show `restart required` until explicitly restarted.
+
+FrostPi also provides context metrics, diagnostics export, strict LF-delimited JSONL transport, and schema-checked Host-Webview messages.
+
+### Settings
 
 - `frostpi.pi.executable`
 - `frostpi.pi.arguments`
 - `frostpi.session.startOnOpen`
 - `frostpi.composer.streamingBehavior`
-- `frostpi.composer.fileMentions.maxFiles`
 - `frostpi.composer.fileMentions.respectSearchExclude`
+- `frostpi.composer.fileMentions.respectIgnoreFiles`
+- `frostpi.composer.fileMentions.followSymlinks`
 - `frostpi.attachments.maxImageBytes`
+- `frostpi.questionTool.enabled`
 - `frostpi.network.proxy.mode`
 - `frostpi.network.proxy.endpoint`
 - `frostpi.network.proxy.noProxy`
@@ -101,16 +202,14 @@ FrostPi also follows VS Code's Chat typography settings as soon as they change:
 
 When a Chat font remains `default`, FrostPi falls back to VS Code's normal interface or editor font.
 
-Use **FrostPi: Configure Network Proxy** or the session menu to choose User/Workspace scope and configure the active mode. Proxy usernames and passwords are stored in VS Code SecretStorage rather than in `settings.json`. Running sessions show `restart required` until explicitly restarted.
+### Privacy, Repository, and License
 
-## Privacy
+FrostPi contains no telemetry or remote service of its own. Prompts and images are sent to the locally launched Pi process.
 
-FrostPi contains no telemetry or remote service of its own. Prompts and images are sent to the locally launched Pi process. See [`PRIVACY.md`](PRIVACY.md) in the extension package for details.
-
-## Repository
+See [`PRIVACY.md`](PRIVACY.md) in the extension package for details.
 
 For comparisons, architecture, development instructions, and protocol documentation, see the [FrostPi repository](https://github.com/frostime/frostpi).
 
-## License
+FrostPi is licensed under **AGPL-3.0-only**.
 
-AGPL-3.0-only. FrostPi is an independent client and is not an official Pi distribution.
+FrostPi is an independent client and is not an official Pi distribution.
