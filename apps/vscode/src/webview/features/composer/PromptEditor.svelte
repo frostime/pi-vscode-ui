@@ -4,9 +4,6 @@
     autocompletion,
     completionKeymap,
     startCompletion,
-    type Completion,
-    type CompletionContext,
-    type CompletionResult,
   } from "@codemirror/autocomplete";
   import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
   import { Compartment, EditorState } from "@codemirror/state";
@@ -18,6 +15,7 @@
   import { withFrostPiCommands } from "./frostPiCommands";
   import { indentPromptWithTab, insertPromptNewline, outdentPromptWithShiftTab } from "./promptEditing";
   import { promptSyntax } from "./promptSyntax";
+  import { commandCompletion } from "./commandCompletion";
   import { workspaceFileCompletion } from "./workspaceFileCompletion";
 
   let {
@@ -167,18 +165,4 @@
     });
   }
 
-  function commandCompletion(commands: RpcCommandDescriptor[]) {
-    return (context: CompletionContext): CompletionResult | null => {
-      const match = context.matchBefore(/\/[\w:#.-]*/);
-      if (!match) return null;
-      const line = context.state.doc.lineAt(match.from);
-      if (line.text.slice(0, match.from - line.from).trim().length > 0) return null;
-      const options: Completion[] = commands.map((command) => ({
-        label: `/${command.name}`,
-        detail: command.source,
-        apply: `/${command.name} `,
-      }));
-      return { from: match.from, options, validFor: /^\/[\w:#.-]*$/ };
-    };
-  }
 </script>
