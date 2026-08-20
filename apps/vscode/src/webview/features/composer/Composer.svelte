@@ -22,6 +22,7 @@
   let pendingRequestId = $state<string | null>(null);
   let pendingSubmittedDraft = $state<SessionDraft | null>(null);
   let expanded = $state(false);
+  let expandedSessionId: string | null = null;
 
   const draft = $derived($composerDrafts[session.id] ?? { text: "", images: [] });
   const commands = $derived(withFrostPiCommands(session.commands));
@@ -34,7 +35,13 @@
   const supportsImages = $derived(modelSupportsImages(session.model));
 
   $effect(() => {
-    session.id;
+    const currentSessionId = session.id;
+    if (expandedSessionId === null) {
+      expandedSessionId = currentSessionId;
+      return;
+    }
+    if (currentSessionId === expandedSessionId) return;
+    expandedSessionId = currentSessionId;
     expanded = false;
   });
 
