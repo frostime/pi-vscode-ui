@@ -7,5 +7,5 @@ Typing `@` starts text-only path completion. FrostPi never reads or injects the 
 - Each query starts a fresh, bounded fd process; a newer query terminates the previous process. Searches time out after 7 seconds. No workspace path catalog is retained.
 - With fd 10.0.0 or newer, searches include files and directories. Searches respect ignore files by default, apply `files.exclude`, and additionally apply `search.exclude` unless disabled. `.git` and `node_modules` are always excluded.
 - Ranking favors exact names, prefixes, path segments, fuzzy subsequences, active/visible editors, and files touched in the current session. At most 500 fd results are ranked; only the requested top candidates cross the Host–Webview bridge.
-- Selecting a directory inserts a trailing slash and keeps the cursor before the closing backtick. Selecting a file finishes the path with a space.
+- Selecting a directory inserts a trailing slash and places the cursor after the closing backtick. Selecting a file finishes the path with a space.
 - Workspace path candidates are inserted relative to the Pi session CWD, without the typed `@` prefix and wrapped in a Markdown code span (`` `path` ``). Paths containing whitespace stay inside the same code span.

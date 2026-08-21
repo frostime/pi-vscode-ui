@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.4] - 2026-08-20
+
+### Fixed
+
+- Keep the selected `@` workspace and `/` command completion visible when results refresh, and avoid restarting completion for equivalent session updates.
+- Place the cursor after the closing backtick when accepting a directory completion.
+- Keep the expanded Composer open across session-state updates and collapse it only when switching sessions or explicitly minimizing it.
+
 ## [0.11.3] - 2026-08-17
 
 ### Fixed

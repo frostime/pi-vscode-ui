@@ -9,6 +9,7 @@ The Composer is a plain-text CodeMirror editor. FrostPi submits exactly the visi
 - Text is trimmed before Host handling. Unicode whitespace between a leading slash command and its arguments is normalized to one ASCII space; Pi parses the remaining arguments.
 - Text-only `/compact` delegates to Pi's compact request, takes precedence over a same-named extension command, and never appends a user prompt. `/resume` and `/editor` are also Host-local.
 - `/editor` allows one temporary Markdown file at a time. Closing its tab replaces the owning session's text while preserving attachments; another `/editor` reveals the existing tab.
+- The expanded Composer remains expanded across updates to the active session and collapses only on session switch, explicit minimize, or Escape.
 - File mentions insert only path/line text. FrostPi never reads or injects referenced file content.
 - PNG/JPEG/WebP attachments remain explicit and obey prompt validation limits.
 - Fork preserves the original session draft and delivers selected text/images to the new temporary session through a Host-validated, one-shot, non-persisted seed.

@@ -4,9 +4,6 @@
     autocompletion,
     completionKeymap,
     startCompletion,
-    type Completion,
-    type CompletionContext,
-    type CompletionResult,
   } from "@codemirror/autocomplete";
   import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
   import { Compartment, EditorState } from "@codemirror/state";
@@ -14,12 +11,12 @@
   import type { RpcCommandDescriptor, StreamingBehavior } from "@frostime/pi-rpc";
   import { onMount } from "svelte";
 
-  import { shouldStartPromptCompletion } from "./completionPolicy";
+  import { promptCompletionConfigurationKey, shouldStartPromptCompletion } from "./completionPolicy";
   import { withFrostPiCommands } from "./frostPiCommands";
-  import { requestWorkspaceFileSuggestions } from "./fileSuggestionClient";
   import { indentPromptWithTab, insertPromptNewline, outdentPromptWithShiftTab } from "./promptEditing";
   import { promptSyntax } from "./promptSyntax";
-  import { workspaceMentionEdit, workspaceMentionReplaceTo } from "./workspaceMentionCompletion";
+  import { commandCompletion } from "./commandCompletion";
+  import { workspaceFileCompletion } from "./workspaceFileCompletion";
 
   let {
     sessionId,
@@ -44,6 +41,7 @@
   let host: HTMLDivElement;
   let view: EditorView | null = null;
   let applyingExternal = false;
+  let configuredCompletionKey: string | null = null;
   const syntaxCompartment = new Compartment();
   const completionCompartment = new Compartment();
 
@@ -71,6 +69,9 @@
     const activeSessionId = sessionId;
     const editor = view;
     if (!editor) return;
+    const completionKey = promptCompletionConfigurationKey(activeSessionId, allCommands);
+    if (completionKey === configuredCompletionKey) return;
+    configuredCompletionKey = completionKey;
     editor.dispatch({
       effects: [
         syntaxCompartment.reconfigure(promptSyntax(allCommands)),
@@ -160,73 +161,8 @@
       activateOnTypingDelay: 40,
       maxRenderedOptions: 100,
       optionClass: (completion) => completion.type === "frostpi-status" ? "frostpi-completion-status" : "",
-      override: [commandCompletion(commands), fileCompletion(sessionId)],
+      override: [commandCompletion(commands), workspaceFileCompletion(sessionId)],
     });
   }
 
-  function commandCompletion(commands: RpcCommandDescriptor[]) {
-    return (context: CompletionContext): CompletionResult | null => {
-      const match = context.matchBefore(/\/[\w:#.-]*/);
-      if (!match) return null;
-      const line = context.state.doc.lineAt(match.from);
-      if (line.text.slice(0, match.from - line.from).trim().length > 0) return null;
-      const options: Completion[] = commands.map((command) => ({
-        label: `/${command.name}`,
-        detail: command.source,
-        apply: `/${command.name} `,
-      }));
-      return { from: match.from, options, validFor: /^\/[\w:#.-]*$/ };
-    };
-  }
-
-  function fileCompletion(sessionId: string) {
-    return async (context: CompletionContext): Promise<CompletionResult | null> => {
-      const match = context.matchBefore(/@(?:"[^"\n]*|[^\s@]*)/);
-      if (!match) return null;
-      const raw = match.text.slice(1);
-      const query = raw.startsWith('"') ? raw.slice(1) : raw;
-      const request = requestWorkspaceFileSuggestions(sessionId, query, 32);
-      context.addEventListener("abort", request.cancel, { onDocChange: true });
-      const result = await request.promise;
-      if (context.aborted) return null;
-
-      // Specials first when the query is empty or still matches (Copilot-style @ menu).
-      const options: Completion[] = (result.specials ?? []).map((item, index) => ({
-        label: item.label,
-        detail: item.detail,
-        apply: item.insertText,
-        boost: 2_000 - index,
-      }));
-      for (const item of result.items) {
-        options.push({
-          label: `${item.name}${item.isDirectory ? "/" : ""}`,
-          detail: item.directory || "workspace root",
-          type: item.isDirectory ? "folder" : "file",
-          apply: (view, _completion, from, to) => {
-            const edit = workspaceMentionEdit(item.path, item.isDirectory);
-            const replaceTo = workspaceMentionReplaceTo(match.text, to, view.state.sliceDoc(to, to + 1));
-            view.dispatch({
-              changes: { from, to: replaceTo, insert: edit.text },
-              selection: { anchor: from + edit.cursorOffset },
-            });
-          },
-        });
-      }
-      if (!options.length) {
-        options.push({
-          label: result.error ?? "No workspace files found",
-          detail: result.error ? "file search error" : "try another path fragment",
-          type: "frostpi-status",
-          boost: -10_000,
-          apply: () => {},
-        });
-      }
-      return {
-        from: match.from,
-        options,
-        validFor: /^@(?:"[^"\n]*|[^\s@]*)$/,
-        filter: false,
-      };
-    };
-  }
 </script>

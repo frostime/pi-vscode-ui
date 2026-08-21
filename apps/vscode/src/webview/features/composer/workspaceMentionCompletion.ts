@@ -13,6 +13,6 @@ export function workspaceMentionEdit(path: string, isDirectory: boolean): Worksp
   const suffix = isDirectory ? "" : " ";
   return {
     text: `${text}${suffix}`,
-    cursorOffset: isDirectory ? text.length - 1 : text.length + suffix.length,
+    cursorOffset: text.length + suffix.length,
   };
 }
