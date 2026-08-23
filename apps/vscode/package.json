@@ -2,7 +2,7 @@
   "name": "frostpi",
   "displayName": "Pi VS Code UI — FrostPi",
   "description": "A visual VS Code UI for Pi Coding Agent that uses your existing Pi configuration, extensions, models, sessions, and workflows.",
-  "version": "0.11.4",
+  "version": "0.12.0",
   "publisher": "frostime",
   "license": "AGPL-3.0-only",
   "private": false,

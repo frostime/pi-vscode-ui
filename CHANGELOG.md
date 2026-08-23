@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-23
+
+### Changed
+
+- Present the extension as **Pi VS Code UI — FrostPi**, migrate the canonical repository to `frostime/pi-vscode-ui`, and refresh the Marketplace and Activity Bar branding while preserving the `frostime.frostpi` extension identity and `frostpi.*` settings.
+
 ## [0.11.4] - 2026-08-20
 
 ### Fixed
@@ -359,7 +365,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.11.4...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.11.4...v0.12.0
 [0.11.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.11.3...v0.11.4
 [0.11.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.11.2...v0.11.3
 [0.11.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.11.1...v0.11.2
