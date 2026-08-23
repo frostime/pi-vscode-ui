@@ -1,3 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-  <path fill="currentColor" d="M11 1h2v4.17l2.95-2.95 1.42 1.42L14.2 6.8l3.8 2.19 3.59-.96.52 1.93-3.33.9v2.28l3.33.9-.52 1.93-3.59-.96-3.8 2.19 3.17 3.16-1.42 1.42L13 18.83V23h-2v-4.17l-2.95 2.95-1.42-1.42L9.8 17.2 6 15.01l-3.59.96-.52-1.93 3.33-.9v-2.28l-3.33-.9.52-1.93L6 8.99 9.8 6.8 6.63 3.64l1.42-1.42L11 5.17V1Zm1 7.53-4.78 2.76v1.42L12 15.47l4.78-2.76v-1.42L12 8.53Z"/>
+  <!-- Pi Coding Agent mark -->
+  <g transform="translate(4.95 4.95) scale(0.03) translate(-165.29 -165.29)">
+    <path
+      fill="currentColor"
+      fill-rule="evenodd"
+      clip-rule="evenodd"
+      d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
+    />
+    <path fill="currentColor" d="M517.36 400H634.72V634.72H517.36Z" />
+  </g>
+
+  <!-- Broken ice frame -->
+  <g
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linecap="square"
+    stroke-linejoin="miter"
+  >
+    <path d="M2.25 6.75v-2l2.5-2.5h2" />
+    <path d="M17.25 2.25h2l2.5 2.5v2" />
+    <path d="M21.75 17.25v2l-2.5 2.5h-2" />
+    <path d="M6.75 21.75h-2l-2.5-2.5v-2" />
+  </g>
 </svg>

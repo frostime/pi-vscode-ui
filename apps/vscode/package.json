@@ -1,7 +1,7 @@
 {
   "name": "frostpi",
-  "displayName": "FrostPi — Visual UI for Pi Coding Agent",
-  "description": "A polished VS Code interface for Pi's RPC mode, with streaming conversations, tool activity, image prompts, extension commands, and extension UI requests.",
+  "displayName": "Pi VS Code UI — FrostPi",
+  "description": "A visual VS Code UI for Pi Coding Agent that uses your existing Pi configuration, extensions, models, sessions, and workflows.",
   "version": "0.11.4",
   "publisher": "frostime",
   "license": "AGPL-3.0-only",
@@ -21,19 +21,26 @@
   ],
   "keywords": [
     "pi",
+    "pi coding agent",
+    "pi agent",
+    "pi vscode",
+    "pi vscode ui",
+    "pi gui",
+    "vscode",
+    "vscode ai",
     "coding agent",
-    "agent",
+    "ai coding agent",
+    "gui",
     "rpc",
-    "assistant",
     "ai"
   ],
-  "homepage": "https://github.com/frostime/frostpi#readme",
+  "homepage": "https://github.com/frostime/pi-vscode-ui#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/frostime/frostpi.git"
+    "url": "https://github.com/frostime/pi-vscode-ui.git"
   },
   "bugs": {
-    "url": "https://github.com/frostime/frostpi/issues"
+    "url": "https://github.com/frostime/pi-vscode-ui/issues"
   },
   "main": "./dist/extension/extension.cjs",
   "extensionKind": [

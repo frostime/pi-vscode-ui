@@ -359,29 +359,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/frostpi/compare/v0.11.3...HEAD
-[0.11.3]: https://github.com/frostime/frostpi/compare/v0.11.2...v0.11.3
-[0.11.2]: https://github.com/frostime/frostpi/compare/v0.11.1...v0.11.2
-[0.11.1]: https://github.com/frostime/frostpi/compare/v0.11.0...v0.11.1
-[0.11.0]: https://github.com/frostime/frostpi/compare/v0.10.4...v0.11.0
-[0.10.4]: https://github.com/frostime/frostpi/compare/v0.10.3...v0.10.4
-[0.10.3]: https://github.com/frostime/frostpi/compare/v0.10.2...v0.10.3
-[0.10.2]: https://github.com/frostime/frostpi/compare/v0.10.1...v0.10.2
-[0.10.1]: https://github.com/frostime/frostpi/compare/v0.10.0...v0.10.1
-[0.10.0]: https://github.com/frostime/frostpi/compare/v0.9.0...v0.10.0
-[0.7.2]: https://github.com/frostime/frostpi/compare/v0.7.1...v0.7.2
-[0.7.1]: https://github.com/frostime/frostpi/compare/v0.7.0...v0.7.1
-[0.7.0]: https://github.com/frostime/frostpi/compare/v0.6.2...v0.7.0
-[0.6.2]: https://github.com/frostime/frostpi/compare/v0.6.1...v0.6.2
-[0.6.1]: https://github.com/frostime/frostpi/compare/v0.6.0...v0.6.1
-[0.6.0]: https://github.com/frostime/frostpi/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/frostime/frostpi/compare/v0.4.2...v0.5.0
-[0.4.2]: https://github.com/frostime/frostpi/compare/v0.4.1...v0.4.2
-[0.4.1]: https://github.com/frostime/frostpi/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/frostime/frostpi/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/frostime/frostpi/compare/v0.2.2...v0.3.0
-[0.2.2]: https://github.com/frostime/frostpi/compare/v0.2.1...v0.2.2
-[0.2.1]: https://github.com/frostime/frostpi/compare/v0.1.1...v0.2.1
-[0.1.1]: https://github.com/frostime/frostpi/compare/10ca43a728ae697fe5b6fbfbf1bb40b607e5edcb...v0.1.1
-[0.1.0]: https://github.com/frostime/frostpi/commit/10ca43a728ae697fe5b6fbfbf1bb40b607e5edcb
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.11.4...HEAD
+[0.11.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.11.3...v0.11.4
+[0.11.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.11.2...v0.11.3
+[0.11.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.11.1...v0.11.2
+[0.11.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.11.0...v0.11.1
+[0.11.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.10.4...v0.11.0
+[0.10.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.10.3...v0.10.4
+[0.10.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.10.2...v0.10.3
+[0.10.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.10.1...v0.10.2
+[0.10.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.10.0...v0.10.1
+[0.10.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.9.0...v0.10.0
+[0.7.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.7.1...v0.7.2
+[0.7.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.6.2...v0.7.0
+[0.6.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.6.1...v0.6.2
+[0.6.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.4.2...v0.5.0
+[0.4.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.4.1...v0.4.2
+[0.4.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.2.2...v0.3.0
+[0.2.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.1.1...v0.2.1
+[0.1.1]: https://github.com/frostime/pi-vscode-ui/compare/10ca43a728ae697fe5b6fbfbf1bb40b607e5edcb...v0.1.1
+[0.1.0]: https://github.com/frostime/pi-vscode-ui/commit/10ca43a728ae697fe5b6fbfbf1bb40b607e5edcb
 

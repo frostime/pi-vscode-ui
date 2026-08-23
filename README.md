@@ -1,14 +1,23 @@
-# FrostPi
+<p align="center">
+  <img src="docs/assets/branding/hero-icon.jpg" alt="FrostPi" width="140">
+</p>
 
-**A VS Code GUI adapter for the Pi you already use.**
+<h1 align="center">Pi VS Code UI — FrostPi</h1>
 
-FrostPi brings your existing Pi workflow into VS Code without turning it into a different agent.
+<p align="center">
+  <strong>A visual VS Code UI for Pi Coding Agent, built around the Pi you already use.</strong>
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> ·
+  <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+FrostPi brings your existing Pi Coding Agent workflow into VS Code without replacing your configuration, extensions, models, or sessions.
 
 <p align="center">
   <img src="docs/assets/screenshots/preview.png" alt="FrostPi conversation view" width="430">
 </p>
-
-[English](README.md) | [简体中文](README.zh-CN.md)
 
 ## Why FrostPi
 
