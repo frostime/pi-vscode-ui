@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, normalize, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -100,7 +100,7 @@ describe("Session working-directory discovery", () => {
   });
 
   it("discovers a linked worktree from Git's real porcelain output", async () => {
-    const parent = await mkdtemp(join(tmpdir(), "frostpi-git-worktrees-"));
+    const parent = await realpath(await mkdtemp(join(tmpdir(), "frostpi-git-worktrees-")));
     const main = join(parent, "main");
     const linked = join(parent, "linked");
     await mkdir(main);
