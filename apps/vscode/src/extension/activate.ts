@@ -7,22 +7,22 @@ import { GIT_BASE_SCHEME, GitBaseContentProvider } from "./file-changes/GitBaseC
 import { SessionStatusBar } from "./status-bar/SessionStatusBar.js";
 import { SessionRegistry } from "./sessions/SessionRegistry.js";
 import { PiViewProvider } from "./webview-host/PiViewProvider.js";
-import { WebviewBridge } from "./webview-host/WebviewBridge.js";
+import { SessionWebviewCoordinator } from "./webview-host/SessionWebviewCoordinator.js";
 
 let registryForDeactivate: SessionRegistry | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const logger = new DiagnosticLogger(readConfiguration().diagnosticsLevel);
   const registry = new SessionRegistry(context, logger);
-  const bridge = new WebviewBridge(registry, logger);
-  const viewProvider = new PiViewProvider(context.extensionUri, bridge);
+  const coordinator = new SessionWebviewCoordinator(registry, logger, context.extensionUri);
+  const viewProvider = new PiViewProvider(context.extensionUri, coordinator);
   const gitBaseProvider = new GitBaseContentProvider();
   const statusBar = new SessionStatusBar(registry);
   registryForDeactivate = registry;
 
   context.subscriptions.push(
     logger,
-    bridge,
+    coordinator,
     statusBar,
     gitBaseProvider,
     vscode.workspace.registerTextDocumentContentProvider(GIT_BASE_SCHEME, gitBaseProvider),
@@ -46,7 +46,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
 
-  registerCommands(context, registry, viewProvider, bridge, logger);
+  registerCommands(context, registry, viewProvider, coordinator, logger);
   logger.info("FrostPi extension activated");
   try {
     await registry.ensureInitialSession();

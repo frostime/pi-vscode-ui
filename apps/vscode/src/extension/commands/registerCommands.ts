@@ -9,13 +9,13 @@ import { configureProxy, configureProxyCredentials } from "../network/configureP
 import { ProxySecretStore } from "../network/ProxySecretStore.js";
 import type { SessionRegistry } from "../sessions/SessionRegistry.js";
 import type { PiViewProvider } from "../webview-host/PiViewProvider.js";
-import type { WebviewBridge } from "../webview-host/WebviewBridge.js";
+import type { SessionWebviewCoordinator } from "../webview-host/SessionWebviewCoordinator.js";
 
 export function registerCommands(
   context: vscode.ExtensionContext,
   registry: SessionRegistry,
   viewProvider: PiViewProvider,
-  bridge: WebviewBridge,
+  coordinator: SessionWebviewCoordinator,
   logger: DiagnosticLogger,
 ): void {
   const proxySecrets = new ProxySecretStore(context.secrets);
@@ -35,8 +35,7 @@ export function registerCommands(
         void vscode.window.showWarningMessage("Open a workspace file first.");
         return;
       }
-      await viewProvider.reveal();
-      bridge.insertPromptText(`${text} `);
+      await coordinator.insertEditorReference(`${text} `);
     }),
     vscode.commands.registerCommand("frostpi.sendFile", async () => {
       const text = captureActiveFileReference();
@@ -44,8 +43,7 @@ export function registerCommands(
         void vscode.window.showWarningMessage("Open a workspace file first.");
         return;
       }
-      await viewProvider.reveal();
-      bridge.insertPromptText(`${text} `);
+      await coordinator.insertEditorReference(`${text} `);
     }),
     vscode.commands.registerCommand("frostpi.stop", () => registry.abort()),
     vscode.commands.registerCommand("frostpi.restartSession", () => registry.retrySession()),

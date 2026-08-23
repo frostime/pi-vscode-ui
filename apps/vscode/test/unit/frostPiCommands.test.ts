@@ -16,4 +16,13 @@ describe("FrostPi composer commands", () => {
       expect.objectContaining({ name: "inspect", source: "prompt" }),
     ]);
   });
+
+  it("omits host-local Resume from Session Tab completion", () => {
+    const commands = withFrostPiCommands([
+      { name: "resume", description: "Extension resume", source: "extension" },
+      { name: "inspect", description: "Inspect files", source: "prompt" },
+    ], false);
+
+    expect(commands.map((command) => command.name)).toEqual(["compact", "editor", "inspect"]);
+  });
 });

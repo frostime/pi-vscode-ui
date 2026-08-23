@@ -539,6 +539,11 @@ process.on("SIGTERM", () => process.exit(0));
     const third = (await registry.createSession())!;
     expect(new Set(registry.snapshot().sessions.map((session) => session.id))).toEqual(new Set([second, third]));
     expect((persisted as { sessions: Array<{ id: string }> }).sessions.map((session) => session.id)).toEqual([second]);
+
+    registry.retainProvisionalSession(third);
+    const fourth = (await registry.createSession())!;
+    expect(new Set(registry.snapshot().sessions.map((session) => session.id))).toEqual(new Set([second, third, fourth]));
+    expect((persisted as { sessions: Array<{ id: string }> }).sessions.map((session) => session.id)).toEqual([second]);
   });
 
   it("keeps temporary sessions in memory and disables persistence, Fork, and restart", async () => {
@@ -706,7 +711,7 @@ process.on("SIGTERM", () => process.exit(0));
     expect(vscodeMocks.showErrorMessage).not.toHaveBeenCalled();
   });
 
-  it("replaces composer text for set_editor_text on the active session and defers inactive sessions", async () => {
+  it("routes set_editor_text by Session identity regardless of sidebar selection", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-registry-editor-"));
     const fakePi = join(dir, "fake-pi.cjs");
     await writeFile(fakePi, String.raw`#!/usr/bin/env node
@@ -777,12 +782,12 @@ process.on("SIGTERM", () => process.exit(0));
     await waitFor(() => registry.snapshot().activeSessionId === foreground && registry.snapshot().activeSession?.status === "ready");
     events.length = 0;
 
-    // Background session keeps the latest editor text until activation.
     await registry.sendPrompt(background, "/input-file", []);
-    expect(events).toEqual([]);
-
-    await registry.activateSession(background);
     expect(events).toEqual([{ sessionId: background, text: "imported from .pi-input.md" }]);
+
+    events.length = 0;
+    await registry.activateSession(background);
+    expect(events).toEqual([]);
   });
 });
 

@@ -17,7 +17,7 @@ beforeEach(() => {
 
 describe("session tree Webview actions", () => {
   it("sends stable ids and whether the current Composer has a draft", () => {
-    composerDrafts.set({ session: { text: "unsent", images: [] } });
+    composerDrafts.set({ session: { revision: 1, text: "unsent", images: [] } });
     requestBranchHere(
       { id: "session" } as never,
       { sourceEntryId: "entry", blocks: [] } as never,

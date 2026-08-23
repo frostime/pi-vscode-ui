@@ -1,17 +1,19 @@
 import { writable } from "svelte/store";
 
-import type { WorkspaceViewModel } from "$shared/model/sessionViewModel";
+import type { WebviewPresentationView } from "$shared/model/webviewPresentationModel";
 
-export const EMPTY_WORKSPACE: WorkspaceViewModel = {
+export const EMPTY_PRESENTATION: WebviewPresentationView = {
+  surface: { kind: "sidebar" },
   workspaceName: "",
   workspacePath: "",
   sessions: [],
   activeSessionId: null,
-  activeSession: null,
+  displayedSession: null,
+  sidebarSessionExternalized: false,
   piAvailable: true,
 };
 
-export const workspaceStore = writable<WorkspaceViewModel>(EMPTY_WORKSPACE);
+export const presentationStore = writable<WebviewPresentationView>(EMPTY_PRESENTATION);
 export const composerFocusTick = writable(0);
 
 export interface ToastItem {
