@@ -30,7 +30,7 @@ export function workspaceFileCompletion(
     const raw = match.text.slice(1);
     const query = raw.startsWith('"') ? raw.slice(1) : raw;
     const request = requestSuggestions(sessionId, query, 32);
-    context.addEventListener("abort", request.cancel, { onDocChange: true });
+    context.addEventListener("abort", () => request.cancel(), { onDocChange: true });
     const result = await request.promise;
     if (context.aborted) return null;
 

@@ -1,14 +1,23 @@
-# FrostPi
-
-**A VS Code GUI adapter for the Pi you already use.**
-
-FrostPi brings your existing Pi workflow into VS Code without turning it into a different agent.
-
 <p align="center">
-  <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/preview.png" alt="FrostPi conversation view" width="430">
+  <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/docs/assets/branding/hero-icon.jpg" alt="FrostPi" width="140">
 </p>
 
-[English](https://github.com/frostime/frostpi/blob/main/README.md) | [简体中文](https://github.com/frostime/frostpi/blob/main/README.zh-CN.md)
+<h1 align="center">Pi VS Code UI — FrostPi</h1>
+
+<p align="center">
+  <strong>A visual VS Code UI for Pi Coding Agent, built around the Pi you already use.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/frostime/pi-vscode-ui/blob/main/README.md">English</a> ·
+  <a href="https://github.com/frostime/pi-vscode-ui/blob/main/README.zh-CN.md">简体中文</a>
+</p>
+
+FrostPi brings your existing Pi Coding Agent workflow into VS Code without replacing your configuration, extensions, models, or sessions.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/docs/assets/screenshots/preview.png" alt="FrostPi conversation view" width="430">
+</p>
 
 ## Why FrostPi
 
@@ -37,36 +46,36 @@ FrostPi keeps Pi's functional workflows available from the GUI:
 <table>
   <tr>
     <td width="50%" align="center">
-      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/model-picker.png" alt="Model picker" width="440">
+      <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/docs/assets/screenshots/model-picker.png" alt="Model picker" width="440">
       <br>
       <sub>Model and thinking controls</sub>
     </td>
     <td width="50%" align="center">
-      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/at-file.png" alt="Workspace references" width="440">
+      <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/docs/assets/screenshots/at-file.png" alt="Workspace references" width="440">
       <br>
       <sub>Workspace-aware prompting</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
-      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/slash-command.png" alt="Slash commands" width="440">
+      <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/docs/assets/screenshots/slash-command.png" alt="Slash commands" width="440">
       <br>
       <sub>Extension commands, prompts, and skills</sub>
     </td>
     <td width="50%" align="center">
-      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/compact.png" alt="Compaction" width="440">
+      <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/docs/assets/screenshots/compact.png" alt="Compaction" width="440">
       <br>
       <sub>Native compaction messages</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
-      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/steer+queue.png" alt="Steer and queue controls" width="440">
+      <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/docs/assets/screenshots/steer+queue.png" alt="Steer and queue controls" width="440">
       <br>
       <sub>Steer and queue controls</sub>
     </td>
     <td width="50%" align="center">
-      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/context-usage.png" alt="Context and cost detail" width="280">
+      <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/docs/assets/screenshots/context-usage.png" alt="Context and cost detail" width="280">
       <br>
       <sub>Context, token usage, and estimated session cost</sub>
     </td>
@@ -78,7 +87,7 @@ FrostPi keeps Pi's functional workflows available from the GUI:
 Branch from an earlier prompt, move between existing paths, and optionally preserve context with Pi's branch summaries — all inside the current Pi session.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/tree-button.png" alt="Pi session tree in FrostPi" width="900">
+  <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/docs/assets/screenshots/tree-button.png" alt="Pi session tree in FrostPi" width="900">
 </p>
 
 **Fork into an independent session.**
@@ -92,12 +101,12 @@ Create, resume, switch, rename, and concurrently run independent Pi sessions. If
 <table>
   <tr>
     <td width="50%" align="center">
-      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/multi-session.png" alt="Multiple Pi sessions" width="440">
+      <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/docs/assets/screenshots/multi-session.png" alt="Multiple Pi sessions" width="440">
       <br>
       <sub>Independent concurrent sessions</sub>
     </td>
     <td width="50%" align="center">
-      <img src="https://raw.githubusercontent.com/frostime/frostpi/main/docs/assets/screenshots/support-worktree.png" alt="Git worktree sessions" width="440">
+      <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/docs/assets/screenshots/support-worktree.png" alt="Git worktree sessions" width="440">
       <br>
       <sub>Sessions across Git worktrees</sub>
     </td>
@@ -208,7 +217,7 @@ FrostPi contains no telemetry or remote service of its own. Prompts and images a
 
 See [`PRIVACY.md`](PRIVACY.md) in the extension package for details.
 
-For comparisons, architecture, development instructions, and protocol documentation, see the [FrostPi repository](https://github.com/frostime/frostpi).
+For comparisons, architecture, development instructions, and protocol documentation, see the [FrostPi repository](https://github.com/frostime/pi-vscode-ui).
 
 FrostPi is licensed under **AGPL-3.0-only**.
 
