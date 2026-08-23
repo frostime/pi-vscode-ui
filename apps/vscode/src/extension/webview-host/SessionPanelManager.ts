@@ -40,7 +40,6 @@ export class SessionPanelManager implements vscode.Disposable {
       { viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
       {
         enableScripts: true,
-        retainContextWhenHidden: true,
         localResourceRoots: [vscode.Uri.joinPath(this.#extensionUri, "dist", "webview")],
       },
     ));
@@ -136,8 +135,8 @@ function panelEndpoint(panel: vscode.WebviewPanel, sessionId: string): WebviewEn
     webview: panel.webview,
     surface: { kind: "panel", sessionId },
     isVisible: () => panel.visible,
-    onDidBecomeVisible: (listener) => panel.onDidChangeViewState((event) => {
-      if (event.webviewPanel.visible) listener();
+    onDidChangeVisibility: (listener) => panel.onDidChangeViewState((event) => {
+      listener(event.webviewPanel.visible);
     }),
   };
 }

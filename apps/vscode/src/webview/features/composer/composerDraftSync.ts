@@ -3,6 +3,8 @@ import type { ComposerDraftContent, ComposerDraftView } from "$shared/model/comp
 import { postToHost } from "../../bridge/vscodeBridge";
 import { getDraft, replaceDraftLocally, type DraftImage, type SessionDraft } from "./composerDraftStore.svelte";
 
+export type DraftAuthority = "webview" | "host";
+
 export function applyHostDraft(sessionId: string, draft: ComposerDraftView): void {
   if (draft.revision < getDraft(sessionId).revision) return;
   replaceDraftLocally(sessionId, {
@@ -15,43 +17,62 @@ export function applyHostDraft(sessionId: string, draft: ComposerDraftView): voi
   });
 }
 
-export function updateDraft(sessionId: string, update: (draft: SessionDraft) => Omit<SessionDraft, "revision"> | SessionDraft): SessionDraft {
+export function updateDraft(
+  sessionId: string,
+  authority: DraftAuthority,
+  update: (draft: SessionDraft) => Omit<SessionDraft, "revision"> | SessionDraft,
+): SessionDraft {
   const current = getDraft(sessionId);
   const updated = update(current);
   const next = { ...updated, revision: current.revision + 1 };
-  replaceAndPost(sessionId, current, next);
+  replaceDraftLocally(sessionId, next);
+  if (authority === "host") postDraftMutation(sessionId, current, next);
   return next;
 }
 
-export function setDraft(sessionId: string, draft: ComposerDraftContent | SessionDraft): SessionDraft {
-  return updateDraft(sessionId, () => ({
+export function setDraft(
+  sessionId: string,
+  authority: DraftAuthority,
+  draft: ComposerDraftContent | SessionDraft,
+): SessionDraft {
+  return updateDraft(sessionId, authority, () => ({
     text: draft.text,
     images: draft.images.map((image) => localImage(image)),
   }));
 }
 
-export function clearDraft(sessionId: string): SessionDraft {
-  return updateDraft(sessionId, () => ({ text: "", images: [] }));
+export function clearDraft(sessionId: string, authority: DraftAuthority): SessionDraft {
+  return updateDraft(sessionId, authority, () => ({ text: "", images: [] }));
 }
 
-export function clearDraftForSubmission(sessionId: string): void {
+export function clearDraftForSubmission(sessionId: string): number {
   const current = getDraft(sessionId);
-  replaceDraftLocally(sessionId, { revision: current.revision + 1, text: "", images: [] });
+  const clearedRevision = current.revision + 1;
+  replaceDraftLocally(sessionId, { revision: clearedRevision, text: "", images: [] });
+  return clearedRevision;
 }
 
-export function insertDraftText(sessionId: string, text: string): SessionDraft {
-  return updateDraft(sessionId, (draft) => {
+export function insertDraftText(sessionId: string, authority: DraftAuthority, text: string): SessionDraft {
+  return updateDraft(sessionId, authority, (draft) => {
     const separator = draft.text.trim().length ? "\n\n" : "";
     return { ...draft, text: `${draft.text}${separator}${text}` };
   });
 }
 
-export function setDraftText(sessionId: string, text: string): SessionDraft {
-  return updateDraft(sessionId, (draft) => ({ ...draft, text }));
+export function setDraftText(sessionId: string, authority: DraftAuthority, text: string): SessionDraft {
+  return updateDraft(sessionId, authority, (draft) => ({ ...draft, text }));
 }
 
-function replaceAndPost(sessionId: string, previous: SessionDraft, draft: SessionDraft): void {
-  replaceDraftLocally(sessionId, draft);
+export function draftForHost(sessionId: string): ComposerDraftView {
+  const { revision, text, images } = getDraft(sessionId);
+  return {
+    revision,
+    text,
+    images: images.map(({ id, name, mimeType, data, size }) => ({ id, name, mimeType, data, size })),
+  };
+}
+
+function postDraftMutation(sessionId: string, previous: SessionDraft, draft: SessionDraft): void {
   const previousImageIds = new Set(previous.images.map((image) => image.id));
   postToHost({
     type: "updateComposerDraft",

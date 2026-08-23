@@ -20,11 +20,12 @@ export interface PresentationDeltaView extends Omit<WebviewPresentationView, "di
 }
 
 export type HostToWebviewPayload =
-  | { type: "snapshot"; presentation: WebviewPresentationView; draft: ComposerDraftView }
+  | { type: "snapshot"; presentation: WebviewPresentationView; draft: ComposerDraftView | null }
   | { type: "setChatTypography"; typography: ChatTypographyView }
   | { type: "presentationDelta"; presentation: PresentationDeltaView }
   | { type: "draftReplacement"; sessionId: string; draft: ComposerDraftView }
-  | { type: "insertPromptText"; text: string }
+  | { type: "replaceComposerText"; sessionId: string; text: string }
+  | { type: "insertPromptText"; sessionId: string; text: string }
   | { type: "focusComposer" }
   | { type: "promptResult"; requestId: string; ok: boolean; error?: string }
   | {

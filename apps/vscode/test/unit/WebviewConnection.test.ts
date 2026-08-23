@@ -33,8 +33,8 @@ describe("per-presentation Webview synchronization", () => {
     const endpointA = fakeEndpoint("a");
     const endpointB = fakeEndpoint("b");
     const dispatcher = { dispatch: vi.fn() };
-    const connectionA = new WebviewConnection(registry as never, endpointA.endpoint as never, dispatcher as never, drafts as never, logger as never, () => true);
-    const connectionB = new WebviewConnection(registry as never, endpointB.endpoint as never, dispatcher as never, drafts as never, logger as never, () => true);
+    const connectionA = new WebviewConnection(registry as never, endpointA.endpoint as never, dispatcher as never, drafts as never, logger as never, () => true, () => true);
+    const connectionB = new WebviewConnection(registry as never, endpointB.endpoint as never, dispatcher as never, drafts as never, logger as never, () => true, () => true);
 
     endpointA.receive({ type: "ready", bridgeVersion: BRIDGE_VERSION });
     endpointB.receive({ type: "ready", bridgeVersion: BRIDGE_VERSION });
@@ -63,21 +63,124 @@ describe("per-presentation Webview synchronization", () => {
     endpointB.setVisible(false);
     views.set("b", sessionView("b", ["b-1", "b-2"]));
     connectionB.refresh();
+    connectionB.focusComposer();
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(endpointB.messages).toEqual([]);
 
     endpointB.setVisible(true);
-    await waitFor(() => endpointB.messages.length === 1);
+    endpointB.receive({ type: "ready", bridgeVersion: BRIDGE_VERSION });
+    await waitFor(() => endpointB.messages.length === 3);
     expect(endpointB.messages[0]).toMatchObject({
       type: "snapshot",
       presentation: {
         surface: { kind: "panel", sessionId: "b" },
+        composerDraftAuthority: "host",
         displayedSession: { id: "b", conversationItems: [{ id: "b-1" }, { id: "b-2" }] },
       },
     });
+    expect(endpointB.messages[1]).toMatchObject({ type: "setChatTypography" });
+    expect(endpointB.messages[2]).toMatchObject({ type: "focusComposer" });
 
     connectionA.dispose();
     connectionB.dispose();
+  });
+
+  it("keeps an ordinary Sidebar draft Webview-local", async () => {
+    const view = sessionView("sidebar", []);
+    const registry = {
+      activeSessionId: "sidebar",
+      sessionView: () => view,
+      snapshot: () => ({
+        workspaceName: "workspace",
+        workspacePath: "/workspace",
+        sessions: [],
+        activeSessionId: "sidebar",
+        activeSession: view,
+        piAvailable: true,
+      }),
+    };
+    const endpoint = fakeEndpoint("sidebar", "sidebar");
+    const drafts = { get: vi.fn(), getIfPresent: vi.fn(() => null), insertText: vi.fn() };
+    const connection = new WebviewConnection(
+      registry as never,
+      endpoint.endpoint as never,
+      { dispatch: vi.fn() } as never,
+      drafts as never,
+      { error: vi.fn(), info: vi.fn() } as never,
+      () => false,
+      () => false,
+    );
+
+    endpoint.receive({ type: "ready", bridgeVersion: BRIDGE_VERSION });
+    await waitFor(() => endpoint.messages.length === 2);
+    expect(endpoint.messages[0]).toMatchObject({
+      type: "snapshot",
+      draft: null,
+      presentation: { composerDraftAuthority: "webview" },
+    });
+
+    endpoint.messages.length = 0;
+    connection.insertPromptText("@file ");
+    await waitFor(() => endpoint.messages.some((message) => (message as { type?: string }).type === "insertPromptText"));
+    expect(drafts.insertText).not.toHaveBeenCalled();
+    expect(endpoint.messages).toContainEqual(expect.objectContaining({
+      type: "insertPromptText",
+      sessionId: "sidebar",
+      text: "@file ",
+    }));
+
+    endpoint.messages.length = 0;
+    endpoint.setVisible(false);
+    const delivered = vi.fn();
+    connection.queueComposerText("sidebar", "from editor", delivered);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(endpoint.messages).toEqual([]);
+
+    endpoint.setVisible(true);
+    await waitFor(() => delivered.mock.calls.length === 1);
+    expect(endpoint.messages).toContainEqual(expect.objectContaining({
+      type: "replaceComposerText",
+      sessionId: "sidebar",
+      text: "from editor",
+    }));
+    connection.dispose();
+  });
+
+  it("retains a focus request until a recreated Webview becomes ready", async () => {
+    const view = sessionView("panel", ["message"]);
+    const registry = {
+      activeSessionId: "sidebar",
+      sessionView: () => view,
+      snapshot: () => ({
+        workspaceName: "workspace",
+        workspacePath: "/workspace",
+        sessions: [],
+        activeSessionId: "sidebar",
+        activeSession: null,
+        piAvailable: true,
+      }),
+    };
+    const endpoint = fakeEndpoint("panel");
+    const connection = new WebviewConnection(
+      registry as never,
+      endpoint.endpoint as never,
+      { dispatch: vi.fn() } as never,
+      { get: () => ({ revision: 0, text: "", images: [] }) } as never,
+      { error: vi.fn(), info: vi.fn() } as never,
+      () => true,
+      () => true,
+    );
+
+    connection.focusComposer();
+    expect(endpoint.messages).toEqual([]);
+    endpoint.receive({ type: "ready", bridgeVersion: BRIDGE_VERSION });
+    await waitFor(() => endpoint.messages.length === 3);
+    expect(endpoint.messages.map((message) => (message as { type: string }).type)).toEqual([
+      "snapshot",
+      "setChatTypography",
+      "focusComposer",
+    ]);
+    connection.dispose();
   });
 });
 
@@ -90,15 +193,15 @@ function sessionView(id: string, itemIds: string[]) {
   };
 }
 
-function fakeEndpoint(sessionId: string) {
+function fakeEndpoint(sessionId: string, kind: "panel" | "sidebar" = "panel") {
   let receiveListener: ((message: unknown) => void) | undefined;
   let visible = true;
-  const visibilityListeners = new Set<() => void>();
+  const visibilityListeners = new Set<(visible: boolean) => void>();
   const messages: unknown[] = [];
   return {
     messages,
     endpoint: {
-      surface: { kind: "panel", sessionId },
+      surface: kind === "panel" ? { kind: "panel", sessionId } : { kind: "sidebar" },
       webview: {
         onDidReceiveMessage: (listener: (message: unknown) => void) => {
           receiveListener = listener;
@@ -110,7 +213,7 @@ function fakeEndpoint(sessionId: string) {
         }),
       },
       isVisible: () => visible,
-      onDidBecomeVisible: (listener: () => void) => {
+      onDidChangeVisibility: (listener: (visible: boolean) => void) => {
         visibilityListeners.add(listener);
         return { dispose: () => visibilityListeners.delete(listener) };
       },
@@ -118,7 +221,7 @@ function fakeEndpoint(sessionId: string) {
     receive: (message: unknown) => receiveListener?.(message),
     setVisible: (next: boolean) => {
       visible = next;
-      if (next) for (const listener of visibilityListeners) listener();
+      for (const listener of visibilityListeners) listener(next);
     },
   };
 }

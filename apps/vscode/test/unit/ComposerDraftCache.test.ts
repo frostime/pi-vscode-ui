@@ -21,13 +21,27 @@ describe("Host Composer draft handoff", () => {
     cache = new ComposerDraftCache();
   });
 
-  it("accepts only newer revisions and retains images across text replacement", () => {
-    expect(cache.replace("session", {
+  it("prepares an authoritative handoff and can roll it back if panel creation fails", () => {
+    expect(cache.getIfPresent("session")).toBeNull();
+    const rollback = cache.beginHandoff("session", { revision: 3, text: "sidebar draft", images: [] });
+    expect(cache.getIfPresent("session")).toMatchObject({ revision: 3, text: "sidebar draft" });
+
+    rollback();
+    expect(cache.getIfPresent("session")).toBeNull();
+  });
+
+  it("accepts only newer externalized revisions and retains images across text replacement", () => {
+    cache.beginHandoff("session", {
       revision: 2,
       text: "draft",
       images: [{ id: "image", name: "shot.png", mimeType: "image/png", data: "AA==", size: 1 }],
-    })).toBe(true);
-    expect(cache.replace("session", { revision: 1, text: "stale", images: [] })).toBe(false);
+    });
+    expect(cache.applyMutation("session", {
+      revision: 1,
+      text: "stale",
+      imageIds: [],
+      addedImages: [],
+    })).toBe(false);
 
     cache.replaceText("session", "from editor");
     expect(cache.get("session")).toMatchObject({
@@ -37,7 +51,9 @@ describe("Host Composer draft handoff", () => {
     });
   });
 
-  it("reuses cached image bytes for text-only mutations", () => {
+  it("reuses cached image bytes without echoing panel-origin mutations", () => {
+    const changed = vi.fn();
+    cache.onDidChange(changed);
     cache.applyMutation("session", {
       revision: 1,
       text: "",
@@ -56,10 +72,13 @@ describe("Host Composer draft handoff", () => {
       text: "describe it",
       images: [expect.objectContaining({ id: "image", data: "AA==" })],
     });
+    expect(changed).not.toHaveBeenCalled();
   });
 
-  it("restores a failed submission only when no newer draft exists", () => {
-    cache.replace("session", { revision: 4, text: "send me", images: [] });
+  it("restores a failed submission only when no newer handed-off draft exists", () => {
+    const ownershipChanged = vi.fn();
+    cache.onDidOwnershipChange(ownershipChanged);
+    cache.beginHandoff("session", { revision: 4, text: "send me", images: [] });
     cache.beginSubmission("session", "request-1", cache.get("session"));
     expect(cache.get("session")).toMatchObject({ revision: 5, text: "" });
 
@@ -67,13 +86,16 @@ describe("Host Composer draft handoff", () => {
     expect(cache.get("session")).toMatchObject({ revision: 6, text: "send me" });
 
     cache.beginSubmission("session", "request-2", cache.get("session"));
-    cache.replace("session", { revision: 8, text: "newer", images: [] });
+    expect(cache.hasPendingSubmission("session")).toBe(true);
+    cache.applyMutation("session", { revision: 8, text: "newer", imageIds: [], addedImages: [] });
     cache.resolveSubmission("session", "request-2", false);
     expect(cache.get("session")).toMatchObject({ revision: 8, text: "newer" });
+    expect(cache.hasPendingSubmission("session")).toBe(false);
+    expect(ownershipChanged).toHaveBeenCalledTimes(2);
   });
 
   it("releases both current and failure state with the Session", () => {
-    cache.replace("session", { revision: 1, text: "draft", images: [] });
+    cache.beginHandoff("session", { revision: 1, text: "draft", images: [] });
     cache.beginSubmission("session", "request", cache.get("session"));
     cache.release("session");
     cache.resolveSubmission("session", "request", false);

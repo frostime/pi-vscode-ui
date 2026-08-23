@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import * as vscode from "vscode";
+
 vi.mock("vscode", () => ({
   EventEmitter: class<T> {
     listeners = new Set<(value: T) => void>();
@@ -45,6 +47,34 @@ describe("Session panel lifecycle", () => {
     expect(manager.has("session")).toBe(false);
     expect(connection.dispose).toHaveBeenCalledOnce();
     expect(sessions.has("session")).toBe(true);
+    manager.dispose();
+  });
+
+  it("creates disposable panels without retaining hidden Webview context", () => {
+    const panel = fakePanel();
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel);
+    createWebviewPanel.mockReturnValueOnce(panel.value as never);
+    const registry = {
+      sessionView: () => ({ id: "session", title: "Session" }),
+      hasSession: () => true,
+      retainProvisionalSession: vi.fn(),
+    };
+    const manager = new SessionPanelManager(
+      registry as never,
+      {} as never,
+      () => ({ dispose: vi.fn(), focusComposer: vi.fn() }) as never,
+    );
+
+    manager.open("session");
+
+    expect(createWebviewPanel).toHaveBeenCalledWith(
+      "frostpi.session",
+      "FrostPi · Session",
+      { viewColumn: 1, preserveFocus: false },
+      expect.objectContaining({ enableScripts: true }),
+    );
+    const options = createWebviewPanel.mock.calls[0]?.[3];
+    expect(options).not.toHaveProperty("retainContextWhenHidden");
     manager.dispose();
   });
 

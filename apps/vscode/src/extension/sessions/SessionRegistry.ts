@@ -42,7 +42,6 @@ interface ForkOperation {
   forkId: string;
   runtime: SessionRuntime;
   resultSelection: ForkResultSelection;
-  sidebarSelectionBefore: string | null;
   cancelRequested: boolean;
   stopPromise?: Promise<void>;
 }
@@ -360,7 +359,6 @@ export class SessionRegistry implements vscode.Disposable {
       forkId: randomUUID(),
       runtime,
       resultSelection,
-      sidebarSelectionBefore: this.#activeSessionId,
       cancelRequested: false,
     };
     this.#forkOperation = operation;
@@ -694,9 +692,8 @@ export class SessionRegistry implements vscode.Disposable {
     this.#runtimes.set(operation.sourceId, originalRuntime);
     this.#lastStatuses.set(operation.sourceId, "stopped");
     this.#lastPendingUiCounts.set(operation.sourceId, 0);
-    this.#activeSessionId = operation.resultSelection === "select-result"
-      ? operation.forkId
-      : operation.sidebarSelectionBefore;
+    if (operation.resultSelection === "select-result") this.#activeSessionId = operation.forkId;
+    else this.#ensureValidActiveSelection();
   }
 
   async #restoreOriginalAfterFork(operation: ForkOperation): Promise<void> {
@@ -707,7 +704,8 @@ export class SessionRegistry implements vscode.Disposable {
       await operation.runtime.dispose().catch(() => undefined);
       this.#removeSession(operation.forkId);
     }
-    this.#activeSessionId = operation.sidebarSelectionBefore;
+    if (operation.resultSelection === "select-result") this.#activeSessionId = operation.sourceId;
+    else this.#ensureValidActiveSelection();
 
     const originalRuntime = this.#requireRuntime(operation.sourceId);
     let restartError: unknown;
@@ -908,6 +906,11 @@ export class SessionRegistry implements vscode.Disposable {
   #workingDirectoryLabel(cwd: string): { workingDirectoryLabel?: string } {
     if (isOpenWorkspaceFolder(cwd)) return {};
     return { workingDirectoryLabel: this.#workingDirectoriesByCwd.get(normalizedPath(cwd))?.directoryName ?? basename(cwd) };
+  }
+
+  #ensureValidActiveSelection(): void {
+    if (this.#activeSessionId && this.#runtimes.has(this.#activeSessionId)) return;
+    this.#activeSessionId = [...this.#runtimes.keys()].at(-1) ?? null;
   }
 
   #requireRuntime(sessionId: string): SessionRuntime {

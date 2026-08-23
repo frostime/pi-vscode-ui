@@ -38,6 +38,8 @@
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
+.panel-shell { grid-template-rows: minmax(0, 1fr) auto; }
+.panel-shell.panel-failed { grid-template-rows: minmax(0, 1fr); }
 .icon-button {
   width: 28px;
   height: 28px;

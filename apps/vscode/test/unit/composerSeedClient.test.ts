@@ -17,7 +17,7 @@ describe("host-validated Composer seed", () => {
       },
     } as never;
 
-    expect(applyComposerSeed(session)).toBe(true);
+    expect(applyComposerSeed(session, "webview")).toBe(true);
     expect(get(composerDrafts).original?.text).toBe("Unsent original");
     expect(get(composerDrafts)["fork-session"]).toEqual({
       revision: 1,
@@ -32,8 +32,8 @@ describe("host-validated Composer seed", () => {
       }],
     });
 
-    updateDraft("fork-session", (draft) => ({ ...draft, text: "Edited" }));
-    expect(applyComposerSeed(session)).toBe(false);
+    updateDraft("fork-session", "webview", (draft) => ({ ...draft, text: "Edited" }));
+    expect(applyComposerSeed(session, "webview")).toBe(false);
     expect(get(composerDrafts)["fork-session"]?.text).toBe("Edited");
   });
 });

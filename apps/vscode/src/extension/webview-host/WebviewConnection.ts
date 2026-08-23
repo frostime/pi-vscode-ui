@@ -26,15 +26,18 @@ export class WebviewConnection implements vscode.Disposable {
   readonly #drafts: ComposerDraftCache;
   readonly #logger: DiagnosticLogger;
   readonly #isExternalized: (sessionId: string) => boolean;
+  readonly #hostOwnsDraft: (sessionId: string) => boolean;
   readonly #disposables: vscode.Disposable[] = [];
   readonly fileSearch: WorkspaceFileSearch;
 
   #ready = false;
   #dirty = true;
+  #pendingFocus = false;
   #disposed = false;
   #cachedSessionId: string | null = null;
   #conversationItemOrder: string[] = [];
   #conversationItemRefs = new Map<string, ConversationItemView>();
+  #pendingComposerText = new Map<string, { text: string; delivered: () => void }>();
   #outbound: Promise<void> = Promise.resolve();
 
   constructor(
@@ -44,6 +47,7 @@ export class WebviewConnection implements vscode.Disposable {
     drafts: ComposerDraftCache,
     logger: DiagnosticLogger,
     isExternalized: (sessionId: string) => boolean,
+    hostOwnsDraft: (sessionId: string) => boolean,
   ) {
     this.#registry = registry;
     this.#endpoint = endpoint;
@@ -51,6 +55,7 @@ export class WebviewConnection implements vscode.Disposable {
     this.#drafts = drafts;
     this.#logger = logger;
     this.#isExternalized = isExternalized;
+    this.#hostOwnsDraft = hostOwnsDraft;
     this.fileSearch = new WorkspaceFileSearch({
       onLegacyFd: (fd) => {
         void vscode.window.showWarningMessage(
@@ -60,9 +65,10 @@ export class WebviewConnection implements vscode.Disposable {
     });
     this.#disposables.push(
       endpoint.webview.onDidReceiveMessage((raw: unknown) => void this.#receive(raw)),
-      endpoint.onDidBecomeVisible(() => {
+      endpoint.onDidChangeVisibility((visible) => {
         this.#dirty = true;
-        this.refresh();
+        if (!visible && this.surface.kind === "panel") this.#ready = false;
+        if (visible) this.refresh();
       }),
     );
   }
@@ -84,6 +90,8 @@ export class WebviewConnection implements vscode.Disposable {
     this.#enqueue(async () => {
       if (this.#dirty || this.sessionId !== this.#cachedSessionId) await this.#sendSnapshot();
       else await this.#sendDelta();
+      await this.#sendPendingComposerText();
+      await this.#sendPendingFocus();
     });
   }
 
@@ -99,13 +107,19 @@ export class WebviewConnection implements vscode.Disposable {
   insertPromptText(text: string): void {
     const sessionId = this.sessionId;
     if (!sessionId) return;
-    this.#drafts.insertText(sessionId, text);
-    this.post({ type: "insertPromptText", text });
+    if (this.surface.kind === "panel") this.#drafts.insertText(sessionId, text);
+    else this.post({ type: "insertPromptText", sessionId, text });
     this.focusComposer();
   }
 
+  queueComposerText(sessionId: string, text: string, delivered: () => void): void {
+    this.#pendingComposerText.set(sessionId, { text, delivered });
+    this.refresh();
+  }
+
   focusComposer(): void {
-    this.post({ type: "focusComposer" });
+    this.#pendingFocus = true;
+    this.refresh();
   }
 
   post(message: HostToWebviewPayload): void {
@@ -136,6 +150,8 @@ export class WebviewConnection implements vscode.Disposable {
           type: "setChatTypography",
           typography: readChatTypography(vscode.workspace.getConfiguration("chat")),
         });
+        await this.#sendPendingComposerText();
+        await this.#sendPendingFocus();
       });
       return;
     }
@@ -158,12 +174,15 @@ export class WebviewConnection implements vscode.Disposable {
 
   async #sendSnapshot(): Promise<void> {
     const presentation = this.#presentation();
+    const displayedSessionId = presentation.displayedSession?.id;
     const delivered = await this.#post({
       type: "snapshot",
       presentation,
-      draft: presentation.displayedSession
-        ? this.#drafts.get(presentation.displayedSession.id)
-        : { revision: 0, text: "", images: [] },
+      draft: displayedSessionId
+        ? this.surface.kind === "panel"
+          ? this.#drafts.get(displayedSessionId)
+          : this.#drafts.getIfPresent(displayedSessionId)
+        : null,
     });
     if (!delivered) {
       this.#dirty = true;
@@ -196,6 +215,25 @@ export class WebviewConnection implements vscode.Disposable {
     }
   }
 
+  async #sendPendingComposerText(): Promise<void> {
+    if (!this.#ready || this.#dirty || !this.#endpoint.isVisible()) return;
+    for (const [sessionId, pending] of this.#pendingComposerText) {
+      if (!await this.#post({ type: "replaceComposerText", sessionId, text: pending.text })) {
+        this.#dirty = true;
+        return;
+      }
+      if (this.#pendingComposerText.get(sessionId) !== pending) continue;
+      this.#pendingComposerText.delete(sessionId);
+      pending.delivered();
+    }
+  }
+
+  async #sendPendingFocus(): Promise<void> {
+    if (!this.#pendingFocus || !this.#ready || this.#dirty || !this.#endpoint.isVisible()) return;
+    if (await this.#post({ type: "focusComposer" })) this.#pendingFocus = false;
+    else this.#dirty = true;
+  }
+
   #presentation(): WebviewPresentationView {
     const workspace = this.#registry.snapshot();
     const displayedSession = this.sessionId ? this.#registry.sessionView(this.sessionId) : null;
@@ -207,6 +245,7 @@ export class WebviewConnection implements vscode.Disposable {
       sessions: workspace.sessions,
       activeSessionId: workspace.activeSessionId,
       displayedSession,
+      composerDraftAuthority: displayedSession && this.#hostOwnsDraft(displayedSession.id) ? "host" : "webview",
       sidebarSessionExternalized: this.surface.kind === "sidebar"
         && Boolean(displayedSession && this.#isExternalized(displayedSession.id)),
       piAvailable: !piError,

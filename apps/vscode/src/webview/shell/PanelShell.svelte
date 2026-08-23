@@ -6,7 +6,7 @@
   let { session }: { session: SessionViewModel } = $props();
 </script>
 
-<div class="app-shell panel-shell">
+<div class="app-shell panel-shell" class:panel-failed={session.status === "failed"}>
   {#if session.status === "failed"}
     <section class="panel-failure" role="status">
       <span class="codicon codicon-error" aria-hidden="true"></span>
@@ -14,7 +14,7 @@
       <p>{session.error ?? "This Session's Pi process stopped. Use the FrostPi sidebar to manage or restart it."}</p>
     </section>
   {:else}
-    <SessionInteraction {session} surfaceKind="panel" />
+    <SessionInteraction {session} surfaceKind="panel" draftAuthority="host" />
   {/if}
 </div>
 

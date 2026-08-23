@@ -3,6 +3,7 @@
   import type { SessionSummaryView, SessionViewModel } from "$shared/model/sessionViewModel";
 
   import { postToHost } from "../../bridge/vscodeBridge";
+  import { draftForHost } from "../composer/composerDraftSync";
   import IconButton from "../../primitives/IconButton.svelte";
   import StatusDot from "./StatusDot.svelte";
   import SessionList from "./SessionList.svelte";
@@ -81,6 +82,11 @@
   function closeSession(sessionId: string): void {
     closeMenus();
     postToHost({ type: "closeSession", sessionId });
+  }
+
+  function openSessionPanel(): void {
+    closeMenus();
+    postToHost({ type: "openSessionPanel", sessionId: active.id, draft: draftForHost(active.id) });
   }
 
   function activeStatusLabel(): string {
@@ -196,7 +202,7 @@
         <IconButton icon="ellipsis" label="Session actions" active={menuOpen} onclick={() => { menuOpen = !menuOpen; launcherOpen = false; sessionListOpen = false; }} />
         {#if menuOpen}
           <div class="session-menu">
-            <button type="button" onclick={() => { closeMenus(); postToHost({ type: "openSessionPanel", sessionId: active.id }); }}><span class="codicon codicon-layout"></span> Open in editor tab</button>
+            <button type="button" onclick={openSessionPanel}><span class="codicon codicon-layout"></span> Open in editor tab</button>
             <button type="button" onclick={beginRename}><span class="codicon codicon-edit"></span> Rename</button>
             {#if active.historyStatus === "deferred" || active.historyStatus === "failed"}
               <button type="button" onclick={() => { closeMenus(); postToHost({ type: "loadHistory", sessionId: active.id }); }}><span class="codicon codicon-history"></span> Load conversation history</button>

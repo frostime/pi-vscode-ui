@@ -7,7 +7,15 @@
   import ExtensionWidgets from "./ExtensionWidgets.svelte";
   import SessionMetrics from "./SessionMetrics.svelte";
 
-  let { session, surfaceKind }: { session: SessionViewModel; surfaceKind: "sidebar" | "panel" } = $props();
+  let {
+    session,
+    surfaceKind,
+    draftAuthority,
+  }: {
+    session: SessionViewModel;
+    surfaceKind: "sidebar" | "panel";
+    draftAuthority: "webview" | "host";
+  } = $props();
   const aboveWidgets = $derived(session.extensionWidgets.filter((widget) => widget.placement === "above"));
   const belowWidgets = $derived(session.extensionWidgets.filter((widget) => widget.placement === "below"));
 </script>
@@ -17,6 +25,6 @@
   <SessionMetrics {session} />
   <ExtensionWidgets widgets={aboveWidgets} />
   <ExtensionUiHost sessionId={session.id} requests={session.pendingExtensionUi} />
-  <Composer {session} {surfaceKind} />
+  <Composer {session} {surfaceKind} {draftAuthority} />
   <ExtensionWidgets widgets={belowWidgets} />
 </div>

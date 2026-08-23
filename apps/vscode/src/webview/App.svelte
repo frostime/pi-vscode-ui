@@ -21,6 +21,7 @@
       sessions={$presentationStore.sessions}
       session={$presentationStore.displayedSession}
       externalized={$presentationStore.sidebarSessionExternalized}
+      draftAuthority={$presentationStore.composerDraftAuthority}
     />
   {/if}
 

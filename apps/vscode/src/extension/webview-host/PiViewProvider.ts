@@ -26,8 +26,8 @@ export class PiViewProvider implements vscode.WebviewViewProvider {
       webview: webviewView.webview,
       surface: { kind: "sidebar" },
       isVisible: () => webviewView.visible,
-      onDidBecomeVisible: (listener) => webviewView.onDidChangeVisibility(() => {
-        if (webviewView.visible) listener();
+      onDidChangeVisibility: (listener) => webviewView.onDidChangeVisibility(() => {
+        listener(webviewView.visible);
       }),
     });
     webviewView.onDidDispose(() => {

@@ -10,7 +10,13 @@
     sessions,
     session,
     externalized,
-  }: { sessions: SessionSummaryView[]; session: SessionViewModel; externalized: boolean } = $props();
+    draftAuthority,
+  }: {
+    sessions: SessionSummaryView[];
+    session: SessionViewModel;
+    externalized: boolean;
+    draftAuthority: "webview" | "host";
+  } = $props();
 </script>
 
 <div class="app-shell">
@@ -20,6 +26,6 @@
   {:else if session.status === "failed"}
     <OnboardingView {session} />
   {:else}
-    <SessionInteraction {session} surfaceKind="sidebar" />
+    <SessionInteraction {session} surfaceKind="sidebar" {draftAuthority} />
   {/if}
 </div>

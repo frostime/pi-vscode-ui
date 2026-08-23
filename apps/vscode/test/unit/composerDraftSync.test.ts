@@ -15,9 +15,16 @@ describe("Webview Composer draft synchronization", () => {
     bridge.postToHost.mockClear();
   });
 
-  it("posts each mutation immediately with a monotonically increasing revision", () => {
-    updateDraft("session", (draft) => ({ ...draft, text: "a" }));
-    updateDraft("session", (draft) => ({ ...draft, text: "ab" }));
+  it("keeps ordinary Sidebar mutations local", () => {
+    updateDraft("session", "webview", (draft) => ({ ...draft, text: "local" }));
+
+    expect(get(composerDrafts).session?.text).toBe("local");
+    expect(bridge.postToHost).not.toHaveBeenCalled();
+  });
+
+  it("posts externalized mutations immediately with a monotonically increasing revision", () => {
+    updateDraft("session", "host", (draft) => ({ ...draft, text: "a" }));
+    updateDraft("session", "host", (draft) => ({ ...draft, text: "ab" }));
 
     const revisions = bridge.postToHost.mock.calls.map(([message]) =>
       message.type === "updateComposerDraft" ? message.draft.revision : -1);
@@ -30,11 +37,11 @@ describe("Webview Composer draft synchronization", () => {
   });
 
   it("sends image bytes only when an attachment is added", () => {
-    updateDraft("session", (draft) => ({
+    updateDraft("session", "host", (draft) => ({
       ...draft,
       images: [{ id: "image", name: "shot.png", mimeType: "image/png", data: "AA==", dataUrl: "data:image/png;base64,AA==", size: 1 }],
     }));
-    updateDraft("session", (draft) => ({ ...draft, text: "describe it" }));
+    updateDraft("session", "host", (draft) => ({ ...draft, text: "describe it" }));
 
     const first = bridge.postToHost.mock.calls[0]?.[0];
     const second = bridge.postToHost.mock.calls[1]?.[0];

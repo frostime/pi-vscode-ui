@@ -55,7 +55,15 @@ const payloadSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("openFolder") }),
   z.object({ type: z.literal("createSession"), ephemeral: z.boolean().optional() }),
   z.object({ type: z.literal("resumeSession") }),
-  z.object({ type: z.literal("openSessionPanel"), sessionId: z.string().min(1).max(128) }),
+  z.object({
+    type: z.literal("openSessionPanel"),
+    sessionId: z.string().min(1).max(128),
+    draft: z.object({
+      revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+      text: z.string().max(2_000_000),
+      images: z.array(imageSchema).max(12),
+    }),
+  }),
   z.object({ type: z.literal("revealSessionPanel"), sessionId: z.string().min(1).max(128) }),
   z.object({
     type: z.literal("updateComposerDraft"),

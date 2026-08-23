@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 
 import type { HostToWebviewPayload } from "../../shared/bridge/hostToWebview.js";
 import type { WebviewToHostMessage } from "../../shared/bridge/webviewToHost.js";
+import type { ComposerDraftView } from "../../shared/model/composerDraftModel.js";
 import { captureActiveFileReference } from "../composer/mentions/captureActiveFile.js";
 import { captureActiveSelection } from "../composer/mentions/captureSelection.js";
 import { listEditorMentionSpecials } from "../composer/mentions/editorMentionSpecials.js";
@@ -14,6 +15,7 @@ import { openReferencedLocation } from "../conversation/openReferencedLocation.j
 import { exportDiagnostics } from "../diagnostics/exportDiagnostics.js";
 import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { openFileDiff } from "../file-changes/GitBaseContentProvider.js";
+import type { ComposerExternalEditorOpenResult } from "../composer/ComposerExternalEditor.js";
 import type { SessionRegistry } from "../sessions/SessionRegistry.js";
 import type { ComposerDraftCache } from "./ComposerDraftCache.js";
 import type { ConnectionContext } from "./webviewTypes.js";
@@ -28,9 +30,9 @@ export interface WebviewActionDispatcherDependencies {
   registry: SessionRegistry;
   logger: DiagnosticLogger;
   drafts: ComposerDraftCache;
-  openPanel(sessionId: string): void | Promise<void>;
+  openPanel(sessionId: string, draft?: ComposerDraftView): void | Promise<void>;
   revealPanel(sessionId: string): void | Promise<void>;
-  openComposerEditor(sessionId: string, text: string): Promise<void>;
+  openComposerEditor(sessionId: string, text: string): Promise<ComposerExternalEditorOpenResult>;
 }
 
 const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
@@ -52,19 +54,32 @@ const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
   "refreshCommands",
 ]);
 
+const SIDEBAR_COLLECTION_TARGET_ACTIONS = new Set<WebviewToHostMessage["type"]>([
+  "activateSession",
+  "closeSession",
+  "renameSession",
+  "revealSessionPanel",
+  "restartSession",
+  "retryStart",
+  "checkPiIntegration",
+  "refreshCommands",
+]);
+
 export class WebviewActionDispatcher {
   readonly #registry: SessionRegistry;
   readonly #logger: DiagnosticLogger;
   readonly #drafts: ComposerDraftCache;
-  readonly #openPanel: (sessionId: string) => void | Promise<void>;
+  readonly #openPanel: (sessionId: string, draft?: ComposerDraftView) => void | Promise<void>;
   readonly #revealPanel: (sessionId: string) => void | Promise<void>;
-  readonly #openComposerEditor: (sessionId: string, text: string) => Promise<void>;
+  readonly #openComposerEditor: (sessionId: string, text: string) => Promise<ComposerExternalEditorOpenResult>;
 
   constructor(dependencies: WebviewActionDispatcherDependencies) {
     this.#registry = dependencies.registry;
     this.#logger = dependencies.logger;
     this.#drafts = dependencies.drafts;
-    this.#openPanel = (sessionId) => dependencies.openPanel(sessionId);
+    this.#openPanel = (sessionId, draft) => draft
+      ? dependencies.openPanel(sessionId, draft)
+      : dependencies.openPanel(sessionId);
     this.#revealPanel = (sessionId) => dependencies.revealPanel(sessionId);
     this.#openComposerEditor = (sessionId, text) => dependencies.openComposerEditor(sessionId, text);
   }
@@ -90,16 +105,21 @@ export class WebviewActionDispatcher {
         await this.#registry.resumeSession();
         return;
       case "openSessionPanel":
-        await this.#openPanel(message.sessionId);
+        await this.#openPanel(message.sessionId, message.draft);
         return;
       case "revealSessionPanel":
         await this.#revealPanel(message.sessionId);
         return;
       case "updateComposerDraft":
+        if (connection.surface.kind !== "panel" && !this.#drafts.hasPendingSubmission(message.sessionId)) {
+          throw new Error("Only an externalized Composer synchronizes drafts to the Host.");
+        }
         this.#drafts.applyMutation(message.sessionId, message.draft);
         return;
       case "openComposerEditor":
-        await this.#openComposerEditor(message.sessionId, message.text);
+        if (await this.#openComposerEditor(message.sessionId, message.text) === "already-open") {
+          connection.post({ type: "toast", level: "info", message: "Finish the open composer editor tab first." });
+        }
         return;
       case "activateSession":
         await this.#registry.activateSession(message.sessionId);
@@ -115,18 +135,22 @@ export class WebviewActionDispatcher {
         connection.post({ type: "toast", level: "info", message: "Copied to clipboard." });
         return;
       case "sendPrompt": {
+        const hostOwnsDraft = connection.surface.kind === "panel"
+          || this.#drafts.hasPendingSubmission(message.sessionId);
         try {
-          const submitted = this.#drafts.beginSubmission(message.sessionId, message.requestId, {
-            revision: message.draftRevision,
-            text: message.text,
-            images: message.images,
-          });
+          const submitted = hostOwnsDraft
+            ? this.#drafts.beginSubmission(message.sessionId, message.requestId, {
+                revision: message.draftRevision,
+                text: message.text,
+                images: message.images,
+              })
+            : { text: message.text, images: message.images };
           await this.#registry.sendPrompt(message.sessionId, submitted.text, submitted.images, message.streamingBehavior);
-          this.#drafts.resolveSubmission(message.sessionId, message.requestId, true);
+          if (hostOwnsDraft) this.#drafts.resolveSubmission(message.sessionId, message.requestId, true);
           connection.post({ type: "promptResult", requestId: message.requestId, ok: true });
         } catch (error) {
           const errorText = error instanceof Error ? error.message : String(error);
-          this.#drafts.resolveSubmission(message.sessionId, message.requestId, false);
+          if (hostOwnsDraft) this.#drafts.resolveSubmission(message.sessionId, message.requestId, false);
           connection.post({ type: "promptResult", requestId: message.requestId, ok: false, error: errorText });
         }
         return;
@@ -144,13 +168,10 @@ export class WebviewActionDispatcher {
         await this.#registry.switchBranch(message.sessionId, message.branchPointId, message.hasDraft);
         return;
       case "forkMessage": {
+        let result: Awaited<ReturnType<SessionRegistry["forkMessage"]>>;
         try {
           const selection = connection.surface.kind === "sidebar" ? "select-result" : "preserve-sidebar-selection";
-          const result = await this.#registry.forkMessage(message.sessionId, message.entryId, selection);
-          if (!result.cancelled && result.forkSessionId && connection.surface.kind === "panel") {
-            await this.#openPanel(result.forkSessionId);
-          }
-          connection.post({ type: "forkResult", requestId: message.requestId, ok: true, ...result });
+          result = await this.#registry.forkMessage(message.sessionId, message.entryId, selection);
         } catch (error) {
           connection.post({
             type: "forkResult",
@@ -158,6 +179,21 @@ export class WebviewActionDispatcher {
             ok: false,
             error: error instanceof Error ? error.message : String(error),
           });
+          return;
+        }
+
+        connection.post({ type: "forkResult", requestId: message.requestId, ok: true, ...result });
+        if (!result.cancelled && result.forkSessionId && connection.surface.kind === "panel") {
+          try {
+            await this.#openPanel(result.forkSessionId);
+          } catch (error) {
+            this.#logger.error(`Fork result Session Tab failed to open for ${result.forkSessionId}`, error);
+            connection.post({
+              type: "toast",
+              level: "error",
+              message: "Fork succeeded, but its Session Tab could not be opened. Select the Fork result in the sidebar.",
+            });
+          }
         }
         return;
       }
@@ -234,7 +270,11 @@ export class WebviewActionDispatcher {
   }
 
   #authorizeSessionTarget(message: WebviewToHostMessage, connection: ConnectionContext): void {
-    if (!("sessionId" in message)) return;
+    if (!("sessionId" in message) || !message.sessionId) return;
+    if (connection.surface.kind === "sidebar" && SIDEBAR_COLLECTION_TARGET_ACTIONS.has(message.type)) {
+      if (!this.#registry.hasSession(message.sessionId)) throw new Error("This FrostPi Session no longer exists.");
+      return;
+    }
     if (!connection.sessionId || message.sessionId !== connection.sessionId) {
       throw new Error("The Webview action does not target the Session displayed by this surface.");
     }

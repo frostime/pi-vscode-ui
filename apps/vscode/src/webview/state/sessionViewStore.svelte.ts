@@ -9,6 +9,7 @@ export const EMPTY_PRESENTATION: WebviewPresentationView = {
   sessions: [],
   activeSessionId: null,
   displayedSession: null,
+  composerDraftAuthority: "webview",
   sidebarSessionExternalized: false,
   piAvailable: true,
 };

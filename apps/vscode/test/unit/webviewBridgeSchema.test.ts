@@ -21,7 +21,17 @@ describe("Webview bridge validation", () => {
 
   it("accepts local session, panel, draft, history, copy, composer-editor, and correlated message-fork actions", () => {
     expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "resumeSession" }).success).toBe(true);
-    expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "openSessionPanel", sessionId: "session-1" }).success).toBe(true);
+    expect(webviewToHostSchema.safeParse({
+      bridgeVersion: BRIDGE_VERSION,
+      type: "openSessionPanel",
+      sessionId: "session-1",
+      draft: { revision: 2, text: "handoff", images: [] },
+    }).success).toBe(true);
+    expect(webviewToHostSchema.safeParse({
+      bridgeVersion: BRIDGE_VERSION,
+      type: "openSessionPanel",
+      sessionId: "session-1",
+    }).success).toBe(false);
     expect(webviewToHostSchema.safeParse({
       bridgeVersion: BRIDGE_VERSION,
       type: "updateComposerDraft",

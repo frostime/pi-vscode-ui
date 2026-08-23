@@ -12,18 +12,34 @@ export class ComposerDraftCache implements vscode.Disposable {
   readonly #drafts = new Map<string, ComposerDraftView>();
   readonly #failedSubmissions = new Map<string, FailedSubmission>();
   readonly #changeEmitter = new vscode.EventEmitter<{ sessionId: string; draft: ComposerDraftView }>();
+  readonly #ownershipChangeEmitter = new vscode.EventEmitter<string>();
 
   readonly onDidChange = this.#changeEmitter.event;
+  readonly onDidOwnershipChange = this.#ownershipChangeEmitter.event;
 
   get(sessionId: string): ComposerDraftView {
     return cloneDraft(this.#drafts.get(sessionId) ?? { revision: 0, text: "", images: [] });
   }
 
-  replace(sessionId: string, draft: ComposerDraftView): boolean {
-    const current = this.#drafts.get(sessionId);
-    if (current && draft.revision <= current.revision) return false;
-    this.#set(sessionId, draft);
-    return true;
+  getIfPresent(sessionId: string): ComposerDraftView | null {
+    const draft = this.#drafts.get(sessionId);
+    return draft ? cloneDraft(draft) : null;
+  }
+
+  hasPendingSubmission(sessionId: string): boolean {
+    return this.#failedSubmissions.has(sessionId);
+  }
+
+  beginHandoff(sessionId: string, draft: ComposerDraftView): () => void {
+    if (new Set(draft.images.map((image) => image.id)).size !== draft.images.length) {
+      throw new Error("Composer draft image ids must be unique.");
+    }
+    const previous = this.#drafts.get(sessionId);
+    this.#drafts.set(sessionId, cloneDraft(draft));
+    return () => {
+      if (previous) this.#drafts.set(sessionId, previous);
+      else this.#drafts.delete(sessionId);
+    };
   }
 
   applyMutation(
@@ -46,7 +62,7 @@ export class ComposerDraftCache implements vscode.Disposable {
       revision: mutation.revision,
       text: mutation.text,
       images: images as ComposerDraftContent["images"],
-    });
+    }, false);
     return true;
   }
 
@@ -76,7 +92,7 @@ export class ComposerDraftCache implements vscode.Disposable {
       draft: { text: accepted.text, images: accepted.images },
       clearedRevision: cleared.revision,
     });
-    this.#set(sessionId, cleared);
+    this.#set(sessionId, cleared, false);
     return { text: accepted.text, images: accepted.images };
   }
 
@@ -84,10 +100,13 @@ export class ComposerDraftCache implements vscode.Disposable {
     const failed = this.#failedSubmissions.get(sessionId);
     if (!failed || failed.requestId !== requestId) return;
     this.#failedSubmissions.delete(sessionId);
-    if (succeeded) return;
-    const current = this.#drafts.get(sessionId);
-    if (!current || current.revision !== failed.clearedRevision || current.text || current.images.length) return;
-    this.#set(sessionId, { revision: current.revision + 1, ...failed.draft });
+    if (!succeeded) {
+      const current = this.#drafts.get(sessionId);
+      if (current && current.revision === failed.clearedRevision && !current.text && !current.images.length) {
+        this.#set(sessionId, { revision: current.revision + 1, ...failed.draft });
+      }
+    }
+    this.#ownershipChangeEmitter.fire(sessionId);
   }
 
   release(sessionId: string): void {
@@ -99,12 +118,13 @@ export class ComposerDraftCache implements vscode.Disposable {
     this.#drafts.clear();
     this.#failedSubmissions.clear();
     this.#changeEmitter.dispose();
+    this.#ownershipChangeEmitter.dispose();
   }
 
-  #set(sessionId: string, draft: ComposerDraftView): void {
+  #set(sessionId: string, draft: ComposerDraftView, notify = true): void {
     const copy = cloneDraft(draft);
     this.#drafts.set(sessionId, copy);
-    this.#changeEmitter.fire({ sessionId, draft: cloneDraft(copy) });
+    if (notify) this.#changeEmitter.fire({ sessionId, draft: cloneDraft(copy) });
   }
 }
 

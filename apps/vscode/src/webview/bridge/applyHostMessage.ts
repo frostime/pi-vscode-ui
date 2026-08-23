@@ -4,7 +4,7 @@ import type { ChatTypographyView } from "$shared/model/chatTypography";
 import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
 import { applyComposerSeed } from "../features/composer/composerSeedClient";
-import { applyHostDraft } from "../features/composer/composerDraftSync";
+import { applyHostDraft, insertDraftText, setDraftText } from "../features/composer/composerDraftSync";
 import { deliverWorkspaceFileSuggestions } from "../features/composer/fileSuggestionClient";
 import { promptSubmissionResult } from "../features/composer/promptSubmissionStore.svelte";
 import { resolveForkResult } from "../features/conversation/forkMessageClient";
@@ -21,10 +21,10 @@ export function applyHostMessage(message: HostToWebviewMessage): void {
       break;
     case "snapshot":
       presentationStore.set(message.presentation);
-      if (message.presentation.displayedSession) {
+      if (message.presentation.displayedSession && message.draft) {
         applyHostDraft(message.presentation.displayedSession.id, message.draft);
       }
-      applyComposerSeed(message.presentation.displayedSession);
+      applyComposerSeed(message.presentation.displayedSession, message.presentation.composerDraftAuthority);
       break;
     case "presentationDelta": {
       let displayedSession: SessionViewModel | null = null;
@@ -37,15 +37,17 @@ export function applyHostMessage(message: HostToWebviewMessage): void {
         } : null;
         return { ...message.presentation, displayedSession };
       });
-      applyComposerSeed(displayedSession);
+      applyComposerSeed(displayedSession, message.presentation.composerDraftAuthority);
       break;
     }
     case "draftReplacement":
       applyHostDraft(message.sessionId, message.draft);
       break;
+    case "replaceComposerText":
+      setDraftText(message.sessionId, "webview", message.text);
+      break;
     case "insertPromptText":
-      // Draft replacement is authoritative; this message only preserves focus ordering.
-      composerFocusTick.update((value) => value + 1);
+      insertDraftText(message.sessionId, "webview", message.text);
       break;
     case "focusComposer":
       composerFocusTick.update((value) => value + 1);

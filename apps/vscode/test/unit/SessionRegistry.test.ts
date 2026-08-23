@@ -378,17 +378,20 @@ let sessionId = "source";
 let sessionName = "Source";
 let failReconcile = false;
 let pendingForkRequestId;
+let pendingForkEntryId;
 let messages = [
   { role: "user", content: [{ type: "text", text: "Retry this" }, { type: "image", id: "image", fileName: "shot.png", mimeType: "image/png", data: "AA==", size: 1 }], timestamp: 1 },
   { role: "user", content: "Cancel this", timestamp: 2 },
   { role: "user", content: "Fail refresh", timestamp: 3 },
   { role: "user", content: "Wait", timestamp: 4 },
+  { role: "user", content: "Preserve sidebar", timestamp: 5 },
 ];
 let entries = [
   { type: "message", id: "user-entry", parentId: null, message: { role: "user", content: [{ type: "text", text: "Retry this" }, { type: "image", id: "image", fileName: "shot.png", mimeType: "image/png", data: "AA==", size: 1 }], timestamp: 1 } },
   { type: "message", id: "cancel-entry", parentId: "user-entry", message: { role: "user", content: "Cancel this", timestamp: 2 } },
   { type: "message", id: "fail-entry", parentId: "cancel-entry", message: { role: "user", content: "Fail refresh", timestamp: 3 } },
   { type: "message", id: "wait-entry", parentId: "fail-entry", message: { role: "user", content: "Wait", timestamp: 4 } },
+  { type: "message", id: "preserve-entry", parentId: "wait-entry", message: { role: "user", content: "Preserve sidebar", timestamp: 5 } },
 ];
 let input = "";
 process.stdin.setEncoding("utf8");
@@ -408,8 +411,9 @@ process.stdin.on("data", chunk => {
     else if (command.type === "fork") {
       if (command.entryId === "cancel-entry") {
         response.data = { text: "Cancel this", cancelled: true };
-      } else if (command.entryId === "wait-entry") {
+      } else if (command.entryId === "wait-entry" || command.entryId === "preserve-entry") {
         pendingForkRequestId = command.id;
+        pendingForkEntryId = command.entryId;
         process.stdout.write(JSON.stringify({ type: "extension_ui_request", id: "fork-confirm", method: "confirm", message: "Fork?" }) + "\n");
         continue;
       } else {
@@ -428,8 +432,18 @@ process.stdin.on("data", chunk => {
         failReconcile = false;
       } else sessionName = command.name;
     } else if (command.type === "extension_ui_response" && pendingForkRequestId) {
-      process.stdout.write(JSON.stringify({ type: "response", id: pendingForkRequestId, success: true, data: { text: "Wait", cancelled: true } }) + "\n");
+      if (pendingForkEntryId === "preserve-entry") {
+        sessionFile = path.join(path.dirname(sourceFile), "fork.jsonl");
+        fs.writeFileSync(sessionFile, JSON.stringify({ type: "session", version: 3, id: "fork", cwd: path.dirname(sourceFile), parentSession: sourceFile }) + "\n");
+        sessionId = "fork";
+        messages = [];
+        entries = [];
+        process.stdout.write(JSON.stringify({ type: "response", id: pendingForkRequestId, success: true, data: { text: "Preserve sidebar", cancelled: false } }) + "\n");
+      } else {
+        process.stdout.write(JSON.stringify({ type: "response", id: pendingForkRequestId, success: true, data: { text: "Wait", cancelled: true } }) + "\n");
+      }
       pendingForkRequestId = undefined;
+      pendingForkEntryId = undefined;
       continue;
     }
     process.stdout.write(JSON.stringify(response) + "\n");
@@ -449,10 +463,26 @@ process.on("SIGTERM", () => process.exit(0));
     registries.push(registry);
 
     const activeId = await registry.openSession({ path: sessionFile, cwd: dir, title: "Source", updatedAt: Date.now() });
-    await waitForForkableHistory(registry, "wait-entry");
+    await waitForForkableHistory(registry, "preserve-entry");
+
+    const unrelatedSidebarId = (await registry.createSession())!;
+    await waitFor(() => registry.activeSessionId === unrelatedSidebarId && registry.sessionView(unrelatedSidebarId)?.status === "ready");
+    const preservedFork = registry.forkMessage(activeId, "preserve-entry", "preserve-sidebar-selection");
+    await waitFor(() => registry.sessionView(activeId)?.isForking === true && registry.sessionView(activeId)?.pendingExtensionUi.length === 1);
+    await registry.closeSession(unrelatedSidebarId);
+    expect(registry.activeSessionId).toBe(activeId);
+    await registry.respondExtensionUi(activeId, "fork-confirm", { confirmed: true });
+    const preservedResult = await preservedFork;
+    expect(preservedResult.cancelled).toBe(false);
+    expect(typeof preservedResult.forkSessionId).toBe("string");
+    expect(registry.activeSessionId).toBe(activeId);
+    expect(registry.snapshot().sessions.some((session) => session.id === preservedResult.forkSessionId)).toBe(true);
+    await registry.closeSession(preservedResult.forkSessionId!);
+    await registry.activateSession(activeId);
+    await waitForForkableHistory(registry, "preserve-entry");
 
     await expect(registry.forkMessage(activeId, "fail-entry")).rejects.toThrow("set_session_name failed after Fork");
-    await waitForForkableHistory(registry, "wait-entry");
+    await waitForForkableHistory(registry, "preserve-entry");
     expect(registry.snapshot().sessions).toEqual([expect.objectContaining({ id: activeId, status: "ready" })]);
 
     const pendingFork = registry.forkMessage(activeId, "wait-entry");
@@ -460,7 +490,7 @@ process.on("SIGTERM", () => process.exit(0));
     await expect(registry.createSession()).rejects.toThrow("cancel it first");
     await registry.cancelFork(activeId);
     await expect(pendingFork).resolves.toEqual({ cancelled: true });
-    await waitForForkableHistory(registry, "wait-entry");
+    await waitForForkableHistory(registry, "preserve-entry");
 
     await expect(registry.forkMessage(activeId, "cancel-entry")).resolves.toEqual({ cancelled: true });
     expect(registry.snapshot().sessions).toHaveLength(1);

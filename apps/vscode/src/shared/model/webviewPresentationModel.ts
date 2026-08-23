@@ -12,6 +12,7 @@ export interface WebviewPresentationView {
   /** The sidebar selection. Panel focus never changes this value. */
   activeSessionId: string | null;
   displayedSession: SessionViewModel | null;
+  composerDraftAuthority: "webview" | "host";
   sidebarSessionExternalized: boolean;
   piAvailable: boolean;
   piError?: string;

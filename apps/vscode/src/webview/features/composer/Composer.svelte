@@ -3,8 +3,8 @@
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
   import { postToHost } from "../../bridge/vscodeBridge";
-  import { composerDrafts, type DraftImage } from "../../features/composer/composerDraftStore.svelte";
-  import { clearDraft, clearDraftForSubmission, setDraftText, updateDraft } from "./composerDraftSync";
+  import { composerDrafts, getDraft, type DraftImage, type SessionDraft } from "../../features/composer/composerDraftStore.svelte";
+  import { clearDraft, clearDraftForSubmission, setDraft, setDraftText, updateDraft } from "./composerDraftSync";
   import { promptSubmissionResult } from "../../features/composer/promptSubmissionStore.svelte";
   import { composerStreamingBehaviors, setComposerStreamingBehavior } from "../../features/composer/composerStreamingBehaviorStore.svelte";
   import { composerFocusTick, showToast } from "../../state/sessionViewStore.svelte";
@@ -18,9 +18,19 @@
   import PromptEditor from "./PromptEditor.svelte";
   import StreamingSendButton from "./StreamingSendButton.svelte";
 
-  let { session, surfaceKind }: { session: SessionViewModel; surfaceKind: "sidebar" | "panel" } = $props();
+  let {
+    session,
+    surfaceKind,
+    draftAuthority,
+  }: {
+    session: SessionViewModel;
+    surfaceKind: "sidebar" | "panel";
+    draftAuthority: "webview" | "host";
+  } = $props();
   let editor: PromptEditor;
   let pendingRequestId = $state<string | null>(null);
+  let pendingSubmittedDraft = $state<SessionDraft | null>(null);
+  let pendingClearedRevision: number | null = null;
   let expanded = $state(false);
   let expandedSessionId: string | null = null;
 
@@ -64,11 +74,19 @@
   $effect(() => {
     const result = $promptSubmissionResult;
     if (!result || result.requestId !== pendingRequestId) return;
+    const submitted = pendingSubmittedDraft;
+    const clearedRevision = pendingClearedRevision;
     pendingRequestId = null;
+    pendingSubmittedDraft = null;
+    pendingClearedRevision = null;
+    if (result.ok || surfaceKind === "panel" || !submitted || clearedRevision === null) return;
+    const current = getDraft(session.id);
+    if (current.revision !== clearedRevision || current.text || current.images.length) return;
+    setDraft(session.id, "webview", submitted);
   });
 
   function setText(text: string): void {
-    setDraftText(session.id, text);
+    setDraftText(session.id, draftAuthority, text);
   }
 
   function setExpanded(next: boolean): void {
@@ -83,7 +101,7 @@
         showToast("info", "Open the FrostPi sidebar to resume a session.");
         return;
       }
-      clearDraft(session.id);
+      clearDraft(session.id, draftAuthority);
       postToHost({ type: "resumeSession" });
       return;
     }
@@ -95,10 +113,15 @@
     }
     const requestId = createId("prompt");
     pendingRequestId = requestId;
+    pendingSubmittedDraft = {
+      revision: draft.revision,
+      text: draft.text,
+      images: draft.images.map((image) => ({ ...image })),
+    };
     const text = draft.text;
     const images = draft.images.map(({ id, name, mimeType, data, size }) => ({ id, name, mimeType, data, size }));
     // Clear on send. Do not clear again on promptResult(ok): extension commands may fill the draft first.
-    clearDraftForSubmission(session.id);
+    pendingClearedRevision = clearDraftForSubmission(session.id);
     postToHost({
       type: "sendPrompt",
       requestId,
@@ -132,7 +155,7 @@
       });
     }
     if (!accepted.length) return;
-    updateDraft(session.id, (current) => {
+    updateDraft(session.id, draftAuthority, (current) => {
       const images = [...current.images, ...accepted].slice(0, session.attachmentLimits.maxImages);
       if (current.images.length + accepted.length > session.attachmentLimits.maxImages) {
         showToast("warning", `A prompt can include at most ${session.attachmentLimits.maxImages} images.`);
@@ -143,7 +166,7 @@
 </script>
 
 <div class="composer-shell" class:composer-expanded={expanded}>
-  <AttachmentStrip images={draft.images} onremove={(id) => updateDraft(session.id, (current) => ({ ...current, images: current.images.filter((image) => image.id !== id) }))} />
+  <AttachmentStrip images={draft.images} onremove={(id) => updateDraft(session.id, draftAuthority, (current) => ({ ...current, images: current.images.filter((image) => image.id !== id) }))} />
   {#if draft.images.length && session.model && !supportsImages}
     <div class="composer-warning"><span class="codicon codicon-warning"></span> The selected model may not accept images.</div>
   {/if}
