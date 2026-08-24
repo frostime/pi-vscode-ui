@@ -31,5 +31,23 @@
   .externalized-session > :global(.codicon) { font-size: 20px; }
   h1 { margin: 8px 0 3px; color: var(--frost-text); font-size: 14px; }
   p { margin: 0 0 14px; }
-  button { display: inline-flex; align-items: center; gap: 6px; }
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--frost-border);
+    border-radius: 5px;
+    background: var(--frost-surface-raised);
+    color: var(--frost-text);
+    cursor: pointer;
+  }
+  button:hover {
+    background: var(--frost-hover);
+    border-color: var(--frost-border-soft);
+  }
+  button:focus-visible {
+    outline: 1px solid var(--frost-focus);
+    outline-offset: 1px;
+  }
 </style>
