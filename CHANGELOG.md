@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep Session Tab Webviews alive while hidden so returning to a conversation no longer briefly shows the workspace onboarding screen.
+
 ## [0.13.0] - 2026-08-24
 
 ### Added

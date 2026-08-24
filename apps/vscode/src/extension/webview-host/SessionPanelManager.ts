@@ -40,6 +40,8 @@ export class SessionPanelManager implements vscode.Disposable {
       { viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
       {
         enableScripts: true,
+        // Keep a hidden Session Tab mounted so returning to it does not show the bootstrap UI.
+        retainContextWhenHidden: true,
         localResourceRoots: [vscode.Uri.joinPath(this.#extensionUri, "dist", "webview")],
       },
     ));

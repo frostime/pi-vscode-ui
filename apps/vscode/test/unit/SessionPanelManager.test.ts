@@ -50,7 +50,7 @@ describe("Session panel lifecycle", () => {
     manager.dispose();
   });
 
-  it("creates disposable panels without retaining hidden Webview context", () => {
+  it("retains Session Tab Webview context while hidden", () => {
     const panel = fakePanel();
     const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel);
     createWebviewPanel.mockReturnValueOnce(panel.value as never);
@@ -74,7 +74,7 @@ describe("Session panel lifecycle", () => {
       expect.objectContaining({ enableScripts: true }),
     );
     const options = createWebviewPanel.mock.calls[0]?.[3];
-    expect(options).not.toHaveProperty("retainContextWhenHidden");
+    expect(options).toHaveProperty("retainContextWhenHidden", true);
     manager.dispose();
   });
 
