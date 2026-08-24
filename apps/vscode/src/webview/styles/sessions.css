@@ -152,7 +152,7 @@ button.session-heading.active { background: var(--frost-hover); }
   letter-spacing: .04em;
 }
 .session-list-items { max-height: min(360px, 55vh); overflow-y: auto; }
-.session-list-item { display: grid; grid-template-columns: minmax(0, 1fr) 27px; align-items: center; border-radius: 5px; }
+.session-list-item { display: grid; grid-template-columns: minmax(0, 1fr) 27px 27px; align-items: center; border-radius: 5px; }
 .session-list-item:hover { background: var(--frost-hover); }
 .session-list-item.active { background: var(--frost-hover); }
 .session-list-select {
@@ -192,6 +192,7 @@ button.session-heading.active { background: var(--frost-hover); }
   text-overflow: ellipsis;
 }
 .session-list-copy small.attention { color: var(--frost-warning); }
+.session-list-externalize,
 .session-list-close {
   width: 25px;
   height: 25px;
@@ -203,8 +204,11 @@ button.session-heading.active { background: var(--frost-hover); }
   cursor: pointer;
   opacity: 0;
 }
+.session-list-item:hover .session-list-externalize,
 .session-list-item:hover .session-list-close { opacity: 1; }
+.session-list-externalize:focus-visible,
 .session-list-close:focus-visible { opacity: 1; }
+.session-list-externalize:hover { color: var(--frost-link); background: var(--frost-hover); }
 .session-list-close:hover { color: var(--frost-text); background: var(--frost-secondary-hover); }
 .session-list-footer { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--frost-border-soft); }
 .session-header-restore {

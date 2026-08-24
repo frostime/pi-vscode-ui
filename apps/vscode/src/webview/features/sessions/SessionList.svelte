@@ -6,6 +6,7 @@
     activeId,
     onselect,
     onclose,
+    onexternalize,
     oncreate,
     onresume,
   }: {
@@ -13,6 +14,7 @@
     activeId: string;
     onselect: (sessionId: string) => void;
     onclose: (sessionId: string) => void;
+    onexternalize: (sessionId: string) => void;
     oncreate: () => void;
     onresume: () => void;
   } = $props();
@@ -61,6 +63,15 @@
               <span>{runtimeStatusLabel(session)}</span>
             </small>
           </span>
+        </button>
+        <button
+          class="session-list-externalize"
+          type="button"
+          aria-label={`Open ${session.title} in editor tab`}
+          title="Open in editor tab"
+          onclick={(event) => { event.stopPropagation(); onexternalize(session.id); }}
+        >
+          <span class="codicon codicon-layout" aria-hidden="true"></span>
         </button>
         <button class="session-list-close" type="button" aria-label={`Close ${session.title}`} title="Close session" onclick={() => onclose(session.id)}>
           <span class="codicon codicon-close" aria-hidden="true"></span>

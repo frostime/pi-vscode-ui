@@ -84,9 +84,10 @@
     postToHost({ type: "closeSession", sessionId });
   }
 
-  function openSessionPanel(): void {
+  function openSessionPanel(sessionId?: string): void {
+    const targetId = sessionId ?? active.id;
     closeMenus();
-    postToHost({ type: "openSessionPanel", sessionId: active.id, draft: draftForHost(active.id) });
+    postToHost({ type: "openSessionPanel", sessionId: targetId, draft: draftForHost(targetId) });
   }
 
   function activeStatusLabel(): string {
@@ -174,6 +175,7 @@
           activeId={active.id}
           onselect={selectSession}
           onclose={closeSession}
+          onexternalize={openSessionPanel}
           oncreate={createSession}
           onresume={resumeSession}
         />
@@ -202,7 +204,7 @@
         <IconButton icon="ellipsis" label="Session actions" active={menuOpen} onclick={() => { menuOpen = !menuOpen; launcherOpen = false; sessionListOpen = false; }} />
         {#if menuOpen}
           <div class="session-menu">
-            <button type="button" onclick={openSessionPanel}><span class="codicon codicon-layout"></span> Open in editor tab</button>
+            <button type="button" onclick={() => openSessionPanel()}><span class="codicon codicon-layout"></span> Open in editor tab</button>
             <button type="button" onclick={beginRename}><span class="codicon codicon-edit"></span> Rename</button>
             {#if active.historyStatus === "deferred" || active.historyStatus === "failed"}
               <button type="button" onclick={() => { closeMenus(); postToHost({ type: "loadHistory", sessionId: active.id }); }}><span class="codicon codicon-history"></span> Load conversation history</button>
