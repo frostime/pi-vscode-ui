@@ -11,6 +11,7 @@
   import SessionNotice from "./SessionNotice.svelte";
   import ThinkingActivity from "./ThinkingActivity.svelte";
   import ToolActivity from "./ToolActivity.svelte";
+  import TurnTiming from "./TurnTiming.svelte";
   import UserMessage from "./UserMessage.svelte";
 
   let { turn, session }: { turn: AgentTurnView; session: SessionViewModel } = $props();
@@ -26,6 +27,7 @@
 
 <section class="agent-turn" data-turn-id={turn.id}>
   {#if turn.userMessage}<UserMessage message={turn.userMessage} {session} />{/if}
+  {#if turn.status === "running"}<TurnTiming startedAt={turn.startedAt} />{/if}
   <div class="turn-activities">
     {#each turn.items as item (item.id)}
       {#if plan.mode === "collapsed" && item.id === plan.firstCollapsedItemId}

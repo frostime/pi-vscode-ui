@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Show the active Agent turn's start time and live elapsed duration while streaming; settled turns keep their total duration in the collapsed work trace.
+
 ### Fixed
 
 - Keep Session Tab Webviews alive while hidden so returning to a conversation no longer briefly shows the workspace onboarding screen.
