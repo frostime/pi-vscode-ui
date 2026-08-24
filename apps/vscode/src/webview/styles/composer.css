@@ -92,6 +92,7 @@
 .stop-button { background: color-mix(in srgb, var(--frost-error) 82%, var(--frost-bg)); }
 .composer-warning { display: flex; align-items: center; gap: 5px; margin: 0 3px 5px; color: var(--frost-warning); font-size: 10px; }
 .app-shell:has(.composer-expanded) { grid-template-rows: auto 0fr minmax(0, 1fr); }
+.panel-shell:has(.composer-expanded) { grid-template-rows: 0fr minmax(0, 1fr); }
 .app-shell:has(.composer-expanded) .conversation-frame { min-height: 0; overflow: hidden; opacity: 0; pointer-events: none; }
 .app-shell:has(.composer-expanded) .composer-region { min-height: 0; height: 100%; display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }
 .app-shell:has(.composer-expanded) .composer-shell { flex: 1 1 auto; min-height: 0; max-width: var(--content-max-width); display: flex; flex-direction: column; }

@@ -12,6 +12,8 @@ FrostPi uses a first-party VS Code visual language: compact, low-noise, keyboard
 
 ## Layout and theming
 
+- The FrostPi sidebar is the sole Session-management surface. Editor Session Tabs are restricted conversation projections: they omit the Session list, New/Resume, rename, close/restart, configuration, and diagnostics controls.
+- Externalizing the sidebar-selected Session keeps its sidebar header/navigation and replaces only conversation/Composer with a tab-reveal placeholder. Closing the tab restores conversation eligibility without affecting the Session process.
 - The complete shell remains usable at 280px width and under VS Code light, dark, and high-contrast themes; committed capabilities may wrap or move, but must not require horizontal scrolling.
 - Use semantic FrostPi variables mapped from VS Code variables. Respect editor zoom and `prefers-reduced-motion`; avoid fixed widths, large shadows, gradients, and pill-heavy chrome.
 - The session shell may narrow or hide. Conversation space expands when hidden, while a keyboard-reachable restore control and required-background-input indication remain available.

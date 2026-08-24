@@ -3,12 +3,12 @@ import type { CollectionDelta, HostToWebviewMessage } from "$shared/bridge/hostT
 import type { ChatTypographyView } from "$shared/model/chatTypography";
 import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
-import { insertDraftText, setDraftText } from "../features/composer/composerDraftStore.svelte";
-import { composerFocusTick, showToast, workspaceStore } from "../state/sessionViewStore.svelte";
-import { promptSubmissionResult } from "../features/composer/promptSubmissionStore.svelte";
-import { deliverWorkspaceFileSuggestions } from "../features/composer/fileSuggestionClient";
 import { applyComposerSeed } from "../features/composer/composerSeedClient";
+import { applyHostDraft, insertDraftText, setDraftText } from "../features/composer/composerDraftSync";
+import { deliverWorkspaceFileSuggestions } from "../features/composer/fileSuggestionClient";
+import { promptSubmissionResult } from "../features/composer/promptSubmissionStore.svelte";
 import { resolveForkResult } from "../features/conversation/forkMessageClient";
+import { composerFocusTick, presentationStore, showToast } from "../state/sessionViewStore.svelte";
 
 export function applyHostMessage(message: HostToWebviewMessage): void {
   if (message.bridgeVersion !== BRIDGE_VERSION) {
@@ -20,54 +20,35 @@ export function applyHostMessage(message: HostToWebviewMessage): void {
       applyChatTypography(message.typography);
       break;
     case "snapshot":
-      workspaceStore.set(message.workspace);
-      applyComposerSeed(message.workspace.activeSession);
+      presentationStore.set(message.presentation);
+      if (message.presentation.displayedSession && message.draft) {
+        applyHostDraft(message.presentation.displayedSession.id, message.draft);
+      }
+      applyComposerSeed(message.presentation.displayedSession, message.presentation.composerDraftAuthority);
       break;
-    case "workspaceDelta": {
-      let activeSession: SessionViewModel | null = null;
-      workspaceStore.update((current) => {
-        const incoming = message.workspace.activeSession;
-        const existing = current.activeSession?.id === incoming?.base.id ? current.activeSession : null;
-        activeSession = incoming ? {
+    case "presentationDelta": {
+      let displayedSession: SessionViewModel | null = null;
+      presentationStore.update((current) => {
+        const incoming = message.presentation.displayedSession;
+        const existing = current.displayedSession?.id === incoming?.base.id ? current.displayedSession : null;
+        displayedSession = incoming ? {
           ...incoming.base,
-          conversationItems: mergeCollection(
-            existing?.conversationItems ?? [],
-            incoming.conversationItems,
-          ),
+          conversationItems: mergeCollection(existing?.conversationItems ?? [], incoming.conversationItems),
         } : null;
-        return {
-          workspaceName: message.workspace.workspaceName,
-          workspacePath: message.workspace.workspacePath,
-          sessions: message.workspace.sessions,
-          activeSessionId: message.workspace.activeSessionId,
-          piAvailable: message.workspace.piAvailable,
-          ...(message.workspace.piError ? { piError: message.workspace.piError } : {}),
-          activeSession,
-        };
+        return { ...message.presentation, displayedSession };
       });
-      applyComposerSeed(activeSession);
+      applyComposerSeed(displayedSession, message.presentation.composerDraftAuthority);
       break;
     }
-    case "insertPromptText": {
-      let activeId: string | null = null;
-      workspaceStore.update((workspace) => {
-        activeId = workspace.activeSessionId;
-        return workspace;
-      });
-      if (activeId) insertDraftText(activeId, message.text);
-      composerFocusTick.update((value) => value + 1);
+    case "draftReplacement":
+      applyHostDraft(message.sessionId, message.draft);
       break;
-    }
-    case "setComposerText": {
-      setDraftText(message.sessionId, message.text);
-      let activeId: string | null = null;
-      workspaceStore.update((workspace) => {
-        activeId = workspace.activeSessionId;
-        return workspace;
-      });
-      if (activeId === message.sessionId) composerFocusTick.update((value) => value + 1);
+    case "replaceComposerText":
+      setDraftText(message.sessionId, "webview", message.text);
       break;
-    }
+    case "insertPromptText":
+      insertDraftText(message.sessionId, "webview", message.text);
+      break;
     case "focusComposer":
       composerFocusTick.update((value) => value + 1);
       break;

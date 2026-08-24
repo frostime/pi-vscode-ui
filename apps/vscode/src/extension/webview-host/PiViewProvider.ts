@@ -1,18 +1,18 @@
 import * as vscode from "vscode";
 
-import type { WebviewBridge } from "./WebviewBridge.js";
 import { createWebviewHtml } from "./createWebviewHtml.js";
+import type { SessionWebviewCoordinator } from "./SessionWebviewCoordinator.js";
 
 export class PiViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = "frostpi.chat";
   #view: vscode.WebviewView | null = null;
 
   readonly #extensionUri: vscode.Uri;
-  readonly #bridge: WebviewBridge;
+  readonly #coordinator: SessionWebviewCoordinator;
 
-  constructor(extensionUri: vscode.Uri, bridge: WebviewBridge) {
+  constructor(extensionUri: vscode.Uri, coordinator: SessionWebviewCoordinator) {
     this.#extensionUri = extensionUri;
-    this.#bridge = bridge;
+    this.#coordinator = coordinator;
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -22,15 +22,23 @@ export class PiViewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [vscode.Uri.joinPath(this.#extensionUri, "dist", "webview")],
     };
     webviewView.webview.html = createWebviewHtml(webviewView.webview, this.#extensionUri);
-    this.#bridge.attach(webviewView.webview);
+    this.#coordinator.attachSidebar({
+      webview: webviewView.webview,
+      surface: { kind: "sidebar" },
+      isVisible: () => webviewView.visible,
+      onDidChangeVisibility: (listener) => webviewView.onDidChangeVisibility(() => {
+        listener(webviewView.visible);
+      }),
+    });
     webviewView.onDidDispose(() => {
-      this.#bridge.detach(webviewView.webview);
-      if (this.#view === webviewView) this.#view = null;
+      if (this.#view !== webviewView) return;
+      this.#coordinator.detachSidebar();
+      this.#view = null;
     });
   }
 
   async reveal(): Promise<void> {
     await vscode.commands.executeCommand(`${PiViewProvider.viewType}.focus`);
-    this.#bridge.focusComposer();
+    this.#coordinator.focusSidebarComposer();
   }
 }

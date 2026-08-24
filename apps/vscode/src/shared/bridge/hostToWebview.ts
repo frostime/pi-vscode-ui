@@ -1,6 +1,8 @@
-import type { ConversationItemView } from "../model/conversationModel.js";
 import type { ChatTypographyView } from "../model/chatTypography.js";
-import type { SessionSummaryView, SessionViewModel, WorkspaceViewModel } from "../model/sessionViewModel.js";
+import type { ComposerDraftView } from "../model/composerDraftModel.js";
+import type { ConversationItemView } from "../model/conversationModel.js";
+import type { SessionViewModel } from "../model/sessionViewModel.js";
+import type { WebviewPresentationView } from "../model/webviewPresentationModel.js";
 import type { EditorMentionSpecialView, WorkspaceFileCandidateView } from "../model/workspaceFileModel.js";
 
 export type SessionBaseView = Omit<SessionViewModel, "conversationItems">;
@@ -10,25 +12,20 @@ export interface CollectionDelta<T> {
   items: T[];
 }
 
-export interface WorkspaceDeltaView {
-  workspaceName: string;
-  workspacePath: string;
-  sessions: SessionSummaryView[];
-  activeSessionId: string | null;
-  piAvailable: boolean;
-  piError?: string;
-  activeSession: {
+export interface PresentationDeltaView extends Omit<WebviewPresentationView, "displayedSession"> {
+  displayedSession: {
     base: SessionBaseView;
     conversationItems: CollectionDelta<ConversationItemView>;
   } | null;
 }
 
 export type HostToWebviewPayload =
-  | { type: "snapshot"; workspace: WorkspaceViewModel }
+  | { type: "snapshot"; presentation: WebviewPresentationView; draft: ComposerDraftView | null }
   | { type: "setChatTypography"; typography: ChatTypographyView }
-  | { type: "workspaceDelta"; workspace: WorkspaceDeltaView }
-  | { type: "insertPromptText"; text: string }
-  | { type: "setComposerText"; sessionId: string; text: string }
+  | { type: "presentationDelta"; presentation: PresentationDeltaView }
+  | { type: "draftReplacement"; sessionId: string; draft: ComposerDraftView }
+  | { type: "replaceComposerText"; sessionId: string; text: string }
+  | { type: "insertPromptText"; sessionId: string; text: string }
   | { type: "focusComposer" }
   | { type: "promptResult"; requestId: string; ok: boolean; error?: string }
   | {

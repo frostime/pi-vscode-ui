@@ -39,7 +39,7 @@ Use this map when the feature is known but its owner is not. Paths name owners a
 ## Host–Webview bridge
 
 - Owners: `apps/vscode/src/extension/webview-host/`, `apps/vscode/src/shared/bridge/`, and `apps/vscode/src/webview/bridge/`.
-- Start with `WebviewBridge.ts` and `applyHostMessage.ts`; synchronization rules live in `apps/vscode/src/shared/bridge/webview-bridge.SPEC.md`, with ordered delta generation in `extension/webview-host/collectionDelta.ts`.
+- Start with `SessionWebviewCoordinator.ts`, `WebviewConnection.ts`, `WebviewActionDispatcher.ts`, and `applyHostMessage.ts`; panel identity/lifecycle lives in `SessionPanelManager.ts`, transient handoff in `ComposerDraftCache.ts`, and synchronization rules in `apps/vscode/src/shared/bridge/webview-bridge.SPEC.md`.
 
 ## Composer, file mentions, and attachments
 

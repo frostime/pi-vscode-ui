@@ -56,6 +56,26 @@ const payloadSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("createSession"), ephemeral: z.boolean().optional() }),
   z.object({ type: z.literal("resumeSession") }),
   z.object({
+    type: z.literal("openSessionPanel"),
+    sessionId: z.string().min(1).max(128),
+    draft: z.object({
+      revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+      text: z.string().max(2_000_000),
+      images: z.array(imageSchema).max(12),
+    }),
+  }),
+  z.object({ type: z.literal("revealSessionPanel"), sessionId: z.string().min(1).max(128) }),
+  z.object({
+    type: z.literal("updateComposerDraft"),
+    sessionId: z.string().min(1).max(128),
+    draft: z.object({
+      revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+      text: z.string().max(2_000_000),
+      imageIds: z.array(z.string().min(1).max(128)).max(12),
+      addedImages: z.array(imageSchema).max(12),
+    }),
+  }),
+  z.object({
     type: z.literal("openComposerEditor"),
     sessionId: z.string().min(1).max(128),
     text: z.string().max(2_000_000),
@@ -70,6 +90,7 @@ const payloadSchema = z.discriminatedUnion("type", [
     sessionId: z.string().min(1).max(128),
     text: z.string().max(2_000_000),
     images: z.array(imageSchema).max(12),
+    draftRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     streamingBehavior: z.enum(["steer", "followUp"]),
   }),
   z.object({ type: z.literal("abort"), sessionId: z.string().min(1).max(128) }),

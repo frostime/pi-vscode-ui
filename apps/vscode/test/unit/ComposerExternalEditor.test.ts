@@ -81,9 +81,9 @@ describe("ComposerExternalEditor", () => {
 
   it("writes a temp markdown file and applies disk contents when the tab closes", async () => {
     const applied: Array<{ sessionId: string; text: string }> = [];
-    const editor = new ComposerExternalEditor((result) => applied.push(result), vi.fn());
+    const editor = new ComposerExternalEditor((result) => applied.push(result));
 
-    await editor.open("session-1", "draft body");
+    await expect(editor.open("session-1", "draft body")).resolves.toBe("opened");
     expect(vscodeMock.workspace.openTextDocument).toHaveBeenCalledOnce();
     expect(vscodeMock.window.showTextDocument).toHaveBeenCalledOnce();
 
@@ -100,9 +100,9 @@ describe("ComposerExternalEditor", () => {
 
   it("applies only once when both tab-close and document-close fire", async () => {
     const applied: Array<{ sessionId: string; text: string }> = [];
-    const editor = new ComposerExternalEditor((result) => applied.push(result), vi.fn());
+    const editor = new ComposerExternalEditor((result) => applied.push(result));
 
-    await editor.open("session-1", "draft");
+    await expect(editor.open("session-1", "draft")).resolves.toBe("opened");
     const document = vscodeMock.documents[0]!;
     await writeFile(document.uri.fsPath, "once\n", "utf8");
 
@@ -116,16 +116,14 @@ describe("ComposerExternalEditor", () => {
   });
 
   it("reveals the pending tab instead of opening a second buffer", async () => {
-    const alreadyOpen = vi.fn();
-    const editor = new ComposerExternalEditor(vi.fn(), alreadyOpen);
+    const editor = new ComposerExternalEditor(vi.fn());
 
-    await editor.open("session-1", "first");
+    await expect(editor.open("session-1", "first")).resolves.toBe("opened");
     const firstPath = vscodeMock.documents[0]!.uri.fsPath;
-    await editor.open("session-2", "second");
+    await expect(editor.open("session-2", "second")).resolves.toBe("already-open");
 
     expect(vscodeMock.workspace.openTextDocument).toHaveBeenCalledOnce();
     expect(vscodeMock.window.showTextDocument).toHaveBeenCalledTimes(2);
-    expect(alreadyOpen).toHaveBeenCalledOnce();
 
     editor.dispose();
     await expect(access(firstPath)).rejects.toThrow();

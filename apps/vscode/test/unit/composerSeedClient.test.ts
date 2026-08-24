@@ -2,11 +2,12 @@ import { get } from "svelte/store";
 import { describe, expect, it } from "vitest";
 
 import { applyComposerSeed } from "../../src/webview/features/composer/composerSeedClient.js";
-import { composerDrafts, updateDraft } from "../../src/webview/features/composer/composerDraftStore.svelte.js";
+import { composerDrafts } from "../../src/webview/features/composer/composerDraftStore.svelte.js";
+import { updateDraft } from "../../src/webview/features/composer/composerDraftSync.js";
 
 describe("host-validated Composer seed", () => {
   it("applies each host-validated Composer seed once", () => {
-    composerDrafts.set({ original: { text: "Unsent original", images: [] } });
+    composerDrafts.set({ original: { revision: 1, text: "Unsent original", images: [] } });
     const session = {
       id: "fork-session",
       composerSeed: {
@@ -16,9 +17,10 @@ describe("host-validated Composer seed", () => {
       },
     } as never;
 
-    expect(applyComposerSeed(session)).toBe(true);
+    expect(applyComposerSeed(session, "webview")).toBe(true);
     expect(get(composerDrafts).original?.text).toBe("Unsent original");
     expect(get(composerDrafts)["fork-session"]).toEqual({
+      revision: 1,
       text: "Retry this",
       images: [{
         id: "image",
@@ -30,8 +32,8 @@ describe("host-validated Composer seed", () => {
       }],
     });
 
-    updateDraft("fork-session", (draft) => ({ ...draft, text: "Edited" }));
-    expect(applyComposerSeed(session)).toBe(false);
+    updateDraft("fork-session", "webview", (draft) => ({ ...draft, text: "Edited" }));
+    expect(applyComposerSeed(session, "webview")).toBe(false);
     expect(get(composerDrafts)["fork-session"]?.text).toBe("Edited");
   });
 });

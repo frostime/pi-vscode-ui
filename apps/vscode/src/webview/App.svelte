@@ -1,16 +1,28 @@
 <script lang="ts">
   import OnboardingView from "./features/onboarding/OnboardingView.svelte";
-  import AppShell from "./shell/AppShell.svelte";
-  import { toastStore, workspaceStore } from "./state/sessionViewStore.svelte";
+  import PanelShell from "./shell/PanelShell.svelte";
+  import SidebarShell from "./shell/SidebarShell.svelte";
+  import { presentationStore, toastStore } from "./state/sessionViewStore.svelte";
 </script>
 
 <main class="frostpi-root">
-  {#if !$workspaceStore.workspacePath}
+  {#if $presentationStore.surface.kind === "panel"}
+    {#if $presentationStore.displayedSession}
+      <PanelShell session={$presentationStore.displayedSession} />
+    {:else}
+      <section class="removed-panel-session" role="status">This FrostPi Session is no longer available.</section>
+    {/if}
+  {:else if !$presentationStore.workspacePath}
     <OnboardingView noWorkspace />
-  {:else if !$workspaceStore.activeSession}
+  {:else if !$presentationStore.displayedSession}
     <OnboardingView />
   {:else}
-    <AppShell sessions={$workspaceStore.sessions} active={$workspaceStore.activeSession} />
+    <SidebarShell
+      sessions={$presentationStore.sessions}
+      session={$presentationStore.displayedSession}
+      externalized={$presentationStore.sidebarSessionExternalized}
+      draftAuthority={$presentationStore.composerDraftAuthority}
+    />
   {/if}
 
   <div class="toast-stack" aria-live="polite">
@@ -24,6 +36,7 @@
 </main>
 
 <style>
+.removed-panel-session { margin: auto; color: var(--frost-muted); }
 .toast-stack {
   position: fixed;
   z-index: 150;

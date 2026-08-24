@@ -3,7 +3,8 @@
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
   import { postToHost } from "../../bridge/vscodeBridge";
-  import { clearDraft, composerDrafts, getDraft, setDraft, updateDraft, type DraftImage, type SessionDraft } from "../../features/composer/composerDraftStore.svelte";
+  import { composerDrafts, getDraft, type DraftImage, type SessionDraft } from "../../features/composer/composerDraftStore.svelte";
+  import { clearDraft, clearDraftForSubmission, setDraft, setDraftText, updateDraft } from "./composerDraftSync";
   import { promptSubmissionResult } from "../../features/composer/promptSubmissionStore.svelte";
   import { composerStreamingBehaviors, setComposerStreamingBehavior } from "../../features/composer/composerStreamingBehaviorStore.svelte";
   import { composerFocusTick, showToast } from "../../state/sessionViewStore.svelte";
@@ -17,15 +18,24 @@
   import PromptEditor from "./PromptEditor.svelte";
   import StreamingSendButton from "./StreamingSendButton.svelte";
 
-  let { session }: { session: SessionViewModel } = $props();
+  let {
+    session,
+    surfaceKind,
+    draftAuthority,
+  }: {
+    session: SessionViewModel;
+    surfaceKind: "sidebar" | "panel";
+    draftAuthority: "webview" | "host";
+  } = $props();
   let editor: PromptEditor;
   let pendingRequestId = $state<string | null>(null);
   let pendingSubmittedDraft = $state<SessionDraft | null>(null);
+  let pendingClearedRevision: number | null = null;
   let expanded = $state(false);
   let expandedSessionId: string | null = null;
 
-  const draft = $derived($composerDrafts[session.id] ?? { text: "", images: [] });
-  const commands = $derived(withFrostPiCommands(session.commands));
+  const draft = $derived($composerDrafts[session.id] ?? { revision: 0, text: "", images: [] });
+  const commands = $derived(withFrostPiCommands(session.commands, surfaceKind === "sidebar"));
   const streamingBehavior = $derived($composerStreamingBehaviors[session.id] ?? session.composerStreamingBehavior);
   const unavailable = $derived(
     session.status === "queued" || session.status === "starting" || session.status === "stopping" || session.status === "failed"
@@ -65,18 +75,18 @@
     const result = $promptSubmissionResult;
     if (!result || result.requestId !== pendingRequestId) return;
     const submitted = pendingSubmittedDraft;
+    const clearedRevision = pendingClearedRevision;
     pendingRequestId = null;
     pendingSubmittedDraft = null;
-    // Success: leave whatever is in the composer (including set_editor_text from extension commands).
-    // Failure: restore the submitted snapshot only if the composer is still empty.
-    if (result.ok || !submitted) return;
+    pendingClearedRevision = null;
+    if (result.ok || surfaceKind === "panel" || !submitted || clearedRevision === null) return;
     const current = getDraft(session.id);
-    if (current.text.length > 0 || current.images.length > 0) return;
-    setDraft(session.id, submitted);
+    if (current.revision !== clearedRevision || current.text || current.images.length) return;
+    setDraft(session.id, "webview", submitted);
   });
 
   function setText(text: string): void {
-    updateDraft(session.id, (current) => ({ ...current, text }));
+    setDraftText(session.id, draftAuthority, text);
   }
 
   function setExpanded(next: boolean): void {
@@ -87,7 +97,11 @@
   function submit(requestedStreamingBehavior: StreamingBehavior = streamingBehavior): void {
     if (!canSend) return;
     if (draft.images.length === 0 && draft.text.trim() === "/resume") {
-      clearDraft(session.id);
+      if (surfaceKind === "panel") {
+        showToast("info", "Open the FrostPi sidebar to resume a session.");
+        return;
+      }
+      clearDraft(session.id, draftAuthority);
       postToHost({ type: "resumeSession" });
       return;
     }
@@ -100,19 +114,21 @@
     const requestId = createId("prompt");
     pendingRequestId = requestId;
     pendingSubmittedDraft = {
+      revision: draft.revision,
       text: draft.text,
       images: draft.images.map((image) => ({ ...image })),
     };
     const text = draft.text;
     const images = draft.images.map(({ id, name, mimeType, data, size }) => ({ id, name, mimeType, data, size }));
     // Clear on send. Do not clear again on promptResult(ok): extension commands may fill the draft first.
-    clearDraft(session.id);
+    pendingClearedRevision = clearDraftForSubmission(session.id);
     postToHost({
       type: "sendPrompt",
       requestId,
       sessionId: session.id,
       text,
       images,
+      draftRevision: draft.revision,
       streamingBehavior: requestedStreamingBehavior,
     });
   }
@@ -139,7 +155,7 @@
       });
     }
     if (!accepted.length) return;
-    updateDraft(session.id, (current) => {
+    updateDraft(session.id, draftAuthority, (current) => {
       const images = [...current.images, ...accepted].slice(0, session.attachmentLimits.maxImages);
       if (current.images.length + accepted.length > session.attachmentLimits.maxImages) {
         showToast("warning", `A prompt can include at most ${session.attachmentLimits.maxImages} images.`);
@@ -150,7 +166,7 @@
 </script>
 
 <div class="composer-shell" class:composer-expanded={expanded}>
-  <AttachmentStrip images={draft.images} onremove={(id) => updateDraft(session.id, (current) => ({ ...current, images: current.images.filter((image) => image.id !== id) }))} />
+  <AttachmentStrip images={draft.images} onremove={(id) => updateDraft(session.id, draftAuthority, (current) => ({ ...current, images: current.images.filter((image) => image.id !== id) }))} />
   {#if draft.images.length && session.model && !supportsImages}
     <div class="composer-warning"><span class="codicon codicon-warning"></span> The selected model may not accept images.</div>
   {/if}

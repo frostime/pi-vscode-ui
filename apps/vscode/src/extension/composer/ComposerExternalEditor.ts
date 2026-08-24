@@ -11,6 +11,8 @@ export interface ComposerEditorResult {
   text: string;
 }
 
+export type ComposerExternalEditorOpenResult = "opened" | "already-open";
+
 /**
  * One-at-a-time temp markdown file for long-form Composer drafts (Pi external-editor shape).
  * Tab close applies on-disk contents: Save keeps edits, Don't Save keeps last saved/prefill text.
@@ -19,12 +21,10 @@ export class ComposerExternalEditor implements vscode.Disposable {
   #pending: { sessionId: string; fsPath: string } | null = null;
   #applying = false;
   readonly #onApply: (result: ComposerEditorResult) => void;
-  readonly #onAlreadyOpen: () => void;
   readonly #subscriptions: vscode.Disposable[] = [];
 
-  constructor(onApply: (result: ComposerEditorResult) => void, onAlreadyOpen: () => void) {
+  constructor(onApply: (result: ComposerEditorResult) => void) {
     this.#onApply = onApply;
-    this.#onAlreadyOpen = onAlreadyOpen;
     this.#subscriptions.push(
       vscode.window.tabGroups.onDidChangeTabs((event) => {
         if (!this.#pending) return;
@@ -43,14 +43,13 @@ export class ComposerExternalEditor implements vscode.Disposable {
     );
   }
 
-  async open(sessionId: string, text: string): Promise<void> {
+  async open(sessionId: string, text: string): Promise<ComposerExternalEditorOpenResult> {
     if (this.#pending) {
       const pendingPath = this.#pending.fsPath;
       const open = vscode.workspace.textDocuments.find((document) => samePath(document.uri.fsPath, pendingPath));
       if (open) {
         await vscode.window.showTextDocument(open, { preview: false, preserveFocus: false });
-        this.#onAlreadyOpen();
-        return;
+        return "already-open";
       }
       await this.#deleteQuietly(pendingPath);
       this.#pending = null;
@@ -61,6 +60,7 @@ export class ComposerExternalEditor implements vscode.Disposable {
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(fsPath));
     this.#pending = { sessionId, fsPath: resolve(document.uri.fsPath) };
     await vscode.window.showTextDocument(document, { preview: false });
+    return "opened";
   }
 
   dispose(): void {

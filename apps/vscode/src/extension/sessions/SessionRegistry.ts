@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 
 import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
 import type { QuestionDraftSubmission } from "../../shared/question-tool/questionToolProtocol.js";
-import type { SessionRuntimeStatus, SessionSummaryView, WorkspaceViewModel } from "../../shared/model/sessionViewModel.js";
+import type { SessionRuntimeStatus, SessionSummaryView, SessionViewModel, WorkspaceViewModel } from "../../shared/model/sessionViewModel.js";
 import { readConfiguration } from "../configuration/readConfiguration.js";
 import { workspaceUriForPath } from "../configuration/workspaceScope.js";
 import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
@@ -34,11 +34,14 @@ export interface RegistryToast {
 type SystemNotificationEvent = "inputRequired" | "failed" | "completed";
 type DiscoverSessionWorkingDirectories = typeof discoverSessionWorkingDirectories;
 
+export type ForkResultSelection = "select-result" | "preserve-sidebar-selection";
+
 interface ForkOperation {
   phase: "waiting-for-pi" | "reconciling";
   sourceId: string;
   forkId: string;
   runtime: SessionRuntime;
+  resultSelection: ForkResultSelection;
   cancelRequested: boolean;
   stopPromise?: Promise<void>;
 }
@@ -52,10 +55,10 @@ export class SessionRegistry implements vscode.Disposable {
   readonly #changeEmitter = new vscode.EventEmitter<void>();
   readonly #toastEmitter = new vscode.EventEmitter<RegistryToast>();
   readonly #setComposerTextEmitter = new vscode.EventEmitter<{ sessionId: string; text: string }>();
-  readonly #pendingEditorText = new Map<string, string>();
   readonly #lastStatuses = new Map<string, SessionRuntimeStatus>();
   readonly #lastPendingUiCounts = new Map<string, number>();
   readonly #temporarySessionIds = new Set<string>();
+  readonly #retainedProvisionalSessionIds = new Set<string>();
   readonly #startJobs = new Map<string, Promise<void>>();
   readonly #historyJobs = new Map<string, Promise<void>>();
   readonly #treeInteractionSessions = new Set<string>();
@@ -112,6 +115,20 @@ export class SessionRegistry implements vscode.Disposable {
     if (active && readConfiguration(workspaceUriForPath(this.#configurationScopeCwd(active.cwd))).startSessionOnOpen) {
       await this.#startRuntime(active).catch(() => undefined);
     }
+  }
+
+  hasSession(sessionId: string): boolean {
+    return this.#runtimes.has(sessionId);
+  }
+
+  sessionView(sessionId: string): SessionViewModel | null {
+    const runtime = this.#runtimes.get(sessionId);
+    return runtime ? this.#withWorkingDirectoryLabel(runtime.view) : null;
+  }
+
+  retainProvisionalSession(sessionId: string): void {
+    this.#requireRuntime(sessionId);
+    if (this.#temporarySessionIds.has(sessionId)) this.#retainedProvisionalSessionIds.add(sessionId);
   }
 
   snapshot(): WorkspaceViewModel {
@@ -235,12 +252,6 @@ export class SessionRegistry implements vscode.Disposable {
     if (sessionId !== this.#activeSessionId) await this.#discardActiveTemporarySession();
     this.#activeSessionId = sessionId;
     await this.#persist();
-    const pendingText = this.#pendingEditorText.get(sessionId);
-    if (pendingText !== undefined) {
-      this.#pendingEditorText.delete(sessionId);
-      this.#lastStatuses.delete(sessionId);
-      this.#setComposerTextEmitter.fire({ sessionId, text: pendingText });
-    }
     this.#emitChange();
     if (runtime.view.status === "stopped" && !runtime.isEphemeral) await this.#startRuntime(runtime);
   }
@@ -305,7 +316,10 @@ export class SessionRegistry implements vscode.Disposable {
     if (compactInstructions !== null) await runtime.compact(compactInstructions || undefined);
     else await runtime.sendPrompt(text, images, streamingBehavior);
     runtime.clearComposerSeed();
-    if (compactInstructions === null && this.#temporarySessionIds.delete(sessionId)) await this.#persist();
+    if (compactInstructions === null && this.#temporarySessionIds.delete(sessionId)) {
+      this.#retainedProvisionalSessionIds.delete(sessionId);
+      await this.#persist();
+    }
   }
 
   async abort(sessionId = this.#requireActiveId()): Promise<void> {
@@ -323,9 +337,15 @@ export class SessionRegistry implements vscode.Disposable {
     await operation.stopPromise;
   }
 
-  async forkMessage(sessionId: string, entryId: string): Promise<{ cancelled: boolean; forkSessionId?: string }> {
+  async forkMessage(
+    sessionId: string,
+    entryId: string,
+    resultSelection: ForkResultSelection = "select-result",
+  ): Promise<{ cancelled: boolean; forkSessionId?: string }> {
     this.#assertNoForkOperation();
-    if (sessionId !== this.#activeSessionId) throw new Error("Activate the session before forking one of its messages.");
+    if (resultSelection === "select-result" && sessionId !== this.#activeSessionId) {
+      throw new Error("Activate the session before forking one of its messages.");
+    }
     const runtime = this.#requireRuntime(sessionId);
     const original = this.#records.get(sessionId);
     if (original?.ephemeral) throw new Error("Temporary sessions do not support Fork.");
@@ -338,6 +358,7 @@ export class SessionRegistry implements vscode.Disposable {
       sourceId: sessionId,
       forkId: randomUUID(),
       runtime,
+      resultSelection,
       cancelRequested: false,
     };
     this.#forkOperation = operation;
@@ -395,7 +416,6 @@ export class SessionRegistry implements vscode.Disposable {
   async branchHere(sessionId: string, entryId: string, hasDraft: boolean): Promise<{ cancelled: boolean }> {
     return this.#withTreeInteraction(sessionId, async () => {
       this.#assertNoForkOperation();
-      if (sessionId !== this.#activeSessionId) throw new Error("Activate the session before branching from one of its messages.");
       const runtime = this.#requireRuntime(sessionId);
       await this.#ensureRunning(runtime);
       if (hasDraft && !await confirmDraftReplacement()) return { cancelled: true };
@@ -414,7 +434,6 @@ export class SessionRegistry implements vscode.Disposable {
   ): Promise<{ cancelled: boolean }> {
     return this.#withTreeInteraction(sessionId, async () => {
       this.#assertNoForkOperation();
-      if (sessionId !== this.#activeSessionId) throw new Error("Activate the session before switching its conversation branch.");
       const runtime = this.#requireRuntime(sessionId);
       await this.#ensureRunning(runtime);
       const selected = await pickBranchEnd(await runtime.listBranchEnds(branchPointId));
@@ -433,7 +452,10 @@ export class SessionRegistry implements vscode.Disposable {
     const runtime = this.#requireRuntime(sessionId);
     await this.#ensureRunning(runtime);
     await runtime.rename(name);
-    if (this.#temporarySessionIds.delete(sessionId)) await this.#persist();
+    if (this.#temporarySessionIds.delete(sessionId)) {
+      this.#retainedProvisionalSessionIds.delete(sessionId);
+      await this.#persist();
+    }
   }
 
   async setModel(sessionId: string, provider: string, modelId: string): Promise<void> {
@@ -606,10 +628,7 @@ export class SessionRegistry implements vscode.Disposable {
         onChange: (runtime) => this.#handleRuntimeChange(runtime),
         onAgentTurnCompleted: (runtime) => this.#showSystemNotification(runtime, "completed"),
         onExtensionCommandCompletionUnconfirmed: (_runtime, message) => this.#toastEmitter.fire({ level: "warning", message }),
-        onEditorText: (runtime, text) => {
-          if (runtime.id === this.#activeSessionId) this.#setComposerTextEmitter.fire({ sessionId: runtime.id, text });
-          else this.#pendingEditorText.set(runtime.id, text);
-        },
+        onEditorText: (runtime, text) => this.#setComposerTextEmitter.fire({ sessionId: runtime.id, text }),
       },
       this.#sessionTreeArtifactPath,
       this.#questionToolArtifactPath,
@@ -673,7 +692,8 @@ export class SessionRegistry implements vscode.Disposable {
     this.#runtimes.set(operation.sourceId, originalRuntime);
     this.#lastStatuses.set(operation.sourceId, "stopped");
     this.#lastPendingUiCounts.set(operation.sourceId, 0);
-    this.#activeSessionId = operation.forkId;
+    if (operation.resultSelection === "select-result") this.#activeSessionId = operation.forkId;
+    else this.#ensureValidActiveSelection();
   }
 
   async #restoreOriginalAfterFork(operation: ForkOperation): Promise<void> {
@@ -684,7 +704,8 @@ export class SessionRegistry implements vscode.Disposable {
       await operation.runtime.dispose().catch(() => undefined);
       this.#removeSession(operation.forkId);
     }
-    this.#activeSessionId = operation.sourceId;
+    if (operation.resultSelection === "select-result") this.#activeSessionId = operation.sourceId;
+    else this.#ensureValidActiveSelection();
 
     const originalRuntime = this.#requireRuntime(operation.sourceId);
     let restartError: unknown;
@@ -846,7 +867,11 @@ export class SessionRegistry implements vscode.Disposable {
 
   async #discardActiveTemporarySession(): Promise<void> {
     const sessionId = this.#activeSessionId;
-    if (!sessionId || !this.#temporarySessionIds.has(sessionId)) return;
+    if (
+      !sessionId
+      || !this.#temporarySessionIds.has(sessionId)
+      || this.#retainedProvisionalSessionIds.has(sessionId)
+    ) return;
     const runtime = this.#runtimes.get(sessionId);
     if (runtime) await runtime.dispose();
     this.#removeSession(sessionId);
@@ -857,7 +882,7 @@ export class SessionRegistry implements vscode.Disposable {
     this.#runtimes.delete(sessionId);
     this.#records.delete(sessionId);
     this.#temporarySessionIds.delete(sessionId);
-    this.#pendingEditorText.delete(sessionId);
+    this.#retainedProvisionalSessionIds.delete(sessionId);
     this.#lastStatuses.delete(sessionId);
     this.#lastPendingUiCounts.delete(sessionId);
     this.#startJobs.delete(sessionId);
@@ -881,6 +906,11 @@ export class SessionRegistry implements vscode.Disposable {
   #workingDirectoryLabel(cwd: string): { workingDirectoryLabel?: string } {
     if (isOpenWorkspaceFolder(cwd)) return {};
     return { workingDirectoryLabel: this.#workingDirectoriesByCwd.get(normalizedPath(cwd))?.directoryName ?? basename(cwd) };
+  }
+
+  #ensureValidActiveSelection(): void {
+    if (this.#activeSessionId && this.#runtimes.has(this.#activeSessionId)) return;
+    this.#activeSessionId = [...this.#runtimes.keys()].at(-1) ?? null;
   }
 
   #requireRuntime(sessionId: string): SessionRuntime {

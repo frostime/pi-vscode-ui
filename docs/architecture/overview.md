@@ -10,12 +10,17 @@ updated: 2026-07-28
 # Architecture Overview
 
 ```text
-Svelte Webview
-  ├─ ordered conversation presentation
-  ├─ Composer and local disclosure/scroll state
+Svelte Webview × N
+  ├─ one sidebar projection following activeSessionId
+  ├─ zero or more editor-tab projections pinned to Session identity
+  ├─ ordered conversation presentation and local disclosure/scroll state
   └─ no Node, VS Code API, or raw Pi events
-          ⇅ versioned, schema-validated messages
+          ⇅ independently versioned, schema-validated connections
 Workspace Extension Host (local, SSH, WSL, or Dev Container)
+  ├─ SessionWebviewCoordinator
+  │    ├─ per-Webview synchronization and action authorization
+  │    ├─ SessionPanelManager
+  │    └─ transient per-Session ComposerDraftCache
   ├─ SessionRegistry
   │    └─ SessionRuntime × N
   │         ├─ SessionEntryState
@@ -36,11 +41,11 @@ Local workspaces run Pi locally. Remote SSH, WSL, and Dev Containers run Pi in t
 
 ## State and data ownership
 
-`SessionRegistry` owns the runtime collection, active selection, and metadata persistence. Within a runtime, `SessionEntryState` owns the persisted entry cursor/tree and active path, `ConversationProjection` owns persisted/live conversation identity and order, and `SessionViewState` owns session scalar state. Their detailed behavior belongs to adjacent SPECs.
+`SessionRegistry` owns the runtime collection, sidebar active selection, and metadata persistence. `SessionWebviewCoordinator` owns disposable sidebar/editor-tab projections and transient Composer draft handoff; editor-tab placement is not persisted. Within a runtime, `SessionEntryState` owns the persisted entry cursor/tree and active path, `ConversationProjection` owns persisted/live conversation identity and order, and `SessionViewState` owns session scalar state. Their detailed behavior belongs to adjacent SPECs.
 
 Runtime flow is `Webview → shared contracts ← Extension Host → @frostime/pi-rpc → Pi`. The Host is authoritative for conversation order and turn membership; the Webview renders that order and owns only presentation state such as disclosure and scroll position. Raw Pi events and session entries never cross the bridge.
 
-Pi owns conversation JSONL, provider credentials, model/session state, and file writes. VS Code workspace state stores FrostPi session metadata only. Ordinary Composer drafts and pasted images are not persisted; `/editor` uses a temporary Host-owned file, and Host-projected Fork/tree seeds remain runtime-only. FrostPi file mentions expose paths and line references without injecting file content.
+Pi owns conversation JSONL, provider credentials, model/session state, and file writes. VS Code workspace state stores FrostPi session metadata only. Composer text and pasted images are held transiently by the Extension Host while presentations hand off, but are not persisted and do not survive Extension Host restart; `/editor` uses a temporary Host-owned file, and Host-projected Fork/tree seeds remain runtime-only. FrostPi file mentions expose paths and line references without injecting file content.
 
 ## Dependency and trust boundaries
 

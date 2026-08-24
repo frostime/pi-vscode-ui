@@ -16,9 +16,7 @@ declare global {
 
 const browserWindow = typeof window === "undefined" ? undefined : window;
 const api = browserWindow?.acquireVsCodeApi?.() ?? {
-  postMessage(message: unknown) {
-    console.info("FrostPi Webview message", message);
-  },
+  postMessage() {},
   getState() {
     return undefined;
   },
