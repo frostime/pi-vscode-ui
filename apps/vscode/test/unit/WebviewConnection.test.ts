@@ -68,8 +68,7 @@ describe("per-presentation Webview synchronization", () => {
     expect(endpointB.messages).toEqual([]);
 
     endpointB.setVisible(true);
-    endpointB.receive({ type: "ready", bridgeVersion: BRIDGE_VERSION });
-    await waitFor(() => endpointB.messages.length === 3);
+    await waitFor(() => endpointB.messages.length === 2);
     expect(endpointB.messages[0]).toMatchObject({
       type: "snapshot",
       presentation: {
@@ -78,8 +77,7 @@ describe("per-presentation Webview synchronization", () => {
         displayedSession: { id: "b", conversationItems: [{ id: "b-1" }, { id: "b-2" }] },
       },
     });
-    expect(endpointB.messages[1]).toMatchObject({ type: "setChatTypography" });
-    expect(endpointB.messages[2]).toMatchObject({ type: "focusComposer" });
+    expect(endpointB.messages[1]).toMatchObject({ type: "focusComposer" });
 
     connectionA.dispose();
     connectionB.dispose();

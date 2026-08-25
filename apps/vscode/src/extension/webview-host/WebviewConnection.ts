@@ -67,7 +67,6 @@ export class WebviewConnection implements vscode.Disposable {
       endpoint.webview.onDidReceiveMessage((raw: unknown) => void this.#receive(raw)),
       endpoint.onDidChangeVisibility((visible) => {
         this.#dirty = true;
-        if (!visible && this.surface.kind === "panel") this.#ready = false;
         if (visible) this.refresh();
       }),
     );

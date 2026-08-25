@@ -4,7 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.13.1] - 2026-08-25
+
+### Added
+
+- Show the active Agent turn's start time and live elapsed duration while streaming; settled turns keep their total duration in the collapsed work trace.
+
+### Fixed
+
+- Keep Session Tab Webviews alive while hidden so returning to a conversation no longer briefly shows the workspace onboarding screen.
 
 ## [0.13.0] - 2026-08-24
 
