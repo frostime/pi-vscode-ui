@@ -15,6 +15,7 @@ import { ProxySecretStore } from "../network/ProxySecretStore.js";
 import { showWindowsToast } from "../notifications/showWindowsToast.js";
 import { readPiSessionMetadata, type PiSessionCatalogEntry } from "./catalog/SessionCatalog.js";
 import { pickPiSession } from "./catalog/SessionCatalogPicker.js";
+import { parseLaunchArguments } from "./parseLaunchArguments.js";
 import { SessionPersistence } from "./SessionPersistence.js";
 import {
   discoverSessionWorkingDirectories,
@@ -174,6 +175,28 @@ export class SessionRegistry implements vscode.Disposable {
     return this.#createSessionInDirectory(directory, ephemeral);
   }
 
+  async createSessionWithCustomArguments(): Promise<string | undefined> {
+    this.#assertNoForkOperation();
+    const cwd = activeWorkspaceFolder()?.uri.fsPath;
+    if (!cwd) throw new Error("Open a workspace folder before creating a Pi session.");
+    // Deliberately no validation or sanitization of these arguments anywhere in FrostPi;
+    // the Pi CLI owns interpretation and failures surface via the startup-failure path.
+    // See the custom-launch-arguments paragraph in session-lifecycle.SPEC.md.
+    const raw = await vscode.window.showInputBox({
+      title: "New Pi session · custom arguments",
+      placeHolder: 'e.g. --model sonnet --system-prompt "focus on tests"',
+      prompt:
+        "Extra Pi CLI arguments appended to this launch as-is. Whitespace separates arguments; double quotes group one argument. Not validated.",
+    });
+    if (raw === undefined) return undefined;
+    const customArguments = parseLaunchArguments(raw);
+    if (customArguments.length === 0) return undefined;
+    const discovery = await this.#discoverWorkingDirectories(cwd);
+    const directory = await pickSessionWorkingDirectory(discovery.directories);
+    if (!directory) return undefined;
+    return this.#createSessionInDirectory(directory, false, customArguments);
+  }
+
   async resumeSession(): Promise<string | undefined> {
     this.#assertNoForkOperation();
     const cwd = activeWorkspaceFolder()?.uri.fsPath;
@@ -224,7 +247,11 @@ export class SessionRegistry implements vscode.Disposable {
     return id;
   }
 
-  async #createSessionInDirectory(directory: SessionWorkingDirectory, ephemeral: boolean): Promise<string> {
+  async #createSessionInDirectory(
+    directory: SessionWorkingDirectory,
+    ephemeral: boolean,
+    customArguments?: readonly string[],
+  ): Promise<string> {
     await this.#discardActiveTemporarySession();
     const id = randomUUID();
     const record: PersistedSessionRecord = {
@@ -237,7 +264,7 @@ export class SessionRegistry implements vscode.Disposable {
     this.#records.set(id, record);
     this.#rememberWorkingDirectory(directory);
     if (!ephemeral) this.#temporarySessionIds.add(id);
-    const runtime = this.#createRuntime(record);
+    const runtime = this.#createRuntime(record, customArguments);
     this.#runtimes.set(id, runtime);
     this.#activeSessionId = id;
     await this.#persist();
@@ -616,7 +643,7 @@ export class SessionRegistry implements vscode.Disposable {
     if (changed) await this.#persist();
   }
 
-  #createRuntime(record: PersistedSessionRecord): SessionRuntime {
+  #createRuntime(record: PersistedSessionRecord, customArguments?: readonly string[]): SessionRuntime {
     return new SessionRuntime(
       record.id,
       record.cwd,
@@ -633,6 +660,7 @@ export class SessionRegistry implements vscode.Disposable {
       this.#sessionTreeArtifactPath,
       this.#questionToolArtifactPath,
       record.ephemeral === true,
+      customArguments,
     );
   }
 

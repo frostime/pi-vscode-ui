@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add a hover Copy button to fenced code blocks that copies the block's raw code to the clipboard.
+- Add a "New session with arguments…" launcher variant that prompts for extra Pi CLI arguments and appends them to that launch as-is; they are not validated, logged, or persisted, survive session restarts, and are dropped after a window reload.
 
 ### Changed
 

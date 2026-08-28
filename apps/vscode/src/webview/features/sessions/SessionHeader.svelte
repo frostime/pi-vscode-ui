@@ -70,6 +70,11 @@
     postToHost({ type: "createSession", ephemeral: true });
   }
 
+  function createSessionWithArguments(): void {
+    closeMenus();
+    postToHost({ type: "createSessionWithArguments" });
+  }
+
   function toggleLauncherVariants(): void {
     launcherVariantsOpen = !launcherVariantsOpen;
   }
@@ -212,6 +217,9 @@
               <div class="launcher-variants">
                 <button type="button" onclick={createTemporarySession}>
                   <span class="codicon codicon-eye-closed"></span><span><strong>New temporary session</strong><small>Start a conversation that is never saved</small></span>
+                </button>
+                <button type="button" onclick={createSessionWithArguments}>
+                  <span class="codicon codicon-terminal"></span><span><strong>New session with arguments…</strong><small>Pass extra Pi CLI flags for this launch</small></span>
                 </button>
               </div>
             {/if}

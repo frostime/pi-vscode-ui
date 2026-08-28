@@ -68,46 +68,9 @@ describe("Pi session startup and conversation history", () => {
   it("launches temporary sessions with --no-session only", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-runtime-ephemeral-"));
     const argsFile = join(dir, "args.json");
-    const fakePi = join(dir, "fake-pi.cjs");
-    await writeFile(fakePi, String.raw`#!/usr/bin/env node
-const fs = require("node:fs");
-fs.writeFileSync(process.env.FROSTPI_TEST_ARGS_FILE, JSON.stringify(process.argv.slice(2)));
-let input = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", chunk => {
-  input += chunk;
-  while (input.includes("\n")) {
-    const index = input.indexOf("\n");
-    const command = JSON.parse(input.slice(0, index));
-    input = input.slice(index + 1);
-    const response = { type: "response", id: command.id, success: true };
-    if (command.type === "get_state") response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionId: "memory" };
-    else if (command.type === "get_available_models") response.data = { models: [] };
-    else if (command.type === "get_commands") response.data = { commands: [] };
-    else if (command.type === "get_entries") response.data = { entries: [], leafId: null };
-    else if (command.type === "get_session_stats") response.data = { sessionId: "memory", userMessages: 0, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 0, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 };
-    process.stdout.write(JSON.stringify(response) + "\n");
-  }
-});
-process.on("SIGTERM", () => process.exit(0));
-`);
+    const configuration = argsRecordingConfiguration(await writeArgsRecordingPi(dir));
     const previousArgsFile = process.env.FROSTPI_TEST_ARGS_FILE;
     process.env.FROSTPI_TEST_ARGS_FILE = argsFile;
-    const configuration = {
-      piExecutable: fakePi,
-      piArguments: ["--no-extensions"],
-      startSessionOnOpen: true,
-      streamingBehavior: "followUp" as const,
-      collapseTurnTrace: true,
-      questionToolEnabled: false,
-      maxImageBytes: 10 * 1024 * 1024,
-      diagnosticsLevel: "info" as const,
-      experimentalNotificationsEnabled: true,
-      proxy: { mode: "inherit" as const },
-      fileMentionRespectSearchExclude: true,
-      fileMentionRespectIgnoreFiles: true,
-      fileMentionFollowSymlinks: true,
-    };
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
     const hooks = { onChange: vi.fn(), onEditorText: vi.fn() };
     try {
@@ -116,13 +79,37 @@ process.on("SIGTERM", () => process.exit(0));
       await ephemeral.start(join(dir, "must-not-be-used.jsonl"));
       expect(JSON.parse(await readFile(argsFile, "utf8"))).toEqual(expect.arrayContaining(["--no-extensions", "--no-session"]));
       expect(JSON.parse(await readFile(argsFile, "utf8"))).not.toContain("--session");
-      await ephemeral.dispose();
-      runtimes.splice(runtimes.indexOf(ephemeral), 1);
 
       const regular = new SessionRuntime("regular", dir, "Regular", () => configuration, secrets, { error: vi.fn(), info: vi.fn() } as never, hooks);
       runtimes.push(regular);
       await regular.start();
       expect(JSON.parse(await readFile(argsFile, "utf8"))).not.toContain("--no-session");
+    } finally {
+      if (previousArgsFile === undefined) delete process.env.FROSTPI_TEST_ARGS_FILE;
+      else process.env.FROSTPI_TEST_ARGS_FILE = previousArgsFile;
+    }
+  });
+
+  it("appends custom launch arguments verbatim and reuses them across restarts", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-runtime-custom-args-"));
+    const argsFile = join(dir, "args.json");
+    const configuration = argsRecordingConfiguration(await writeArgsRecordingPi(dir));
+    const previousArgsFile = process.env.FROSTPI_TEST_ARGS_FILE;
+    process.env.FROSTPI_TEST_ARGS_FILE = argsFile;
+    const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
+    const hooks = { onChange: vi.fn(), onEditorText: vi.fn() };
+    try {
+      const runtime = new SessionRuntime("custom-args", dir, "Custom", () => configuration, secrets, { error: vi.fn(), info: vi.fn() } as never, hooks, undefined, undefined, false, ["--model", "sonnet"]);
+      runtimes.push(runtime);
+      await runtime.start();
+      const launchedArgs: string[] = JSON.parse(await readFile(argsFile, "utf8")) as string[];
+      expect(launchedArgs).toEqual(expect.arrayContaining(["--model", "sonnet"]));
+      // Verbatim append: custom tokens come after every FrostPi-owned argument.
+      expect(launchedArgs.indexOf("sonnet")).toBeGreaterThan(launchedArgs.indexOf("--no-extensions"));
+
+      await runtime.stop();
+      await runtime.start();
+      expect(JSON.parse(await readFile(argsFile, "utf8"))).toEqual(expect.arrayContaining(["--model", "sonnet"]));
     } finally {
       if (previousArgsFile === undefined) delete process.env.FROSTPI_TEST_ARGS_FILE;
       else process.env.FROSTPI_TEST_ARGS_FILE = previousArgsFile;
@@ -1047,6 +1034,38 @@ function runtimeConfiguration(piExecutable: string) {
     fileMentionRespectIgnoreFiles: true,
     fileMentionFollowSymlinks: true,
   };
+}
+
+function argsRecordingConfiguration(piExecutable: string) {
+  return { ...runtimeConfiguration(piExecutable), piArguments: ["--no-extensions"] };
+}
+
+/** Writes a fake Pi CLI that records its argv to FROSTPI_TEST_ARGS_FILE and answers the rpc handshake. */
+async function writeArgsRecordingPi(dir: string): Promise<string> {
+  const fakePi = join(dir, "fake-pi.cjs");
+  await writeFile(fakePi, String.raw`#!/usr/bin/env node
+const fs = require("node:fs");
+fs.writeFileSync(process.env.FROSTPI_TEST_ARGS_FILE, JSON.stringify(process.argv.slice(2)));
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => {
+  input += chunk;
+  while (input.includes("\n")) {
+    const index = input.indexOf("\n");
+    const command = JSON.parse(input.slice(0, index));
+    input = input.slice(index + 1);
+    const response = { type: "response", id: command.id, success: true };
+    if (command.type === "get_state") response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionId: "memory" };
+    else if (command.type === "get_available_models") response.data = { models: [] };
+    else if (command.type === "get_commands") response.data = { commands: [] };
+    else if (command.type === "get_entries") response.data = { entries: [], leafId: null };
+    else if (command.type === "get_session_stats") response.data = { sessionId: "memory", userMessages: 0, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 0, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 };
+    process.stdout.write(JSON.stringify(response) + "\n");
+  }
+});
+process.on("SIGTERM", () => process.exit(0));
+`);
+  return fakePi;
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
