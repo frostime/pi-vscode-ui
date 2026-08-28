@@ -249,17 +249,31 @@ function applyFileLinkPlugin(md: MarkdownIt): void {
   };
 }
 
+// Prose-like fenced blocks read better wrapped; everything else scrolls horizontally.
+const WRAP_LANGUAGES = new Set(["txt", "text", "plaintext", "md", "markdown", "tex", "latex"]);
+
+/**
+ * Fence chrome: the outer `pre` clips and hosts hover chrome; the inner
+ * `.code-scroll` scrolls so the copy button stays fixed while code moves.
+ */
+function renderFenceHtml(code: string, language: string): string {
+  const highlighted = language && hljs.getLanguage(language)
+    ? hljs.highlight(code, { language }).value
+    : escapeHtml(code);
+  const wrapClass = WRAP_LANGUAGES.has(language.toLowerCase()) ? " wrap" : "";
+  return `<pre class="hljs${wrapClass}"><span class="code-scroll"><code>${highlighted}</code></span></pre>`;
+}
+
 const markdown: MarkdownIt = new MarkdownIt({
   html: false,
   linkify: true,
   breaks: false,
-  highlight(code: string, language: string): string {
-    if (language && hljs.getLanguage(language)) {
-      return `<pre class="hljs"><code>${hljs.highlight(code, { language }).value}</code></pre>`;
-    }
-    return `<pre class="hljs"><code>${escapeHtml(code)}</code></pre>`;
-  },
+  highlight: renderFenceHtml,
 });
+
+// Indented code blocks bypass `highlight`; share the fence chrome so scrolling and
+// the copy button behave the same.
+markdown.renderer.rules.code_block = (tokens, idx) => renderFenceHtml(tokens[idx]!.content, "");
 
 markdown.linkify.set({ fuzzyLink: false });
 applyMathPlugin(markdown);

@@ -29,6 +29,33 @@ describe("renderMarkdownHtml", () => {
     expect(html).not.toContain("<script>");
   });
 
+  it("keeps code text intact inside the scroll wrapper", () => {
+    const html = renderMarkdownHtml("```js\nconst x = 1\n```");
+    const root = document.createElement("div");
+    root.innerHTML = html;
+
+    expect(root.querySelector("pre > .code-scroll > code")?.textContent).toBe("const x = 1\n");
+  });
+
+  it("gives indented code blocks the same fence chrome", () => {
+    const html = renderMarkdownHtml("    indented code");
+    expect(html).toContain('<pre class="hljs"><span class="code-scroll"><code>indented code');
+  });
+
+  it("wraps prose-like fences and scrolls code fences", () => {
+    const prose = renderMarkdownHtml("```markdown\nlong prose line\n```");
+    expect(prose).toContain('<pre class="hljs wrap">');
+
+    const code = renderMarkdownHtml("```ts\nconst x = 1;\n```");
+    expect(code).toContain('<pre class="hljs">');
+    expect(code).not.toContain("hljs wrap");
+  });
+
+  it("matches wrap languages case-insensitively but scrolls untagged fences", () => {
+    expect(renderMarkdownHtml("```TeX\nx\n```")).toContain('<pre class="hljs wrap">');
+    expect(renderMarkdownHtml("```\nplain text\n```")).not.toContain("hljs wrap");
+  });
+
   it("does not treat currency-like dollars as math", () => {
     const html = renderMarkdownHtml("price $20.00 today");
     expect(html).toContain("$20.00");

@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Add a hover Copy button to fenced code blocks that copies the block's raw code to the clipboard.
+
+### Changed
+
+- Wrap prose-like code fences (plain text, Markdown, TeX) by default so long lines stay readable; other code blocks keep horizontal scrolling.
+
 ## [0.13.1] - 2026-08-25
 
 ### Added
@@ -383,7 +393,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.1...HEAD
+[0.13.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.11.4...v0.12.0
 [0.11.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.11.3...v0.11.4

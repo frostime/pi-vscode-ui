@@ -29,16 +29,43 @@
   position: relative;
   max-width: 100%;
   margin: .65em 0 .85em;
-  padding: 10px 11px;
-  overflow: auto;
+  overflow: clip;
   background: var(--frost-code-bg);
   border: 1px solid var(--frost-border-soft);
   border-radius: 7px;
   font: var(--frostpi-chat-message-font-size, var(--font-size))/1.55 var(--frostpi-chat-composer-font-family, var(--font-mono));
   tab-size: 2;
 }
-.markdown-body pre.hljs { padding: 10px 11px; }
+/* Inner scroller keeps hover chrome (copy button) fixed while the code scrolls. */
+.markdown-body pre .code-scroll { display: block; overflow: auto; padding: 10px 11px; }
 .markdown-body pre code { background: transparent; display: block; }
+/* Prose-like fences wrap; other and untagged fences scroll horizontally. */
+.markdown-body pre.wrap .code-scroll { white-space: pre-wrap; overflow-wrap: anywhere; }
+.markdown-body pre .copy-btn {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  z-index: 1;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid var(--frost-border);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--frost-surface) 88%, transparent);
+  color: var(--frost-muted);
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 1.5;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0;
+  transition: opacity .12s ease, background .12s ease;
+}
+.markdown-body pre:hover .copy-btn,
+.markdown-body pre .copy-btn:focus-visible { opacity: 1; }
+.markdown-body pre .copy-btn:hover { background: var(--frost-surface); color: var(--frost-text); }
+.markdown-body pre .copy-btn.copied { color: var(--frost-success); opacity: 1; }
 .markdown-body table { width: 100%; margin: .7em 0; border-collapse: collapse; font-size: .95em; }
 .markdown-body th, .markdown-body td { padding: 5px 7px; border: 1px solid var(--frost-border); text-align: left; }
 .markdown-body th { background: var(--frost-surface); }
