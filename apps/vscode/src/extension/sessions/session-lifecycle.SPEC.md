@@ -46,6 +46,8 @@ An Ephemeral Session is a separate, user-selected mode. It starts Pi with `--no-
 
 A stopped or failed ephemeral process cannot restart because its conversation cannot be reconstructed. Single-session restart and automatic restart-on-send are rejected, bulk restart skips ephemeral sessions, and activation does not start a stopped ephemeral runtime. Fork is unavailable, while in-memory session-tree navigation remains available. Closing an ephemeral session that contains a user prompt always requires confirmation that its content will be permanently lost.
 
+Custom launch arguments are a per-launch creation mode: canceling the argument prompt or submitting no usable tokens aborts the creation. The tokens are appended verbatim after every FrostPi-owned argument; they are deliberately never validated, logged, persisted, or exported (they may contain credentials), and the Pi CLI is their sole interpreter, so any failure surfaces through the ordinary startup-failure path. They live on the runtime instance, so restart and restart-on-send reuse them. Pi Fork reuses that runtime's live process, so the Fork result retains its launch arguments for that runtime and subsequent restarts; the replacement original runtime, Extension Host reload, and restored sessions start without them.
+
 ## Message Fork
 
 Fork requires the selected session to be idle, fully loaded, free of pending extension UI and queued follow-ups, and the target to be a completed projected user message with a Pi entry id. The target is identified by entry id, never text. Attachment/seed validation follows the Composer contract.

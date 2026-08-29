@@ -38,6 +38,7 @@ export interface WebviewActionDispatcherDependencies {
 const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
   "openFolder",
   "createSession",
+  "createSessionWithArguments",
   "resumeSession",
   "activateSession",
   "closeSession",
@@ -100,6 +101,9 @@ export class WebviewActionDispatcher {
         return;
       case "createSession":
         await this.#registry.createSession(message.ephemeral ?? false);
+        return;
+      case "createSessionWithArguments":
+        await this.#registry.createSessionWithCustomArguments();
         return;
       case "resumeSession":
         await this.#registry.resumeSession();

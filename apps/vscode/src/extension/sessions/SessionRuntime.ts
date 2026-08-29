@@ -91,6 +91,8 @@ export class SessionRuntime {
     sessionTreeArtifactPath?: string,
     questionToolArtifactPath?: string,
     readonly isEphemeral = false,
+    /** Extra CLI tokens appended verbatim to every launch of this runtime; never persisted or logged. */
+    readonly customLaunchArguments: readonly string[] = [],
   ) {
     this.#id = id;
     const initialConfiguration = configurationProvider();
@@ -548,6 +550,8 @@ export class SessionRuntime {
       ...(this.isEphemeral ? ["--no-session"] : sessionFile ? ["--session", sessionFile] : []),
       ...(this.#sessionTreeBridge?.launchArguments() ?? []),
       ...(configuration.questionToolEnabled ? this.#questionToolBridge?.launchArguments() ?? [] : []),
+      // Verbatim by contract — never validate or reorder here (session-lifecycle.SPEC.md).
+      ...this.customLaunchArguments,
     ];
     const vscodeProxy = readVsCodeProxy(this.cwd);
     const credentials = await this.#proxySecrets.get();

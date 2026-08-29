@@ -13,7 +13,7 @@
   let titleDraft = $state("");
   let menuOpen = $state(false);
   let launcherOpen = $state(false);
-  let temporaryMode = $state(false);
+  let launcherVariantsOpen = $state(false);
   let sessionListOpen = $state(false);
   let extensionsMenuOpen = $state(false);
   let hidden = $state(false);
@@ -28,20 +28,18 @@
   });
 
   onMount(() => {
-    const closeMenus = (event: PointerEvent): void => {
+    const onPointerDown = (event: PointerEvent): void => {
       if (root?.contains(event.target as Node)) return;
-      menuOpen = false;
-      launcherOpen = false;
-      sessionListOpen = false;
-      extensionsMenuOpen = false;
+      closeMenus();
     };
-    document.addEventListener("pointerdown", closeMenus);
-    return () => document.removeEventListener("pointerdown", closeMenus);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
   });
 
   function closeMenus(): void {
     menuOpen = false;
     launcherOpen = false;
+    launcherVariantsOpen = false;
     sessionListOpen = false;
     extensionsMenuOpen = false;
   }
@@ -63,10 +61,22 @@
   }
 
   function createSession(): void {
-    const ephemeral = temporaryMode;
-    temporaryMode = false;
     closeMenus();
-    postToHost({ type: "createSession", ...(ephemeral ? { ephemeral: true } : {}) });
+    postToHost({ type: "createSession" });
+  }
+
+  function createTemporarySession(): void {
+    closeMenus();
+    postToHost({ type: "createSession", ephemeral: true });
+  }
+
+  function createSessionWithArguments(): void {
+    closeMenus();
+    postToHost({ type: "createSessionWithArguments" });
+  }
+
+  function toggleLauncherVariants(): void {
+    launcherVariantsOpen = !launcherVariantsOpen;
   }
 
   function resumeSession(): void {
@@ -187,16 +197,35 @@
         <IconButton icon="add" label="New or resume session" active={launcherOpen} onclick={() => { launcherOpen = !launcherOpen; menuOpen = false; sessionListOpen = false; }} />
         {#if launcherOpen}
           <div class="session-menu session-launcher-menu">
-            <button type="button" onclick={createSession}>
-              <span class="codicon codicon-add"></span><span><strong>{temporaryMode ? "New temporary session" : "New session"}</strong><small>{temporaryMode ? "Start a conversation that is never saved" : "Start a clean Pi conversation"}</small></span>
-            </button>
+            <div class="launcher-create-row">
+              <button type="button" class="launcher-create" onclick={createSession}>
+                <span class="codicon codicon-add"></span><span><strong>New session</strong><small>Start a clean Pi conversation</small></span>
+              </button>
+              <button
+                type="button"
+                class="launcher-expand"
+                class:active={launcherVariantsOpen}
+                aria-label="More ways to start a session"
+                aria-haspopup="true"
+                aria-expanded={launcherVariantsOpen}
+                onclick={toggleLauncherVariants}
+              >
+                <span class="codicon" class:codicon-chevron-right={!launcherVariantsOpen} class:codicon-chevron-down={launcherVariantsOpen} aria-hidden="true"></span>
+              </button>
+            </div>
+            {#if launcherVariantsOpen}
+              <div class="launcher-variants">
+                <button type="button" onclick={createTemporarySession}>
+                  <span class="codicon codicon-eye-closed"></span><span><strong>New temporary session</strong><small>Start a conversation that is never saved</small></span>
+                </button>
+                <button type="button" onclick={createSessionWithArguments}>
+                  <span class="codicon codicon-terminal"></span><span><strong>New session with arguments…</strong><small>Pass extra Pi CLI flags for this launch</small></span>
+                </button>
+              </div>
+            {/if}
             <button type="button" onclick={resumeSession}>
               <span class="codicon codicon-history"></span><span><strong>Resume session</strong><small>Open an existing Pi conversation</small></span>
             </button>
-            <label class="temporary-mode-toggle">
-              <span><strong>Temporary mode</strong><small>Do not save this conversation</small></span>
-              <input type="checkbox" bind:checked={temporaryMode} />
-            </label>
           </div>
         {/if}
       </div>
@@ -281,9 +310,10 @@
   .session-file-path { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .session-menu button:disabled { opacity: .5; cursor: default; }
   .ephemeral-badge { flex: 0 0 auto; padding: 1px 4px; border: 1px solid var(--frost-border); border-radius: 4px; color: var(--frost-muted); font-size: 9px; line-height: 1.2; }
-  .temporary-mode-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 9px; border-top: 1px solid var(--frost-border); cursor: pointer; }
-  .temporary-mode-toggle > span { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-  .temporary-mode-toggle strong { font-size: 11px; font-weight: 500; }
-  .temporary-mode-toggle small { color: var(--frost-muted); font-size: 9.5px; }
-  .temporary-mode-toggle input { margin: 0; accent-color: var(--frost-accent); }
+  .launcher-create-row { display: flex; align-items: stretch; }
+  .launcher-create-row > button { width: auto; }
+  .launcher-create { flex: 1 1 auto; }
+  .launcher-expand { flex: 0 0 auto; padding: 7px; opacity: 0.7; }
+  .launcher-expand.active { background: var(--frost-hover); opacity: 1; }
+  .launcher-variants { display: flex; flex-direction: column; margin: 2px 0 2px 29px; padding-left: 3px; border-left: 2px solid var(--frost-border); }
 </style>
