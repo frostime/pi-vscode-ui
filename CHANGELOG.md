@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-08-29
 ### Added
 
 - Add a hover Copy button to fenced code blocks that copies the block's raw code to the clipboard.
@@ -15,14 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Wrap prose-like code fences (plain text, Markdown, TeX) by default so long lines stay readable; other code blocks keep horizontal scrolling.
 - Rework the session launcher menu: "New session" now creates a session immediately, and an expandable variant section with "New temporary session" replaces the one-shot Temporary mode checkbox.
-- Drop the standalone response streaming spinner: streaming progress is already conveyed by growing text, the thinking pulse, and the tool status dot.
-- Adopt a motion policy in the UI spec: animations stay small-element, low-cost, and low-stimulation visual supplements; no large-scale or spatial motion.
+- Drop the standalone response streaming spinner; streaming progress is already conveyed by growing text, the thinking pulse, and the tool status dot.
+- Always play UI animations on systems reporting reduced motion; the previous suppression only froze small fades and pulses into misleading static states.
 
 ### Fixed
 
-- Replace the tool-call running spinner with a small, dim breathing status dot (the previous rotating codicon froze after one turn on systems reporting reduced motion and read as hung).
-- Drop the global `prefers-reduced-motion` animation suppression: FrostPi's animations are small fades and pulses, and the suppression froze state indicators into misleading static shapes.
-- Finalize tool calls emitted by a failed agent attempt as `cancelled` when Pi retries, so their in-progress indicator no longer persists alongside the retried attempt.
+- Fix the tool-call "in progress" indicator freezing after one turn on systems reporting reduced motion: the rotating arc is now a small breathing status dot.
+- Stop tool calls from failed agent attempts from keeping an endless "in progress" indicator; they now show as cancelled while Pi retries.
 
 ## [0.13.1] - 2026-08-25
 
@@ -403,7 +403,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.1...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.2...HEAD
+[0.13.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.11.4...v0.12.0
