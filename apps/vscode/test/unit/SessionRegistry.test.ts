@@ -18,6 +18,7 @@ const vscodeMocks = vi.hoisted(() => ({
   showErrorMessage: vi.fn().mockResolvedValue(undefined),
   showInformationMessage: vi.fn().mockResolvedValue(undefined),
   showWarningMessage: vi.fn().mockResolvedValue("Close session"),
+  showInputBox: vi.fn(),
 }));
 
 const windowsToastMocks = vi.hoisted(() => ({
@@ -75,6 +76,7 @@ vi.mock("vscode", () => {
       showErrorMessage: vscodeMocks.showErrorMessage,
       showInformationMessage: vscodeMocks.showInformationMessage,
       showWarningMessage: vscodeMocks.showWarningMessage,
+      showInputBox: vscodeMocks.showInputBox,
     },
     workspace: {
       get workspaceFolders() { return testEnvironment.cwd ? [{ name: "test", uri: { fsPath: testEnvironment.cwd } }] : []; },
@@ -110,6 +112,7 @@ describe("FrostPi session collection", () => {
     testEnvironment.windowFocused = true;
     testEnvironment.startSessionOnOpenByCwd.clear();
     windowsToastMocks.showWindowsToast.mockReset().mockResolvedValue(true);
+    vscodeMocks.showInputBox.mockReset();
     treePickerMocks.pickBranchEnd.mockReset();
     treePickerMocks.pickBranchSummary.mockReset();
     treePickerMocks.confirmDraftReplacement.mockReset();
@@ -199,6 +202,23 @@ process.on("SIGTERM", () => process.exit(0));
     expect(snapshot.activeSessionId).toBeNull();
     expect(snapshot.activeSession).toBeNull();
     expect(snapshot.sessions).toEqual([]);
+  });
+
+  it("blocks Fork while custom session creation is waiting for launch arguments", async () => {
+    testEnvironment.cwd = resolve("test/e2e/fixtures/workspace");
+    let resolveInput: (value: string | undefined) => void = () => undefined;
+    vscodeMocks.showInputBox.mockReturnValueOnce(new Promise<string | undefined>((resolve) => {
+      resolveInput = resolve;
+    }));
+    const registry = new SessionRegistry(createContext() as never, { error: vi.fn(), info: vi.fn() } as never);
+    registries.push(registry);
+
+    const creation = registry.createSessionWithCustomArguments();
+    await waitFor(() => vscodeMocks.showInputBox.mock.calls.length === 1);
+    await expect(registry.forkMessage("session", "entry")).rejects.toThrow("current session creation");
+
+    resolveInput(undefined);
+    await expect(creation).resolves.toBeUndefined();
   });
 
   it("creates a session in the worktree selected by the host picker", async () => {

@@ -9,7 +9,8 @@
  * - Double quotes group whitespace into one token and are removed (`"a b"` -> `a b`).
  * - Backslash is a literal character, so Windows paths need no escaping.
  * - Unclosed quotes run to the end of the input (lenient, never an error).
- * - Empty tokens (`""`) are dropped: they carry no meaning to the Pi CLI.
+ * - Explicit empty tokens (`""`) are preserved; the creation flow treats an input
+ *   containing only empty quoted groups as having no usable arguments.
  */
 export function parseLaunchArguments(input: string): string[] {
   const tokens: string[] = [];
@@ -17,7 +18,7 @@ export function parseLaunchArguments(input: string): string[] {
   let inQuotes = false;
   let started = false;
   const flush = (): void => {
-    if (started && current.length > 0) tokens.push(current);
+    if (started) tokens.push(current);
     current = "";
     started = false;
   };

@@ -34,13 +34,16 @@ describe("parseLaunchArguments", () => {
     expect(parseLaunchArguments('--prompt "never closed')).toEqual(["--prompt", "never closed"]);
   });
 
-  it("drops empty quoted tokens", () => {
-    expect(parseLaunchArguments('a "" b')).toEqual(["a", "b"]);
+  it("preserves empty quoted tokens", () => {
+    expect(parseLaunchArguments('a "" b')).toEqual(["a", "", "b"]);
   });
 
   it("returns no tokens for blank or empty input", () => {
     expect(parseLaunchArguments("")).toEqual([]);
     expect(parseLaunchArguments("   ")).toEqual([]);
-    expect(parseLaunchArguments('""  ""')).toEqual([]);
+  });
+
+  it("preserves inputs made only of empty quoted tokens for the caller to classify", () => {
+    expect(parseLaunchArguments('""  ""')).toEqual(["", ""]);
   });
 });

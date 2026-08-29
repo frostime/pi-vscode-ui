@@ -70,6 +70,7 @@ export class SessionRegistry implements vscode.Disposable {
 
   #activeSessionId: string | null = null;
   #forkOperation: ForkOperation | null = null;
+  #sessionCreationInProgress = 0;
   #startQueue: Promise<void> = Promise.resolve();
   #historyQueue: Promise<void> = Promise.resolve();
   #persistenceQueue: Promise<void> = Promise.resolve();
@@ -166,35 +167,37 @@ export class SessionRegistry implements vscode.Disposable {
   }
 
   async createSession(ephemeral = false): Promise<string | undefined> {
-    this.#assertNoForkOperation();
-    const cwd = activeWorkspaceFolder()?.uri.fsPath;
-    if (!cwd) throw new Error("Open a workspace folder before creating a Pi session.");
-    const discovery = await this.#discoverWorkingDirectories(cwd);
-    const directory = await pickSessionWorkingDirectory(discovery.directories);
-    if (!directory) return undefined;
-    return this.#createSessionInDirectory(directory, ephemeral);
+    return this.#withSessionCreation(async () => {
+      const cwd = activeWorkspaceFolder()?.uri.fsPath;
+      if (!cwd) throw new Error("Open a workspace folder before creating a Pi session.");
+      const discovery = await this.#discoverWorkingDirectories(cwd);
+      const directory = await pickSessionWorkingDirectory(discovery.directories);
+      if (!directory) return undefined;
+      return this.#createSessionInDirectory(directory, ephemeral);
+    });
   }
 
   async createSessionWithCustomArguments(): Promise<string | undefined> {
-    this.#assertNoForkOperation();
-    const cwd = activeWorkspaceFolder()?.uri.fsPath;
-    if (!cwd) throw new Error("Open a workspace folder before creating a Pi session.");
-    // Deliberately no validation or sanitization of these arguments anywhere in FrostPi;
-    // the Pi CLI owns interpretation and failures surface via the startup-failure path.
-    // See the custom-launch-arguments paragraph in session-lifecycle.SPEC.md.
-    const raw = await vscode.window.showInputBox({
-      title: "New Pi session · custom arguments",
-      placeHolder: 'e.g. --model sonnet --system-prompt "focus on tests"',
-      prompt:
-        "Extra Pi CLI arguments appended to this launch as-is. Whitespace separates arguments; double quotes group one argument. Not validated.",
+    return this.#withSessionCreation(async () => {
+      const cwd = activeWorkspaceFolder()?.uri.fsPath;
+      if (!cwd) throw new Error("Open a workspace folder before creating a Pi session.");
+      // Deliberately no validation or sanitization of these arguments anywhere in FrostPi;
+      // the Pi CLI owns interpretation and failures surface via the startup-failure path.
+      // See the custom-launch-arguments paragraph in session-lifecycle.SPEC.md.
+      const raw = await vscode.window.showInputBox({
+        title: "New Pi session · custom arguments",
+        placeHolder: 'e.g. --model sonnet --system-prompt "focus on tests"',
+        prompt:
+          "Extra Pi CLI arguments appended to this launch as-is. Whitespace separates arguments; double quotes group one argument. Not validated.",
+      });
+      if (raw === undefined) return undefined;
+      const customArguments = parseLaunchArguments(raw);
+      if (customArguments.length === 0 || customArguments.every((argument) => argument.length === 0)) return undefined;
+      const discovery = await this.#discoverWorkingDirectories(cwd);
+      const directory = await pickSessionWorkingDirectory(discovery.directories);
+      if (!directory) return undefined;
+      return this.#createSessionInDirectory(directory, false, customArguments);
     });
-    if (raw === undefined) return undefined;
-    const customArguments = parseLaunchArguments(raw);
-    if (customArguments.length === 0) return undefined;
-    const discovery = await this.#discoverWorkingDirectories(cwd);
-    const directory = await pickSessionWorkingDirectory(discovery.directories);
-    if (!directory) return undefined;
-    return this.#createSessionInDirectory(directory, false, customArguments);
   }
 
   async resumeSession(): Promise<string | undefined> {
@@ -370,6 +373,7 @@ export class SessionRegistry implements vscode.Disposable {
     resultSelection: ForkResultSelection = "select-result",
   ): Promise<{ cancelled: boolean; forkSessionId?: string }> {
     this.#assertNoForkOperation();
+    this.#assertNoSessionCreation();
     if (resultSelection === "select-result" && sessionId !== this.#activeSessionId) {
       throw new Error("Activate the session before forking one of its messages.");
     }
@@ -388,6 +392,7 @@ export class SessionRegistry implements vscode.Disposable {
       resultSelection,
       cancelRequested: false,
     };
+    this.#assertNoSessionCreation();
     this.#forkOperation = operation;
     const forkName = forkSessionName(runtime.view.title);
 
@@ -764,6 +769,21 @@ export class SessionRegistry implements vscode.Disposable {
 
   #assertNoForkOperation(): void {
     if (this.#forkOperation) throw new Error("Wait for the current session Fork to finish or cancel it first.");
+  }
+
+  #assertNoSessionCreation(): void {
+    if (this.#sessionCreationInProgress > 0) throw new Error("Wait for the current session creation to finish.");
+  }
+
+  async #withSessionCreation<T>(operation: () => Promise<T>): Promise<T> {
+    this.#assertNoForkOperation();
+    this.#assertNoSessionCreation();
+    this.#sessionCreationInProgress += 1;
+    try {
+      return await operation();
+    } finally {
+      this.#sessionCreationInProgress -= 1;
+    }
   }
 
   #assertSessionOutsideFork(sessionId: string): void {
