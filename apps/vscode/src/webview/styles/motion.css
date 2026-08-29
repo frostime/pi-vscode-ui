@@ -1,8 +1,4 @@
-@keyframes spin { to { transform: rotate(360deg); } }
 @keyframes status-pulse { 0%,100% { opacity: .55; box-shadow: 0 0 0 2px transparent; } 50% { opacity: 1; box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 12%, transparent); } }
 @keyframes toast-in { from { opacity: 0; transform: translateY(7px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 [data-state="open"] > .thinking-content, [data-state="open"] > .tool-content { animation: reveal var(--motion-fast) ease-out; }
 @keyframes reveal { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
-}

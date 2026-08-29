@@ -12,13 +12,11 @@
   const label = $derived(tool.state === "preparing" ? "Generating arguments…" : tool.label);
   const icon = $derived(tool.state === "preparing" ? "tools" : toolIcon(tool.name));
   const statusIcon = $derived(
-    tool.status === "running"
-      ? "loading codicon-modifier-spin"
-      : tool.status === "error"
-        ? "error"
-        : tool.status === "cancelled"
-          ? "warning"
-          : "check",
+    tool.status === "error"
+      ? "error"
+      : tool.status === "cancelled"
+        ? "warning"
+        : "check",
   );
   const statusLabel = $derived(
     tool.status === "cancelled"
@@ -38,11 +36,15 @@
     <span class="tool-activity-name">{name}</span>
     <span class="tool-activity-label" title={label}>{label}</span>
     {#if errorSummary && tool.state === "bound"}<span class="tool-error-summary" title={tool.output}>{errorSummary}</span>{/if}
-    <span
-      class={`codicon codicon-${statusIcon} activity-status${tool.status === "cancelled" ? " tool-status-cancelled" : ""}`}
-      title={statusLabel}
-      aria-label={statusLabel}
-    ></span>
+    {#if tool.status === "running"}
+      <span class="status-dot running-dot activity-status" title={statusLabel} aria-label={statusLabel}></span>
+    {:else}
+      <span
+        class={`codicon codicon-${statusIcon} activity-status${tool.status === "cancelled" ? " tool-status-cancelled" : ""}`}
+        title={statusLabel}
+        aria-label={statusLabel}
+      ></span>
+    {/if}
     <span class={`codicon codicon-chevron-${open ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
   </Collapsible.Trigger>
   <Collapsible.Content class="activity-content tool-activity-content">
@@ -121,6 +123,17 @@
 </script>
 
 <style>
+/* Quieter variant of the shared status dot: smaller, dimmed green, no halo.
+   The deep-dim floor of the breathe gives the pulse enough contrast to read. */
+.running-dot {
+  width: 6px;
+  height: 6px;
+  background: color-mix(in srgb, var(--frost-success) 55%, var(--frost-bg));
+  box-shadow: none;
+  animation: running-breathe 2s ease-in-out infinite;
+}
+@keyframes running-breathe { 0%, 100% { opacity: .25; } 50% { opacity: .95; } }
+
 .tool-output::-webkit-scrollbar { width: 9px; height: 9px; }
 .tool-output::-webkit-scrollbar-thumb {
   background: var(--frost-scrollbar);

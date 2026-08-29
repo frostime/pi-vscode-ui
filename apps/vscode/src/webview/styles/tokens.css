@@ -135,15 +135,6 @@
 .system-message .markdown-body p { margin: 0; }
 .system-error { color: var(--frost-error); }
 .inline-error { color: var(--frost-error); white-space: pre-wrap; }
-.spinner {
-  width: 16px;
-  height: 16px;
-  display: inline-block;
-  border: 2px solid color-mix(in srgb, var(--frost-muted) 28%, transparent);
-  border-top-color: var(--frost-link);
-  border-radius: 50%;
-  animation: spin .8s linear infinite;
-}
 .thinking-block { margin: 6px 0 11px; border-left: 1px solid var(--frost-border); }
 .thinking-trigger {
   width: 100%;

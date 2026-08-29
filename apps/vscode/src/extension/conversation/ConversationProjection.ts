@@ -436,6 +436,10 @@ export class ConversationProjection {
 
   #endAgentAttempt(willRetry: boolean): void {
     if (!this.#pendingLiveErrorTurnId) return;
+    // A failed attempt's emitted tool calls can never execute within it, so they
+    // must not keep reporting "running" during a retry. If Pi still executes
+    // one, a later live execution event restores "running".
+    this.#store.finalizeUnresolvedTools();
     if (willRetry) {
       this.#setTurnStatus(this.#pendingLiveErrorTurnId, "running");
       return;

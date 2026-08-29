@@ -339,6 +339,37 @@ describe("ConversationProjection", () => {
     expect(normalizePersistedProjection(projection)).toEqual(normalizePersistedProjection(replacement));
   });
 
+  it("finalizes failed-attempt tool calls as cancelled when the agent retries", () => {
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("Retry", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "Retry", timestamp: 1 } });
+    projection.applyEvent({ type: "message_start", message: { role: "assistant", content: [], timestamp: 2 } });
+    const toolCall = { type: "toolCall", id: "call-1", name: "write", arguments: { path: "a.ts" } };
+    projection.applyEvent({
+      type: "message_update",
+      assistantMessageEvent: { type: "toolcall_end", contentIndex: 0, toolCall },
+    });
+    projection.applyEvent({
+      type: "message_end",
+      message: { role: "assistant", content: [toolCall], stopReason: "error", errorMessage: "transient", timestamp: 2 },
+    });
+    projection.applyEvent({ type: "agent_end", willRetry: true, messages: [] });
+
+    let [turn] = turns(projection.read().items);
+    expect(turn?.status).toBe("running");
+    expect(turn?.items.map((item) => item.type)).toEqual(["tool", "response"]);
+    expect(turn?.items[0]).toMatchObject({
+      id: "assistant-2:tool:0",
+      tool: { state: "bound", id: "call-1", status: "cancelled" },
+    });
+
+    // A later live execution event restores running status if Pi still executes one.
+    projection.applyEvent({ type: "tool_execution_start", toolCallId: "call-1", toolName: "write", args: { path: "a.ts" } });
+    [turn] = turns(projection.read().items);
+    expect(turn?.items[0]).toMatchObject({ tool: { status: "running" } });
+  });
+
   it("finalizes a retry error only when Pi will not continue", () => {
     const entries = [
       userEntry("u1", null, "Fail", 1),

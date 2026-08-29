@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Wrap prose-like code fences (plain text, Markdown, TeX) by default so long lines stay readable; other code blocks keep horizontal scrolling.
 - Rework the session launcher menu: "New session" now creates a session immediately, and an expandable variant section with "New temporary session" replaces the one-shot Temporary mode checkbox.
+- Drop the standalone response streaming spinner: streaming progress is already conveyed by growing text, the thinking pulse, and the tool status dot.
+- Adopt a motion policy in the UI spec: animations stay small-element, low-cost, and low-stimulation visual supplements; no large-scale or spatial motion.
+
+### Fixed
+
+- Replace the tool-call running spinner with a small, dim breathing status dot (the previous rotating codicon froze after one turn on systems reporting reduced motion and read as hung).
+- Drop the global `prefers-reduced-motion` animation suppression: FrostPi's animations are small fades and pulses, and the suppression froze state indicators into misleading static shapes.
+- Finalize tool calls emitted by a failed agent attempt as `cancelled` when Pi retries, so their in-progress indicator no longer persists alongside the retried attempt.
 
 ## [0.13.1] - 2026-08-25
 

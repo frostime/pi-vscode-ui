@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { ResponseActivityView } from "$shared/model/conversationModel";
 
-  import Spinner from "./Spinner.svelte";
   import ImageGallery from "./ImageGallery.svelte";
   import MarkdownContent from "./MarkdownContent.svelte";
   import { copyMessageText, rawMessageText } from "./copyMessageClient";
@@ -16,7 +15,6 @@
     {#if block.type === "images"}<ImageGallery images={block.images} />{/if}
     {#if block.type === "error"}<div class="inline-error">{block.text}</div>{/if}
   {/each}
-  {#if activity.status === "streaming"}<span class="response-streaming"><Spinner /></span>{/if}
   {#if activity.status === "aborted"}<div class="message-footnote">Stopped by user</div>{/if}
   {#if copyText && activity.status !== "streaming"}
     <div class="message-actions response-actions">
@@ -37,6 +35,4 @@
 :global(.response-activity + .response-activity) { padding-top: 0; }
 .response-actions { justify-content: flex-start; }
 .response-error { color: var(--frost-error); }
-.response-streaming { display: inline-flex; margin: 3px 0 0 2px; vertical-align: middle; }
-.response-streaming :global(.spinner) { width: 12px; height: 12px; border-width: 1.5px; }
 </style>
