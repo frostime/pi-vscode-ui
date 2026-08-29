@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/branding/hero-icon.jpg" alt="FrostPi" width="140">
+  <img src="assets/branding/hero-icon.jpg" alt="FrostPi" width="140">
 </p>
 
 <h1 align="center">Pi VS Code UI — FrostPi</h1>
@@ -15,7 +15,7 @@
 FrostPi 将你现有的 Pi Coding Agent 工作流带入 VS Code，同时保留你的配置、扩展、模型和会话。
 
 <p align="center">
-  <img src="docs/assets/screenshots/preview.png" alt="FrostPi 会话视图" width="430">
+  <img src="assets/screenshots/preview.png" alt="FrostPi 会话视图" width="430">
 </p>
 
 ## 为什么选择 FrostPi
@@ -37,36 +37,36 @@ FrostPi 致力于让 Pi 的功能性工作流都能在图形界面中使用：�
 <table>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/model-picker.png" alt="模型选择器" width="440">
+      <img src="assets/screenshots/model-picker.png" alt="模型选择器" width="440">
       <br>
       <sub>模型和思考控制</sub>
     </td>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/at-file.png" alt="工作区引用" width="440">
+      <img src="assets/screenshots/at-file.png" alt="工作区引用" width="440">
       <br>
       <sub>工作区感知的提示词</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/slash-command.png" alt="斜杠命令" width="440">
+      <img src="assets/screenshots/slash-command.png" alt="斜杠命令" width="440">
       <br>
       <sub>扩展命令、提示词和技能</sub>
     </td>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/compact.png" alt="压缩" width="440">
+      <img src="assets/screenshots/compact.png" alt="压缩" width="440">
       <br>
       <sub>原生压缩消息</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/steer+queue.png" alt="Steer 和队列控制" width="440">
+      <img src="assets/screenshots/steer+queue.png" alt="Steer 和队列控制" width="440">
       <br>
       <sub>Steer 和队列控制</sub>
     </td>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/context-usage.png" alt="上下文和成本详情" width="280">
+      <img src="assets/screenshots/context-usage.png" alt="上下文和成本详情" width="280">
       <br>
       <sub>上下文、Token 使用量和预计会话成本</sub>
     </td>
@@ -78,7 +78,7 @@ FrostPi 致力于让 Pi 的功能性工作流都能在图形界面中使用：�
 Pi 会话是树，而不只是线性的聊天记录。FrostPi 将 Pi 原生的树工作流以图形化控件呈现：从较早的提示词创建分支、在已有路径之间切换，并可选择通过分支摘要保留上下文。
 
 <p align="center">
-  <img src="docs/assets/screenshots/tree-button.png" alt="FrostPi 中的 Pi 会话树" width="900">
+  <img src="assets/screenshots/tree-button.png" alt="FrostPi 中的 Pi 会话树" width="900">
 </p>
 
 **需要另一个会话时再 Fork。**
@@ -92,12 +92,12 @@ Pi 会话是树，而不只是线性的聊天记录。FrostPi 将 Pi 原生的�
 <table>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/multi-session.png" alt="多个 Pi 会话" width="440">
+      <img src="assets/screenshots/multi-session.png" alt="多个 Pi 会话" width="440">
       <br>
       <sub>独立的并行会话</sub>
     </td>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/support-worktree.png" alt="Git worktree 会话" width="440">
+      <img src="assets/screenshots/support-worktree.png" alt="Git worktree 会话" width="440">
       <br>
       <sub>跨 Git worktree 的会话</sub>
     </td>
@@ -246,7 +246,7 @@ pnpm package:zip
 - `apps/vscode` — Extension Host、稳定的 Host-Webview 契约和 Svelte UI。
 - `docs` — 架构、协议、UI、测试、隐私和发布文档。
 
-请从 [`docs/index.md`](docs/index.md) 开始。行为兼容性契约位于各模块旁边的 `*.SPEC.md` 或 `SPEC.md` 文件中。
+请从 [`.dev/docs/index.md`](.dev/docs/index.md) 开始。行为兼容性契约位于各模块旁边的 `*.SPEC.md` 或 `SPEC.md` 文件中。
 
 ### 隐私与许可证
 

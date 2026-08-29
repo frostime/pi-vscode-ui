@@ -34,7 +34,7 @@ Use this map when the feature is known but its owner is not. Paths name owners a
 ## Pi RPC transport
 
 - Owner: `packages/pi-rpc/src/`; start with `packages/pi-rpc/src/PiRpcConnection.ts`, `packages/pi-rpc/src/PiRpcApi.ts`, and `packages/pi-rpc/src/protocol/JsonlDecoder.ts`.
-- Contracts: `packages/pi-rpc/SPEC.md` and `docs/protocol/pi-rpc-compatibility.md` for cross-module policy.
+- Contracts: `packages/pi-rpc/SPEC.md` and `.dev/docs/protocol/pi-rpc-compatibility.md` for cross-module policy.
 
 ## Host–Webview bridge
 
@@ -49,7 +49,7 @@ Use this map when the feature is known but its owner is not. Paths name owners a
 ## Conversation rendering, Markdown, and scrolling
 
 - Owner: `apps/vscode/src/webview/features/conversation/`; scrolling lives in `apps/vscode/src/webview/features/conversation/scrolling/`.
-- Entry points/contracts: `apps/vscode/src/webview/features/conversation/ConversationView.svelte`, `apps/vscode/src/webview/features/conversation/markdown/renderMarkdown.ts` (`markdown-it`), and `apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md`; cross-feature scroll ownership is in `docs/design/ui-spec.md`.
+- Entry points/contracts: `apps/vscode/src/webview/features/conversation/ConversationView.svelte`, `apps/vscode/src/webview/features/conversation/markdown/renderMarkdown.ts` (`markdown-it`), and `apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md`; cross-feature scroll ownership is in `.dev/docs/design/ui-spec.md`.
 
 ## Models and thinking level
 
@@ -74,9 +74,9 @@ Use this map when the feature is known but its owner is not. Paths name owners a
 ## Diagnostics, notifications, and status bar
 
 - Owners: `apps/vscode/src/extension/diagnostics/`, `apps/vscode/src/extension/notifications/`, and `apps/vscode/src/extension/status-bar/`.
-- Cross-module sensitivity boundary: `docs/architecture/overview.md`; lifecycle-trigger semantics remain in the lifecycle and extension UI SPECs.
+- Cross-module sensitivity boundary: `.dev/docs/architecture/overview.md`; lifecycle-trigger semantics remain in the lifecycle and extension UI SPECs.
 
 ## Build, testing, packaging, and release
 
 - Owners: root `package.json`, package-local manifests, `scripts/`, `.github/workflows/`, and `apps/vscode/test/` / `packages/pi-rpc/test/`.
-- Workflows: `docs/development.md`, `docs/testing.md`, and `docs/release.md`.
+- Workflows: `.dev/docs/development.md`, `.dev/docs/testing.md`, and `.dev/docs/release.md`.

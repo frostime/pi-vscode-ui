@@ -17,15 +17,15 @@ For commands where only the result matters, print only the tail or even just the
 
 ## Navigation
 
-- When you know **what** feature to change but not **where**: start with [`docs/feature-map.md`](docs/feature-map.md) — feature→code index.
+- When you know **what** feature to change but not **where**: start with [`.dev/docs/feature-map.md`](.dev/docs/feature-map.md) — feature→code index.
 
 ## Maintenance
 
-- Use [`docs/index.md`](docs/index.md) as the documentation entry point. Before changing architecture, protocol, session state, bridge behavior, or UI interaction, read the linked topic document and the nearest `*.SPEC.md`.
-- Follow [`docs/development.md`](docs/development.md) for workspace dependencies and package scripts. Install from the repository root; packages own local scripts, while root scripts only orchestrate them.
-- Follow [`docs/testing.md`](docs/testing.md) for verification scope and [`docs/release.md`](docs/release.md) for versions, packaging, tags, and GitHub Actions. Change the product version only with `pnpm version:set <version>`.
+- Use [`.dev/docs/index.md`](.dev/docs/index.md) as the documentation entry point. Before changing architecture, protocol, session state, bridge behavior, or UI interaction, read the linked topic document and the nearest `*.SPEC.md`.
+- Follow [`.dev/docs/development.md`](.dev/docs/development.md) for workspace dependencies and package scripts. Install from the repository root; packages own local scripts, while root scripts only orchestrate them.
+- Follow [`.dev/docs/testing.md`](.dev/docs/testing.md) for verification scope and [`.dev/docs/release.md`](.dev/docs/release.md) for versions, packaging, tags, and GitHub Actions. Change the product version only with `pnpm version:set <version>`.
 - Update the relevant document in the same change when a durable command, boundary, workflow, or release rule changes. Keep `AGENTS.md` brief and link detailed procedures instead of duplicating them.
-- Top-level `docs/` is reserved for cross-module constraints and workflows; module-specific behavior belongs in the nearest `*.SPEC.md`.
+- `.dev/docs/` is reserved for cross-module constraints and workflows; `.dev/backlog/` and `.dev/changes/` hold lifecycle artifacts. Module-specific behavior belongs in the nearest `*.SPEC.md`.
 
 ## Boundaries
 

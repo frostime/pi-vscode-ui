@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/branding/hero-icon.jpg" alt="FrostPi" width="140">
+  <img src="assets/branding/hero-icon.jpg" alt="FrostPi" width="140">
 </p>
 
 <h1 align="center">Pi VS Code UI — FrostPi</h1>
@@ -16,7 +16,7 @@
 FrostPi brings your existing Pi Coding Agent workflow into VS Code without replacing your configuration, extensions, models, or sessions.
 
 <p align="center">
-  <img src="docs/assets/screenshots/preview.png" alt="FrostPi conversation view" width="430">
+  <img src="assets/screenshots/preview.png" alt="FrostPi conversation view" width="430">
 </p>
 
 ## Why FrostPi
@@ -38,36 +38,36 @@ Conversation rendering supports ordered reasoning, tool activity, command output
 <table>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/model-picker.png" alt="Model picker" width="440">
+      <img src="assets/screenshots/model-picker.png" alt="Model picker" width="440">
       <br>
       <sub>Model and thinking controls</sub>
     </td>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/at-file.png" alt="Workspace references" width="440">
+      <img src="assets/screenshots/at-file.png" alt="Workspace references" width="440">
       <br>
       <sub>Workspace-aware prompting</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/slash-command.png" alt="Slash commands" width="440">
+      <img src="assets/screenshots/slash-command.png" alt="Slash commands" width="440">
       <br>
       <sub>Extension commands, prompts, and skills</sub>
     </td>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/compact.png" alt="Compaction" width="440">
+      <img src="assets/screenshots/compact.png" alt="Compaction" width="440">
       <br>
       <sub>Native compaction messages</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/steer+queue.png" alt="Steer and queue controls" width="440">
+      <img src="assets/screenshots/steer+queue.png" alt="Steer and queue controls" width="440">
       <br>
       <sub>Steer and queue controls</sub>
     </td>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/context-usage.png" alt="Context and cost detail" width="280">
+      <img src="assets/screenshots/context-usage.png" alt="Context and cost detail" width="280">
       <br>
       <sub>Context, token usage, and estimated session cost</sub>
     </td>
@@ -79,7 +79,7 @@ Conversation rendering supports ordered reasoning, tool activity, command output
 Pi sessions are trees, not just linear chat histories. FrostPi exposes Pi's native tree workflow as graphical controls: branch from an earlier prompt, switch between existing paths, and optionally preserve context with branch summaries.
 
 <p align="center">
-  <img src="docs/assets/screenshots/tree-button.png" alt="Pi session tree in FrostPi" width="900">
+  <img src="assets/screenshots/tree-button.png" alt="Pi session tree in FrostPi" width="900">
 </p>
 
 **Fork when you actually want another session.**
@@ -93,12 +93,12 @@ Create, resume, switch, rename, and concurrently run independent Pi sessions. If
 <table>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/multi-session.png" alt="Multiple Pi sessions" width="440">
+      <img src="assets/screenshots/multi-session.png" alt="Multiple Pi sessions" width="440">
       <br>
       <sub>Independent concurrent sessions</sub>
     </td>
     <td width="50%" align="center">
-      <img src="docs/assets/screenshots/support-worktree.png" alt="Git worktree sessions" width="440">
+      <img src="assets/screenshots/support-worktree.png" alt="Git worktree sessions" width="440">
       <br>
       <sub>Sessions across Git worktrees</sub>
     </td>
@@ -250,7 +250,7 @@ The workspace contains:
 - `apps/vscode` — Extension Host, stable Host-Webview contracts, and Svelte UI.
 - `docs` — architecture, protocol, UI, testing, privacy, and release documentation.
 
-Start with [`docs/index.md`](docs/index.md). Behavioral compatibility contracts live next to their modules as `*.SPEC.md` or `SPEC.md`.
+Start with [`.dev/docs/index.md`](.dev/docs/index.md). Behavioral compatibility contracts live next to their modules as `*.SPEC.md` or `SPEC.md`.
 
 ### Privacy and License
 

@@ -1,6 +1,6 @@
 # Contributing
 
-Before opening a change, read `docs/architecture/overview.md`, `docs/development.md`, and the relevant adjacent `*.SPEC.md` contract.
+Before opening a change, read `.dev/docs/architecture/overview.md`, `.dev/docs/development.md`, and the relevant adjacent `*.SPEC.md` contract.
 
 Required local gate:
 

@@ -93,7 +93,7 @@
         if (message.type === "searchWorkspaceFiles") setTimeout(() => window.postMessage({ bridgeVersion: 2, type: "workspaceFileSuggestions", requestId: message.requestId, items: [
           { path: "src/extension/sessions/SessionRuntime.ts", name: "SessionRuntime.ts", directory: "src/extension/sessions", score: 900 },
           { path: "src/webview/features/composer/PromptEditor.svelte", name: "PromptEditor.svelte", directory: "src/webview/features/composer", score: 800 },
-          { path: "docs/design/ui-spec.md", name: "ui-spec.md", directory: "docs/design", score: 700 }
+          { path: ".dev/docs/design/ui-spec.md", name: "ui-spec.md", directory: ".dev/docs/design", score: 700 }
         ] }, "*"), 80);
       },
       getState() { return undefined; },
