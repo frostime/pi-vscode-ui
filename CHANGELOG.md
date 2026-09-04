@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Annotate finalized assistant responses in a temporary review workspace, collect source-linked notes, and insert the resulting annotation block before the existing Composer draft without sending it automatically.
+
 ## [0.13.2] - 2026-08-29
 ### Added
 
