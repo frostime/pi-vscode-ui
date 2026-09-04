@@ -49,6 +49,14 @@
     view?.focus();
   }
 
+  export function focusAtEnd(): void {
+    const editor = view;
+    if (!editor) return;
+    const end = editor.state.doc.length;
+    editor.dispatch({ selection: { anchor: end }, scrollIntoView: true });
+    editor.focus();
+  }
+
   onMount(() => {
     view = createEditor();
     return () => view?.destroy();

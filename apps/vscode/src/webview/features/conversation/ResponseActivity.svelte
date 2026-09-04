@@ -1,11 +1,12 @@
 <script lang="ts">
   import type { ResponseActivityView } from "$shared/model/conversationModel";
 
+  import { beginAnnotationReview } from "../annotation-review/annotationReviewStore.svelte";
   import ImageGallery from "./ImageGallery.svelte";
   import MarkdownContent from "./MarkdownContent.svelte";
   import { copyMessageText, rawMessageText } from "./copyMessageClient";
 
-  let { activity }: { activity: ResponseActivityView } = $props();
+  let { activity, sessionId }: { activity: ResponseActivityView; sessionId: string } = $props();
   const copyText = $derived(rawMessageText(activity.blocks));
 </script>
 
@@ -21,6 +22,15 @@
       <button type="button" aria-label="Copy assistant response" title="Copy raw response text" onclick={() => copyMessageText(activity.blocks)}>
         <span class="codicon codicon-copy" aria-hidden="true"></span>
         <span>Copy</span>
+      </button>
+      <button
+        type="button"
+        aria-label="Annotate assistant response"
+        title="Annotate this response"
+        onclick={() => beginAnnotationReview(sessionId, copyText)}
+      >
+        <span class="codicon codicon-comment-discussion" aria-hidden="true"></span>
+        <span>Annotate</span>
       </button>
     </div>
   {/if}

@@ -1,8 +1,20 @@
 <script lang="ts">
+  import { pruneAnnotationReviews } from "./features/annotation-review/annotationReviewStore.svelte";
   import OnboardingView from "./features/onboarding/OnboardingView.svelte";
   import PanelShell from "./shell/PanelShell.svelte";
   import SidebarShell from "./shell/SidebarShell.svelte";
   import { presentationStore, toastStore } from "./state/sessionViewStore.svelte";
+
+  $effect(() => {
+    const presentation = $presentationStore;
+    const sessionIds = presentation.surface.kind === "panel"
+      ? presentation.displayedSession ? [presentation.displayedSession.id] : []
+      : [
+          ...presentation.sessions.map(({ id }) => id),
+          ...(presentation.displayedSession ? [presentation.displayedSession.id] : []),
+        ];
+    pruneAnnotationReviews(sessionIds);
+  });
 </script>
 
 <main class="frostpi-root">

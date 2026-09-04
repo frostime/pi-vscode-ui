@@ -73,7 +73,7 @@
   {:else if item.type === "tool"}
     <ToolActivity activity={item} />
   {:else if item.type === "response"}
-    <ResponseActivity activity={item} />
+    <ResponseActivity activity={item} sessionId={session.id} />
   {:else if item.type === "notice"}
     <SessionNotice notice={item} />
   {:else if item.type === "compaction"}
