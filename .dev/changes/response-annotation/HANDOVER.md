@@ -1,6 +1,7 @@
 ---
 title: Response annotation implementation handover
 created: 2026-09-05T02:18:23+08:00
+consumed: false
 ---
 
 ## Assume Reader
@@ -64,10 +65,10 @@ After the final hardening changes:
 ## File Reference Map
 
 - Accepted direction and diff prediction: [`response-annotation.SHAPE.md`](response-annotation.SHAPE.md)
-- Durable feature contract: [`../../../apps/vscode/src/webview/features/annotation-review/annotation-review.SPEC.md`](../../../apps/vscode/src/webview/features/annotation-review/annotation-review.SPEC.md)
-- Main review UI: [`../../../apps/vscode/src/webview/features/annotation-review/ResponseAnnotationWorkspace.svelte`](../../../apps/vscode/src/webview/features/annotation-review/ResponseAnnotationWorkspace.svelte)
-- Review state: [`../../../apps/vscode/src/webview/features/annotation-review/annotationReviewStore.svelte.ts`](../../../apps/vscode/src/webview/features/annotation-review/annotationReviewStore.svelte.ts)
-- Prompt formatter: [`../../../apps/vscode/src/webview/features/annotation-review/annotationPrompt.ts`](../../../apps/vscode/src/webview/features/annotation-review/annotationPrompt.ts)
-- Conversation trigger: [`../../../apps/vscode/src/webview/features/conversation/ResponseActivity.svelte`](../../../apps/vscode/src/webview/features/conversation/ResponseActivity.svelte)
-- Stage/Composer coordination: [`../../../apps/vscode/src/webview/shell/SessionInteraction.svelte`](../../../apps/vscode/src/webview/shell/SessionInteraction.svelte)
-- Draft composition: [`../../../apps/vscode/src/webview/features/composer/composerDraftSync.ts`](../../../apps/vscode/src/webview/features/composer/composerDraftSync.ts)
+- Durable feature contract: [`annotation-review.SPEC.md`](/apps/vscode/src/webview/features/annotation-review/annotation-review.SPEC.md)
+- Main review UI: [`ResponseAnnotationWorkspace.svelte`](/apps/vscode/src/webview/features/annotation-review/ResponseAnnotationWorkspace.svelte)
+- Review state: [`annotationReviewStore.svelte.ts`](/apps/vscode/src/webview/features/annotation-review/annotationReviewStore.svelte.ts)
+- Prompt formatter: [`annotationPrompt.ts`](/apps/vscode/src/webview/features/annotation-review/annotationPrompt.ts)
+- Conversation trigger: [ResponseActivity.svelte`](/apps/vscode/src/webview/features/conversation/ResponseActivity.svelte)
+- Stage/Composer coordination: [`SessionInteraction.svelte`](/apps/vscode/src/webview/shell/SessionInteraction.svelte)
+- Draft composition: [`composerDraftSync.ts`](/apps/vscode/src/webview/features/composer/composerDraftSync.ts)
