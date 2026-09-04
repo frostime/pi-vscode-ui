@@ -1,0 +1,1008 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FrostPi · Response Annotation Prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #181818;
+      --bg-alt: #1e1e1e;
+      --surface: #252526;
+      --surface-raised: #2d2d2d;
+      --surface-hover: #343434;
+      --input: #202020;
+      --text: #d9d9d9;
+      --muted: #999;
+      --faint: #717171;
+      --border: #3a3a3a;
+      --border-soft: #2d2d2d;
+      --accent: #75beff;
+      --accent-soft: rgba(117, 190, 255, 0.14);
+      --accent-mid: rgba(117, 190, 255, 0.25);
+      --danger: #f48771;
+      --success: #89d185;
+      --shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body { overflow: hidden; background: #111; color: var(--text); }
+    button, textarea { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+      outline: 1px solid var(--accent);
+      outline-offset: 2px;
+    }
+    [hidden] { display: none !important; }
+
+    .prototype-frame {
+      width: min(980px, 100%);
+      height: 100%;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+      border-inline: 1px solid var(--border-soft);
+    }
+
+    .session-bar {
+      min-height: 48px;
+      padding: 7px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+      border-bottom: 1px solid var(--border-soft);
+      background: var(--bg-alt);
+    }
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 0 4px rgba(137, 209, 133, 0.12);
+    }
+    .session-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+    .session-state { color: var(--muted); font-size: 11px; }
+    .session-spacer { flex: 1; }
+    .prototype-badge {
+      padding: 2px 5px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--faint);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .screen { min-height: 0; flex: 1; }
+
+    /* Baseline conversation */
+    .conversation-screen {
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+    }
+    .conversation-scroll { min-height: 0; overflow: auto; }
+    .conversation-content {
+      width: min(760px, 100%);
+      margin: 0 auto;
+      padding: 20px 18px 34px;
+    }
+    .user-row { display: flex; justify-content: flex-end; margin-bottom: 15px; }
+    .user-bubble {
+      max-width: min(590px, 88%);
+      padding: 9px 11px;
+      border: 1px solid var(--border);
+      border-radius: 10px 10px 3px 10px;
+      background: var(--surface);
+      line-height: 1.5;
+    }
+    .assistant-response { min-width: 0; line-height: 1.68; }
+    .assistant-response h2 { margin: 17px 0 7px; font-size: 15px; }
+    .assistant-response p { margin: 8px 0; }
+    .assistant-response ul { margin: 7px 0; padding-left: 20px; }
+    .assistant-response blockquote {
+      margin: 10px 0;
+      padding: 6px 10px;
+      border-left: 2px solid var(--accent);
+      background: var(--surface);
+      color: #c8c8c8;
+    }
+    .assistant-response code {
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: var(--surface-raised);
+      font-family: Consolas, monospace;
+      font-size: 0.93em;
+    }
+    .message-actions {
+      min-height: 28px;
+      margin-top: 9px;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      opacity: 0.72;
+    }
+    .message-actions:hover, .message-actions:focus-within { opacity: 1; }
+    .quiet-action {
+      min-height: 25px;
+      padding: 3px 7px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .quiet-action:hover { background: var(--surface-hover); color: var(--text); }
+    .icon { width: 14px; text-align: center; font-size: 13px; }
+
+    .composer-region {
+      padding: 0 10px 10px;
+      border-top: 1px solid transparent;
+      background: linear-gradient(to bottom, transparent, var(--bg) 14px);
+    }
+    .composer-box {
+      width: min(760px, 100%);
+      margin: 0 auto;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--input);
+      box-shadow: 0 3px 12px rgba(0,0,0,.18);
+    }
+    .composer-draft {
+      width: 100%;
+      min-height: 68px;
+      max-height: 210px;
+      padding: 10px 11px 4px;
+      resize: vertical;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .composer-toolbar {
+      min-height: 35px;
+      padding: 4px 6px 6px 9px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--faint);
+      font-size: 10px;
+    }
+    .model-name { color: var(--muted); }
+    .send-button {
+      width: 27px;
+      height: 27px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #102333;
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    /* Deliberate, temporary review workspace */
+    .review-screen {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      background: var(--bg);
+    }
+    .review-toolbar {
+      min-height: 50px;
+      padding: 7px 11px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      border-bottom: 1px solid var(--border-soft);
+      background: var(--bg-alt);
+    }
+    .back-button {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      cursor: pointer;
+      font-size: 17px;
+    }
+    .back-button:hover { background: var(--surface-hover); }
+    .review-heading { min-width: 0; }
+    .review-title { font-size: 12.5px; font-weight: 650; }
+    .review-subtitle {
+      margin-top: 2px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 10px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .note-count {
+      min-width: 20px;
+      padding: 2px 6px;
+      border-radius: 9px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      text-align: center;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .review-layout {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(225px, 29%);
+      overflow: hidden;
+    }
+    .source-pane, .notes-pane {
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .source-pane { border-right: 1px solid var(--border-soft); }
+    .pane-heading {
+      min-height: 38px;
+      padding: 7px 13px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex: 0 0 auto;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--muted);
+      font-size: 10.5px;
+    }
+    .pane-heading strong { color: var(--text); font-size: 11px; }
+    .raw-label {
+      margin-left: auto;
+      padding: 2px 5px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--faint);
+      font-size: 9px;
+    }
+    .source-scroll, .notes-list { min-height: 0; overflow: auto; }
+    .source-scroll { flex: 1; }
+    .review-source {
+      width: min(720px, 100%);
+      min-height: 100%;
+      margin: 0 auto;
+      padding: 23px 25px 60px;
+      color: #d7d7d7;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: 12.5px;
+      line-height: 1.82;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      cursor: text;
+      user-select: text;
+    }
+    .review-source::selection, .review-source *::selection { background: var(--accent-mid); }
+    .annotation-mark {
+      padding: 1px 0;
+      border-radius: 2px;
+      background: var(--accent-soft);
+      box-shadow: inset 0 -2px var(--accent);
+      cursor: pointer;
+    }
+    .annotation-mark:hover, .annotation-mark.active { background: var(--accent-mid); }
+    .annotation-mark.overlap { box-shadow: inset 0 -2px var(--accent), inset 0 -5px rgba(117,190,255,.18); }
+
+    .notes-list {
+      flex: 1;
+      padding: 7px;
+    }
+    .notes-empty {
+      padding: 34px 14px;
+      color: var(--faint);
+      text-align: center;
+      font-size: 10.5px;
+      line-height: 1.6;
+    }
+    .notes-empty-symbol {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 19px;
+    }
+    .note-card {
+      width: 100%;
+      margin-bottom: 5px;
+      padding: 9px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+    }
+    .note-card:hover, .note-card.active {
+      border-color: var(--border);
+      background: var(--surface);
+    }
+    .note-number { color: var(--accent); font-size: 9.5px; font-weight: 700; }
+    .note-quote {
+      margin-top: 5px;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      color: var(--muted);
+      font-size: 10.5px;
+      line-height: 1.45;
+    }
+    .note-comment {
+      margin-top: 5px;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      color: var(--text);
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .note-actions { margin-top: 6px; display: flex; gap: 3px; }
+    .mini-button {
+      padding: 2px 5px;
+      border: 0;
+      border-radius: 3px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 9.5px;
+    }
+    .mini-button:hover { background: var(--surface-hover); color: var(--text); }
+    .mini-button.danger:hover { color: var(--danger); }
+
+    .review-footer {
+      min-height: 54px;
+      padding: 8px 11px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-alt);
+    }
+    .review-tip { color: var(--muted); font-size: 10px; }
+    .review-tip strong { color: var(--text); }
+    .button {
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .button:hover:not(:disabled) { background: var(--surface-hover); }
+    .button.primary { border-color: var(--accent); background: var(--accent); color: #102333; font-weight: 650; }
+    .button:disabled { opacity: 0.42; cursor: default; }
+
+    /* Selection-attached note editor */
+    .note-editor {
+      position: fixed;
+      z-index: 30;
+      width: min(380px, calc(100vw - 20px));
+      overflow: hidden;
+      border: 1px solid #505050;
+      border-radius: 8px;
+      background: var(--surface-raised);
+      box-shadow: var(--shadow);
+    }
+    .note-editor-header {
+      min-height: 34px;
+      padding: 6px 8px 6px 10px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .editor-close {
+      margin-left: auto;
+      width: 23px;
+      height: 23px;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .editor-close:hover { background: var(--surface-hover); color: var(--text); }
+    .selected-quote {
+      max-height: 76px;
+      padding: 8px 10px;
+      overflow: auto;
+      border-bottom: 1px solid var(--border-soft);
+      background: var(--accent-soft);
+      color: var(--muted);
+      font-size: 10.5px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .note-input {
+      width: 100%;
+      min-height: 104px;
+      padding: 9px 10px;
+      resize: vertical;
+      border: 0;
+      outline: 0;
+      background: var(--input);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .note-editor-footer {
+      min-height: 38px;
+      padding: 5px 7px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-top: 1px solid var(--border);
+    }
+    .keyboard-hint { color: var(--faint); font-size: 9.5px; }
+
+    .toast {
+      position: fixed;
+      right: 12px;
+      bottom: 12px;
+      z-index: 50;
+      max-width: calc(100vw - 24px);
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-raised);
+      box-shadow: var(--shadow);
+      color: var(--text);
+      font-size: 10.5px;
+    }
+
+    @media (max-width: 720px) {
+      .review-layout { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
+      .source-pane { border-right: 0; }
+      .notes-pane { max-height: 210px; border-top: 1px solid var(--border); }
+      .notes-pane .pane-heading { min-height: 32px; }
+      .notes-list { display: flex; gap: 6px; overflow-x: auto; }
+      .note-card { min-width: min(245px, 82vw); margin: 0; }
+      .review-source { padding: 19px 15px 48px; }
+    }
+
+    @media (max-width: 410px) {
+      .conversation-content { padding-inline: 11px; }
+      .session-state, .review-subtitle, .prototype-badge, .review-tip, .raw-label,
+      .review-footer .session-spacer, #discardButton { display: none; }
+      .review-toolbar { min-height: 44px; }
+      #insertButton { width: 100%; min-width: 0; }
+      .note-editor {
+        top: auto !important;
+        right: 7px;
+        bottom: 7px;
+        left: 7px !important;
+        width: auto;
+      }
+      .message-actions .quiet-action span:last-child { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="prototype-frame">
+    <header class="session-bar">
+      <span class="status-dot" aria-hidden="true"></span>
+      <div class="session-title">Response annotation · interaction proposal</div>
+      <span class="session-state">· ready</span>
+      <span class="session-spacer"></span>
+      <span class="prototype-badge">prototype</span>
+    </header>
+
+    <section id="conversationScreen" class="screen conversation-screen" aria-label="Conversation prototype">
+      <div class="conversation-scroll">
+        <div class="conversation-content">
+          <div class="user-row">
+            <div class="user-bubble">我希望在 FrostPi 中引入类似的批注工具，但不要过度侵入现有交互。</div>
+          </div>
+
+          <article class="assistant-response">
+            <p>我的建议是：不要让普通文本选择自动触发批注，而是在完成的回复旁提供一个明确的 <code>Annotate</code> 操作。</p>
+
+            <h2>为什么使用明确入口</h2>
+            <p>会话中的文本选择通常还承担复制、阅读和打开链接等用途。自动弹出编辑器会让一个原本安静的动作带上额外副作用。</p>
+
+            <blockquote>只有在用户进入审阅工作台之后，选择文本才表示“我要针对这段内容写批注”。</blockquote>
+
+            <p>最终生成的内容不会成为新的协议对象，而只是追加到 Composer 的普通文本。用户仍然可以修改它，并决定何时发送。</p>
+
+            <ul>
+              <li>不自动发送 prompt；</li>
+              <li>不修改 Pi RPC；</li>
+              <li>不在普通对话中保留永久高亮；</li>
+              <li>批注来源是这条回复的原始 Markdown 文本。</li>
+            </ul>
+
+            <div class="message-actions" aria-label="Assistant response actions">
+              <button id="copyResponseButton" class="quiet-action" type="button">
+                <span class="icon" aria-hidden="true">⧉</span><span>Copy</span>
+              </button>
+              <button id="openReviewButton" class="quiet-action" type="button">
+                <span class="icon" aria-hidden="true">✎</span><span>Annotate</span>
+              </button>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <div class="composer-region">
+        <div class="composer-box">
+          <textarea id="composerDraft" class="composer-draft" placeholder="Ask Pi about this workspace…" aria-label="Composer draft"></textarea>
+          <div class="composer-toolbar">
+            <span class="model-name">GPT · High</span>
+            <span class="session-spacer"></span>
+            <span>Ctrl ↵</span>
+            <button class="send-button" type="button" aria-label="Send prototype prompt" title="Prototype only">↑</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="reviewScreen" class="screen review-screen" aria-label="Response annotation workspace" hidden>
+      <header class="review-toolbar">
+        <button id="backButton" class="back-button" type="button" aria-label="Back to conversation">←</button>
+        <div class="review-heading">
+          <div class="review-title">Annotate response</div>
+          <div class="review-subtitle">Select a phrase, sentence, or paragraph to add feedback</div>
+        </div>
+        <span class="session-spacer"></span>
+        <span id="toolbarNoteCount" class="note-count">0</span>
+      </header>
+
+      <div class="review-layout">
+        <main class="source-pane">
+          <div class="pane-heading">
+            <strong>Response</strong>
+            <span>选择文字即可批注</span>
+            <span class="raw-label">RAW MARKDOWN</span>
+          </div>
+          <div class="source-scroll">
+            <div id="reviewSource" class="review-source" tabindex="0" aria-label="Raw assistant response"></div>
+          </div>
+        </main>
+
+        <aside class="notes-pane" aria-label="Annotation list">
+          <div class="pane-heading">
+            <strong>Notes</strong>
+            <span id="sidebarNoteCount">0 条批注</span>
+          </div>
+          <div id="notesList" class="notes-list"></div>
+        </aside>
+      </div>
+
+      <footer class="review-footer">
+        <span class="review-tip"><strong id="footerNoteCount">0</strong> notes · only the generated text enters Composer</span>
+        <span class="session-spacer"></span>
+        <button id="discardButton" class="button" type="button">Discard</button>
+        <button id="insertButton" class="button primary" type="button" disabled>Insert into Composer</button>
+      </footer>
+    </section>
+  </div>
+
+  <section id="noteEditor" class="note-editor" role="dialog" aria-modal="false" aria-labelledby="noteEditorTitle" hidden>
+    <header class="note-editor-header">
+      <span id="noteEditorTitle">Add annotation</span>
+      <button id="closeEditorButton" class="editor-close" type="button" aria-label="Close annotation editor">×</button>
+    </header>
+    <div id="selectedQuote" class="selected-quote"></div>
+    <textarea id="noteInput" class="note-input" placeholder="写下你的批注……" aria-label="Annotation text"></textarea>
+    <footer class="note-editor-footer">
+      <span class="keyboard-hint">Ctrl / ⌘ + Enter</span>
+      <span class="session-spacer"></span>
+      <button id="cancelEditorButton" class="button" type="button">Cancel</button>
+      <button id="saveNoteButton" class="button primary" type="button">Save note</button>
+    </footer>
+  </section>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const responseSource = `我的建议是：不要让普通文本选择自动触发批注，而是在完成的回复旁提供一个明确的 \`Annotate\` 操作。
+
+## 为什么使用明确入口
+
+会话中的文本选择通常还承担复制、阅读和打开链接等用途。自动弹出编辑器会让一个原本安静的动作带上额外副作用。
+
+> 只有在用户进入审阅工作台之后，选择文本才表示“我要针对这段内容写批注”。
+
+最终生成的内容不会成为新的协议对象，而只是追加到 Composer 的普通文本。用户仍然可以修改它，并决定何时发送。
+
+- 不自动发送 prompt；
+- 不修改 Pi RPC；
+- 不在普通对话中保留永久高亮；
+- 批注来源是这条回复的原始 Markdown 文本。`;
+
+      const state = {
+        annotations: [],
+        activeAnnotationId: null,
+        editor: null,
+      };
+
+      const elements = Object.fromEntries([
+        "conversationScreen", "reviewScreen", "openReviewButton", "copyResponseButton",
+        "backButton", "discardButton", "insertButton", "reviewSource", "notesList",
+        "toolbarNoteCount", "sidebarNoteCount", "footerNoteCount", "composerDraft",
+        "noteEditor", "noteEditorTitle", "selectedQuote", "noteInput", "closeEditorButton",
+        "cancelEditorButton", "saveNoteButton", "toast",
+      ].map((id) => [id, document.getElementById(id)]));
+
+      function openReviewWorkspace() {
+        elements.conversationScreen.hidden = true;
+        elements.reviewScreen.hidden = false;
+        renderReview();
+        requestAnimationFrame(() => elements.reviewSource.focus());
+      }
+
+      function returnToConversation({ discard = false } = {}) {
+        if (discard) state.annotations = [];
+        closeNoteEditor();
+        elements.reviewScreen.hidden = true;
+        elements.conversationScreen.hidden = false;
+        renderReview();
+      }
+
+      function requestReturnToConversation() {
+        const hasWork = state.annotations.length > 0 || noteEditorHasText();
+        if (hasWork && !window.confirm("放弃尚未插入 Composer 的批注吗？")) return;
+        returnToConversation({ discard: true });
+      }
+
+      function renderReview() {
+        renderSourceWithHighlights();
+        renderAnnotationList();
+
+        const count = state.annotations.length;
+        elements.toolbarNoteCount.textContent = String(count);
+        elements.sidebarNoteCount.textContent = `${count} 条批注`;
+        elements.footerNoteCount.textContent = String(count);
+        elements.insertButton.disabled = count === 0;
+      }
+
+      function sortedAnnotations() {
+        return [...state.annotations].sort((left, right) =>
+          left.start - right.start || left.end - right.end || left.createdAt - right.createdAt
+        );
+      }
+
+      function renderSourceWithHighlights() {
+        const boundaries = new Set([0, responseSource.length]);
+        state.annotations.forEach((annotation) => {
+          boundaries.add(annotation.start);
+          boundaries.add(annotation.end);
+        });
+
+        const points = [...boundaries].sort((left, right) => left - right);
+        const fragment = document.createDocumentFragment();
+
+        for (let index = 0; index < points.length - 1; index += 1) {
+          const start = points[index];
+          const end = points[index + 1];
+          const text = responseSource.slice(start, end);
+          const coveringAnnotations = state.annotations.filter((annotation) =>
+            annotation.start < end && annotation.end > start
+          );
+
+          if (coveringAnnotations.length === 0) {
+            fragment.append(document.createTextNode(text));
+            continue;
+          }
+
+          const mark = document.createElement("span");
+          mark.className = "annotation-mark";
+          mark.classList.toggle("overlap", coveringAnnotations.length > 1);
+          mark.classList.toggle("active", coveringAnnotations.some(({ id }) => id === state.activeAnnotationId));
+          mark.dataset.annotationIds = coveringAnnotations.map(({ id }) => id).join(",");
+          mark.textContent = text;
+          mark.addEventListener("click", () => focusAnnotation(coveringAnnotations[0].id));
+          fragment.append(mark);
+        }
+
+        elements.reviewSource.replaceChildren(fragment);
+      }
+
+      function renderAnnotationList() {
+        const annotations = sortedAnnotations();
+        elements.notesList.replaceChildren();
+
+        if (annotations.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "notes-empty";
+          empty.innerHTML = '<span class="notes-empty-symbol">✦</span>还没有批注<br>从左侧原文中选择文字';
+          elements.notesList.append(empty);
+          return;
+        }
+
+        annotations.forEach((annotation, index) => {
+          const card = document.createElement("article");
+          card.className = "note-card";
+          card.classList.toggle("active", annotation.id === state.activeAnnotationId);
+          card.dataset.annotationId = annotation.id;
+          card.tabIndex = 0;
+          card.innerHTML = `
+            <div class="note-number">NOTE ${String(index + 1).padStart(2, "0")}</div>
+            <div class="note-quote"></div>
+            <div class="note-comment"></div>
+            <div class="note-actions">
+              <button class="mini-button edit-note" type="button">Edit</button>
+              <button class="mini-button danger delete-note" type="button">Delete</button>
+            </div>`;
+          card.querySelector(".note-quote").textContent = `“${compactText(annotation.quote, 100)}”`;
+          card.querySelector(".note-comment").textContent = annotation.comment;
+          card.addEventListener("click", () => focusAnnotation(annotation.id));
+          card.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") focusAnnotation(annotation.id);
+          });
+          card.querySelector(".edit-note").addEventListener("click", (event) => {
+            event.stopPropagation();
+            editAnnotation(annotation.id);
+          });
+          card.querySelector(".delete-note").addEventListener("click", (event) => {
+            event.stopPropagation();
+            deleteAnnotation(annotation.id);
+          });
+          elements.notesList.append(card);
+        });
+      }
+
+      function readSelection() {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+
+        const range = selection.getRangeAt(0);
+        if (!elements.reviewSource.contains(range.startContainer) || !elements.reviewSource.contains(range.endContainer)) {
+          return null;
+        }
+
+        const prefix = document.createRange();
+        prefix.selectNodeContents(elements.reviewSource);
+        prefix.setEnd(range.startContainer, range.startOffset);
+
+        let start = prefix.toString().length;
+        let end = start + range.toString().length;
+        while (start < end && /\s/.test(responseSource[start])) start += 1;
+        while (end > start && /\s/.test(responseSource[end - 1])) end -= 1;
+        if (end <= start) return null;
+
+        const rects = [...range.getClientRects()];
+        return {
+          start,
+          end,
+          quote: responseSource.slice(start, end),
+          rect: rects.at(-1) ?? range.getBoundingClientRect(),
+        };
+      }
+
+      function handleSourceSelection() {
+        window.setTimeout(() => {
+          const selection = readSelection();
+          if (selection) openNoteEditorForSelection(selection);
+        }, 0);
+      }
+
+      function openNoteEditorForSelection(selection) {
+        if (noteEditorHasText() && !window.confirm("放弃当前未保存的批注并使用新选区吗？")) return;
+        state.editor = { mode: "new", ...selection, annotationId: null };
+        elements.noteEditorTitle.textContent = "Add annotation";
+        elements.selectedQuote.textContent = selection.quote;
+        elements.noteInput.value = "";
+        elements.noteEditor.hidden = false;
+        positionNoteEditor(selection.rect);
+        requestAnimationFrame(() => elements.noteInput.focus());
+      }
+
+      function editAnnotation(annotationId) {
+        const annotation = state.annotations.find(({ id }) => id === annotationId);
+        if (!annotation) return;
+
+        state.activeAnnotationId = annotationId;
+        state.editor = {
+          mode: "edit",
+          start: annotation.start,
+          end: annotation.end,
+          quote: annotation.quote,
+          annotationId,
+          rect: findAnnotationRect(annotationId),
+        };
+        elements.noteEditorTitle.textContent = "Edit annotation";
+        elements.selectedQuote.textContent = annotation.quote;
+        elements.noteInput.value = annotation.comment;
+        elements.noteEditor.hidden = false;
+        renderReview();
+        positionNoteEditor(state.editor.rect);
+        requestAnimationFrame(() => elements.noteInput.focus());
+      }
+
+      function saveNote() {
+        const comment = elements.noteInput.value.trim();
+        if (!comment || !state.editor) {
+          showToast("请先写下批注内容");
+          elements.noteInput.focus();
+          return;
+        }
+
+        if (state.editor.mode === "edit") {
+          const annotation = state.annotations.find(({ id }) => id === state.editor.annotationId);
+          if (annotation) annotation.comment = comment;
+        } else {
+          const id = `note-${Date.now()}`;
+          state.annotations.push({
+            id,
+            start: state.editor.start,
+            end: state.editor.end,
+            quote: state.editor.quote,
+            comment,
+            createdAt: Date.now(),
+          });
+          state.activeAnnotationId = id;
+        }
+
+        closeNoteEditor();
+        clearBrowserSelection();
+        renderReview();
+      }
+
+      function deleteAnnotation(annotationId) {
+        state.annotations = state.annotations.filter(({ id }) => id !== annotationId);
+        if (state.activeAnnotationId === annotationId) state.activeAnnotationId = null;
+        if (state.editor?.annotationId === annotationId) closeNoteEditor();
+        renderReview();
+      }
+
+      function focusAnnotation(annotationId) {
+        state.activeAnnotationId = annotationId;
+        renderReview();
+        requestAnimationFrame(() => {
+          const mark = [...elements.reviewSource.querySelectorAll(".annotation-mark")]
+            .find((candidate) => candidate.dataset.annotationIds.split(",").includes(annotationId));
+          mark?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      }
+
+      function findAnnotationRect(annotationId) {
+        return [...elements.reviewSource.querySelectorAll(".annotation-mark")]
+          .find((candidate) => candidate.dataset.annotationIds.split(",").includes(annotationId))
+          ?.getBoundingClientRect() ?? null;
+      }
+
+      function positionNoteEditor(anchor) {
+        if (!anchor || window.innerWidth <= 410) return;
+        const editorWidth = Math.min(380, window.innerWidth - 20);
+        const estimatedHeight = 276;
+        const margin = 10;
+        let left = Math.min(anchor.left, window.innerWidth - editorWidth - margin);
+        let top = anchor.bottom + 8;
+        if (top + estimatedHeight > window.innerHeight - margin) top = anchor.top - estimatedHeight - 8;
+        left = Math.max(margin, left);
+        top = Math.max(margin, top);
+        elements.noteEditor.style.left = `${Math.round(left)}px`;
+        elements.noteEditor.style.top = `${Math.round(top)}px`;
+      }
+
+      function closeNoteEditor() {
+        state.editor = null;
+        elements.noteEditor.hidden = true;
+        elements.noteInput.value = "";
+      }
+
+      function noteEditorHasText() {
+        return !elements.noteEditor.hidden && elements.noteInput.value.trim().length > 0;
+      }
+
+      function buildPrompt() {
+        const sections = ["请结合以下对你此前回复的批注继续处理："];
+        sortedAnnotations().forEach((annotation, index) => {
+          const number = String(index + 1).padStart(2, "0");
+          const quote = annotation.quote.trim().split("\n").map((line) => `> ${line}`).join("\n");
+          sections.push(`--- 批注 ${number} ---\n\n${quote}\n\n批注：${annotation.comment}`);
+        });
+        return sections.join("\n\n");
+      }
+
+      function insertPromptIntoComposer() {
+        if (state.annotations.length === 0) return;
+        const generatedPrompt = buildPrompt();
+        const existingDraft = elements.composerDraft.value;
+        elements.composerDraft.value = existingDraft.trim()
+          ? `${existingDraft}\n\n${generatedPrompt}`
+          : generatedPrompt;
+        state.annotations = [];
+        state.activeAnnotationId = null;
+        returnToConversation();
+        requestAnimationFrame(() => {
+          elements.composerDraft.focus();
+          elements.composerDraft.setSelectionRange(elements.composerDraft.value.length, elements.composerDraft.value.length);
+        });
+        showToast("批注已追加到 Composer；尚未发送");
+      }
+
+      function compactText(text, maximumLength) {
+        const compact = text.replace(/\s+/g, " ").trim();
+        return compact.length <= maximumLength ? compact : `${compact.slice(0, maximumLength - 1)}…`;
+      }
+
+      function clearBrowserSelection() {
+        window.getSelection()?.removeAllRanges();
+      }
+
+      let toastTimer = null;
+      function showToast(message) {
+        window.clearTimeout(toastTimer);
+        elements.toast.textContent = message;
+        elements.toast.hidden = false;
+        toastTimer = window.setTimeout(() => { elements.toast.hidden = true; }, 1800);
+      }
+
+      async function copyResponse() {
+        try {
+          await navigator.clipboard.writeText(responseSource);
+          showToast("已复制原始回复文本");
+        } catch {
+          showToast("当前浏览器不允许原型访问剪贴板");
+        }
+      }
+
+      elements.openReviewButton.addEventListener("click", openReviewWorkspace);
+      elements.copyResponseButton.addEventListener("click", copyResponse);
+      elements.backButton.addEventListener("click", requestReturnToConversation);
+      elements.discardButton.addEventListener("click", requestReturnToConversation);
+      elements.insertButton.addEventListener("click", insertPromptIntoComposer);
+      elements.reviewSource.addEventListener("pointerup", handleSourceSelection);
+      elements.closeEditorButton.addEventListener("click", closeNoteEditor);
+      elements.cancelEditorButton.addEventListener("click", closeNoteEditor);
+      elements.saveNoteButton.addEventListener("click", saveNote);
+      elements.noteInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          saveNote();
+        }
+      });
+      window.addEventListener("resize", () => {
+        if (!elements.noteEditor.hidden && state.editor) positionNoteEditor(state.editor.rect);
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        if (!elements.noteEditor.hidden) closeNoteEditor();
+        else if (!elements.reviewScreen.hidden) requestReturnToConversation();
+      });
+
+      renderReview();
+      if (new URLSearchParams(window.location.search).get("view") === "review") {
+        openReviewWorkspace();
+      }
+    })();
+  </script>
+</body>
+</html>
