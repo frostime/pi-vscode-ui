@@ -4,7 +4,7 @@ description: Compact map from product features to owning modules, entry points, 
 scope:
   - /apps/vscode/**
   - /packages/pi-rpc/**
-updated: 2026-07-28
+updated: 2026-09-04
 ---
 
 # Feature → Code Map
@@ -50,6 +50,11 @@ Use this map when the feature is known but its owner is not. Paths name owners a
 
 - Owner: `apps/vscode/src/webview/features/conversation/`; scrolling lives in `apps/vscode/src/webview/features/conversation/scrolling/`.
 - Entry points/contracts: `apps/vscode/src/webview/features/conversation/ConversationView.svelte`, `apps/vscode/src/webview/features/conversation/markdown/renderMarkdown.ts` (`markdown-it`), and `apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md`; cross-feature scroll ownership is in `.dev/docs/design/ui-spec.md`.
+
+## Response annotation review
+
+- Owner: `apps/vscode/src/webview/features/annotation-review/`; shell coordination is in `apps/vscode/src/webview/shell/SessionInteraction.svelte`.
+- Entry points/contracts: `ResponseAnnotationWorkspace.svelte`, `annotationPrompt.ts`, and `annotation-review.SPEC.md`.
 
 ## Models and thinking level
 

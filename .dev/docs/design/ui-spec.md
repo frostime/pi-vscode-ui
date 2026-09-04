@@ -3,7 +3,7 @@ title: UI Design Specification
 description: Cross-feature visual, layout, accessibility, theme, and user-owned interaction constraints.
 scope:
   - /apps/vscode/src/webview/**
-updated: 2026-08-16
+updated: 2026-09-04
 ---
 
 # UI Design Specification
@@ -18,6 +18,7 @@ FrostPi uses a first-party VS Code visual language: compact, low-noise, keyboard
 - Use semantic FrostPi variables mapped from VS Code variables. Respect editor zoom; avoid fixed widths, large shadows, gradients, and pill-heavy chrome.
 - The session shell may narrow or hide. Conversation space expands when hidden, while a keyboard-reachable restore control and required-background-input indication remain available.
 - Conversation owns the scrollable transcript region. Composer remains bottom-anchored and may temporarily take the panel while preserving a clear restore path.
+- Response annotation temporarily replaces conversation and Composer only after an explicit action on finalized assistant text. Its source and notes scroll independently when side by side, while the stacked narrow layout uses one bounded workspace scroller. It remains usable at 280px and returns only an ordinary editable Composer draft; required Extension UI requests remain reachable during review.
 - The Question panel and `select`, `confirm`, `input`, and `editor` extension-request UI sit between conversation and Composer, use bounded independent scrolling, and must not take ownership of conversation scrolling. A blocking request's action controls remain reachable while its content scrolls.
 
 ## User-owned interaction state
@@ -25,6 +26,7 @@ FrostPi uses a first-party VS Code visual language: compact, low-noise, keyboard
 - Disclosure and conversation scroll position are user-owned. Live or persisted updates do not reopen collapsed content, resume paused following, or otherwise replace those choices.
 - Initial/session-switch/new-turn navigation may follow output; after the user scrolls away, projected conversation-content updates preserve the viewport and expose a jump-to-latest control. Stats and other scalar session updates do not count as conversation updates.
 - Collapsing a Question request or hiding the session shell does not cancel Host-owned work or pending input.
+- An unfinished response annotation review is presentation-local and may survive displayed-Session switches within that Webview. It is not persisted or transferred between Sidebar and Session Tab presentations.
 
 ## Accessibility
 

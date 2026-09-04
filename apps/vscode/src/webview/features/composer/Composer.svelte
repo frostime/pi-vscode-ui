@@ -44,6 +44,10 @@
   const canSend = $derived((draft.text.trim().length > 0 || draft.images.length > 0) && !unavailable && !pendingRequestId);
   const supportsImages = $derived(modelSupportsImages(session.model));
 
+  export function focusAtEnd(): void {
+    requestAnimationFrame(() => editor?.focusAtEnd());
+  }
+
   $effect(() => {
     const currentSessionId = session.id;
     if (expandedSessionId === null) {

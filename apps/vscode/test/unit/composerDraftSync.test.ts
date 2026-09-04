@@ -7,7 +7,7 @@ const bridge = vi.hoisted(() => ({ postToHost: vi.fn<(message: WebviewToHostPayl
 vi.mock("../../src/webview/bridge/vscodeBridge.js", () => bridge);
 
 const { composerDrafts } = await import("../../src/webview/features/composer/composerDraftStore.svelte.js");
-const { applyHostDraft, updateDraft } = await import("../../src/webview/features/composer/composerDraftSync.js");
+const { applyHostDraft, prefixDraftText, updateDraft } = await import("../../src/webview/features/composer/composerDraftSync.js");
 
 describe("Webview Composer draft synchronization", () => {
   beforeEach(() => {
@@ -48,6 +48,30 @@ describe("Webview Composer draft synchronization", () => {
     expect(first?.type === "updateComposerDraft" && first.draft.addedImages).toHaveLength(1);
     expect(second?.type === "updateComposerDraft" && second.draft.addedImages).toEqual([]);
     expect(second?.type === "updateComposerDraft" && second.draft.imageIds).toEqual(["image"]);
+  });
+
+  it("prefixes generated context without changing existing text or attachments", () => {
+    updateDraft("session", "host", () => ({
+      text: "user instruction",
+      images: [{ id: "image", name: "shot.png", mimeType: "image/png", data: "AA==", dataUrl: "data:image/png;base64,AA==", size: 1 }],
+    }));
+    bridge.postToHost.mockClear();
+
+    const next = prefixDraftText("session", "host", "annotation block");
+
+    expect(next.text).toBe("annotation block\n\nuser instruction");
+    expect(next.images.map(({ id }) => id)).toEqual(["image"]);
+    const posted = bridge.postToHost.mock.calls[0]?.[0];
+    expect(posted?.type).toBe("updateComposerDraft");
+    if (posted?.type !== "updateComposerDraft") throw new Error("Expected a Composer draft update");
+    expect(posted.sessionId).toBe("session");
+    expect(posted.draft.text).toBe("annotation block\n\nuser instruction");
+    expect(posted.draft.imageIds).toEqual(["image"]);
+    expect(posted.draft.addedImages).toEqual([]);
+  });
+
+  it("leaves the caret line after a prefixed block when the draft is empty", () => {
+    expect(prefixDraftText("session", "webview", "annotation block").text).toBe("annotation block\n\n");
   });
 
   it("applies authoritative Host replacements without echoing them", () => {

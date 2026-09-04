@@ -59,6 +59,13 @@ export function insertDraftText(sessionId: string, authority: DraftAuthority, te
   });
 }
 
+export function prefixDraftText(sessionId: string, authority: DraftAuthority, text: string): SessionDraft {
+  return updateDraft(sessionId, authority, (draft) => ({
+    ...draft,
+    text: `${text}\n\n${draft.text}`,
+  }));
+}
+
 export function setDraftText(sessionId: string, authority: DraftAuthority, text: string): SessionDraft {
   return updateDraft(sessionId, authority, (draft) => ({ ...draft, text }));
 }
