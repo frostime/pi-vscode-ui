@@ -5,6 +5,7 @@
   import ImageGallery from "./ImageGallery.svelte";
   import MarkdownContent from "./MarkdownContent.svelte";
   import { copyMessageText, rawMessageText } from "./copyMessageClient";
+  import { formatMessageTimestamp } from "./messageTimestamp";
   import { pendingForkEntryId, requestMessageFork } from "./forkMessageClient";
   import { requestBranchHere } from "./sessionTreeClient";
 
@@ -15,6 +16,7 @@
   );
   const pending = $derived($pendingForkEntryId === message.sourceEntryId);
   const copyText = $derived(rawMessageText(message.blocks));
+  const sentAtLabel = $derived(formatMessageTimestamp(message.timestamp));
 </script>
 
 <article class="message message-user" data-pi-entry-id={message.sourceEntryId}>
@@ -28,6 +30,13 @@
     </div>
     {#if copyText || message.sourceEntryId}
       <div class="message-actions">
+        {#if sentAtLabel}
+          <time
+            class="action-row-timestamp"
+            datetime={new Date(message.timestamp).toISOString()}
+            title={new Date(message.timestamp).toLocaleString()}
+          >{sentAtLabel}</time>
+        {/if}
         {#if copyText}
           <button type="button" aria-label="Copy user message" title="Copy raw message text" onclick={() => copyMessageText(message.blocks)}>
             <span class="codicon codicon-copy" aria-hidden="true"></span>
@@ -66,4 +75,6 @@
 
 <style>
 .user-message-stack { max-width: 100%; display: flex; flex-direction: column; align-items: flex-end; }
+/* Timestamp leads the hover row; the shared chip style lives in styles/tokens.css. */
+.action-row-timestamp { margin-right: 6px; }
 </style>

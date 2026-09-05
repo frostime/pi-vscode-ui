@@ -5,9 +5,11 @@
   import ImageGallery from "./ImageGallery.svelte";
   import MarkdownContent from "./MarkdownContent.svelte";
   import { copyMessageText, rawMessageText } from "./copyMessageClient";
+  import { formatMessageTimestamp } from "./messageTimestamp";
 
   let { activity, sessionId }: { activity: ResponseActivityView; sessionId: string } = $props();
   const copyText = $derived(rawMessageText(activity.blocks));
+  const completedAtLabel = $derived(formatMessageTimestamp(activity.timestamp));
 </script>
 
 <div class="response-activity" class:response-error={activity.status === "error"}>
@@ -32,6 +34,13 @@
         <span class="codicon codicon-comment-discussion" aria-hidden="true"></span>
         <span>Annotate</span>
       </button>
+      {#if completedAtLabel}
+        <time
+          class="action-row-timestamp"
+          datetime={new Date(activity.timestamp).toISOString()}
+          title={new Date(activity.timestamp).toLocaleString()}
+        >{completedAtLabel}</time>
+      {/if}
     </div>
   {/if}
 </div>
@@ -44,5 +53,7 @@
 /* Sibling chrome crosses component instances; keep unscoped. */
 :global(.response-activity + .response-activity) { padding-top: 0; }
 .response-actions { justify-content: flex-start; }
+/* Timestamp trails the hover row; the shared chip style lives in styles/tokens.css. */
+.response-actions .action-row-timestamp { margin-left: auto; }
 .response-error { color: var(--frost-error); }
 </style>

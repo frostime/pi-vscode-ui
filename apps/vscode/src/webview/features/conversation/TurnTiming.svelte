@@ -2,12 +2,13 @@
   import { onMount } from "svelte";
 
   import { formatTurnDuration } from "./collapseTurnTrace";
+  import { formatTimeOfDay } from "./messageTimestamp";
 
   let { startedAt }: { startedAt: number } = $props();
   let now = $state(Date.now());
 
   const elapsedLabel = $derived(formatTurnDuration(startedAt, now) ?? "<1s");
-  const startedLabel = $derived(formatStartTime(startedAt));
+  const startedLabel = $derived(formatTimeOfDay(startedAt));
 
   onMount(() => {
     const update = (): void => {
@@ -18,14 +19,6 @@
     const timer = window.setInterval(update, 1_000);
     return () => window.clearInterval(timer);
   });
-
-  function formatStartTime(timestamp: number): string {
-    return new Intl.DateTimeFormat(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(timestamp);
-  }
 </script>
 
 <div class="turn-timing">

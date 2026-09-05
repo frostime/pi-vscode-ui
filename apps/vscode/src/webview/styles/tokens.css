@@ -110,6 +110,15 @@
 }
 .message-actions button:hover:not(:disabled) { color: var(--frost-text); background: var(--frost-hover); }
 .message-actions button:disabled { opacity: .5; cursor: default; }
+/* Timestamp chip shared by user and response action rows; each row positions it
+   (user row leads the buttons, response row trails at the far end). */
+.action-row-timestamp {
+  align-self: center;
+  color: var(--frost-faint);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .message-assistant { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 8px; }
 .assistant-gutter { padding-top: 2px; color: var(--frost-muted); }
 .assistant-mark {
