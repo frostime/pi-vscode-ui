@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-05
+
 ### Added
 
 - Show a compact timestamp in the hover action rows of user prompts and assistant responses: time only for today, a locale "yesterday" marker for the previous day, and the date (plus year) for older messages. Streaming responses and malformed timestamps render no label.
@@ -412,7 +414,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.2...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.2...v0.14.0
 [0.13.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.12.0...v0.13.0
