@@ -8,7 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Show a compact timestamp in the hover action rows of user prompts and assistant responses: time only for today, a locale "yesterday" marker for the previous day, and the date (plus year) for older messages. Streaming responses and malformed timestamps render no label.
 - Annotate finalized assistant responses in a temporary review workspace, collect source-linked notes, and insert the resulting annotation block before the existing Composer draft without sending it automatically.
+
+### Fixed
+
+- Render midnight on the running-turn timing bar as 00:xx instead of 24:xx in locales where the previous 24-hour formatting produced that.
 
 ## [0.13.2] - 2026-08-29
 ### Added
