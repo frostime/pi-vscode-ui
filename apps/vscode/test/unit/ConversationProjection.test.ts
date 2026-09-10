@@ -498,6 +498,42 @@ describe("ConversationProjection", () => {
     expect(projectedTool(projection, "t1")).toMatchObject({ status: "complete", output: "final", isError: false, endedAt: 3 });
   });
 
+  it("projects per-call diffs from live and persisted tool results", () => {
+    const liveProjection = new ConversationProjection();
+    liveProjection.appendUserPrompt("Edit", [], 1);
+    liveProjection.applyEvent({ type: "agent_start" });
+    liveProjection.applyEvent({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "t1", name: "edit", arguments: { path: "a.ts" } }],
+        stopReason: "toolUse",
+        timestamp: 2,
+      },
+    });
+    liveProjection.applyEvent({
+      type: "tool_execution_end",
+      toolCallId: "t1",
+      toolName: "edit",
+      result: {
+        content: [{ type: "text", text: "edited" }],
+        details: { diff: "-1 old\n+1 new", patch: "unused" },
+      },
+      isError: false,
+    });
+
+    expect(projectedTool(liveProjection, "t1")?.diff).toBe("-1 old\n+1 new");
+
+    const persistedProjection = new ConversationProjection();
+    persistedProjection.replaceEntries([
+      userEntry("u1", null, "Edit", 1),
+      assistantEntry("a1", "u1", [{ type: "toolCall", id: "t1", name: "edit", arguments: { path: "a.ts" } }], "toolUse", 2),
+      toolResultEntry("r1", "a1", "t1", "edited", 3, false, { diff: "-1 old\n+1 new" }),
+    ], []);
+
+    expect(projectedTool(persistedProjection, "t1")?.diff).toBe("-1 old\n+1 new");
+  });
+
   it("keeps persisted tool failures authoritative", () => {
     const projection = new ConversationProjection();
     projection.replaceEntries([
@@ -954,13 +990,22 @@ function toolResultEntry(
   output: string,
   timestamp: number,
   isError = false,
+  details?: Record<string, unknown>,
 ): RpcSessionEntry {
   return {
     type: "message",
     id,
     parentId,
     timestamp,
-    message: { role: "toolResult", toolCallId, toolName: "read", content: [{ type: "text", text: output }], isError, timestamp },
+    message: {
+      role: "toolResult",
+      toolCallId,
+      toolName: "read",
+      content: [{ type: "text", text: output }],
+      ...(details ? { details } : {}),
+      isError,
+      timestamp,
+    },
   };
 }
 

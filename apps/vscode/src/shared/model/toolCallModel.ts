@@ -19,6 +19,7 @@ export interface BoundToolCallView extends ToolCallBase {
   label: string;
   args: Record<string, unknown>;
   output?: string;
+  diff?: string;
   filePath?: string;
   line?: number;
 }

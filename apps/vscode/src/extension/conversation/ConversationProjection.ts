@@ -33,7 +33,7 @@ import {
   assistantPartsFromMessage,
   PiAssistantMessageAdapter,
 } from "./PiAssistantMessageAdapter.js";
-import { contentToBlocks, createToolView, extractText, isRecord, recordValue, stringValue } from "./messageAssembler.js";
+import { contentToBlocks, createToolView, extractText, extractToolDiff, isRecord, recordValue, stringValue } from "./messageAssembler.js";
 
 export interface ActiveBranchEdge {
   branchPointId: string | null;
@@ -367,6 +367,7 @@ export class ConversationProjection {
 
     if (message.role === "toolResult" && typeof message.toolCallId === "string") {
       const turn = this.#persistedTurnFor(entry.id, timestamp);
+      const diff = extractToolDiff(message);
       this.#store.upsertTool({
         source: { kind: "persisted", entryId: entry.id },
         fallbackTurnId: turn.id,
@@ -375,6 +376,7 @@ export class ConversationProjection {
         args: {},
         status: message.isError === true ? "error" : "complete",
         output: extractText(message.content).slice(-160_000),
+        ...(diff ? { diff } : {}),
         isError: message.isError === true,
         endedAt: timestamp,
         timestamp,
@@ -542,6 +544,7 @@ export class ConversationProjection {
     if (typeof event.toolCallId !== "string") return;
     const turn = this.#liveToolTurnOrCreate(event.toolCallId);
     const isError = event.isError === true;
+    const diff = extractToolDiff(event.result);
     this.#store.upsertTool({
       source: { kind: "live" },
       fallbackTurnId: turn?.id,
@@ -550,6 +553,7 @@ export class ConversationProjection {
       args: recordValue(event.args),
       status: isError ? "error" : "complete",
       output: extractText(event.result).slice(-160_000),
+      ...(diff ? { diff } : {}),
       isError,
       endedAt: Date.now(),
       timestamp: Date.now(),

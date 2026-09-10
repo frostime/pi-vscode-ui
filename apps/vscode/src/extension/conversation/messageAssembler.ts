@@ -57,6 +57,12 @@ export function extractText(value: unknown): string {
   return "";
 }
 
+export function extractToolDiff(value: unknown): string | undefined {
+  if (!isRecord(value) || !isRecord(value.details)) return undefined;
+  const diff = value.details.diff;
+  return typeof diff === "string" && diff.length > 0 ? diff.slice(0, 160_000) : undefined;
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

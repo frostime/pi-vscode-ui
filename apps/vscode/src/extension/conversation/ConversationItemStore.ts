@@ -79,6 +79,7 @@ export interface ToolPlacementUpdate {
   args: Record<string, unknown>;
   status: ToolCallView["status"];
   output?: string;
+  diff?: string;
   isError: boolean;
   endedAt?: number;
   timestamp: number;
@@ -258,6 +259,7 @@ export class ConversationItemStore {
       status: input.status,
       isError: input.isError,
       ...(input.output !== undefined ? { output: input.output } : currentTool?.output !== undefined ? { output: currentTool.output } : {}),
+      ...(input.diff !== undefined ? { diff: input.diff } : currentTool?.diff !== undefined ? { diff: currentTool.diff } : {}),
       ...(input.endedAt !== undefined ? { endedAt: input.endedAt } : currentTool?.endedAt !== undefined ? { endedAt: currentTool.endedAt } : {}),
     };
     const activity: AgentActivityView = {

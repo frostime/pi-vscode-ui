@@ -57,13 +57,16 @@
           <button type="button" onclick={() => postToHost({ type: "openFile", path: tool.filePath!, ...(tool.line ? { line: tool.line } : {}) })}>
             <span class="codicon codicon-go-to-file"></span> Open file
           </button>
-          {#if tool.name === "edit" || tool.name === "write"}
-            <button type="button" onclick={() => postToHost({ type: "openDiff", path: tool.filePath! })}>
-              <span class="codicon codicon-diff"></span> Open diff
-            </button>
-          {/if}
         {/if}
       </div>
+      {#if tool.diff}
+        <div class="tool-section-label">Changes</div>
+        <pre class="tool-diff" aria-label="Changes"><code class="tool-diff-content">{#each diffLines(tool.diff) as line, index (index)}{@const kind = diffLineKind(line)}<span
+          class="tool-diff-line"
+          class:added={kind === "added"}
+          class:removed={kind === "removed"}
+        >{line || " "}</span>{/each}</code></pre>
+      {/if}
       {#if Object.keys(tool.args).length}
         <div class="tool-section-label">Input</div>
         <div class="tool-input">
@@ -103,6 +106,16 @@
     return line.length > 72 ? `${line.slice(0, 69)}…` : line;
   }
 
+  function diffLines(diff: string): string[] {
+    return diff.split(/\r?\n/);
+  }
+
+  function diffLineKind(line: string): "added" | "removed" | "context" {
+    if (line.startsWith("+")) return "added";
+    if (line.startsWith("-")) return "removed";
+    return "context";
+  }
+
   interface RenderedArg {
     kind: "inline" | "block";
     text: string;
@@ -134,8 +147,10 @@
 }
 @keyframes running-breathe { 0%, 100% { opacity: .25; } 50% { opacity: .95; } }
 
-.tool-output::-webkit-scrollbar { width: 9px; height: 9px; }
-.tool-output::-webkit-scrollbar-thumb {
+.tool-output::-webkit-scrollbar,
+.tool-diff::-webkit-scrollbar { width: 9px; height: 9px; }
+.tool-output::-webkit-scrollbar-thumb,
+.tool-diff::-webkit-scrollbar-thumb {
   background: var(--frost-scrollbar);
   border: 2px solid transparent;
   background-clip: padding-box;
@@ -182,6 +197,31 @@
   font: 11px/1.48 var(--font-mono);
   white-space: pre-wrap;
   word-break: break-word;
+}
+.tool-diff {
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px 0;
+  background: var(--frost-code-bg);
+  border-radius: 5px;
+  color: var(--frost-text);
+  font: 11px/1.48 var(--font-mono);
+  white-space: pre;
+}
+.tool-diff-content {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  font: inherit;
+}
+.tool-diff-line { display: block; box-sizing: border-box; padding: 0 8px; color: var(--frost-muted); }
+.tool-diff-line.added {
+  color: var(--vscode-diffEditor-insertedTextForeground, var(--frost-text));
+  background: var(--vscode-diffEditor-insertedTextBackground, color-mix(in srgb, var(--frost-success) 15%, transparent));
+}
+.tool-diff-line.removed {
+  color: var(--vscode-diffEditor-removedTextForeground, var(--frost-text));
+  background: var(--vscode-diffEditor-removedTextBackground, color-mix(in srgb, var(--frost-error) 15%, transparent));
 }
 .tool-input { display: flex; flex-direction: column; gap: 2px; }
 .tool-input-row { display: flex; gap: 6px; align-items: baseline; font: 11px/1.48 var(--font-mono); }
