@@ -12,6 +12,22 @@ export interface PreparingToolCallView extends ToolCallBase {
   rawArguments: string;
 }
 
+export interface RecognizedToolLocationView {
+  path: string;
+  line?: number;
+}
+
+/**
+ * UI metadata recognized from conventional fields in otherwise tool-specific
+ * arguments and result details. These are FrostPi interpretations, not raw Pi fields.
+ */
+export interface RecognizedToolCallView {
+  /** File location recognized from path and line argument conventions. */
+  location?: RecognizedToolLocationView;
+  /** Display-oriented diff recognized from a result details.diff string. */
+  diff?: string;
+}
+
 export interface BoundToolCallView extends ToolCallBase {
   state: "bound";
   id: string;
@@ -19,9 +35,7 @@ export interface BoundToolCallView extends ToolCallBase {
   label: string;
   args: Record<string, unknown>;
   output?: string;
-  diff?: string;
-  filePath?: string;
-  line?: number;
+  recognized?: RecognizedToolCallView;
 }
 
 export type ToolCallView = PreparingToolCallView | BoundToolCallView;

@@ -31,6 +31,9 @@ export function contentToBlocks(content: unknown, attachments: unknown, idPrefix
 export function createToolView(id: string, name: string, args: Record<string, unknown>, startedAt = Date.now()): BoundToolCallView {
   const filePath = toolFilePath(args);
   const line = numericValue(args.line) ?? numericValue(args.start_line) ?? numericValue(args.startLine);
+  const recognized = filePath
+    ? { location: { path: filePath, ...(line ? { line } : {}) } }
+    : undefined;
   return {
     state: "bound",
     id,
@@ -40,8 +43,7 @@ export function createToolView(id: string, name: string, args: Record<string, un
     args,
     isError: false,
     startedAt,
-    ...(filePath ? { filePath } : {}),
-    ...(line ? { line } : {}),
+    ...(recognized ? { recognized } : {}),
   };
 }
 

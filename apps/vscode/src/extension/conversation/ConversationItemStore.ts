@@ -251,6 +251,11 @@ export class ConversationItemStore {
       args,
       currentTool?.startedAt ?? input.timestamp,
     );
+    const recognized = {
+      ...currentTool?.recognized,
+      ...created.recognized,
+      ...(input.diff !== undefined ? { diff: input.diff } : {}),
+    };
     const tool: ToolCallView = {
       ...created,
       ...currentTool,
@@ -259,7 +264,7 @@ export class ConversationItemStore {
       status: input.status,
       isError: input.isError,
       ...(input.output !== undefined ? { output: input.output } : currentTool?.output !== undefined ? { output: currentTool.output } : {}),
-      ...(input.diff !== undefined ? { diff: input.diff } : currentTool?.diff !== undefined ? { diff: currentTool.diff } : {}),
+      ...(Object.keys(recognized).length > 0 ? { recognized } : {}),
       ...(input.endedAt !== undefined ? { endedAt: input.endedAt } : currentTool?.endedAt !== undefined ? { endedAt: currentTool.endedAt } : {}),
     };
     const activity: AgentActivityView = {

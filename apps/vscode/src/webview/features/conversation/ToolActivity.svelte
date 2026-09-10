@@ -52,16 +52,18 @@
       <div class="tool-section-label">Input (raw)</div>
       <pre class="tool-json">{tool.rawArguments}</pre>
     {:else}
+      {@const location = tool.recognized?.location}
+      {@const diff = tool.recognized?.diff}
       <div class="tool-actions">
-        {#if tool.filePath}
-          <button type="button" onclick={() => postToHost({ type: "openFile", path: tool.filePath!, ...(tool.line ? { line: tool.line } : {}) })}>
+        {#if location}
+          <button type="button" onclick={() => postToHost({ type: "openFile", path: location.path, ...(location.line ? { line: location.line } : {}) })}>
             <span class="codicon codicon-go-to-file"></span> Open file
           </button>
         {/if}
       </div>
-      {#if tool.diff}
+      {#if diff}
         <div class="tool-section-label">Changes</div>
-        <pre class="tool-diff" aria-label="Changes"><code class="tool-diff-content">{#each diffLines(tool.diff) as line, index (index)}{@const kind = diffLineKind(line)}<span
+        <pre class="tool-diff" aria-label="Changes"><code class="tool-diff-content">{#each diffLines(diff) as line, index (index)}{@const kind = diffLineKind(line)}<span
           class="tool-diff-line"
           class:added={kind === "added"}
           class:removed={kind === "removed"}

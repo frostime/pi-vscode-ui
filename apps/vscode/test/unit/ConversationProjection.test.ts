@@ -70,7 +70,12 @@ describe("ConversationProjection", () => {
     expect(turn?.items.map((item) => item.type)).toEqual(["tool", "branchControl", "response"]);
     expect(turn?.items[0]).toMatchObject({
       type: "tool",
-      tool: { id: "t1", status: "complete", output: "body" },
+      tool: {
+        id: "t1",
+        status: "complete",
+        output: "body",
+        recognized: { location: { path: "a.ts" } },
+      },
     });
   });
 
@@ -522,7 +527,10 @@ describe("ConversationProjection", () => {
       isError: false,
     });
 
-    expect(projectedTool(liveProjection, "t1")?.diff).toBe("-1 old\n+1 new");
+    expect(projectedTool(liveProjection, "t1")?.recognized).toMatchObject({
+      location: { path: "a.ts" },
+      diff: "-1 old\n+1 new",
+    });
 
     const persistedProjection = new ConversationProjection();
     persistedProjection.replaceEntries([
@@ -531,7 +539,10 @@ describe("ConversationProjection", () => {
       toolResultEntry("r1", "a1", "t1", "edited", 3, false, { diff: "-1 old\n+1 new" }),
     ], []);
 
-    expect(projectedTool(persistedProjection, "t1")?.diff).toBe("-1 old\n+1 new");
+    expect(projectedTool(persistedProjection, "t1")?.recognized).toMatchObject({
+      location: { path: "a.ts" },
+      diff: "-1 old\n+1 new",
+    });
   });
 
   it("keeps persisted tool failures authoritative", () => {
