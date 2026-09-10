@@ -13,7 +13,6 @@ export type MarkdownImageFailureReason =
   | "notAFile"
   | "tooLarge"
   | "unsupportedType"
-  | "invalidDimensions"
   | "readFailed";
 
 export type MarkdownImageLoadResult =
@@ -21,8 +20,6 @@ export type MarkdownImageLoadResult =
       ok: true;
       mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif" | "image/svg+xml";
       data: string;
-      width?: number;
-      height?: number;
     }
   | { ok: false; reason: MarkdownImageFailureReason };
 

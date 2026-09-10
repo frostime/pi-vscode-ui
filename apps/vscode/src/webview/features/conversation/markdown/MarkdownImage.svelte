@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { MarkdownImageFailureReason, MarkdownImageLoadResult } from "$shared/bridge/hostToWebview";
+  import type { MarkdownImageFailureReason } from "$shared/bridge/hostToWebview";
   import { onDestroy, onMount } from "svelte";
 
   import ImageLightbox from "../ImageLightbox.svelte";
-  import { currentMarkdownImageByteLimit, loadLocalMarkdownImage } from "./markdownImageClient";
+  import { loadLocalMarkdownImage } from "./markdownImageClient";
   import { markdownImageCaption } from "./markdownImageCaption";
   import { sanitizeMarkdownSvg } from "./sanitizeMarkdownSvg";
 
@@ -18,8 +18,6 @@
   let root: HTMLSpanElement;
   let phase = $state<Phase>("waiting");
   let imageUrl = $state<string | null>(null);
-  let imageWidth = $state<number | undefined>();
-  let imageHeight = $state<number | undefined>();
   let error = $state<string | null>(null);
   let svgWarning = $state(false);
   let previewOpen = $state(false);
@@ -30,14 +28,9 @@
   const label = $derived(title || alt || "Markdown image");
   const caption = $derived(markdownImageCaption(title, alt));
   const sourceLabel = $derived(remote?.hostname ?? "Local image");
-  const aspectRatio = $derived(imageWidth && imageHeight ? `${imageWidth} / ${imageHeight}` : undefined);
 
   onMount(() => {
     if (remote) return;
-    if (!isLoadableLocalSource(source)) {
-      fail("Unsupported image source");
-      return;
-    }
     if (typeof IntersectionObserver === "undefined") {
       void loadLocalOrDataImage();
       return;
@@ -62,10 +55,6 @@
     try {
       const dataImage = decodeDataImage(source);
       if (dataImage) {
-        if (dataImage.bytes.byteLength > currentMarkdownImageByteLimit()) {
-          fail("Image exceeds the configured size limit");
-          return;
-        }
         await displayBytes(dataImage.mimeType, dataImage.bytes);
         return;
       }
@@ -79,8 +68,6 @@
         fail(failureMessage(result.reason));
         return;
       }
-      imageWidth = result.width;
-      imageHeight = result.height;
       await displayBytes(result.mimeType, decodeBase64(result.data));
     } catch {
       if (!disposed) fail("Unable to load image");
@@ -114,15 +101,7 @@
     imageUrl = ownedObjectUrl;
   }
 
-  function imageLoaded(event: Event): void {
-    const image = event.currentTarget as HTMLImageElement;
-    if (!safeDecodedDimensions(image.naturalWidth, image.naturalHeight)) {
-      imageUrl = null;
-      fail("Image dimensions exceed the display limit");
-      return;
-    }
-    imageWidth ??= image.naturalWidth;
-    imageHeight ??= image.naturalHeight;
+  function imageLoaded(): void {
     phase = "ready";
   }
 
@@ -153,7 +132,6 @@
       notAFile: "Image source is not a file",
       tooLarge: "Image exceeds the configured size limit",
       unsupportedType: "Unsupported image type",
-      invalidDimensions: "Image dimensions exceed the safety limit",
       readFailed: "Unable to read local image",
     };
     return messages[reason];
@@ -166,13 +144,6 @@
     } catch {
       return null;
     }
-  }
-
-  function isLoadableLocalSource(value: string): boolean {
-    if (/^data:/i.test(value)) return decodeDataImage(value) !== null;
-    if (value.length > 32_768) return false;
-    if (/^file:/i.test(value)) return true;
-    return !/^[a-z][a-z\d+.-]*:/i.test(value) || /^[a-z]:[\\/]/i.test(value);
   }
 
   function decodeDataImage(value: string): { mimeType: string; bytes: Uint8Array } | null {
@@ -198,14 +169,11 @@
     return Uint8Array.from(binary, (character) => character.charCodeAt(0));
   }
 
-  function safeDecodedDimensions(width: number, height: number): boolean {
-    return width > 0 && height > 0 && width <= 16_384 && height <= 16_384 && width * height <= 40_000_000;
-  }
 </script>
 
 <span class="markdown-image" bind:this={root}>
   {#if imageUrl}
-    <span class="loaded-image" style:aspect-ratio={aspectRatio} class:image-loading={phase === "loading"}>
+    <span class="loaded-image" class:image-loading={phase === "loading"}>
       {#if linked}
         <img
           src={imageUrl}

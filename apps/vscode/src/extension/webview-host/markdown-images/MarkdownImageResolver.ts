@@ -3,7 +3,7 @@ import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { MarkdownImageLoadResult } from "../../../shared/bridge/hostToWebview.js";
-import { hasSafeRasterDimensions, inspectRasterImage } from "./inspectRasterImage.js";
+import { detectRasterImageMimeType } from "./detectRasterImageMimeType.js";
 
 const URI_SCHEME = /^[a-z][a-z\d+.-]*:/i;
 const WINDOWS_DRIVE_PATH = /^[a-z]:[\\/]/i;
@@ -27,16 +27,9 @@ export async function resolveLocalMarkdownImage(
     if (data.length > maxBytes) return { ok: false, reason: "tooLarge" };
     if (data.length <= 0) return { ok: false, reason: "unsupportedType" };
 
-    const raster = inspectRasterImage(data);
-    if (raster) {
-      if (!hasSafeRasterDimensions(raster)) return { ok: false, reason: "invalidDimensions" };
-      return {
-        ok: true,
-        mimeType: raster.mimeType,
-        data: data.toString("base64"),
-        width: raster.width,
-        height: raster.height,
-      };
+    const rasterMimeType = detectRasterImageMimeType(data);
+    if (rasterMimeType) {
+      return { ok: true, mimeType: rasterMimeType, data: data.toString("base64") };
     }
 
     if (SVG_PREFIX.test(data.toString("utf8"))) {

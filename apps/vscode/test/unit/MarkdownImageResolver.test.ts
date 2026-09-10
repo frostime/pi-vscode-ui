@@ -21,25 +21,23 @@ describe("resolveLocalMarkdownImage", () => {
     await writeFile(join(directory, "100%.png"), png(10, 10));
 
     const relative = await resolveLocalMarkdownImage("misleading.txt", directory, 1024);
-    expect(relative).toMatchObject({ ok: true, mimeType: "image/png", width: 24, height: 12 });
+    expect(relative).toMatchObject({ ok: true, mimeType: "image/png" });
 
     const fileUri = await resolveLocalMarkdownImage(pathToFileURL(path).href, directory, 1024);
-    expect(fileUri).toMatchObject({ ok: true, mimeType: "image/png", width: 24, height: 12 });
+    expect(fileUri).toMatchObject({ ok: true, mimeType: "image/png" });
 
     const literalPercent = await resolveLocalMarkdownImage("100%.png", directory, 1024);
-    expect(literalPercent).toMatchObject({ ok: true, mimeType: "image/png", width: 10, height: 10 });
+    expect(literalPercent).toMatchObject({ ok: true, mimeType: "image/png" });
   });
 
-  it("returns stable failures for absent, oversized, unsupported, and pixel-bomb files", async () => {
+  it("returns stable failures for absent, oversized, and unsupported files", async () => {
     const directory = await temporaryDirectory();
     await writeFile(join(directory, "large.png"), png(20, 20));
     await writeFile(join(directory, "text.png"), "not an image");
-    await writeFile(join(directory, "bomb.png"), png(16_385, 1));
 
     await expect(resolveLocalMarkdownImage("missing.png", directory, 1024)).resolves.toEqual({ ok: false, reason: "notFound" });
     await expect(resolveLocalMarkdownImage("large.png", directory, 20)).resolves.toEqual({ ok: false, reason: "tooLarge" });
     await expect(resolveLocalMarkdownImage("text.png", directory, 1024)).resolves.toEqual({ ok: false, reason: "unsupportedType" });
-    await expect(resolveLocalMarkdownImage("bomb.png", directory, 1024)).resolves.toEqual({ ok: false, reason: "invalidDimensions" });
   });
 
   it("accepts common SVG preambles for browser-side sanitization but rejects non-local protocols", async () => {

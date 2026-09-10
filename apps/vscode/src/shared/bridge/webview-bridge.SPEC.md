@@ -5,7 +5,7 @@ scope:
   - /apps/vscode/src/shared/bridge/**
   - /apps/vscode/src/extension/webview-host/**
   - /apps/vscode/src/webview/bridge/**
-updated: 2026-08-17
+updated: 2026-09-11
 ---
 
 # Webview Bridge Compatibility Contract

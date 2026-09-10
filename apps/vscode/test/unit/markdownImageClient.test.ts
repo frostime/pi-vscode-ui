@@ -26,7 +26,7 @@ describe("markdownImageClient", () => {
     expect(postToHost).toHaveBeenCalledTimes(1);
 
     const request = postToHost.mock.calls[0]![0] as { requestId: string };
-    const result = { ok: true as const, mimeType: "image/png" as const, data: "AA==", width: 1, height: 1 };
+    const result = { ok: true as const, mimeType: "image/png" as const, data: "AA==" };
     deliverMarkdownImageResult(request.requestId, "session-1", result);
 
     await expect(first).resolves.toEqual(result);
@@ -43,8 +43,6 @@ describe("markdownImageClient", () => {
       ok: true,
       mimeType: "image/png",
       data: "AA==",
-      width: 1,
-      height: 1,
     });
   });
 

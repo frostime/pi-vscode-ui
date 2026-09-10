@@ -11,7 +11,6 @@ export function mountMarkdownImages(root: HTMLElement): MountedMarkdownImages {
     const source = target.dataset.imageSource ?? "";
     const alt = target.dataset.imageAlt ?? "";
     const title = target.dataset.imageTitle || undefined;
-    target.replaceChildren();
     return mount(MarkdownImage, {
       target,
       props: { source, alt, title, linked: Boolean(target.closest("a")) },

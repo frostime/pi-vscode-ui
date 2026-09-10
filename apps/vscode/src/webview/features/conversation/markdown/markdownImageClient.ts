@@ -25,10 +25,6 @@ const pending = new Map<string, PendingRequest>();
 const inFlight = new Map<string, Promise<MarkdownImageLoadResult>>();
 const cache = new Map<string, CachedResult>();
 
-export function currentMarkdownImageByteLimit(): number {
-  return get(presentationStore).displayedSession?.attachmentLimits.maxImageBytes ?? 10 * 1024 * 1024;
-}
-
 export function loadLocalMarkdownImage(source: string): Promise<MarkdownImageLoadResult> {
   const sessionId = get(presentationStore).displayedSession?.id;
   if (!sessionId) return Promise.resolve({ ok: false, reason: "invalidSource" });

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Show each Pi tool result's provided diff inside its expanded activity card, including restored history, with themed additions and removals that cover the full horizontally scrollable width.
-- Support render markdown image in conversation
+- Support rendering Markdown images in conversations.
 
 ## [0.14.0] - 2026-09-05
 
