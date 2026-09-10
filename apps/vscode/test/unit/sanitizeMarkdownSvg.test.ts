@@ -21,6 +21,15 @@ describe("sanitizeMarkdownSvg", () => {
     expect(result.removedScripts).toBe(false);
   });
 
+  it("gives viewBox-only SVGs intrinsic dimensions for shrink-to-fit layout", () => {
+    const result = sanitizeMarkdownSvg('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660"><rect width="1200" height="660"/></svg>');
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.svg).toContain('width="1200"');
+    expect(result.svg).toContain('height="660"');
+  });
+
   it("removes script elements and reports the change", () => {
     const result = sanitizeMarkdownSvg(`
       <svg xmlns="http://www.w3.org/2000/svg">
