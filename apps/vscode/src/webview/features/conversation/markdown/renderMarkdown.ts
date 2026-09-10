@@ -2,6 +2,7 @@ import DOMPurify from "dompurify";
 import hljs from "highlight.js/lib/common";
 import MarkdownIt from "markdown-it";
 import type StateBlock from "markdown-it/lib/rules_block/state_block.mjs";
+import imageRule from "markdown-it/lib/rules_inline/image.mjs";
 import type StateInline from "markdown-it/lib/rules_inline/state_inline.mjs";
 
 import { parseFileHref, parseFileReference, type FileReference } from "./fileReferences.js";
@@ -225,6 +226,34 @@ function fileReferenceAttributes(reference: FileReference): string {
   ].join(" ");
 }
 
+function applyImagePlugin(md: MarkdownIt): void {
+  const validateLink = md.validateLink.bind(md);
+  // markdown-it rejects file: destinations before rendering. Relax that check
+  // only while parsing image syntax; ordinary links retain the existing policy.
+  md.inline.ruler.at("image", (state, silent) => {
+    state.md.validateLink = (url) => /^file:/i.test(url) || validateLink(url);
+    try {
+      return imageRule(state, silent);
+    } finally {
+      state.md.validateLink = validateLink;
+    }
+  });
+
+  md.renderer.rules.image = (tokens, idx, options, env) => {
+    const token = tokens[idx]!;
+    const source = token.attrGet("src") ?? "";
+    const title = token.attrGet("title");
+    const alt = md.renderer.renderInlineAsText(token.children ?? [], options, env);
+    return [
+      `<span data-markdown-image="true"`,
+      ` data-image-source="${escapeHtml(source)}"`,
+      ` data-image-alt="${escapeHtml(alt)}"`,
+      ...(title ? [` data-image-title="${escapeHtml(title)}"`] : []),
+      `></span>`,
+    ].join("");
+  };
+}
+
 function applyFileLinkPlugin(md: MarkdownIt): void {
   md.renderer.rules.code_inline = (tokens, idx) => {
     const content = tokens[idx]!.content;
@@ -277,6 +306,7 @@ markdown.renderer.rules.code_block = (tokens, idx) => renderFenceHtml(tokens[idx
 
 markdown.linkify.set({ fuzzyLink: false });
 applyMathPlugin(markdown);
+applyImagePlugin(markdown);
 applyFileLinkPlugin(markdown);
 
 export function renderMarkdownHtml(content: string): string {
@@ -292,6 +322,10 @@ export function renderMarkdownHtml(content: string): string {
       "data-file-line",
       "data-file-column",
       "data-file-end-line",
+      "data-markdown-image",
+      "data-image-source",
+      "data-image-alt",
+      "data-image-title",
     ],
     ADD_TAGS: ["annotation", "semantics"],
   });
@@ -355,5 +389,19 @@ export function sanitizeSvg(svg: string): string {
 /** Fail closed: never return unsanitized Mermaid output. */
 export function sanitizeMermaidSvg(svg: string): string | null {
   const cleaned = sanitizeSvg(svg);
-  return cleaned.includes("<svg") ? cleaned : null;
+  if (!cleaned.includes("<svg")) return null;
+
+  // The Webview permits HTTPS images only for the explicit Markdown-image
+  // consent flow. Mermaid output must not gain an implicit network channel.
+  const document = new DOMParser().parseFromString(cleaned, "text/html");
+  const root = document.querySelector("svg");
+  if (!root) return null;
+  for (const element of [root, ...root.querySelectorAll("*")]) {
+    if (element.localName.toLowerCase() === "a") continue;
+    for (const name of ["src", "href", "xlink:href"]) {
+      const value = element.getAttribute(name)?.trim();
+      if (value && !value.startsWith("#") && !value.startsWith("data:")) element.removeAttribute(name);
+    }
+  }
+  return root.outerHTML;
 }

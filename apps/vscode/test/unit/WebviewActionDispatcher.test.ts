@@ -14,6 +14,7 @@ describe("Session Tab Host authorization", () => {
   function setup() {
     const registry = {
       hasSession: vi.fn(() => true),
+      sessionView: vi.fn(() => ({ cwd: "C:/workspace", attachmentLimits: { maxImageBytes: 1024 } })),
       createSession: vi.fn(),
       activateSession: vi.fn(),
       closeSession: vi.fn(),
@@ -69,6 +70,42 @@ describe("Session Tab Host authorization", () => {
 
     expect(registry.activateSession).toHaveBeenCalledWith("other");
     expect(registry.closeSession).toHaveBeenCalledWith("other");
+  });
+
+  it("returns local Markdown image failures inline to the originating connection", async () => {
+    const { dispatcher, posted, connection } = setup();
+    await dispatcher.dispatch({
+      type: "loadMarkdownImage",
+      bridgeVersion: "3.1",
+      requestId: "image-1",
+      sessionId: "source",
+      source: "missing.png",
+    } as never, connection);
+
+    expect(posted).toEqual([{
+      type: "markdownImageResult",
+      requestId: "image-1",
+      sessionId: "source",
+      result: { ok: false, reason: "notFound" },
+    }]);
+  });
+
+  it("returns a correlated inline failure when the displayed Session changes before an image read", async () => {
+    const { dispatcher, posted, connection } = setup();
+    await dispatcher.dispatch({
+      type: "loadMarkdownImage",
+      bridgeVersion: "3.1",
+      requestId: "image-stale",
+      sessionId: "previous-session",
+      source: "image.png",
+    } as never, connection);
+
+    expect(posted).toEqual([{
+      type: "markdownImageResult",
+      requestId: "image-stale",
+      sessionId: "previous-session",
+      result: { ok: false, reason: "invalidSource" },
+    }]);
   });
 
   it("transfers the displayed Sidebar draft when opening a panel", async () => {

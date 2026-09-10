@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { ImageAttachmentView } from "$shared/model/conversationModel";
 
+  import ImageLightbox from "./ImageLightbox.svelte";
+
   let { images }: { images: ImageAttachmentView[] } = $props();
   let selected = $state<ImageAttachmentView | null>(null);
 </script>
@@ -15,12 +17,7 @@
 </div>
 
 {#if selected}
-  <div class="image-lightbox" role="presentation" onclick={() => selected = null}>
-    <button class="lightbox-close" type="button" aria-label="Close image" onclick={() => selected = null}>
-      <span class="codicon codicon-close"></span>
-    </button>
-    <img src={selected.dataUrl} alt={selected.name} />
-  </div>
+  <ImageLightbox src={selected.dataUrl} alt={selected.name} title={selected.name} onclose={() => selected = null} />
 {/if}
 
 <style>
@@ -50,35 +47,5 @@
   background: rgba(0,0,0,.58);
   color: white;
   font-size: 9px;
-}
-.image-lightbox {
-  position: fixed;
-  z-index: 100;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: rgba(0,0,0,.72);
-  backdrop-filter: blur(4px);
-}
-.image-lightbox :global(img) {
-  max-width: 92vw;
-  max-height: 86vh;
-  object-fit: contain;
-  border-radius: 6px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.5);
-}
-.lightbox-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(20,20,20,.75);
-  color: white;
-  cursor: pointer;
 }
 </style>

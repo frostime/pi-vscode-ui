@@ -86,6 +86,12 @@ const payloadSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("renameSession"), sessionId: z.string().min(1).max(128), name: z.string().max(160) }),
   z.object({ type: z.literal("copyText"), text: z.string().min(1).max(2_000_000) }),
   z.object({
+    type: z.literal("loadMarkdownImage"),
+    requestId: z.string().min(1).max(128),
+    sessionId: z.string().min(1).max(128),
+    source: z.string().min(1).max(32_768),
+  }),
+  z.object({
     type: z.literal("sendPrompt"),
     requestId: z.string().min(1).max(128),
     sessionId: z.string().min(1).max(128),

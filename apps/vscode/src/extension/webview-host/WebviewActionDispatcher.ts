@@ -18,6 +18,7 @@ import { openFileDiff } from "../file-changes/GitBaseContentProvider.js";
 import type { ComposerExternalEditorOpenResult } from "../composer/ComposerExternalEditor.js";
 import type { SessionRegistry } from "../sessions/SessionRegistry.js";
 import type { ComposerDraftCache } from "./ComposerDraftCache.js";
+import { resolveLocalMarkdownImage } from "./markdown-images/MarkdownImageResolver.js";
 import type { ConnectionContext } from "./webviewTypes.js";
 
 export interface DispatchConnection extends ConnectionContext {
@@ -90,6 +91,10 @@ export class WebviewActionDispatcher {
       throw new Error(message.type === "resumeSession"
         ? "Open the FrostPi sidebar to resume a session."
         : "This action is available only from the FrostPi sidebar.");
+    }
+    if (message.type === "loadMarkdownImage") {
+      await this.#loadMarkdownImage(message, connection);
+      return;
     }
     this.#authorizeSessionTarget(message, connection);
 
@@ -271,6 +276,34 @@ export class WebviewActionDispatcher {
         await this.#registry.retrySession(message.sessionId);
         return;
     }
+  }
+
+  async #loadMarkdownImage(
+    message: Extract<WebviewToHostMessage, { type: "loadMarkdownImage" }>,
+    connection: DispatchConnection,
+  ): Promise<void> {
+    try {
+      this.#authorizeSessionTarget(message, connection);
+    } catch {
+      connection.post({
+        type: "markdownImageResult",
+        requestId: message.requestId,
+        sessionId: message.sessionId,
+        result: { ok: false, reason: "invalidSource" },
+      });
+      return;
+    }
+
+    const session = this.#displayedSession(connection);
+    const result = session
+      ? await resolveLocalMarkdownImage(message.source, session.cwd, session.attachmentLimits.maxImageBytes)
+      : { ok: false as const, reason: "invalidSource" as const };
+    connection.post({
+      type: "markdownImageResult",
+      requestId: message.requestId,
+      sessionId: message.sessionId,
+      result,
+    });
   }
 
   #authorizeSessionTarget(message: WebviewToHostMessage, connection: ConnectionContext): void {

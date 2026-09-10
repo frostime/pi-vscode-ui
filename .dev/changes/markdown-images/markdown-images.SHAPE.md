@@ -1,5 +1,5 @@
 ---
-status: draft
+status: completed
 ---
 
 # Markdown image rendering change shape
@@ -188,3 +188,16 @@ The prototype is a review artifact only and will not be imported into production
 ## Shape review point
 
 The principal structural choice for review is the sanitized-placeholder-to-mounted-Svelte boundary. It adds one explicit adapter because Svelte components cannot be emitted by `{@html}`; replacing the complete Markdown renderer to avoid that adapter would be disproportionate. If this boundary is accepted, local function signatures and exact cache constants can remain implementation decisions.
+
+## Implementation comparison
+
+The completed diff is approximately `+1,354/-47` lines including change artifacts and durable documentation, within the predicted overall range. The accepted ownership and dependency direction are unchanged: inert Markdown placeholder → mounted Webview component → correlated client → authorized Host resolver. No Pi RPC, conversation projection, ViewModel, persistence, attachment schema, or global Markdown style responsibility was added.
+
+Observed local deviations:
+
+- `MarkdownImage.svelte` is about 40 lines above its estimate because source decoding, post-decode dimension checks, and all responsive state chrome remained together under the component's presentation responsibility. No additional dependency or state owner resulted.
+- Host logic is smaller than its per-file estimate but the resolver plus pure raster inspector remain the predicted two-module boundary.
+- A five-line declaration file was added for markdown-it's internal image rule, required to allow `file:` only for image syntax without relaxing ordinary link validation.
+- Component markup receives server-rendered consent/Lightbox coverage, while browser-only mount, IntersectionObserver, Blob revocation, and click transitions are verified by typecheck/build and code review rather than a dedicated client-condition Vitest suite; the repository test configuration resolves Svelte to its server entry. The correlated client timeout, deduplication, Session isolation, renderer boundary, Host integration, SVG policy, and format limits have direct tests.
+
+Two independent read-only reviews found no remaining exploitable correctness, security, or lifecycle defect after follow-up fixes. `pnpm check` passes with 69 VS Code test files / 393 tests and 5 pi-rpc test files / 14 tests; its only Svelte diagnostic is the pre-existing `ExtensionUiRequestCard.svelte` tabindex warning. Production visual review in a VS Code light/dark/high-contrast Webview remains a manual verification item.
