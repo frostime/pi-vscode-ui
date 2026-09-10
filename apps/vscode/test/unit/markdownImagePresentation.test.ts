@@ -3,8 +3,16 @@ import { describe, expect, it } from "vitest";
 
 import ImageLightbox from "../../src/webview/features/conversation/ImageLightbox.svelte";
 import MarkdownImage from "../../src/webview/features/conversation/markdown/MarkdownImage.svelte";
+import { markdownImageCaption } from "../../src/webview/features/conversation/markdown/markdownImageCaption.js";
 
 describe("Markdown image presentation", () => {
+  it("prefers an explicit title and falls back to concise alt text", () => {
+    expect(markdownImageCaption("操作入口", "页面截图")).toBe("操作入口");
+    expect(markdownImageCaption(undefined, "操作入口")).toBe("操作入口");
+    expect(markdownImageCaption("  ", "  页面截图  ")).toBe("页面截图");
+    expect(markdownImageCaption(undefined, "x".repeat(161))).toBeUndefined();
+  });
+
   it("keeps HTTPS sources inert behind an explicit load action", () => {
     const { body } = render(MarkdownImage, {
       props: {

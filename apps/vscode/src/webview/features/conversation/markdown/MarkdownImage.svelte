@@ -4,6 +4,7 @@
 
   import ImageLightbox from "../ImageLightbox.svelte";
   import { currentMarkdownImageByteLimit, loadLocalMarkdownImage } from "./markdownImageClient";
+  import { markdownImageCaption } from "./markdownImageCaption";
   import { sanitizeMarkdownSvg } from "./sanitizeMarkdownSvg";
 
   let {
@@ -27,6 +28,7 @@
 
   const remote = $derived(remoteHttpsUrl(source));
   const label = $derived(title || alt || "Markdown image");
+  const caption = $derived(markdownImageCaption(title, alt));
   const sourceLabel = $derived(remote?.hostname ?? "Local image");
   const aspectRatio = $derived(imageWidth && imageHeight ? `${imageWidth} / ${imageHeight}` : undefined);
 
@@ -238,7 +240,7 @@
       {/if}
       {#if phase === "loading"}<span class="loading-label" role="status">Loading image…</span>{/if}
     </span>
-    {#if title}<span class="image-caption">{title}</span>{/if}
+    {#if caption}<span class="image-caption">{caption}</span>{/if}
     {#if svgWarning}
       <span class="svg-warning" role="status"><span aria-hidden="true">⚠</span> Removed unsafe SVG content</span>
     {/if}
@@ -271,7 +273,7 @@
 </span>
 
 {#if previewOpen && imageUrl}
-  <ImageLightbox src={imageUrl} {alt} {title} onclose={() => { previewOpen = false; }} />
+  <ImageLightbox src={imageUrl} {alt} title={caption} onclose={() => { previewOpen = false; }} />
 {/if}
 
 <style>
