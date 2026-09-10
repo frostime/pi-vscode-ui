@@ -49,9 +49,8 @@ apps/vscode/src/webview/features/conversation/
 │   ├── markdownImageClient.ts               create  +90–135
 │   │   Owns request ids, Session-scoped keys, in-flight deduplication, bounded short-lived result caching,
 │   │   late-result rejection, and the typed interface consumed by the component.
-│   ├── sanitizeMarkdownSvg.ts               create  +100–155
-│   │   Produces a static SVG subset, classifies whether unsafe content was removed, validates intrinsic bounds,
-│   │   and fails closed without sharing Mermaid's more permissive foreignObject policy.
+│   ├── sanitizeMarkdownSvg.ts               create  +25–40
+│   │   Removes `<script>` elements from SVG text before Blob-image loading and reports whether removal occurred.
 │   └── markdown.SPEC.md                     modify  +20–35/-1–3
 │       Records source policies, local/remote SVG asymmetry, sizing, title/alt behavior, and presentation failures.
 ├── ImageLightbox.svelte                     create  +55–85
@@ -86,8 +85,8 @@ apps/vscode/src/shared/bridge/
 apps/vscode/test/unit/
 ├── renderMarkdown.test.ts                   modify  +35–55/-0
 │   Covers inert output, escaped source/alt/title, links, rejected schemes, and unchanged raw-HTML sanitization.
-├── sanitizeMarkdownSvg.test.ts              create  +90–140
-│   Covers scripts/events/foreignObject/style URLs, fragment references, warnings, invalid roots, and dimensions.
+├── sanitizeMarkdownSvg.test.ts              create  +35–55
+│   Covers script removal/warning, preservation of ordinary SVG content, entities, and invalid roots.
 ├── markdownImageClient.test.ts              create  +70–110
 │   Covers correlation, Session isolation, in-flight deduplication, bounded cache, cancellation, and late results.
 ├── MarkdownImageResolver.test.ts            create  +110–170
@@ -142,7 +141,7 @@ mountMarkdownImages ──mounts──► MarkdownImage.svelte
 - `markdownImageClient` knows correlation and temporary deduplication but not DOM or file policy.
 - `WebviewActionDispatcher` authorizes the Session target but delegates path and format decisions.
 - `MarkdownImageResolver` knows host filesystem policy but not conversation ordering or Svelte UI.
-- SVG sanitization stays in the browser beside DOMPurify; raw SVG is never inserted into rendered Markdown HTML.
+- SVG handling stays in the browser as a small script-removal step; raw SVG is never inserted into rendered Markdown HTML and is only loaded through a Blob URL in `<img>`.
 - The shared bridge describes only serializable bounded messages and owns no behavior.
 
 ## Coordination and state rules
@@ -174,14 +173,14 @@ A failure can be localized in order:
 2. mounted image state reports source classification and request id, without exposing source in logs;
 3. Bridge schema/Connection authorization accepts or rejects the request;
 4. resolver returns a stable failure reason or validated MIME/dimensions;
-5. SVG sanitizer reports blocked/clean/cleaned;
+5. SVG sanitizer reports parse failure or script removal;
 6. browser image decode or HTTPS load succeeds/fails.
 
 No fallback silently changes a local path into a network URL, retries another Session cwd, or bypasses validation.
 
 ## Deliberate cuts
 
-The first implementation does not add a general Webview resource service, persistent/disk cache, file watcher, refresh button, image download, HTTP support, domain allowlist UI, remote proxy, retry policy, remote SVG inspection, raw SVG insertion, script opt-in, EXIF processing, image conversion, Pi attachment conversion, or changes to message copy text.
+The first implementation does not add a general Webview resource service, persistent/disk cache, file watcher, refresh button, image download, HTTP support, domain allowlist UI, remote proxy, retry policy, remote SVG inspection, raw SVG insertion, script opt-in, EXIF processing, image conversion, Pi attachment conversion, or changes to message copy text. SVG sanitization intentionally remains at the minimum current boundary: remove `<script>` before Blob-image loading; broader SVG policy requires a separate product decision.
 
 The prototype is a review artifact only and will not be imported into production code.
 
@@ -198,6 +197,6 @@ Observed local deviations:
 - `MarkdownImage.svelte` is about 40 lines above its estimate because source decoding, post-decode dimension checks, and all responsive state chrome remained together under the component's presentation responsibility. No additional dependency or state owner resulted.
 - Host logic is smaller than its per-file estimate but the resolver plus pure raster inspector remain the predicted two-module boundary.
 - A five-line declaration file was added for markdown-it's internal image rule, required to allow `file:` only for image syntax without relaxing ordinary link validation.
-- Component markup receives server-rendered consent/Lightbox coverage, while browser-only mount, IntersectionObserver, Blob revocation, and click transitions are verified by typecheck/build and code review rather than a dedicated client-condition Vitest suite; the repository test configuration resolves Svelte to its server entry. The correlated client timeout, deduplication, Session isolation, renderer boundary, Host integration, SVG policy, and format limits have direct tests.
+- Component markup receives server-rendered consent/Lightbox coverage, while browser-only mount, IntersectionObserver, Blob revocation, and click transitions are verified by typecheck/build and code review rather than a dedicated client-condition Vitest suite; the repository test configuration resolves Svelte to its server entry. The correlated client timeout, deduplication, Session isolation, renderer boundary, Host integration, script-removal boundary, and format limits have direct tests.
 
 Two independent read-only reviews found no remaining exploitable correctness, security, or lifecycle defect after follow-up fixes. `pnpm check` passes with 69 VS Code test files / 393 tests and 5 pi-rpc test files / 14 tests; its only Svelte diagnostic is the pre-existing `ExtensionUiRequestCard.svelte` tabindex warning. Production visual review in a VS Code light/dark/high-contrast Webview remains a manual verification item.

@@ -98,10 +98,10 @@
     if (mimeType === "image/svg+xml") {
       const sanitized = sanitizeMarkdownSvg(new TextDecoder().decode(bytes));
       if (!sanitized.ok) {
-        fail("This SVG has no safe renderable content");
+        fail("Unable to parse SVG");
         return;
       }
-      svgWarning = sanitized.removedUnsafeContent;
+      svgWarning = sanitized.removedScripts;
       blob = new Blob([sanitized.svg], { type: mimeType });
     } else if (["image/png", "image/jpeg", "image/webp", "image/gif"].includes(mimeType)) {
       blob = new Blob([Uint8Array.from(bytes).buffer], { type: mimeType });
@@ -242,7 +242,7 @@
     </span>
     {#if caption}<span class="image-caption">{caption}</span>{/if}
     {#if svgWarning}
-      <span class="svg-warning" role="status"><span aria-hidden="true">⚠</span> Removed unsafe SVG content</span>
+      <span class="svg-warning" role="status"><span aria-hidden="true">⚠</span> Removed SVG scripts</span>
     {/if}
   {:else if remote && phase === "waiting"}
     <span class="image-placeholder remote-placeholder">
@@ -278,10 +278,10 @@
 
 <style>
   .markdown-image { display: inline-flex; max-width: 100%; flex-direction: column; margin: .55em 0 .75em; vertical-align: top; }
-  .loaded-image { position: relative; display: block; width: fit-content; max-width: 100%; }
+  .loaded-image { position: relative; display: block; width: fit-content; max-width: min(92%, 640px); }
   .image-trigger { display: block; width: fit-content; max-width: 100%; cursor: zoom-in; border-radius: 7px; }
   .image-trigger:focus-visible { outline: 2px solid var(--frost-focus); outline-offset: 2px; }
-  img { display: block; width: auto; height: auto; max-width: 100%; max-height: min(480px, 60vh); object-fit: contain; border-radius: 7px; }
+  img { display: block; width: auto; height: auto; max-width: 100%; max-height: min(400px, 55vh); object-fit: contain; border-radius: 7px; }
   .image-loading img { opacity: .45; }
   .loading-label { position: absolute; inset: 0; display: grid; place-items: center; color: var(--frost-muted); font-size: 11px; }
   .image-caption { align-self: stretch; padding: 5px 4px 0; color: var(--frost-faint); font-size: 11.5px; text-align: center; }

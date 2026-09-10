@@ -4,39 +4,45 @@ import { describe, expect, it } from "vitest";
 import { sanitizeMarkdownSvg } from "../../src/webview/features/conversation/markdown/sanitizeMarkdownSvg.js";
 
 describe("sanitizeMarkdownSvg", () => {
-  it("keeps static SVG and local fragment references", () => {
+  it("keeps ordinary SVG content and styles unchanged", () => {
     const result = sanitizeMarkdownSvg(`
       <svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80">
-        <defs><linearGradient id="g"><stop offset="0" stop-color="red"/></linearGradient></defs>
-        <rect width="120" height="80" fill="url(#g)"/>
+        <style>.box { fill: red; }</style>
+        <foreignObject><div xmlns="http://www.w3.org/1999/xhtml">content</div></foreignObject>
+        <rect class="box" width="120" height="80"/>
+        <image href="https://example.com/image.png" width="10" height="10"/>
       </svg>
     `);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.svg).toContain("url(#g)");
-    expect(result.removedUnsafeContent).toBe(false);
+    expect(result.svg).toContain("foreignObject");
+    expect(result.svg).toContain("https://example.com/image.png");
+    expect(result.removedScripts).toBe(false);
   });
 
-  it("removes scripts, events, foreign content, and external resources with a warning", () => {
+  it("removes script elements and reports the change", () => {
     const result = sanitizeMarkdownSvg(`
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" onclick="alert('root')">
+      <svg xmlns="http://www.w3.org/2000/svg">
         <script>alert(1)</script>
-        <foreignObject><div xmlns="http://www.w3.org/1999/xhtml">unsafe</div></foreignObject>
-        <image href="https://example.com/tracker.png" width="10" height="10"/>
-        <rect width="100" height="100" onclick="alert(2)" style="fill:red"/>
+        <g><script type="application/ecmascript">alert(2)</script></g>
+        <rect width="10" height="10"/>
       </svg>
     `);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.svg).not.toMatch(/script|foreignObject|onclick|https:|style=/i);
-    expect(result.removedUnsafeContent).toBe(true);
+    expect(result.svg).not.toMatch(/<script/i);
+    expect(result.svg).toContain("<rect");
+    expect(result.removedScripts).toBe(true);
   });
 
-  it("fails closed for active-only, malformed, or oversized SVG", () => {
-    expect(sanitizeMarkdownSvg('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>')).toEqual({ ok: false });
+  it("accepts common SVG entities for Blob-image decoding", () => {
+    const result = sanitizeMarkdownSvg('<svg xmlns="http://www.w3.org/2000/svg"><text>a&nbsp;b</text><rect width="2" height="2"/></svg>');
+    expect(result.ok).toBe(true);
+  });
+
+  it("fails closed when the source has no SVG root", () => {
     expect(sanitizeMarkdownSvg("not svg")).toEqual({ ok: false });
-    expect(sanitizeMarkdownSvg('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20000 1"><rect width="1" height="1"/></svg>')).toEqual({ ok: false });
   });
 });
