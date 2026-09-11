@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-09-11
+
 ### Added
 
 - Open file links whose path does not resolve — a bare filename or a stale path — by jumping to the best fd workspace match with the referenced line and column applied; the original error remains when nothing plausible matches.
