@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-09-11
+
 ### Added
 
 - Show significant Pi prompt-cache misses as warning notices in live and restored conversations when Pi's `showCacheMissNotices` setting is enabled.
@@ -430,8 +432,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.0...HEAD
-[0.14.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.2...v0.14.0
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.2...HEAD
+[0.14.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.1...v0.14.2
+[0.14.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.0...v0.14.1
 [0.13.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.12.0...v0.13.0
