@@ -8,6 +8,7 @@ import { applyHostDraft, insertDraftText, setDraftText } from "../features/compo
 import { deliverWorkspaceFileSuggestions } from "../features/composer/fileSuggestionClient";
 import { promptSubmissionResult } from "../features/composer/promptSubmissionStore.svelte";
 import { resolveForkResult } from "../features/conversation/forkMessageClient";
+import { deliverMarkdownImageResult } from "../features/conversation/markdown/markdownImageClient";
 import { composerFocusTick, presentationStore, showToast } from "../state/sessionViewStore.svelte";
 
 export function applyHostMessage(message: HostToWebviewMessage): void {
@@ -55,6 +56,9 @@ export function applyHostMessage(message: HostToWebviewMessage): void {
     case "promptResult":
       promptSubmissionResult.set(message);
       if (!message.ok && message.error) showToast("error", message.error);
+      break;
+    case "markdownImageResult":
+      deliverMarkdownImageResult(message.requestId, message.sessionId, message.result);
       break;
     case "forkResult":
       resolveForkResult(message);

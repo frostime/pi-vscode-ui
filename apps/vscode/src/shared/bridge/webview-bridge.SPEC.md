@@ -5,7 +5,7 @@ scope:
   - /apps/vscode/src/shared/bridge/**
   - /apps/vscode/src/extension/webview-host/**
   - /apps/vscode/src/webview/bridge/**
-updated: 2026-08-17
+updated: 2026-09-11
 ---
 
 # Webview Bridge Compatibility Contract
@@ -26,7 +26,9 @@ The Host authorizes actions from immutable Connection context. Panel messages ma
 
 Registry/global Host toasts preserve the former single-Webview behavior and are delivered best-effort to the Sidebar Connection only. Action results, failures, and contention notices return only to their originating Connection.
 
-File actions carry validated locations only; relative paths resolve from the Session displayed by the originating Connection. Session-tree actions carry stable ids and draft presence only: the Host refetches authoritative entries and owns native interaction. Complete entries, prompt/image content, private tokens, and summary content do not cross that action boundary. Host-projected Fork/tree Composer seeds are non-persisted and applied once per Webview mount until submission.
+File actions carry validated locations only; relative paths resolve from the Session displayed by the originating Connection. Markdown local-image requests are correlated, bounded, authorized against that same displayed Session, and return only to their originating Connection. The Host reads only ordinary files, identifies supported content independently of its extension, and returns structured inline failures rather than global toasts. Returned image bytes are transient presentation resources: they do not enter conversation projection, drafts, or persistence, and paths/image bytes must not be logged.
+
+Session-tree actions carry stable ids and draft presence only: the Host refetches authoritative entries and owns native interaction. Complete entries, prompt/image content, private tokens, and summary content do not cross that action boundary. Host-projected Fork/tree Composer seeds are non-persisted and applied once per Webview mount until submission.
 
 ## Composer synchronization
 

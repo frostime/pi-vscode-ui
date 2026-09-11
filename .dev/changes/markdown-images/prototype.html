@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FrostPi Markdown 图片 UI 原型</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg:#181818; --text:#d4d4d4; --muted:#9a9a9a; --faint:#747474;
+    --surface:#252526; --raised:#2d2d30; --border:#3c3c3c; --soft:#303031;
+    --link:#4daafc; --warning:#cca700; --error:#f48771; --hover:#343436;
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:#111; color:var(--text); font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+  button { font:inherit }
+  .review-bar { position:sticky; top:0; z-index:4; display:flex; justify-content:center; gap:8px; padding:9px; background:#111e; border-bottom:1px solid #292929 }
+  .review-bar button { padding:4px 10px; color:var(--muted); background:#222; border:1px solid #3b3b3b; border-radius:5px; cursor:pointer }
+  .review-bar button:hover { color:var(--text); background:#2b2b2b }
+  .shell { width:min(680px,calc(100vw - 24px)); min-height:690px; margin:16px auto; background:var(--bg); border:1px solid #303030; border-radius:9px; overflow:hidden; box-shadow:0 16px 50px #0008; transition:width .18s ease }
+  .shell.narrow { width:300px }
+  header { height:38px; display:flex; align-items:center; gap:8px; padding:0 11px; border-bottom:1px solid var(--soft); font-weight:600 }
+  header small { color:var(--link); font-size:9.5px; border:1px solid #275980; border-radius:99px; padding:0 6px }
+  main { padding:22px 17px 40px }
+  .assistant { display:grid; grid-template-columns:24px minmax(0,1fr); gap:8px }
+  .mark { width:20px; height:20px; display:grid; place-items:center; color:var(--muted); background:var(--surface); border-radius:6px; font-family:Georgia,serif }
+  .content { min-width:0 }
+  p { margin:0 0 9px }
+  .label { margin:20px 0 6px; color:var(--faint); font-size:10px; font-weight:650; letter-spacing:.08em; text-transform:uppercase }
+
+  .md-image { width:fit-content; max-width:100%; margin:8px 0 12px }
+  .image-button { display:block; max-width:100%; padding:0; border:0; background:transparent; cursor:zoom-in }
+  .image-button img { display:block; max-width:100%; max-height:370px; width:auto; height:auto; object-fit:contain; border-radius:7px }
+  .caption { padding:5px 4px 0; color:var(--faint); font-size:11.5px; text-align:center }
+  .warning { display:flex; gap:6px; align-items:flex-start; margin-top:5px; padding:5px 8px; color:color-mix(in srgb,var(--warning) 82%,var(--text)); border-radius:5px; background:color-mix(in srgb,var(--warning) 7%,transparent); font-size:10.5px }
+
+  .placeholder { width:min(390px,100%); min-height:78px; display:grid; grid-template-columns:34px minmax(0,1fr) auto; align-items:center; gap:9px; padding:11px; margin:8px 0 12px; background:color-mix(in srgb,var(--surface) 45%,var(--bg)); border:1px dashed var(--border); border-radius:7px }
+  .placeholder-icon { width:32px; height:32px; display:grid; place-items:center; border-radius:6px; color:var(--muted); background:var(--surface); font-size:17px }
+  .placeholder-copy { min-width:0 }
+  .placeholder-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:11.5px; font-weight:600 }
+  .placeholder-source { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--faint); font-size:10.5px }
+  .load { padding:4px 8px; white-space:nowrap; color:var(--text); background:var(--raised); border:1px solid var(--border); border-radius:5px; cursor:pointer }
+  .load:hover { background:var(--hover) }
+  .blocked { border-style:solid; border-color:color-mix(in srgb,var(--error) 34%,var(--border)) }
+  .blocked .placeholder-icon { color:var(--error) }
+  .blocked .placeholder-title { white-space:normal }
+
+  .lightbox { position:fixed; z-index:10; inset:0; display:none; place-items:center; padding:28px; background:#000c; backdrop-filter:blur(4px) }
+  .lightbox.open { display:grid }
+  .lightbox img { max-width:92vw; max-height:82vh; border-radius:7px; box-shadow:0 20px 60px #000 }
+  .lightbox .lightbox-title { margin-top:9px; color:#ddd; text-align:center }
+  .close { position:absolute; top:15px; right:15px; width:34px; height:34px; color:white; background:#202020cc; border:1px solid #555; border-radius:50%; cursor:pointer }
+  @media (max-width:380px) {
+    main { padding:17px 11px 32px }
+    .placeholder { grid-template-columns:30px minmax(0,1fr); }
+    .placeholder .load { grid-column:2; justify-self:start }
+  }
+</style>
+</head>
+<body>
+<div class="review-bar">
+  <button id="width">切换 300 / 680px</button>
+  <button id="reset">重置网络图片</button>
+</div>
+
+<section class="shell" id="shell">
+  <header>Markdown 图片预览 <small>H:/SrcCode/playground/FrostPi</small></header>
+  <main>
+    <div class="assistant">
+      <div class="mark">π</div>
+      <div class="content">
+        <p>这是消息正文。下面分别展示本地图片、待加载的网络图片和经过清理的 SVG。</p>
+
+        <div class="label">本地图片 · 自动加载</div>
+        <figure class="md-image">
+          <button class="image-button" data-title="构建结果概览" aria-label="打开构建结果概览">
+            <img class="demo-image" alt="蓝紫色构建结果示意图">
+          </button>
+          <figcaption class="caption">构建结果概览</figcaption>
+        </figure>
+
+        <div class="label">网络图片 · 点击后加载</div>
+        <div id="remote-slot">
+          <div class="placeholder">
+            <div class="placeholder-icon">▧</div>
+            <div class="placeholder-copy">
+              <div class="placeholder-title">架构示意图</div>
+              <div class="placeholder-source">images.example.com</div>
+            </div>
+            <button class="load" id="load-remote">加载图片</button>
+          </div>
+        </div>
+
+        <div class="label">SVG · 已移除主动内容</div>
+        <figure class="md-image">
+          <button class="image-button" data-title="安全处理后的流程图" aria-label="打开安全处理后的流程图">
+            <img class="svg-image" alt="安全处理后的 SVG 流程图">
+          </button>
+          <figcaption class="caption">安全处理后的流程图</figcaption>
+          <div class="warning"><span>⚠</span><span>已移除 SVG 中的脚本或外部资源</span></div>
+        </figure>
+
+        <div class="label">无法安全显示</div>
+        <div class="placeholder blocked">
+          <div class="placeholder-icon">!</div>
+          <div class="placeholder-copy">
+            <div class="placeholder-title">无法显示此 SVG</div>
+            <div class="placeholder-source">清理后没有可渲染内容</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</section>
+
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="图片预览">
+  <button class="close" aria-label="关闭">×</button>
+  <div><img alt=""><div class="lightbox-title"></div></div>
+</div>
+
+<script>
+  const rasterSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="350" viewBox="0 0 720 350"><defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#3278c8"/><stop offset="1" stop-color="#7654b8"/></linearGradient></defs><rect width="720" height="350" rx="14" fill="#202533"/><rect x="32" y="30" width="656" height="58" rx="9" fill="url(#g)"/><text x="58" y="66" fill="white" font-family="Segoe UI,sans-serif" font-size="20">FrostPi build · passed</text><g fill="#313849"><rect x="32" y="112" width="204" height="198" rx="10"/><rect x="258" y="112" width="204" height="198" rx="10"/><rect x="484" y="112" width="204" height="198" rx="10"/></g><g fill="#cdd6e5" font-family="Segoe UI,sans-serif"><text x="54" y="148" font-size="15">Type check</text><text x="280" y="148" font-size="15">Unit tests</text><text x="506" y="148" font-size="15">Package</text></g><g fill="#66c58a" font-family="Segoe UI,sans-serif" font-size="42"><text x="54" y="216">✓</text><text x="280" y="216">✓</text><text x="506" y="216">✓</text></g><g fill="#8994a8" font-family="Segoe UI,sans-serif" font-size="13"><text x="54" y="275">0 errors</text><text x="280" y="275">184 passed</text><text x="506" y="275">VSIX verified</text></g></svg>`;
+  const flowSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="220" viewBox="0 0 720 220"><rect width="720" height="220" rx="14" fill="#202533"/><g fill="#30394b" stroke="#61718d" stroke-width="2"><rect x="34" y="72" width="160" height="74" rx="9"/><rect x="280" y="72" width="160" height="74" rx="9"/><rect x="526" y="72" width="160" height="74" rx="9"/></g><g fill="#d7deea" text-anchor="middle" font-family="Segoe UI,sans-serif" font-size="16"><text x="114" y="115">读取 SVG</text><text x="360" y="115">清理主动内容</text><text x="606" y="115">安全显示</text></g><g stroke="#7ca7dc" stroke-width="3" fill="none"><path d="M194 109h76"/><path d="M440 109h76"/></g><g fill="#7ca7dc"><path d="M270 109l-10-7v14z"/><path d="M516 109l-10-7v14z"/></g></svg>`;
+  const asData = svg => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  const rasterUrl = asData(rasterSvg);
+  const flowUrl = asData(flowSvg);
+  document.querySelector('.demo-image').src = rasterUrl;
+  document.querySelector('.svg-image').src = flowUrl;
+
+  const remoteSlot = document.querySelector('#remote-slot');
+  const placeholder = remoteSlot.innerHTML;
+  function bindRemote() {
+    document.querySelector('#load-remote')?.addEventListener('click', () => {
+      remoteSlot.innerHTML = `<figure class="md-image"><button class="image-button" data-title="架构示意图" aria-label="打开架构示意图"><img src="${flowUrl}" alt="架构示意图"></button><figcaption class="caption">架构示意图</figcaption></figure>`;
+      bindImages();
+    });
+  }
+  document.querySelector('#reset').addEventListener('click', () => { remoteSlot.innerHTML = placeholder; bindRemote(); });
+  document.querySelector('#width').addEventListener('click', () => document.querySelector('#shell').classList.toggle('narrow'));
+
+  const lightbox = document.querySelector('#lightbox');
+  function bindImages() {
+    document.querySelectorAll('.image-button').forEach(button => {
+      if (button.dataset.bound) return;
+      button.dataset.bound = 'true';
+      button.addEventListener('click', () => {
+        const source = button.querySelector('img');
+        lightbox.querySelector('img').src = source.src;
+        lightbox.querySelector('img').alt = source.alt;
+        lightbox.querySelector('.lightbox-title').textContent = button.dataset.title || source.alt;
+        lightbox.classList.add('open');
+      });
+    });
+  }
+  lightbox.addEventListener('click', event => { if (event.target === lightbox || event.target.closest('.close')) lightbox.classList.remove('open'); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') lightbox.classList.remove('open'); });
+  bindRemote(); bindImages();
+</script>
+</body>
+</html>

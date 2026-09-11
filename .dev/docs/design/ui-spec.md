@@ -31,6 +31,7 @@ FrostPi uses a first-party VS Code visual language: compact, low-noise, keyboard
 ## Accessibility
 
 - Every action is keyboard reachable with visible focus. Icon-only controls have accessible names; status is never conveyed by color alone.
-- Transient status uses an `aria-live` region. Blocking requests remain in document order; images use filename-based alt text, and removal controls identify the affected image.
+- Transient status uses an `aria-live` region. Blocking requests remain in document order; attachment images use filename-based alt text, Markdown images preserve their authored alt text, and removal controls identify the affected image.
+- Markdown HTTPS images require an explicit load action. Loaded transcript images preserve aspect ratio, stay within 92% of message width and a 640px maximum, and use a bounded viewport-relative height. They open a keyboard-accessible Lightbox unless wrapped by a Markdown link. Explicit titles, or concise alt text when no title exists, appear as centered captions without card chrome; load failures and SVG script-removal warnings remain inline and perceivable without color.
 - Controls, text, focus, and status indicators remain perceivable in high-contrast themes.
 - Motion is a visual supplement only: animations stay small-element, low-cost, and low-stimulation (fades, pulses, brief reveals); never introduce large-scale or spatial motion.

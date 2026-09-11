@@ -7,6 +7,22 @@ import type { EditorMentionSpecialView, WorkspaceFileCandidateView } from "../mo
 
 export type SessionBaseView = Omit<SessionViewModel, "conversationItems">;
 
+export type MarkdownImageFailureReason =
+  | "invalidSource"
+  | "notFound"
+  | "notAFile"
+  | "tooLarge"
+  | "unsupportedType"
+  | "readFailed";
+
+export type MarkdownImageLoadResult =
+  | {
+      ok: true;
+      mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif" | "image/svg+xml";
+      data: string;
+    }
+  | { ok: false; reason: MarkdownImageFailureReason };
+
 export interface CollectionDelta<T> {
   mode: "replace" | "upsert";
   items: T[];
@@ -28,6 +44,7 @@ export type HostToWebviewPayload =
   | { type: "insertPromptText"; sessionId: string; text: string }
   | { type: "focusComposer" }
   | { type: "promptResult"; requestId: string; ok: boolean; error?: string }
+  | { type: "markdownImageResult"; requestId: string; sessionId: string; result: MarkdownImageLoadResult }
   | {
       type: "forkResult";
       requestId: string;

@@ -109,6 +109,36 @@ describe("renderMarkdownHtml", () => {
     expect(root.querySelectorAll("a.file-link")).toHaveLength(1);
   });
 
+  it("renders Markdown images as inert sanitized placeholders", () => {
+    const html = renderMarkdownHtml('![diagram](./tmp/build.png "Build result")');
+    const root = document.createElement("div");
+    root.innerHTML = html;
+    const image = root.querySelector("[data-markdown-image]");
+
+    expect(image?.getAttribute("data-image-source")).toBe("./tmp/build.png");
+    expect(image?.getAttribute("data-image-alt")).toBe("diagram");
+    expect(image?.getAttribute("data-image-title")).toBe("Build result");
+    expect(root.querySelector("img")).toBeNull();
+
+    const formattedAlt = document.createElement("div");
+    formattedAlt.innerHTML = renderMarkdownHtml("![a *formatted* label](./build.png)");
+    expect(formattedAlt.querySelector("[data-image-alt]")?.getAttribute("data-image-alt")).toBe("a formatted label");
+
+    const fileUri = document.createElement("div");
+    fileUri.innerHTML = renderMarkdownHtml("![local](file:///C:/tmp/build.png)");
+    expect(fileUri.querySelector("[data-image-source]")?.getAttribute("data-image-source"))
+      .toBe("file:///C:/tmp/build.png");
+  });
+
+  it("preserves a link around an inert Markdown image", () => {
+    const html = renderMarkdownHtml("[![diagram](./build.png)](https://example.com/details)");
+    const root = document.createElement("div");
+    root.innerHTML = html;
+
+    expect(root.querySelector("a")?.getAttribute("href")).toBe("https://example.com/details");
+    expect(root.querySelector("a > [data-markdown-image]")).not.toBeNull();
+  });
+
   it("keeps HTTP links external rather than classifying them as files", () => {
     const html = renderMarkdownHtml("[docs](https://example.com/file.ts:42)");
     const root = document.createElement("div");
@@ -202,6 +232,19 @@ describe("sanitizeMermaidSvg", () => {
     const cleaned = sanitizeMermaidSvg(svg);
     expect(cleaned).toContain("<svg");
     expect(cleaned).toContain("circle");
+  });
+
+  it("keeps non-breaking spaces in otherwise safe Mermaid SVG", () => {
+    expect(sanitizeMermaidSvg('<svg xmlns="http://www.w3.org/2000/svg"><text>a b</text></svg>'))
+      .toContain("a&nbsp;b");
+  });
+
+  it("removes implicit remote image loads from Mermaid SVG", () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><image href="https://example.com/tracker.png"/><a href="https://example.com/docs"><text>Docs</text></a></svg>';
+    const cleaned = sanitizeMermaidSvg(svg);
+
+    expect(cleaned).not.toContain("tracker.png");
+    expect(cleaned).toContain("https://example.com/docs");
   });
 
   it("fails closed on non-svg payload", () => {

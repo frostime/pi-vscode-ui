@@ -56,6 +56,23 @@ describe("Webview bridge validation", () => {
     }).success).toBe(true);
   });
 
+  it("accepts bounded Markdown image requests", () => {
+    expect(webviewToHostSchema.safeParse({
+      bridgeVersion: BRIDGE_VERSION,
+      type: "loadMarkdownImage",
+      requestId: "image-1",
+      sessionId: "session-1",
+      source: "./tmp/result.png",
+    }).success).toBe(true);
+    expect(webviewToHostSchema.safeParse({
+      bridgeVersion: BRIDGE_VERSION,
+      type: "loadMarkdownImage",
+      requestId: "image-1",
+      sessionId: "session-1",
+      source: "x".repeat(32_769),
+    }).success).toBe(false);
+  });
+
   it("accepts bounded session-tree actions and rejects malformed fields", () => {
     expect(webviewToHostSchema.safeParse({
       bridgeVersion: BRIDGE_VERSION,

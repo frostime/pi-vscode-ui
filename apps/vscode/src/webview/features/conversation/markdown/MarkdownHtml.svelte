@@ -1,6 +1,7 @@
 <script lang="ts">
   import { postToHost } from "../../../bridge/vscodeBridge";
   import { ensureKatex, isKatexReady, renderMarkdownHtml } from "./renderMarkdown";
+  import { mountMarkdownImages } from "./mountMarkdownImages";
 
   let { content }: { content: string } = $props();
 
@@ -27,15 +28,17 @@
 
   // ---- Code-block copy chrome ----
 
-  // Re-run after every render: `{@html}` replacement drops prior buttons.
+  // Re-run after every render: `{@html}` replacement drops enhancements.
   $effect(() => {
     const root = container;
     if (!root) return;
     void html; // dependency on the rendered markup
+    const images = mountMarkdownImages(root);
     for (const pre of root.querySelectorAll("pre.hljs")) {
       if (pre.querySelector(".copy-btn")) continue;
       pre.prepend(createCopyButton());
     }
+    return () => images.destroy();
   });
 
   function createCopyButton(): HTMLButtonElement {

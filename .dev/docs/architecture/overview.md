@@ -45,7 +45,7 @@ Local workspaces run Pi locally. Remote SSH, WSL, and Dev Containers run Pi in t
 
 Runtime flow is `Webview → shared contracts ← Extension Host → @frostime/pi-rpc → Pi`. The Host is authoritative for conversation order and turn membership; the Webview renders that order and owns only presentation state such as disclosure and scroll position. Raw Pi events and session entries never cross the bridge.
 
-Pi owns conversation JSONL, provider credentials, model/session state, and file writes. VS Code workspace state stores FrostPi session metadata only. Composer text and pasted images are held transiently by the Extension Host while presentations hand off, but are not persisted and do not survive Extension Host restart; `/editor` uses a temporary Host-owned file, and Host-projected Fork/tree seeds remain runtime-only. FrostPi file mentions expose paths and line references without injecting file content.
+Pi owns conversation JSONL, provider credentials, model/session state, and file writes. VS Code workspace state stores FrostPi session metadata only. Composer text and pasted images are held transiently by the Extension Host while presentations hand off, but are not persisted and do not survive Extension Host restart; `/editor` uses a temporary Host-owned file, and Host-projected Fork/tree seeds remain runtime-only. FrostPi file mentions expose paths and line references without injecting file content. Markdown local images are a separate, bounded presentation resource: the Host mediates filesystem reads for the displayed Session and returns bytes only to the requesting Webview Connection.
 
 ## Dependency and trust boundaries
 
