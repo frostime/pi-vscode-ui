@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Show significant Pi prompt-cache misses as warning notices in live and restored conversations when Pi's `showCacheMissNotices` setting is enabled.
+
+### Changed
+
+- Honor Pi's global and project settings, project trust, and `PI_CODING_AGENT_DIR` when resolving model scope and discovering existing sessions.
+
 ## [0.14.1] - 2026-09-11
 
 ### Added

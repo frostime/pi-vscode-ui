@@ -19,9 +19,11 @@ import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
 import type { QuestionDraftSubmission } from "../../shared/question-tool/questionToolProtocol.js";
 import type { AgentTurnView, ImageAttachmentView } from "../../shared/model/conversationModel.js";
 import type { ComposerSeedView, SessionViewModel } from "../../shared/model/sessionViewModel.js";
+import { loadPiSettings, showCacheMissNoticesEnabled } from "../_shared/pi-settings/loadPiSettings.js";
 import { normalizeImageAttachments, validateProjectedImageAttachments } from "../attachments/normalizeImageAttachment.js";
 import type { FrostPiConfiguration } from "../configuration/configurationTypes.js";
 import { workspaceUriForPath } from "../configuration/workspaceScope.js";
+import { assistantCacheHitPercent } from "../conversation/cacheMissDetection.js";
 import { ConversationProjection } from "../conversation/ConversationProjection.js";
 import { redactDiagnosticText, type DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { ExtensionUiCoordinator } from "../extension-ui/ExtensionUiCoordinator.js";
@@ -553,6 +555,9 @@ export class SessionRuntime {
       // Verbatim by contract — never validate or reorder here (session-lifecycle.SPEC.md).
       ...this.customLaunchArguments,
     ];
+    const piSettings = await loadPiSettings(this.cwd, { piArguments: args });
+    if (this.#disposed || lifecycleVersion !== this.#lifecycleVersion) return;
+    this.#conversation.configureCacheMissNotices(showCacheMissNoticesEnabled(piSettings));
     const vscodeProxy = readVsCodeProxy(this.cwd);
     const credentials = await this.#proxySecrets.get();
     if (this.#disposed || lifecycleVersion !== this.#lifecycleVersion) return;
@@ -621,6 +626,7 @@ export class SessionRuntime {
       this.#appliedQuestionToolEnabled = configuration.questionToolEnabled;
       this.#viewState.setNetworkProxy({ mode: configuration.proxy.mode, label: proxyEnvironment.label, restartRequired: false });
       this.#viewState.applyState(state);
+      this.#conversation.setCacheModels(state.model ? [state.model] : []);
       this.#logger.info(`Started Pi session ${this.id} in ${this.cwd}`);
       this.#notifyChange();
       void this.#loadSessionInformation(api);
@@ -647,6 +653,7 @@ export class SessionRuntime {
       api.getSessionStats().catch(() => undefined),
     ]);
     if (this.#disposed || api !== this.#api) return;
+    this.#conversation.setCacheModels(models.length > 0 ? models : this.view.model ? [this.view.model] : []);
     const scopedModelIds = await resolvePiModelScope(this.cwd, this.#configurationProvider().piArguments, models);
     if (this.#disposed || api !== this.#api) return;
     this.#viewState.setModels(models);
@@ -957,18 +964,8 @@ function latestAssistantCacheHit(entries: readonly RpcSessionEntry[]): { found: 
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
     if (!entry || entry.type !== "message" || !isRecord(entry.message) || entry.message.role !== "assistant") continue;
-    if (!isRecord(entry.message.usage)) return { found: true };
-
-    const { input, cacheRead, cacheWrite } = entry.message.usage;
-    if (
-      typeof input !== "number" || !Number.isFinite(input) || input < 0
-      || typeof cacheRead !== "number" || !Number.isFinite(cacheRead) || cacheRead < 0
-      || typeof cacheWrite !== "number" || !Number.isFinite(cacheWrite) || cacheWrite < 0
-    ) return { found: true };
-    const promptTokens = input + cacheRead + cacheWrite;
-    return promptTokens > 0
-      ? { found: true, percent: (cacheRead / promptTokens) * 100 }
-      : { found: true };
+    const percent = assistantCacheHitPercent(entry.message);
+    return percent === undefined ? { found: true } : { found: true, percent };
   }
   return { found: false };
 }

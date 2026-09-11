@@ -15,6 +15,7 @@ FrostPi targets the current documented Pi native RPC mode and launches `pi --mod
 
 - Startup requires `get_state`; product features use prompt/abort, compaction, entries, fork, commands, models, thinking level, naming, statistics, and extension UI responses.
 - Runtime projection consumes documented agent, message, tool, compaction, and extension UI events. Unknown additive events or fields are accepted unless a required invariant becomes impossible.
+- Cache-miss projection derives Pi TUI-compatible notices from documented assistant `provider`, `model`, `timestamp`, and `usage` fields on `message_end` and session entries, plus full Model cost data from `get_available_models`. RPC does not carry Pi TUI's rendered warning text. Missing or malformed diagnostic fields are ignored locally without weakening generic event forwarding.
 - Pi 0.83 cumulative `message_update.message` and Pi 0.84 delta-only `message_update.assistantMessageEvent` are both supported by shape. Delta assembly is extension conversation policy; the transport forwards either form unchanged.
 - Malformed JSONL, invalid envelopes, stdin/stdout failure, startup timeout, and unexpected process exit remain visible connection failures. Malformed assistant content deltas are ignored locally and do not weaken transport failures.
 

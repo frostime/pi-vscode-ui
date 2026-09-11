@@ -1,8 +1,8 @@
-import type { RpcSessionEntry } from "@frostime/pi-rpc";
+import type { RpcModel, RpcSessionEntry } from "@frostime/pi-rpc";
 import { describe, expect, it } from "vitest";
 
 import { ConversationProjection } from "../../src/extension/conversation/ConversationProjection.js";
-import type { AgentTurnView } from "../../src/shared/model/conversationModel.js";
+import type { AgentTurnView, SessionNoticeView } from "../../src/shared/model/conversationModel.js";
 import type { BoundToolCallView } from "../../src/shared/model/toolCallModel.js";
 
 describe("ConversationProjection", () => {
@@ -14,6 +14,161 @@ describe("ConversationProjection", () => {
     projection.applyEvent({ type: "agent_settled" });
 
     expect(projection.read().contentRevision).toBe(initialRevision);
+  });
+
+  it("projects every qualifying cache miss at its assistant message_end boundary", () => {
+    const projection = new ConversationProjection();
+    projection.configureCacheMissNotices(true);
+    projection.appendUserPrompt("Run tools", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "Run tools", timestamp: 1 } });
+
+    applyCompletedAssistant(projection, cacheAssistant("m1", 2, 29_000, 0, 1_000, "toolUse"));
+    expect(cacheMissNotices(projection)).toEqual([]);
+
+    applyCompletedAssistant(projection, cacheAssistant("m2", 3, 25_000, 5_000, 0, "toolUse"));
+    expect(cacheMissNotices(projection).map((notice) => notice.text)).toEqual([
+      "Cache miss: 25k tokens re-billed",
+    ]);
+
+    applyCompletedAssistant(projection, cacheAssistant("m3", 4, 27_000, 3_000, 0, "stop"));
+    expect(cacheMissNotices(projection).map((notice) => notice.text)).toEqual([
+      "Cache miss: 25k tokens re-billed",
+      "Cache miss: 27k tokens re-billed",
+    ]);
+    expect(projection.read().items.flatMap((item) => item.type === "turn" ? item.items : [item]).at(-1))
+      .toEqual(expect.objectContaining({ type: "notice", text: "Cache miss: 27k tokens re-billed" }));
+  });
+
+  it("rebuilds cache notices from history without duplicating a live notice on persisted takeover", () => {
+    const projection = new ConversationProjection();
+    projection.configureCacheMissNotices(true);
+    projection.replaceEntries([
+      userEntry("u1", null, "Run tools", 1),
+      cacheAssistantEntry("a1", "u1", cacheAssistant("m1", 2, 29_000, 0, 1_000, "toolUse")),
+    ], []);
+
+    applyCompletedAssistant(projection, cacheAssistant("m2", 3, 25_000, 5_000, 0, "stop"));
+    expect(cacheMissNotices(projection)).toHaveLength(1);
+
+    expect(projection.reconcileEntries([
+      cacheAssistantEntry("a2", "a1", cacheAssistant("m2", 3, 25_000, 5_000, 0, "stop")),
+    ], [])).toBe("applied");
+    expect(cacheMissNotices(projection)).toHaveLength(1);
+
+    const rebuilt = new ConversationProjection();
+    rebuilt.configureCacheMissNotices(true);
+    rebuilt.replaceEntries([
+      userEntry("u1", null, "Run tools", 1),
+      cacheAssistantEntry("a1", "u1", cacheAssistant("m1", 2, 29_000, 0, 1_000, "toolUse")),
+      cacheAssistantEntry("a2", "a1", cacheAssistant("m2", 3, 25_000, 5_000, 0, "stop")),
+    ], []);
+    expect(cacheMissNotices(rebuilt).map((notice) => notice.text)).toEqual([
+      "Cache miss: 25k tokens re-billed",
+    ]);
+  });
+
+  it("resets once when a live compaction is later adopted by its persisted entry", () => {
+    const projection = new ConversationProjection();
+    projection.configureCacheMissNotices(true);
+    projection.replaceEntries([
+      userEntry("u1", null, "Compact", 1),
+      cacheAssistantEntry("a1", "u1", cacheAssistant("m1", 2, 49_000, 0, 1_000, "toolUse")),
+    ], []);
+    projection.applyEvent({
+      type: "compaction_end",
+      result: { summary: "Compact", tokensBefore: 50_000, firstKeptEntryId: "kept-1" },
+    });
+
+    applyCompletedAssistant(projection, cacheAssistant("m2", 3, 29_000, 0, 1_000, "toolUse"));
+    expect(projection.reconcileEntries([
+      entry("compaction", "c1", "a1", {
+        summary: "Compact",
+        tokensBefore: 50_000,
+        firstKeptEntryId: "kept-1",
+        timestamp: 2,
+      }),
+    ], [])).toBe("applied");
+    applyCompletedAssistant(projection, cacheAssistant("m3", 4, 25_000, 5_000, 0, "stop"));
+
+    expect(cacheMissNotices(projection).map((notice) => notice.text)).toEqual([
+      "Cache miss: 25k tokens re-billed",
+    ]);
+  });
+
+  it("resets historical analysis at a branch summary", () => {
+    const projection = new ConversationProjection();
+    projection.configureCacheMissNotices(true);
+    projection.replaceEntries([
+      userEntry("u1", null, "Branch", 1),
+      cacheAssistantEntry("a1", "u1", cacheAssistant("m1", 2, 49_000, 0, 1_000, "toolUse")),
+      entry("branch_summary", "s1", "a1", { summary: "Other path", timestamp: 3 }),
+      cacheAssistantEntry("a2", "s1", cacheAssistant("m2", 4, 30_000, 0, 0, "stop")),
+    ], []);
+
+    expect(cacheMissNotices(projection)).toEqual([]);
+  });
+
+  it("uses failed requests as the next baseline without displaying their cache miss", () => {
+    const projection = new ConversationProjection();
+    projection.configureCacheMissNotices(true);
+    projection.appendUserPrompt("Retry", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "Retry", timestamp: 1 } });
+
+    applyCompletedAssistant(projection, cacheAssistant("m1", 2, 49_000, 0, 1_000, "toolUse"));
+    applyCompletedAssistant(projection, cacheAssistant("m2", 3, 30_000, 0, 0, "error"));
+    applyCompletedAssistant(projection, cacheAssistant("m3", 4, 25_000, 25_000, 0, "stop"));
+
+    expect(cacheMissNotices(projection)).toEqual([]);
+  });
+
+  it("removes derived cache notices when the Pi setting is disabled", () => {
+    const projection = new ConversationProjection();
+    projection.configureCacheMissNotices(true);
+    projection.replaceEntries([
+      userEntry("u1", null, "Run tools", 1),
+      cacheAssistantEntry("a1", "u1", cacheAssistant("m1", 2, 29_000, 0, 1_000, "toolUse")),
+      cacheAssistantEntry("a2", "a1", cacheAssistant("m2", 3, 25_000, 5_000, 0, "stop")),
+    ], []);
+    expect(cacheMissNotices(projection)).toHaveLength(1);
+
+    projection.configureCacheMissNotices(false);
+
+    expect(cacheMissNotices(projection)).toEqual([]);
+  });
+
+  it("uses Pi model prices and labels model-switch and idle misses like Pi TUI", () => {
+    const projection = new ConversationProjection();
+    projection.configureCacheMissNotices(true);
+    projection.setCacheModels(cacheModels);
+    projection.replaceEntries([
+      userEntry("u1", null, "Continue", 1),
+      cacheAssistantEntry("a1", "u1", cacheAssistant("m1", 1, 49_000, 0, 1_000, "toolUse")),
+      cacheAssistantEntry("a2", "a1", cacheAssistant(
+        "m2",
+        2,
+        30_000,
+        0,
+        0,
+        "toolUse",
+        { provider: "openai", model: "gpt", inputCost: 0.06 },
+      )),
+      cacheAssistantEntry("a3", "a2", cacheAssistant(
+        "m3",
+        5 * 60 * 1_000 + 2,
+        25_000,
+        5_000,
+        0,
+        "stop",
+        { provider: "openai", model: "gpt", inputCost: 0.05, cacheReadCost: 0.001 },
+      )),
+    ], []);
+
+    expect(cacheMissNotices(projection).map((notice) => notice.text)).toEqual([
+      "Cache miss after model switch: 30k tokens re-billed (~$0.05)",
+      "Cache miss after 5m idle: 25k tokens re-billed (~$0.04)",
+    ]);
   });
 
   it("preserves active-path order across turns, branch edges, boundaries, and custom blocks", () => {
@@ -946,6 +1101,75 @@ function runLiveTurn(
   });
   projection.applyEvent({ type: "agent_settled" });
   return turnId;
+}
+
+const cacheModels: RpcModel[] = [
+  { provider: "anthropic", id: "claude", cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 } },
+  { provider: "openai", id: "gpt", cost: { input: 2, output: 8, cacheRead: 0.2, cacheWrite: 2 } },
+];
+
+function applyCompletedAssistant(projection: ConversationProjection, message: Record<string, unknown>): void {
+  projection.applyEvent({
+    type: "message_start",
+    message: { role: "assistant", id: message.id, timestamp: message.timestamp, content: [] },
+  });
+  projection.applyEvent({ type: "message_end", message });
+}
+
+function cacheAssistant(
+  id: string,
+  timestamp: number,
+  input: number,
+  cacheRead: number,
+  cacheWrite: number,
+  stopReason: string,
+  options: {
+    provider?: string;
+    model?: string;
+    inputCost?: number;
+    cacheReadCost?: number;
+    cacheWriteCost?: number;
+  } = {},
+): Record<string, unknown> {
+  return {
+    id,
+    role: "assistant",
+    provider: options.provider ?? "anthropic",
+    model: options.model ?? "claude",
+    timestamp,
+    stopReason,
+    content: [{ type: "text", text: id }],
+    usage: {
+      input,
+      output: 0,
+      cacheRead,
+      cacheWrite,
+      totalTokens: input + cacheRead + cacheWrite,
+      cost: {
+        input: options.inputCost ?? 0,
+        output: 0,
+        cacheRead: options.cacheReadCost ?? 0,
+        cacheWrite: options.cacheWriteCost ?? 0,
+        total: 0,
+      },
+    },
+  };
+}
+
+function cacheAssistantEntry(
+  id: string,
+  parentId: string | null,
+  message: Record<string, unknown>,
+): RpcSessionEntry {
+  return { type: "message", id, parentId, timestamp: message.timestamp, message };
+}
+
+function cacheMissNotices(projection: ConversationProjection): SessionNoticeView[] {
+  return projection.read().items
+    .flatMap((item) => item.type === "turn" ? item.items : [item])
+    .filter((item): item is SessionNoticeView => (
+      item.type === "notice" && item.id.startsWith("cache-miss-")
+    ));
 }
 
 function turns(items: readonly { type: string }[]): AgentTurnView[] {

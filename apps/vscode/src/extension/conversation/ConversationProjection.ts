@@ -1,4 +1,4 @@
-import type { RpcEvent, RpcSessionEntry } from "@frostime/pi-rpc";
+import type { RpcEvent, RpcModel, RpcSessionEntry } from "@frostime/pi-rpc";
 
 import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
 import type {
@@ -33,6 +33,14 @@ import {
   assistantPartsFromMessage,
   PiAssistantMessageAdapter,
 } from "./PiAssistantMessageAdapter.js";
+import {
+  advanceCacheAnalysis,
+  CACHE_MISS_IDLE_TTL_MS,
+  type CacheAnalysisState,
+  type CacheMiss,
+  emptyCacheAnalysis,
+  isSignificantCacheMiss,
+} from "./cacheMissDetection.js";
 import { contentToBlocks, createToolView, extractText, extractToolDiff, isRecord, recordValue, stringValue } from "./messageAssembler.js";
 
 export interface ActiveBranchEdge {
@@ -55,6 +63,15 @@ interface PersistedTurnState {
   phase: "active" | "error-awaiting-continuation";
 }
 
+interface AssistantPlacement {
+  turnId: string;
+  viewMessageId: string;
+  status: MessageStatus;
+  timestamp: number;
+}
+
+const CACHE_MISS_NOTICE_ID_PREFIX = "cache-miss-";
+
 export class ConversationProjection {
   readonly #store = new ConversationItemStore();
   readonly #assistantMessageAdapter = new PiAssistantMessageAdapter();
@@ -70,6 +87,11 @@ export class ConversationProjection {
   readonly #eligibleLiveTurnIdSet = new Set<string>();
   #maxImageBytes: number;
   #maxImages: number;
+  #cacheMissNoticesEnabled = false;
+  #cacheModels: readonly RpcModel[] = [];
+  #cacheAnalysis: CacheAnalysisState = emptyCacheAnalysis();
+  readonly #cacheAnalyzedAssistantIds = new Set<string>();
+  readonly #cacheResetBoundaryIds = new Set<string>();
 
   constructor(maxImageBytes = 10 * 1024 * 1024, maxImages = 12) {
     this.#maxImageBytes = maxImageBytes;
@@ -94,6 +116,7 @@ export class ConversationProjection {
     this.#persistedEntryIds.clear();
     this.#eligibleLiveTurnIds.length = 0;
     this.#eligibleLiveTurnIdSet.clear();
+    this.#resetCacheAnalysis();
 
     this.#projectEntries(entries, branchEdges);
     this.#completePersistedTurn(true);
@@ -134,6 +157,18 @@ export class ConversationProjection {
   setImageLimits(maxImageBytes: number, maxImages: number): void {
     this.#maxImageBytes = maxImageBytes;
     this.#maxImages = maxImages;
+  }
+
+  /** Start a fresh process-scoped cache analysis using Pi's effective setting. */
+  configureCacheMissNotices(enabled: boolean): void {
+    this.#cacheMissNoticesEnabled = enabled;
+    this.#cacheModels = [];
+    this.#resetCacheAnalysis();
+    this.#removeCacheMissNotices();
+  }
+
+  setCacheModels(models: readonly RpcModel[]): void {
+    this.#cacheModels = [...models];
   }
 
   userMessage(sourceEntryId: string): ConversationMessageView | undefined {
@@ -237,9 +272,13 @@ export class ConversationProjection {
         }
         break;
       case "message_update":
-      case "message_end":
         this.#applyAssistantMessageEvent(event);
         break;
+      case "message_end": {
+        const placement = this.#applyAssistantMessageEvent(event);
+        if (placement) this.#analyzeAssistantMessage(placement, event.message);
+        break;
+      }
       case "tool_execution_start":
         this.#applyToolStart(event);
         break;
@@ -259,9 +298,11 @@ export class ConversationProjection {
       case "auto_retry_end":
         if (event.success === false) this.appendNotice(`Automatic retry failed: ${stringValue(event.finalError, "Unknown error")}`, "error");
         return;
-      case "compaction_end":
-        this.#applyLiveCompaction(event);
+      case "compaction_end": {
+        const boundaryId = this.#applyLiveCompaction(event);
+        if (boundaryId) this.#applyCacheResetBoundary(boundaryId);
         break;
+      }
       default:
         return;
     }
@@ -290,11 +331,14 @@ export class ConversationProjection {
       case "message":
         this.#projectMessageEntry(entry);
         break;
-      case "compaction":
-        this.#projectCompactionEntry(entry);
+      case "compaction": {
+        const boundaryId = this.#projectCompactionEntry(entry);
+        if (boundaryId) this.#applyCacheResetBoundary(boundaryId);
         break;
+      }
       case "branch_summary":
         this.#appendPersistedItem(branchSummaryView(entry));
+        this.#applyCacheResetBoundary(`branch-summary-${entry.id}`);
         break;
       case "custom_message":
         if (entry.display === true) {
@@ -356,6 +400,7 @@ export class ConversationProjection {
         ),
       });
       if (placement.kind === "conflict") throw new Error(`Persisted assistant placement conflict: ${placement.reason}`);
+      this.#analyzeAssistantMessage({ turnId: turn.id, viewMessageId: placement.viewMessageId, status, timestamp }, message);
       if (message.stopReason === "error") {
         this.#persistedTurn = { turnId: turn.id, phase: "error-awaiting-continuation" };
       } else if (message.stopReason !== "toolUse") {
@@ -397,10 +442,10 @@ export class ConversationProjection {
     }
   }
 
-  #projectCompactionEntry(entry: RpcSessionEntry): void {
+  #projectCompactionEntry(entry: RpcSessionEntry): string | undefined {
     const timestamp = entryTimestamp(entry);
     const source = persistedCompactionSource(entry);
-    if (!source) return;
+    if (!source) return undefined;
     const continuationTurnId = this.#persistedTurn?.phase === "error-awaiting-continuation"
       ? this.#persistedTurn.turnId
       : undefined;
@@ -416,6 +461,7 @@ export class ConversationProjection {
       }),
     });
     if (placement.kind === "conflict") throw new Error(`Persisted compaction placement conflict: ${placement.reason}`);
+    return `compaction-${placement.viewId}`;
   }
 
   #startAgentTurn(): void {
@@ -467,11 +513,11 @@ export class ConversationProjection {
     this.#assistantMessageAdapter.reset();
   }
 
-  #applyAssistantMessageEvent(event: RpcEvent): void {
+  #applyAssistantMessageEvent(event: RpcEvent): AssistantPlacement | undefined {
     const message = this.#assistantMessageAdapter.adapt(event);
-    if (!message) return;
+    if (!message) return undefined;
     const correlationKey = adaptedCorrelationKey(message);
-    if (!correlationKey || this.#store.hasPersistedAssistantOwnership(correlationKey)) return;
+    if (!correlationKey || this.#store.hasPersistedAssistantOwnership(correlationKey)) return undefined;
 
     const timestamp = message.timestamp ?? Date.now();
     const turn = this.#activeTurn() ?? this.#ensureLiveTurn(timestamp);
@@ -479,7 +525,7 @@ export class ConversationProjection {
     const status: MessageStatus = message.phase === "final"
       ? assistantMessageStatus(message.stopReason)
       : message.legacyFailure ?? "streaming";
-    this.#store.placeAssistant({
+    const placement = this.#store.placeAssistant({
       turnId: turn.id,
       source: {
         kind: "live",
@@ -495,6 +541,7 @@ export class ConversationProjection {
         (content, idPrefix) => this.#validatedBlocks(content, undefined, idPrefix),
       ),
     });
+    if (placement.kind !== "placed") return undefined;
     if (status === "streaming") this.#setTurnStatus(turn.id, "running");
     else if (status === "error") {
       this.#pendingLiveErrorTurnId = turn.id;
@@ -506,6 +553,7 @@ export class ConversationProjection {
       this.#pendingLiveErrorTurnId = null;
       this.#setTurnStatus(turn.id, "completed", Date.now());
     }
+    return { turnId: turn.id, viewMessageId: placement.viewMessageId, status, timestamp };
   }
 
   #applyToolStart(event: RpcEvent): void {
@@ -564,13 +612,13 @@ export class ConversationProjection {
     return this.#activeTurn() ?? (this.#store.hasTool(toolCallId) ? undefined : this.#ensureLiveTurn(Date.now()));
   }
 
-  #applyLiveCompaction(event: RpcEvent): void {
+  #applyLiveCompaction(event: RpcEvent): string | undefined {
     const result = recordValue(event.result);
     if (
       typeof result.summary !== "string"
       || typeof result.tokensBefore !== "number"
       || typeof result.firstKeptEntryId !== "string"
-    ) return;
+    ) return undefined;
     const timestamp = Date.now();
     if (event.willRetry === true && this.#activeTurnId) {
       this.#setTurnStatus(this.#activeTurnId, "running");
@@ -580,7 +628,7 @@ export class ConversationProjection {
       firstKeptEntryId: result.firstKeptEntryId,
       fallbackViewId: `compaction-live-${timestamp}-${++this.#sequence}`,
     };
-    this.#store.placeCompaction({
+    const placement = this.#store.placeCompaction({
       turnId: this.#activeTurnId ?? undefined,
       source,
       buildItem: (viewId): CompactionView => ({
@@ -591,6 +639,7 @@ export class ConversationProjection {
         timestamp,
       }),
     });
+    return placement.kind === "conflict" ? undefined : `compaction-${placement.viewId}`;
   }
 
   #alignActiveTurnAwaitingUserMessage(event: RpcEvent): boolean {
@@ -806,6 +855,49 @@ export class ConversationProjection {
     return this.#store.conversationItems();
   }
 
+  #analyzeAssistantMessage(placement: AssistantPlacement, message: unknown): void {
+    if (!this.#cacheMissNoticesEnabled || this.#cacheAnalyzedAssistantIds.has(placement.viewMessageId)) return;
+
+    const result = advanceCacheAnalysis(this.#cacheAnalysis, message, this.#cacheModels);
+    if (result.state === this.#cacheAnalysis) return;
+    this.#cacheAnalysis = result.state;
+    this.#cacheAnalyzedAssistantIds.add(placement.viewMessageId);
+
+    if (
+      result.miss
+      && placement.status !== "error"
+      && placement.status !== "aborted"
+      && isSignificantCacheMiss(result.miss)
+    ) {
+      this.#store.upsertTurnItem(placement.turnId, cacheMissNotice(placement.viewMessageId, result.miss, placement.timestamp));
+    }
+  }
+
+  #applyCacheResetBoundary(boundaryId: string): void {
+    if (!this.#cacheMissNoticesEnabled || this.#cacheResetBoundaryIds.has(boundaryId)) return;
+    this.#cacheResetBoundaryIds.add(boundaryId);
+    this.#cacheAnalysis = emptyCacheAnalysis();
+  }
+
+  #resetCacheAnalysis(): void {
+    this.#cacheAnalysis = emptyCacheAnalysis();
+    this.#cacheAnalyzedAssistantIds.clear();
+    this.#cacheResetBoundaryIds.clear();
+  }
+
+  #removeCacheMissNotices(): void {
+    if (!this.#conversationItems().some((item) => item.id.startsWith(CACHE_MISS_NOTICE_ID_PREFIX))) return;
+    this.#store.mapItems((item) => item.type === "turn"
+      ? {
+          ...item,
+          items: item.items.filter((turnItem) => (
+            turnItem.type !== "notice" || !turnItem.id.startsWith(CACHE_MISS_NOTICE_ID_PREFIX)
+          )),
+        }
+      : item);
+    this.#markContentChanged();
+  }
+
   #validatedBlocks(content: unknown, attachments: unknown, idPrefix: string): MessageBlockView[] {
     const blocks = contentToBlocks(content, attachments, idPrefix);
     const images = blocks.flatMap((block) => block.type === "images" ? block.images : []);
@@ -816,6 +908,31 @@ export class ConversationProjection {
   #markContentChanged(): void {
     this.#contentRevision += 1;
   }
+}
+
+function cacheMissNotice(viewMessageId: string, miss: CacheMiss, timestamp: number): SessionNoticeView {
+  const cost = miss.missedCost >= 0.01 ? ` (~$${miss.missedCost.toFixed(2)})` : "";
+  const reBilled = `${formatTokens(miss.missedTokens)} tokens re-billed${cost}`;
+  const label = miss.modelChanged
+    ? "Cache miss after model switch"
+    : miss.idleMs >= CACHE_MISS_IDLE_TTL_MS
+      ? `Cache miss after ${Math.round(miss.idleMs / 60_000)}m idle`
+      : "Cache miss";
+  return {
+    id: `${CACHE_MISS_NOTICE_ID_PREFIX}${viewMessageId}`,
+    type: "notice",
+    text: `${label}: ${reBilled}`,
+    level: "warning",
+    timestamp,
+  };
+}
+
+function formatTokens(count: number): string {
+  if (count < 1_000) return count.toString();
+  if (count < 10_000) return `${(count / 1_000).toFixed(1)}k`;
+  if (count < 1_000_000) return `${Math.round(count / 1_000)}k`;
+  if (count < 10_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  return `${Math.round(count / 1_000_000)}M`;
 }
 
 function persistedUserTurn(

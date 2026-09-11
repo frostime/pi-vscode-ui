@@ -4,7 +4,7 @@ description: Project entry for reproducing Pi TUI cache-miss notices in FrostPi.
 scope:
   - /apps/vscode/src/extension/**
   - /packages/pi-rpc/**
-status: planned
+status: in-progress
 ---
 
 # Pi-configured cache-miss notices
@@ -24,7 +24,7 @@ FrostPi reproduces Pi TUI's cache-miss notices from documented Pi RPC assistant 
 
 ## Current situation
 
-Pi RPC transmits the assistant messages, usage, model identity, and timestamps needed to detect cache misses, but does not transmit the warning text rendered by Pi TUI. FrostPi already reads selected Pi settings independently for model scope and session discovery, but has no shared Pi-settings loader.
+Pi RPC transmits the assistant messages, usage, model identity, and timestamps needed to detect cache misses, but does not transmit the warning text rendered by Pi TUI. The shared Pi-settings loader is complete. The working tree now contains the Pi-compatible detector and its live/history projection integration; automated verification passes, while interactive review remains pending.
 
 ## Decisions
 
@@ -50,7 +50,7 @@ lai list 'label:work:cache-miss-notices'
 - [Implement Pi-compatible cache-miss detection](lai:#3) — independent pure detection behavior.
 - [Project cache-miss notices into live and restored conversations](lai:#4) — integration, blocked by #2 and #3.
 
-Issues #2 and #3 are independent foundations. Their results unlock #4.
+Issues #2 and #3 are complete. Issue #4 is implemented in the working tree and awaiting interactive review; the change remains intentionally uncommitted.
 
 ## Consequential compatibility question
 

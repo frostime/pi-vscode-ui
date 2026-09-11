@@ -76,9 +76,10 @@ Use this map when the feature is known but its owner is not. Paths name owners a
 - Owners: `apps/vscode/src/extension/composer/ComposerExternalEditor.ts`, `apps/vscode/src/extension/conversation/openReferencedLocation.ts`, and `apps/vscode/src/extension/file-changes/GitBaseContentProvider.ts`.
 - Contracts: Composer and file-mention SPECs; bridge validation is owned by the bridge SPEC.
 
-## Diagnostics, notifications, and status bar
+## Diagnostics, notifications, usage, and status bar
 
-- Owners: `apps/vscode/src/extension/diagnostics/`, `apps/vscode/src/extension/notifications/`, and `apps/vscode/src/extension/status-bar/`.
+- Owners: `apps/vscode/src/extension/diagnostics/`, `apps/vscode/src/extension/notifications/`, `apps/vscode/src/extension/status-bar/`, and `apps/vscode/src/webview/features/usage/`.
+- Pi-configured cache-miss notices are detected and projected by `apps/vscode/src/extension/conversation/cacheMissDetection.ts` and `ConversationProjection.ts`; effective Pi settings come from `apps/vscode/src/extension/_shared/pi-settings/`.
 - Cross-module sensitivity boundary: `.dev/docs/architecture/overview.md`; lifecycle-trigger semantics remain in the lifecycle and extension UI SPECs.
 
 ## Build, testing, packaging, and release

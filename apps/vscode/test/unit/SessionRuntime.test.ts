@@ -1,4 +1,4 @@
-import { access, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -59,6 +59,43 @@ describe("Pi session startup and conversation history", () => {
       tool: { state: "bound", status: "complete", output: "file body" },
     });
     expect(conversationText(runtime.view)).toEqual(expect.arrayContaining(["Checked the file", "Streaming response"]));
+  });
+
+  it("honors Pi settings and projects a cache miss before the agent settles", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-cache-miss-"));
+    await mkdir(join(dir, ".pi"));
+    await writeFile(join(dir, ".pi", "settings.json"), JSON.stringify({ showCacheMissNotices: true }));
+    const fakePi = await writeCacheMissPi(dir);
+    const configuration = { ...runtimeConfiguration(fakePi), piArguments: ["--approve"] };
+    const runtime = new SessionRuntime(
+      "cache-miss",
+      dir,
+      "Cache miss",
+      () => configuration,
+      new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
+      { error: vi.fn(), info: vi.fn() } as never,
+      { onChange: vi.fn(), onEditorText: vi.fn() },
+    );
+    runtimes.push(runtime);
+
+    await runtime.start();
+    await runtime.sendPrompt("Use tools", []);
+    await waitFor(() => conversationNotices(runtime.view).some((notice) => notice.text.startsWith("Cache miss:")));
+
+    expect(runtime.view.status).toBe("running");
+    expect(conversationNotices(runtime.view)).toContainEqual(expect.objectContaining({
+      level: "warning",
+      text: "Cache miss: 25k tokens re-billed",
+    }));
+    await waitFor(() => runtime.view.status === "ready");
+
+    await runtime.stop();
+    await writeFile(join(dir, ".pi", "settings.json"), JSON.stringify({ showCacheMissNotices: false }));
+    await runtime.start();
+    await runtime.sendPrompt("Use tools again", []);
+    await waitFor(() => runtime.view.status === "ready");
+
+    expect(conversationNotices(runtime.view).filter((notice) => notice.text.startsWith("Cache miss:"))).toEqual([]);
   });
 
   afterEach(async () => {
@@ -1061,6 +1098,63 @@ process.stdin.on("data", chunk => {
     else if (command.type === "get_entries") response.data = { entries: [], leafId: null };
     else if (command.type === "get_session_stats") response.data = { sessionId: "memory", userMessages: 0, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 0, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 };
     process.stdout.write(JSON.stringify(response) + "\n");
+  }
+});
+process.on("SIGTERM", () => process.exit(0));
+`);
+  return fakePi;
+}
+
+async function writeCacheMissPi(dir: string): Promise<string> {
+  const fakePi = join(dir, "fake-cache-miss-pi.cjs");
+  await writeFile(fakePi, String.raw`#!/usr/bin/env node
+let input = "";
+const model = { provider: "anthropic", id: "claude", name: "Claude", cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 } };
+const write = value => process.stdout.write(JSON.stringify(value) + "\n");
+const assistant = (id, timestamp, inputTokens, cacheRead, cacheWrite, stopReason) => ({
+  id,
+  role: "assistant",
+  provider: "anthropic",
+  model: "claude",
+  timestamp,
+  stopReason,
+  content: [{ type: "text", text: id }],
+  usage: {
+    input: inputTokens,
+    output: 0,
+    cacheRead,
+    cacheWrite,
+    totalTokens: inputTokens + cacheRead + cacheWrite,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  },
+});
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => {
+  input += chunk;
+  while (input.includes("\n")) {
+    const index = input.indexOf("\n");
+    const command = JSON.parse(input.slice(0, index));
+    input = input.slice(index + 1);
+    const response = { type: "response", id: command.id, command: command.type, success: true };
+    if (command.type === "get_state") response.data = { model, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionId: "cache-miss" };
+    else if (command.type === "get_available_models") response.data = { models: [model] };
+    else if (command.type === "get_commands") response.data = { commands: [] };
+    else if (command.type === "get_entries") response.data = { entries: [], leafId: null };
+    else if (command.type === "get_session_stats") response.data = { sessionId: "cache-miss", userMessages: 1, assistantMessages: 2, toolCalls: 1, toolResults: 1, totalMessages: 4, tokens: { input: 54000, output: 0, cacheRead: 5000, cacheWrite: 1000, total: 60000 }, cost: 0 };
+    else if (command.type === "prompt") {
+      write(response);
+      write({ type: "agent_start" });
+      write({ type: "message_start", message: { role: "user", content: command.message, timestamp: 1 } });
+      const first = assistant("a1", 2, 29000, 0, 1000, "toolUse");
+      write({ type: "message_start", message: { role: "assistant", id: "a1", timestamp: 2, content: [] } });
+      write({ type: "message_end", message: first });
+      const second = assistant("a2", 3, 25000, 5000, 0, "stop");
+      write({ type: "message_start", message: { role: "assistant", id: "a2", timestamp: 3, content: [] } });
+      write({ type: "message_end", message: second });
+      setTimeout(() => write({ type: "agent_settled" }), 80);
+      continue;
+    }
+    write(response);
   }
 });
 process.on("SIGTERM", () => process.exit(0));
