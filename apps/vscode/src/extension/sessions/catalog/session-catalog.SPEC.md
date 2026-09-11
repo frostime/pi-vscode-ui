@@ -12,7 +12,7 @@ The catalog provides Pi `/resume`-equivalent discovery for the active workspace 
 
 ## Roots and ownership
 
-Root precedence is: `--session-dir` in `frostpi.pi.arguments`, `PI_CODING_AGENT_SESSION_DIR`, project `.pi/settings.json` `sessionDir`, user `~/.pi/agent/settings.json` `sessionDir`, then Pi's default `~/.pi/agent/sessions`.
+Root precedence is: `--session-dir` in `frostpi.pi.arguments`, `PI_CODING_AGENT_SESSION_DIR`, project `.pi/settings.json` `sessionDir`, user `<PI_CODING_AGENT_DIR>/settings.json` `sessionDir`, then Pi's default `<PI_CODING_AGENT_DIR>/sessions` (`~/.pi/agent` when the environment override is absent).
 
 Relative `sessionDir` values expand `~` and resolve from the relevant workspace/worktree directory used as Pi cwd, never from the settings file. Roots are resolved per allowed working directory, deduplicated, and all remain candidates so sessions survive configuration changes. A candidate JSONL header `cwd` must match an allowed directory.
 

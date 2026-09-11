@@ -1,7 +1,8 @@
-import { open, readdir, readFile, stat } from "node:fs/promises";
+import { open, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, normalize, resolve } from "node:path";
 
+import { loadPiSettings, resolvePiAgentDirectory } from "../../_shared/pi-settings/loadPiSettings.js";
 import {
   findSessionWorkingDirectory,
   type SessionWorkingDirectory,
@@ -156,16 +157,14 @@ export async function resolveSessionRoots(cwd: string, piArguments: string[]): P
   if (cli) roots.push(resolveSessionDir(cli, cwd));
   if (process.env.PI_CODING_AGENT_SESSION_DIR) roots.push(resolveSessionDir(process.env.PI_CODING_AGENT_SESSION_DIR, cwd));
 
-  // Relative sessionDir values follow Pi runtime semantics: normalize (~) then
-  // resolve against the process cwd (the workspace folder FrostPi launches Pi in).
-  // Do not anchor to the settings file directory — that rule applies to Pi resources, not sessionDir.
-  const projectSettings = join(cwd, ".pi", "settings.json");
-  const globalSettings = join(homedir(), ".pi", "agent", "settings.json");
-  const projectDir = await readSessionDirSetting(projectSettings);
-  const globalDir = await readSessionDirSetting(globalSettings);
+  // Catalog discovery includes both configured scopes even when one is not currently effective,
+  // so sessions remain discoverable after trust or launch-argument changes.
+  const settings = await loadPiSettings(cwd, { piArguments });
+  const projectDir = sessionDirSetting(settings.project);
+  const globalDir = sessionDirSetting(settings.global);
   if (projectDir) roots.push(resolveSessionDir(projectDir, cwd));
   if (globalDir) roots.push(resolveSessionDir(globalDir, cwd));
-  roots.push(join(homedir(), ".pi", "agent", "sessions"));
+  roots.push(join(resolvePiAgentDirectory(cwd), "sessions"));
 
   return [...new Set(roots.map((root) => normalize(resolve(root))))];
 }
@@ -194,13 +193,10 @@ async function findJsonlFiles(roots: string[], limit: number): Promise<string[]>
   return files;
 }
 
-async function readSessionDirSetting(path: string): Promise<string | undefined> {
-  try {
-    const parsed = JSON.parse(await readFile(path, "utf8")) as { sessionDir?: unknown };
-    return typeof parsed.sessionDir === "string" && parsed.sessionDir.trim() ? parsed.sessionDir.trim() : undefined;
-  } catch {
-    return undefined;
-  }
+function sessionDirSetting(settings: Readonly<Record<string, unknown>>): string | undefined {
+  return typeof settings.sessionDir === "string" && settings.sessionDir.trim()
+    ? settings.sessionDir.trim()
+    : undefined;
 }
 
 function sessionDirArgument(args: string[]): string | undefined {

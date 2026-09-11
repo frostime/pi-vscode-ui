@@ -339,4 +339,23 @@ describe("session root resolution", () => {
     const roots = await resolveSessionRoots(cwd, ["--session-dir", "custom-sessions"]);
     expect(roots).toContain(normalize(resolve(cwd, "custom-sessions")));
   });
+
+  it("uses PI_CODING_AGENT_DIR for global settings and the default session root", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "frostpi-roots-"));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    try {
+      const agentDirectory = join(cwd, ".config", "pi");
+      await mkdir(agentDirectory, { recursive: true });
+      await writeFile(join(agentDirectory, "settings.json"), JSON.stringify({ sessionDir: "configured-sessions" }));
+      process.env.PI_CODING_AGENT_DIR = agentDirectory;
+
+      const roots = await resolveSessionRoots(cwd, []);
+
+      expect(roots).toContain(normalize(resolve(cwd, "configured-sessions")));
+      expect(roots).toContain(normalize(resolve(agentDirectory, "sessions")));
+    } finally {
+      if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+    }
+  });
 });

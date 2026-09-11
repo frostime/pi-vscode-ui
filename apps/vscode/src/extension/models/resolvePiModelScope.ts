@@ -1,15 +1,11 @@
-import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
-
 import { minimatch } from "minimatch";
 
 import type { RpcModel } from "@frostime/pi-rpc";
 
+import { loadPiSettings, type PiSettings } from "../_shared/pi-settings/loadPiSettings.js";
+
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 const DATED_MODEL_ID = /-\d{8}$/;
-
-type PiSettings = Record<string, unknown>;
 
 /**
  * Resolve the model patterns used by Pi's --models/enabledModels scope.
@@ -61,12 +57,8 @@ export async function resolvePiModelScope(
   piArguments: readonly string[],
   models: readonly RpcModel[],
 ): Promise<string[]> {
-  // This is a display-only mirror; project trust is intentionally not reproduced here.
-  const [globalSettings, projectSettings] = await Promise.all([
-    readSettings(join(piAgentDir(cwd), "settings.json")),
-    readSettings(join(cwd, ".pi", "settings.json")),
-  ]);
-  return resolveModelScopePatterns(selectModelPatterns(piArguments, globalSettings, projectSettings), models);
+  const settings = await loadPiSettings(cwd, { piArguments });
+  return resolveModelScopePatterns(selectModelPatterns(piArguments, settings.global, settings.project), models);
 }
 
 function resolvePattern(pattern: string, models: readonly RpcModel[]): RpcModel[] {
@@ -134,16 +126,6 @@ function modelKey(model: RpcModel): string {
   return `${model.provider}/${model.id}`;
 }
 
-function piAgentDir(cwd: string): string {
-  const configured = process.env.PI_CODING_AGENT_DIR?.trim();
-  if (!configured) return join(homedir(), ".pi", "agent");
-  if (configured === "~") return homedir();
-  const expanded = configured.startsWith("~/") || configured.startsWith("~\\")
-    ? join(homedir(), configured.slice(2))
-    : configured;
-  return isAbsolute(expanded) ? expanded : join(cwd, expanded);
-}
-
 function modelsArgument(args: readonly string[]): string[] | undefined {
   let patterns: string[] | undefined;
   for (let index = 0; index + 1 < args.length; index += 1) {
@@ -158,15 +140,6 @@ function enabledModels(value: unknown): string[] | undefined {
   if (!isSettings(value) || !("enabledModels" in value)) return undefined;
   if (!Array.isArray(value.enabledModels) || !value.enabledModels.every((pattern) => typeof pattern === "string")) return [];
   return value.enabledModels;
-}
-
-async function readSettings(path: string): Promise<PiSettings | undefined> {
-  try {
-    const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
-    return isSettings(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function isSettings(value: unknown): value is PiSettings {
