@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { rankFileCandidate } from "../../src/extension/composer/mentions/rankFileCandidate.js";
+import { parseFdOutput, rankFileCandidate } from "../../src/extension/fd/fdResults.js";
+
+describe("fd result parsing", () => {
+  it("parses NUL-delimited files and directories across path separators", () => {
+    expect(parseFdOutput("src\\app.ts\0src\\features\\\0")).toEqual([
+      { path: "src/app.ts", isDirectory: false },
+      { path: "src/features", isDirectory: true },
+    ]);
+  });
+});
 
 describe("workspace file ranking", () => {
   it("prioritizes exact names, prefixes, and boosted paths", () => {

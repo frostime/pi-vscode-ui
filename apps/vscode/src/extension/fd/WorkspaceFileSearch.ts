@@ -1,49 +1,28 @@
-import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
-import { homedir } from "node:os";
-import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, extname, resolve } from "node:path";
 
 import { minimatch } from "minimatch";
 
-import type { WorkspaceFileCandidateView } from "../../../shared/model/workspaceFileModel.js";
-import { rankFileCandidate } from "./rankFileCandidate.js";
+import {
+  buildFdArguments,
+  normalizeGlob,
+  resolveQueryScope,
+  type ScopedQuery,
+  type WorkspaceFileExcludeRule,
+  type WorkspaceFileSearchOptions,
+} from "./fdArgs.js";
+import { parseFdOutput, rankFileCandidate, type FdEntry } from "./fdResults.js";
+import { discoverFdExecutable, type FdExecutable } from "./fdExecutable.js";
+import type { WorkspaceFileCandidateView } from "../../shared/model/workspaceFileModel.js";
 
-const MAX_FD_RESULTS = 500;
 const FD_TIMEOUT_MS = 7_000;
-
-export interface WorkspaceFileExcludeRule {
-  pattern: string;
-  when?: string;
-}
-
-export interface WorkspaceFileSearchOptions {
-  excludeRules: readonly WorkspaceFileExcludeRule[];
-  respectIgnoreFiles: boolean;
-  followSymlinks: boolean;
-}
-
-export interface FdExecutable {
-  command: string;
-  version: string;
-  supportsDirectoryMarkers: boolean;
-}
 
 export interface WorkspaceFileSearchDependencies {
   discoverFd?: () => Promise<FdExecutable>;
   spawnFd?: (command: string, args: readonly string[]) => ChildProcess;
   timeoutMs?: number;
   onLegacyFd?: (fd: FdExecutable) => void;
-}
-
-interface FdEntry {
-  path: string;
-  isDirectory: boolean;
-}
-
-export interface ScopedQuery {
-  baseDirectory: string;
-  displayPrefix: string;
-  query: string;
 }
 
 export class WorkspaceFileSearch {
@@ -83,7 +62,7 @@ export class WorkspaceFileSearch {
       this.#onLegacyFd?.(fd);
     }
 
-    const scope = resolveQueryScope(cwd, query);
+    const scope = resolveQueryScope(cwd, query, isDirectory);
     const entries = await this.#runFd(fd, scope, options, version);
     if (version !== this.#searchVersion) return [];
 
@@ -160,111 +139,7 @@ export class WorkspaceFileSearch {
   }
 }
 
-export function buildFdArguments(
-  scope: ScopedQuery,
-  options: WorkspaceFileSearchOptions,
-  includeDirectories = true,
-): string[] {
-  const args = [
-    "--base-directory", scope.baseDirectory,
-    "--max-results", String(MAX_FD_RESULTS),
-    "--type", "file",
-  ];
-  if (includeDirectories) args.push("--type", "directory");
-  args.push(
-    "--color", "never",
-    "--print0",
-    "--hidden",
-    "--ignore-case",
-    "--exclude", ".git",
-    "--exclude", "node_modules",
-  );
-  if (!options.respectIgnoreFiles) args.push("--no-ignore");
-  if (options.followSymlinks) args.push("--follow");
-  for (const rule of options.excludeRules) {
-    if (!rule.when) args.push("--exclude", normalizeGlob(rule.pattern));
-  }
-  if (scope.query) args.push("--full-path", "--", buildFdFuzzyPattern(scope.baseDirectory, scope.query));
-  return args;
-}
-
-export function buildFdFuzzyPattern(baseDirectory: string, query: string): string {
-  const base = [...baseDirectory.replaceAll("\\", "/")]
-    .map((character) => character === "/" ? "[\\\\/]" : escapeRegex(character))
-    .join("");
-  const fuzzy = [...query.replaceAll("\\", "/")]
-    .map((character) => character === "/" ? "[\\\\/]" : escapeRegex(character))
-    .join(".*");
-  return `^${base}[\\\\/].*${fuzzy}`;
-}
-
-export function parseFdOutput(output: string): FdEntry[] {
-  return output
-    .split("\0")
-    .filter(Boolean)
-    .map((rawPath) => {
-      const isDirectory = /[\\/]$/.test(rawPath);
-      const path = rawPath.replace(/[\\/]$/, "").replaceAll("\\", "/").replace(/^\.\//, "");
-      return { path, isDirectory };
-    })
-    .filter((entry) => entry.path && !entry.path.startsWith("../"));
-}
-
-export function resolveQueryScope(cwd: string, query: string): ScopedQuery {
-  const normalized = query.replaceAll("\\", "/");
-  const slash = normalized.lastIndexOf("/");
-  if (slash < 0 || isAbsolute(normalized)) return { baseDirectory: cwd, displayPrefix: "", query: normalized };
-
-  const displayPrefix = normalized.slice(0, slash + 1);
-  const baseDirectory = resolve(cwd, displayPrefix);
-  const relativeBase = relative(cwd, baseDirectory);
-  if (relativeBase.startsWith("..") || isAbsolute(relativeBase) || !isDirectory(baseDirectory)) {
-    return { baseDirectory: cwd, displayPrefix: "", query: normalized };
-  }
-  return { baseDirectory, displayPrefix, query: normalized.slice(slash + 1) };
-}
-
-export async function selectFdExecutable(
-  commands: readonly string[],
-  probe: (command: string) => Promise<FdExecutable | undefined> = probeFdExecutable,
-): Promise<FdExecutable> {
-  let legacy: FdExecutable | undefined;
-  for (const command of commands) {
-    const fd = await probe(command);
-    if (!fd) continue;
-    if (fd.supportsDirectoryMarkers) return fd;
-    legacy ??= fd;
-  }
-  if (legacy) return legacy;
-  throw new Error("fd is required for workspace path completion but was not found in PATH or Pi's managed bin directory.");
-}
-
-async function discoverFdExecutable(): Promise<FdExecutable> {
-  const pathCandidates = process.platform === "linux" ? ["fd", "fdfind"] : ["fd"];
-  const agentDirectory = process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");
-  const managed = join(agentDirectory, "bin", process.platform === "win32" ? "fd.exe" : "fd");
-  return selectFdExecutable([...new Set([...pathCandidates, managed])]);
-}
-
-function probeFdExecutable(command: string): Promise<FdExecutable | undefined> {
-  return new Promise((resolvePromise) => {
-    execFile(command, ["--version"], { encoding: "utf8", windowsHide: true }, (error, stdout) => {
-      if (error) {
-        resolvePromise(undefined);
-        return;
-      }
-      resolvePromise(parseFdVersion(command, stdout));
-    });
-  });
-}
-
-export function parseFdVersion(command: string, output: string): FdExecutable {
-  const match = output.match(/\b(\d+)(?:\.\d+){1,2}\b/);
-  const version = match?.[0] ?? "unknown";
-  const major = match ? Number.parseInt(match[1] ?? "0", 10) : 0;
-  return { command, version, supportsDirectoryMarkers: major >= 10 };
-}
-
+/** Applies workspace `files.exclude` rules, including conditional sibling-file rules. */
 export function isWorkspacePathExcluded(cwd: string, path: string, rules: readonly WorkspaceFileExcludeRule[]): boolean {
   return rules.some((rule) => {
     if (!matchesGlob(path, rule.pattern)) return false;
@@ -281,24 +156,15 @@ function matchesGlob(path: string, pattern: string): boolean {
   return minimatch(path, normalized, options) || minimatch(path, `${normalized.replace(/\/$/, "")}/**`, options);
 }
 
-function normalizeGlob(pattern: string): string {
-  const normalized = pattern.replaceAll("\\", "/");
-  return normalized.startsWith("/") ? normalized.slice(1) : normalized;
-}
-
 function isAlwaysExcluded(path: string): boolean {
   return path === ".git" || path.startsWith(".git/") || path.includes("/.git/")
     || path === "node_modules" || path.startsWith("node_modules/") || path.includes("/node_modules/");
 }
 
-function isDirectory(path: string): boolean {
+export function isDirectory(path: string): boolean {
   try {
     return statSync(path).isDirectory();
   } catch {
     return false;
   }
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

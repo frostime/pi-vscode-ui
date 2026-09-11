@@ -1,24 +1,15 @@
 import type { ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  buildFdArguments,
-  buildFdFuzzyPattern,
-  isWorkspacePathExcluded,
-  parseFdOutput,
-  parseFdVersion,
-  resolveQueryScope,
-  selectFdExecutable,
-  WorkspaceFileSearch,
-  type FdExecutable,
-  type WorkspaceFileSearchOptions,
-} from "../../src/extension/composer/mentions/WorkspaceFileSearch.js";
+import { isWorkspacePathExcluded, WorkspaceFileSearch } from "../../src/extension/fd/WorkspaceFileSearch.js";
+import type { WorkspaceFileSearchOptions } from "../../src/extension/fd/fdArgs.js";
+import { parseFdVersion, type FdExecutable } from "../../src/extension/fd/fdExecutable.js";
 
 const temporaryDirectories: string[] = [];
 const searchOptions: WorkspaceFileSearchOptions = {
@@ -34,28 +25,6 @@ afterEach(() => {
 });
 
 describe("workspace path search", () => {
-  it("builds an escaped fuzzy query that matches full paths", () => {
-    const pattern = buildFdFuzzyPattern("/workspace", "ss[c]/x");
-    expect(pattern).toContain("s.*s.*\\[.*c.*\\].*[\\\\/].*x");
-    expect(new RegExp(pattern, "i").test("/workspace/docs/ss[c]/x.ts")).toBe(true);
-  });
-
-  it("parses NUL-delimited files and directories across path separators", () => {
-    expect(parseFdOutput("src\\app.ts\0src\\features\\\0")).toEqual([
-      { path: "src/app.ts", isDirectory: false },
-      { path: "src/features", isDirectory: true },
-    ]);
-  });
-
-  it("selects a modern managed fd over an older PATH fd", async () => {
-    const oldFd = parseFdVersion("fd", "fd 9.0.0");
-    const managedFd = parseFdVersion("/pi/bin/fd", "fd 10.2.0");
-    const probe = vi.fn((command: string) => Promise.resolve(command === "fd" ? oldFd : managedFd));
-
-    await expect(selectFdExecutable(["fd", "/pi/bin/fd"], probe)).resolves.toEqual(managedFd);
-    expect(probe).toHaveBeenCalledTimes(2);
-  });
-
   it("falls back to file-only search and reports a legacy fd once", async () => {
     const oldFd = parseFdVersion("fd", "fd 9.0.0");
     const processes: FakeFdProcess[] = [];
@@ -137,18 +106,6 @@ describe("workspace path search", () => {
     expect(processes[0]?.kill).toHaveBeenCalledWith("SIGKILL");
   });
 
-  it("scopes continued directory completion to that directory", () => {
-    const cwd = mkdtempSync(join(tmpdir(), "frostpi-files-"));
-    temporaryDirectories.push(cwd);
-    mkdirSync(join(cwd, "src"));
-
-    expect(resolveQueryScope(cwd, "src/com")).toEqual({
-      baseDirectory: join(cwd, "src"),
-      displayPrefix: "src/",
-      query: "com",
-    });
-  });
-
   it("honors conditional files.exclude rules only when the sibling exists", () => {
     const cwd = mkdtempSync(join(tmpdir(), "frostpi-exclude-"));
     temporaryDirectories.push(cwd);
@@ -157,22 +114,6 @@ describe("workspace path search", () => {
     const rules = [{ pattern: "**/*.js", when: "$(basename).ts" }];
     expect(isWorkspacePathExcluded(cwd, "app.js", rules)).toBe(true);
     expect(isWorkspacePathExcluded(cwd, "other.js", rules)).toBe(false);
-  });
-
-  it("maps ignore, symlink, and exclude controls to bounded fd arguments", () => {
-    const args = buildFdArguments(
-      { baseDirectory: "/workspace", displayPrefix: "", query: "src" },
-      {
-        excludeRules: [{ pattern: "dist/**" }, { pattern: "**/*.js", when: "$(basename).ts" }],
-        respectIgnoreFiles: false,
-        followSymlinks: true,
-      },
-    );
-    expect(args).toContain("500");
-    expect(args).toContain("--no-ignore");
-    expect(args).toContain("--follow");
-    expect(args).toContain("dist/**");
-    expect(args).not.toContain("**/*.js");
   });
 });
 

@@ -43,13 +43,13 @@ Use this map when the feature is known but its owner is not. Paths name owners a
 
 ## Composer, file mentions, and attachments
 
-- Owners: `apps/vscode/src/webview/features/composer/`, `apps/vscode/src/extension/composer/`, and `apps/vscode/src/extension/attachments/`.
-- Entry points/contracts: `apps/vscode/src/webview/features/composer/Composer.svelte`, `apps/vscode/src/extension/composer/mentions/WorkspaceFileSearch.ts`, `apps/vscode/src/webview/features/composer/composer.SPEC.md`, and `apps/vscode/src/extension/composer/mentions/file-mentions.SPEC.md`.
+- Owners: `apps/vscode/src/webview/features/composer/`, `apps/vscode/src/extension/composer/`, `apps/vscode/src/extension/fd/` (fd retrieval shared with file-link fallback), and `apps/vscode/src/extension/attachments/`.
+- Entry points/contracts: `apps/vscode/src/webview/features/composer/Composer.svelte`, `apps/vscode/src/extension/fd/WorkspaceFileSearch.ts`, `apps/vscode/src/webview/features/composer/composer.SPEC.md`, and `apps/vscode/src/extension/composer/mentions/file-mentions.SPEC.md`.
 
 ## Conversation rendering, Markdown, and scrolling
 
 - Owner: `apps/vscode/src/webview/features/conversation/`; scrolling lives in `apps/vscode/src/webview/features/conversation/scrolling/`.
-- Entry points/contracts: `apps/vscode/src/webview/features/conversation/ConversationView.svelte`, `apps/vscode/src/webview/features/conversation/markdown/renderMarkdown.ts` (`markdown-it`), and `apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md`; cross-feature scroll ownership is in `.dev/docs/design/ui-spec.md`.
+- Entry points/contracts: `apps/vscode/src/webview/features/conversation/ConversationView.svelte`, `apps/vscode/src/webview/features/conversation/markdown/renderMarkdown.ts` (`markdown-it`), `apps/vscode/src/extension/conversation/openReferencedLocation.ts` (file-link open, workspace fallback), and `apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md`; cross-feature scroll ownership is in `.dev/docs/design/ui-spec.md`.
 
 ## Response annotation review
 

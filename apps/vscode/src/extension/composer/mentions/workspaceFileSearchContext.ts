@@ -3,7 +3,7 @@ import { isAbsolute, relative } from "node:path";
 import * as vscode from "vscode";
 
 import type { SessionViewModel } from "../../../shared/model/sessionViewModel.js";
-import type { WorkspaceFileExcludeRule } from "./WorkspaceFileSearch.js";
+import type { WorkspaceFileExcludeRule } from "../../fd/fdArgs.js";
 
 type ConfiguredExclude = boolean | { when?: string };
 

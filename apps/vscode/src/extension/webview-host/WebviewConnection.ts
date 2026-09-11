@@ -6,7 +6,7 @@ import { webviewToHostSchema } from "../../shared/bridge/webviewToHost.js";
 import type { ConversationItemView } from "../../shared/model/conversationModel.js";
 import type { SessionViewModel } from "../../shared/model/sessionViewModel.js";
 import type { WebviewPresentationView } from "../../shared/model/webviewPresentationModel.js";
-import { WorkspaceFileSearch } from "../composer/mentions/WorkspaceFileSearch.js";
+import { WorkspaceFileSearch } from "../fd/WorkspaceFileSearch.js";
 import { readChatTypography } from "../configuration/readChatTypography.js";
 import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import type { SessionRegistry } from "../sessions/SessionRegistry.js";

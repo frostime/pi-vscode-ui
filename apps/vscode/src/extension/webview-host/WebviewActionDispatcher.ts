@@ -6,7 +6,7 @@ import type { ComposerDraftView } from "../../shared/model/composerDraftModel.js
 import { captureActiveFileReference } from "../composer/mentions/captureActiveFile.js";
 import { captureActiveSelection } from "../composer/mentions/captureSelection.js";
 import { listEditorMentionSpecials } from "../composer/mentions/editorMentionSpecials.js";
-import type { WorkspaceFileSearch } from "../composer/mentions/WorkspaceFileSearch.js";
+import type { WorkspaceFileSearch } from "../fd/WorkspaceFileSearch.js";
 import { workspaceFileBoosts, workspaceFileExcludeRules } from "../composer/mentions/workspaceFileSearchContext.js";
 import { configurePiExecutable } from "../configuration/configurePiExecutable.js";
 import { readConfiguration } from "../configuration/readConfiguration.js";

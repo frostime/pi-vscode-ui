@@ -1,6 +1,23 @@
 import { basename, dirname } from "node:path";
 
-import type { WorkspaceFileCandidateView } from "../../../shared/model/workspaceFileModel.js";
+import type { WorkspaceFileCandidateView } from "../../shared/model/workspaceFileModel.js";
+
+export interface FdEntry {
+  path: string;
+  isDirectory: boolean;
+}
+
+export function parseFdOutput(output: string): FdEntry[] {
+  return output
+    .split("\0")
+    .filter(Boolean)
+    .map((rawPath) => {
+      const isDirectory = /[\\/]$/.test(rawPath);
+      const path = rawPath.replace(/[\\/]$/, "").replaceAll("\\", "/").replace(/^\.\//, "");
+      return { path, isDirectory };
+    })
+    .filter((entry) => entry.path && !entry.path.startsWith("../"));
+}
 
 export function rankFileCandidate(
   path: string,
