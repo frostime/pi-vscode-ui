@@ -19,7 +19,7 @@
     "clean": "node ../../scripts/clean-dir.mjs dist coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "lint": "eslint src/**/*.ts test/**/*.ts --max-warnings 0"
+    "lint": "eslint src test --max-warnings 0"
   },
   "devDependencies": {
     "@types/node": "^24.1.0",

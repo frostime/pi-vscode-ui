@@ -297,7 +297,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "node test/e2e/runTest.cjs",
-    "lint": "eslint src/**/*.ts pi-extensions/**/*.ts test/**/*.ts --max-warnings 0 && eslint src/**/*.svelte --max-warnings 0"
+    "lint": "eslint src pi-extensions test --max-warnings 0"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
