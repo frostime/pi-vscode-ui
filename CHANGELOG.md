@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Open file links whose path does not resolve — a bare filename or a stale path — by jumping to the best fd workspace match with the referenced line and column applied; the original error remains when nothing plausible matches.
 - Show each Pi tool result's provided diff inside its expanded activity card, including restored history, with themed additions and removals that cover the full horizontally scrollable width.
 - Support rendering Markdown images in conversations.
 
