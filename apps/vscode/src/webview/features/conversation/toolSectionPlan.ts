@@ -24,7 +24,7 @@ const SECTION_LABELS: Record<ToolSectionId, string> = {
 };
 
 export function isToolSectionId(value: string): value is ToolSectionId {
-  return value in SECTION_LABELS;
+  return Object.hasOwn(SECTION_LABELS, value);
 }
 
 export function planToolSections(tool: ToolCallView): ToolSectionPlan {

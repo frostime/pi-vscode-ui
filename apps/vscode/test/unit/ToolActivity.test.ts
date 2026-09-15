@@ -1,13 +1,18 @@
 import { render } from "svelte/server";
 import { describe, expect, it } from "vitest";
 
-import type { BoundToolCallView } from "../../src/shared/model/toolCallModel.js";
+import type {
+  BoundToolCallView,
+  PreparingToolCallView,
+  ToolCallView,
+} from "../../src/shared/model/toolCallModel.js";
 import ToolActivity from "../../src/webview/features/conversation/ToolActivity.svelte";
 
 /**
  * The card is pinned through its rendered markup instead of a mounted tree: the section set and
- * the section a card opens on are what the organization promises, and both are decided before
- * any interaction. The reader's own section choice lives in `toolSectionPlan`'s latch rule.
+ * the section a card opens on are the whole of what a first render decides. The reader's own
+ * section choice, and the latch that fixes it when the card is first expanded, are component
+ * state and are not covered here.
  */
 describe("ToolActivity sections", () => {
   it("offers every section the call has content for", () => {
@@ -63,6 +68,15 @@ describe("ToolActivity sections", () => {
     expect(argumentKeys(card)).toEqual(["edits"]);
   });
 
+  it("shows a call that is still streaming its arguments as input", () => {
+    const card = renderCard(preparing('{ "command": "pnpm build"'));
+
+    expect(card).toContain("Preparing tool call");
+    expect(tabLabels(card)).toEqual([]);
+    expect(staticLabel(card)).toBe("Input");
+    expect(card).toContain("pnpm build");
+  });
+
   it("offers the recognized file as an action", () => {
     const card = renderCard(bound({ args: { path: "a.ts" }, location: { path: "a.ts", line: 4 } }));
 
@@ -76,7 +90,7 @@ describe("ToolActivity sections", () => {
   });
 });
 
-function renderCard(tool: BoundToolCallView): string {
+function renderCard(tool: ToolCallView): string {
   return render(ToolActivity, { props: { activity: activity(tool) } }).body;
 }
 
@@ -115,8 +129,12 @@ function stripMarkers(html: string): string {
   return html.replace(/<!--[\s\S]*?-->/g, "").trim();
 }
 
-function activity(tool: BoundToolCallView) {
+function activity(tool: ToolCallView) {
   return { id: "a1", type: "tool" as const, tool, timestamp: 0 };
+}
+
+function preparing(rawArguments: string): PreparingToolCallView {
+  return { state: "preparing", rawArguments, status: "running", isError: false, startedAt: 0 };
 }
 
 function bound(options: {
