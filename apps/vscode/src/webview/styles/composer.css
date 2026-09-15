@@ -102,44 +102,6 @@
 .app-shell:has(.composer-expanded) .prompt-editor .cm-scroller { flex: 1 1 auto; min-height: 0; max-height: none; height: auto; }
 .app-shell:has(.composer-expanded) .prompt-editor .cm-content { min-height: 100%; }
 .app-shell:has(.composer-expanded) .composer-toolbar { flex: 0 0 auto; }
-.command-suggestions {
-  position: absolute;
-  z-index: 40;
-  left: 0;
-  right: 0;
-  bottom: calc(100% + 7px);
-  max-height: 310px;
-  overflow-y: auto;
-  padding: 5px;
-  background: var(--frost-surface-raised);
-  border: 1px solid var(--frost-border);
-  border-radius: 9px;
-  box-shadow: var(--frost-shadow);
-}
-.command-suggestions button {
-  width: 100%;
-  display: grid;
-  grid-template-columns: minmax(90px, auto) minmax(0,1fr) auto;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 8px;
-  background: transparent;
-  border-radius: 5px;
-  text-align: left;
-  cursor: pointer;
-}
-.command-suggestions button:hover { background: var(--frost-hover); }
-.command-name { color: var(--frost-text); font-family: var(--font-mono); font-size: 11px; }
-.command-description { color: var(--frost-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
-.command-source {
-  padding: 1px 5px;
-  border-radius: 99px;
-  background: color-mix(in srgb, var(--frost-active) 70%, transparent);
-  color: var(--frost-muted);
-  font-size: 9px;
-  text-transform: uppercase;
-}
-.command-suggestions button.active { background: var(--frost-hover); }
 .prompt-editor { min-width: 0; }
 .prompt-editor .cm-editor { min-width: 0; }
 .prompt-editor .cm-editor.cm-focused { outline: 0; }
@@ -267,6 +229,4 @@
   .composer-region { padding-left: 7px; padding-right: 7px; }
   .composer-toolbar { gap: 3px; }
   .composer-toolbar-left { gap: 1px; }
-  .command-suggestions button { grid-template-columns: minmax(72px, auto) minmax(0, 1fr); }
-  .command-source { display: none; }
 }
