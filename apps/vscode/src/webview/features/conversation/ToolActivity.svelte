@@ -50,8 +50,8 @@
   }
 </script>
 
-<Collapsible.Root bind:open class={`activity-row tool-activity${tool.isError ? " activity-error" : ""}`}>
-  <Collapsible.Trigger class="activity-trigger tool-activity-trigger" onclick={latchSection}>
+<Collapsible.Root bind:open class={`activity-row${tool.isError ? " activity-error" : ""}`}>
+  <Collapsible.Trigger class="activity-trigger" onclick={latchSection}>
     <span class={`codicon codicon-${icon} activity-leading`} aria-hidden="true"></span>
     <span class="tool-activity-name">{name}</span>
     <span class="tool-activity-label" title={label}>{label}</span>

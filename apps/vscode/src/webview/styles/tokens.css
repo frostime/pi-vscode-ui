@@ -153,7 +153,10 @@
   text-align: left;
 }
 .activity-trigger:hover { color: var(--frost-text); }
-.activity-leading { width: 13px; flex: 0 0 13px; color: var(--frost-muted); font-size: 12px; text-align: center; }
+/* The glyph's size and display come from codicon's own `.codicon[class*=codicon-]` rule, which
+   outranks this selector: a `font-size` or `display` declared here is silently ignored. This
+   class only reserves the column the row lays its icon out in. */
+.activity-leading { width: 13px; flex: 0 0 13px; color: var(--frost-muted); text-align: center; }
 .activity-title {
   flex: none;
   color: color-mix(in srgb, var(--frost-text) 88%, var(--frost-muted));
@@ -171,10 +174,6 @@
   --font-size-ui: var(--vscode-font-size, 13px);
   --font-size-compact: calc(var(--font-size-ui) - 1px);
   --font-size-detail: calc(var(--font-size-ui) - 2px);
-}
-
-@media (max-width: 330px) {
-  .activity-leading { display: none; }
 }
 
 @media (max-width: 430px) {
