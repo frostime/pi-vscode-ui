@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Highlight `diff` and `patch` fenced Markdown code blocks with theme-aware full-line additions and removals, plus changed-substring emphasis for similar replacement lines; edit-tool change previews use the same presentation.
+- Toggle soft wrapping independently on each fenced Markdown code block while preserving the default wrapped behavior for prose-like languages.
 
 ## [0.14.2] - 2026-09-11
 

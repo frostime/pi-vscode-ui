@@ -153,7 +153,8 @@ function renderDiffLine(line: DiffLinePresentation): string {
   const emphasis = line.emphasis
     ? `<span class="hljs-diff-emphasis">${escapeHtml(line.emphasis)}</span>`
     : "";
-  return `<span class="${lineClass}">${marker}${escapeHtml(line.before)}${emphasis}${escapeHtml(line.after)}</span>${escapeHtml(line.ending)}`;
+  const content = `<span class="hljs-diff-content">${escapeHtml(line.before)}${emphasis}${escapeHtml(line.after)}</span>`;
+  return `<span class="${lineClass}">${marker}${content}</span>${escapeHtml(line.ending)}`;
 }
 
 function escapeHtml(value: string): string {

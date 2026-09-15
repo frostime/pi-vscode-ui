@@ -68,7 +68,7 @@
           class="tool-diff-line"
           class:added={line.kind === "addition"}
           class:removed={line.kind === "deletion"}
-        >{#if line.marker}<span class="tool-diff-marker">{line.marker}</span>{/if}{line.before}{#if line.emphasis}<span class="tool-diff-emphasis">{line.emphasis}</span>{/if}{line.after}{#if !line.marker && !line.before && !line.emphasis && !line.after} {/if}</span>{/each}</code></pre>
+        >{#if line.marker}<span class="tool-diff-marker">{line.marker}</span>{/if}{line.before}{#if line.emphasis}<span class="tool-diff-emphasis">{line.emphasis}</span>{/if}{line.after}{#if !line.marker && !line.before && !line.emphasis && !line.after}<span aria-hidden="true">&nbsp;</span>{/if}</span>{/each}</code></pre>
       {/if}
       {#if Object.keys(tool.args).length}
         <div class="tool-section-label">Input</div>

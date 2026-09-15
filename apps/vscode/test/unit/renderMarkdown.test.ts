@@ -77,7 +77,9 @@ describe("renderMarkdownHtml", () => {
 
   it("wraps prose-like fences and scrolls code fences", () => {
     const prose = renderMarkdownHtml("```markdown\nlong prose line\n```");
+    const plainText = renderMarkdownHtml("```text\nlong plain-text line\n```");
     expect(prose).toContain('<pre class="hljs wrap">');
+    expect(plainText).toContain('<pre class="hljs wrap">');
 
     const code = renderMarkdownHtml("```ts\nconst x = 1;\n```");
     expect(code).toContain('<pre class="hljs">');
