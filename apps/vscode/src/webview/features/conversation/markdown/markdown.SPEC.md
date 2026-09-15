@@ -3,7 +3,8 @@ title: Conversation Markdown Rendering
 description: Sanitization, file references, streaming Mermaid, and source-text copy behavior.
 scope:
   - /apps/vscode/src/webview/features/conversation/markdown/**
-updated: 2026-09-11
+  - /apps/vscode/src/webview/features/conversation/diffPresentation.ts
+updated: 2026-09-15
 ---
 
 # Conversation Markdown Rendering
@@ -16,4 +17,5 @@ updated: 2026-09-11
 - Incomplete Mermaid fences remain source text while streaming; only complete fences mount a diagram, and render failure shows the error plus original source.
 - Fenced code blocks get a hover copy button (injected by `MarkdownHtml.svelte`, not part of sanitized HTML). It copies the block's raw code text through `copyText` and confirms in place briefly.
 - Fence chrome: the outer `pre` clips and hosts the hover chrome; the inner `.code-scroll` scrolls. Prose-like languages (`txt`, `text`, `plaintext`, `md`, `markdown`, `tex`, `latex`) wrap by default; other and untagged fences scroll horizontally.
+- `diff` and `patch` fences use VS Code Diff theme colors for full-line additions and deletions. Equal-sized adjacent deletion/addition runs also emphasize the changed substring when corresponding lines retain enough shared text; uncertain pairs fall back to whole-line highlighting. Recognized tool-result diffs share this classification and substring-emphasis model while retaining their compact tool-card chrome.
 - Copy uses original protocol text in order, never rendered HTML, SVG, math markup, images, reasoning, tools, or notices.

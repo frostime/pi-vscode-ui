@@ -3,6 +3,7 @@
   import type { ToolActivityView } from "$shared/model/conversationModel";
 
   import { postToHost } from "../../bridge/vscodeBridge";
+  import { presentDiff } from "./diffPresentation";
 
   let { activity }: { activity: ToolActivityView } = $props();
   let open = $state(false);
@@ -63,11 +64,11 @@
       </div>
       {#if diff}
         <div class="tool-section-label">Changes</div>
-        <pre class="tool-diff" aria-label="Changes"><code class="tool-diff-content">{#each diffLines(diff) as line, index (index)}{@const kind = diffLineKind(line)}<span
+        <pre class="tool-diff" aria-label="Changes"><code class="tool-diff-content">{#each presentDiff(diff) as line, index (index)}<span
           class="tool-diff-line"
-          class:added={kind === "added"}
-          class:removed={kind === "removed"}
-        >{line || " "}</span>{/each}</code></pre>
+          class:added={line.kind === "addition"}
+          class:removed={line.kind === "deletion"}
+        >{#if line.marker}<span class="tool-diff-marker">{line.marker}</span>{/if}{line.before}{#if line.emphasis}<span class="tool-diff-emphasis">{line.emphasis}</span>{/if}{line.after}{#if !line.marker && !line.before && !line.emphasis && !line.after} {/if}</span>{/each}</code></pre>
       {/if}
       {#if Object.keys(tool.args).length}
         <div class="tool-section-label">Input</div>
@@ -106,16 +107,6 @@
     if (!value) return "Failed";
     const line = value.split(/\r?\n/, 1)[0]?.trim() || "Failed";
     return line.length > 72 ? `${line.slice(0, 69)}…` : line;
-  }
-
-  function diffLines(diff: string): string[] {
-    return diff.split(/\r?\n/);
-  }
-
-  function diffLineKind(line: string): "added" | "removed" | "context" {
-    if (line.startsWith("+")) return "added";
-    if (line.startsWith("-")) return "removed";
-    return "context";
   }
 
   interface RenderedArg {
@@ -217,13 +208,20 @@
   font: inherit;
 }
 .tool-diff-line { display: block; box-sizing: border-box; padding: 0 8px; color: var(--frost-muted); }
+.tool-diff-marker { display: inline-block; width: 1ch; text-align: center; }
 .tool-diff-line.added {
   color: var(--vscode-diffEditor-insertedTextForeground, var(--frost-text));
-  background: var(--vscode-diffEditor-insertedTextBackground, color-mix(in srgb, var(--frost-success) 15%, transparent));
+  background: var(--vscode-diffEditor-insertedLineBackground, color-mix(in srgb, var(--frost-success) 14%, transparent));
 }
 .tool-diff-line.removed {
   color: var(--vscode-diffEditor-removedTextForeground, var(--frost-text));
-  background: var(--vscode-diffEditor-removedTextBackground, color-mix(in srgb, var(--frost-error) 15%, transparent));
+  background: var(--vscode-diffEditor-removedLineBackground, color-mix(in srgb, var(--frost-error) 14%, transparent));
+}
+.tool-diff-line.added .tool-diff-emphasis {
+  background: var(--vscode-diffEditor-insertedTextBackground, color-mix(in srgb, var(--frost-success) 32%, transparent));
+}
+.tool-diff-line.removed .tool-diff-emphasis {
+  background: var(--vscode-diffEditor-removedTextBackground, color-mix(in srgb, var(--frost-error) 32%, transparent));
 }
 .tool-input { display: flex; flex-direction: column; gap: 2px; }
 .tool-input-row { display: flex; gap: 6px; align-items: baseline; font: 11px/1.48 var(--font-mono); }

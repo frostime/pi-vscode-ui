@@ -29,6 +29,39 @@ describe("renderMarkdownHtml", () => {
     expect(html).not.toContain("<script>");
   });
 
+  it("highlights diff lines and the changed substring of similar replacements", () => {
+    const html = renderMarkdownHtml([
+      "```diff",
+      "@@ -1 +1 @@",
+      "-const total = oldValue;",
+      "+const total = newValue;",
+      "```",
+    ].join("\n"));
+    const root = document.createElement("div");
+    root.innerHTML = html;
+
+    expect(root.querySelector("pre")?.classList.contains("language-diff")).toBe(true);
+    expect(root.querySelectorAll(".hljs-diff-line")).toHaveLength(3);
+    expect(root.querySelector(".hljs-deletion")?.textContent).toBe("-const total = oldValue;");
+    expect(root.querySelector(".hljs-addition")?.textContent).toBe("+const total = newValue;");
+    expect(root.querySelector(".hljs-deletion .hljs-diff-marker")?.textContent).toBe("-");
+    expect(root.querySelector(".hljs-addition .hljs-diff-marker")?.textContent).toBe("+");
+    expect(root.querySelector(".hljs-deletion .hljs-diff-emphasis")?.textContent).toBe("old");
+    expect(root.querySelector(".hljs-addition .hljs-diff-emphasis")?.textContent).toBe("new");
+    expect(root.querySelector("code")?.textContent).toBe(
+      "@@ -1 +1 @@\n-const total = oldValue;\n+const total = newValue;\n",
+    );
+  });
+
+  it("keeps unrelated replacement lines at whole-line diff highlighting", () => {
+    const html = renderMarkdownHtml("```diff\n-alpha\n+omega\n```");
+    const root = document.createElement("div");
+    root.innerHTML = html;
+
+    expect(root.querySelectorAll(".hljs-deletion, .hljs-addition")).toHaveLength(2);
+    expect(root.querySelector(".hljs-diff-emphasis")).toBeNull();
+  });
+
   it("keeps code text intact inside the scroll wrapper", () => {
     const html = renderMarkdownHtml("```js\nconst x = 1\n```");
     const root = document.createElement("div");

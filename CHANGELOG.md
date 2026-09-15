@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Highlight `diff` and `patch` fenced Markdown code blocks with theme-aware full-line additions and removals, plus changed-substring emphasis for similar replacement lines; edit-tool change previews use the same presentation.
+
 ## [0.14.2] - 2026-09-11
 
 ### Added

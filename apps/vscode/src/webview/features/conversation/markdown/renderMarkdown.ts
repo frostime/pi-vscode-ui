@@ -6,6 +6,7 @@ import imageRule from "markdown-it/lib/rules_inline/image.mjs";
 import type StateInline from "markdown-it/lib/rules_inline/state_inline.mjs";
 
 import { parseFileHref, parseFileReference, type FileReference } from "./fileReferences.js";
+import { renderDiffHtml } from "../diffPresentation.js";
 
 const katexCache = new Map<string, string>();
 const KATEX_CACHE_LIMIT = 256;
@@ -286,11 +287,16 @@ const WRAP_LANGUAGES = new Set(["txt", "text", "plaintext", "md", "markdown", "t
  * `.code-scroll` scrolls so the copy button stays fixed while code moves.
  */
 function renderFenceHtml(code: string, language: string): string {
-  const highlighted = language && hljs.getLanguage(language)
-    ? hljs.highlight(code, { language }).value
-    : escapeHtml(code);
-  const wrapClass = WRAP_LANGUAGES.has(language.toLowerCase()) ? " wrap" : "";
-  return `<pre class="hljs${wrapClass}"><span class="code-scroll"><code>${highlighted}</code></span></pre>`;
+  const normalizedLanguage = language.toLowerCase();
+  const isDiff = normalizedLanguage === "diff" || normalizedLanguage === "patch";
+  const highlighted = isDiff
+    ? renderDiffHtml(code)
+    : language && hljs.getLanguage(language)
+      ? hljs.highlight(code, { language }).value
+      : escapeHtml(code);
+  const wrapClass = WRAP_LANGUAGES.has(normalizedLanguage) ? " wrap" : "";
+  const languageClass = isDiff ? " language-diff" : "";
+  return `<pre class="hljs${wrapClass}${languageClass}"><span class="code-scroll"><code>${highlighted}</code></span></pre>`;
 }
 
 const markdown: MarkdownIt = new MarkdownIt({

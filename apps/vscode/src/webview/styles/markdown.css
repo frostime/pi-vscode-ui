@@ -82,3 +82,34 @@
 .hljs-function, .hljs-title.function_ { color: var(--vscode-symbolIcon-functionForeground, #dcdcaa); }
 .hljs-variable, .hljs-attr, .hljs-property { color: var(--vscode-symbolIcon-variableForeground, #9cdcfe); }
 .hljs-type, .hljs-class .hljs-title { color: var(--vscode-symbolIcon-classForeground, #4ec9b0); }
+.markdown-body pre.language-diff code {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+}
+.markdown-body pre.language-diff .hljs-diff-line {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 100%;
+}
+.markdown-body pre.language-diff .hljs-diff-marker {
+  display: inline-block;
+  width: 1ch;
+  text-align: center;
+}
+.markdown-body pre.language-diff .hljs-addition,
+.markdown-body pre.language-diff .hljs-deletion { color: var(--frost-text); }
+.markdown-body pre.language-diff .hljs-addition {
+  color: var(--vscode-diffEditor-insertedTextForeground, var(--frost-text));
+  background: var(--vscode-diffEditor-insertedLineBackground, color-mix(in srgb, var(--frost-success) 14%, transparent));
+}
+.markdown-body pre.language-diff .hljs-deletion {
+  color: var(--vscode-diffEditor-removedTextForeground, var(--frost-text));
+  background: var(--vscode-diffEditor-removedLineBackground, color-mix(in srgb, var(--frost-error) 14%, transparent));
+}
+.markdown-body pre.language-diff .hljs-addition .hljs-diff-emphasis {
+  background: var(--vscode-diffEditor-insertedTextBackground, color-mix(in srgb, var(--frost-success) 32%, transparent));
+}
+.markdown-body pre.language-diff .hljs-deletion .hljs-diff-emphasis {
+  background: var(--vscode-diffEditor-removedTextBackground, color-mix(in srgb, var(--frost-error) 32%, transparent));
+}
