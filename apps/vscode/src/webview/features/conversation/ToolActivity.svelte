@@ -1,14 +1,20 @@
 <script lang="ts">
-  import { Collapsible } from "bits-ui";
+  import { Collapsible, Tabs } from "bits-ui";
   import type { ToolActivityView } from "$shared/model/conversationModel";
 
   import { postToHost } from "../../bridge/vscodeBridge";
   import { presentDiff } from "./diffPresentation";
+  import { isToolSectionId, planToolSections, sectionToShow, type ToolSectionId } from "./toolSectionPlan";
 
   let { activity }: { activity: ToolActivityView } = $props();
   let open = $state(false);
+  /** Section the reader picked; unset until the first expansion latches the plan default. */
+  let chosenSection = $state<ToolSectionId | null>(null);
 
   const tool = $derived(activity.tool);
+  const plan = $derived(planToolSections(tool));
+  const activeSection = $derived(sectionToShow(plan, chosenSection));
+
   const name = $derived(tool.state === "preparing" ? "Preparing tool call" : tool.name);
   const label = $derived(tool.state === "preparing" ? "Generating arguments…" : tool.label);
   const icon = $derived(tool.state === "preparing" ? "tools" : toolIcon(tool.name));
@@ -29,10 +35,23 @@
           : "Tool completed",
   );
   const errorSummary = $derived(tool.status === "error" && tool.state === "bound" ? firstLine(tool.output) : "");
+
+  /**
+   * Fixes the section this card shows the first time the reader expands it. Tools stream in:
+   * arguments first, then the diff and the result, so an unfixed default would follow whichever
+   * section arrived last and move the reader away from what they opened.
+   */
+  function latchSection(): void {
+    chosenSection ??= plan.defaultSectionId;
+  }
+
+  function selectSection(value: string): void {
+    if (isToolSectionId(value)) chosenSection = value;
+  }
 </script>
 
 <Collapsible.Root bind:open class={`activity-row tool-activity${tool.isError ? " activity-error" : ""}`}>
-  <Collapsible.Trigger class="activity-trigger tool-activity-trigger">
+  <Collapsible.Trigger class="activity-trigger tool-activity-trigger" onclick={latchSection}>
     <span class={`codicon codicon-${icon} activity-leading`} aria-hidden="true"></span>
     <span class="tool-activity-name">{name}</span>
     <span class="tool-activity-label" title={label}>{label}</span>
@@ -49,51 +68,85 @@
     <span class={`codicon codicon-chevron-${open ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
   </Collapsible.Trigger>
   <Collapsible.Content class="activity-content tool-activity-content">
-    {#if tool.state === "preparing"}
-      <div class="tool-section-label">Input (raw)</div>
-      <pre class="tool-json">{tool.rawArguments}</pre>
-    {:else}
-      {@const location = tool.recognized?.location}
-      {@const diff = tool.recognized?.diff}
-      <div class="tool-actions">
-        {#if location}
-          <button type="button" onclick={() => postToHost({ type: "openFile", path: location.path, ...(location.line ? { line: location.line } : {}) })}>
-            <span class="codicon codicon-go-to-file"></span> Open file
-          </button>
+    <div class="tool-body">
+      {#if plan.sections.length > 1}
+        {@const initialSection = plan.sections[0]!.id}
+        <Tabs.Root value={activeSection ?? initialSection} onValueChange={selectSection}>
+          <div class="tool-body-bar">
+            <span class="tool-tabs">
+              <Tabs.List>
+                {#each plan.sections as section (section.id)}
+                  <Tabs.Trigger value={section.id}>{section.label}</Tabs.Trigger>
+                {/each}
+              </Tabs.List>
+            </span>
+            {@render fileAction()}
+          </div>
+          {#each plan.sections as section (section.id)}
+            <Tabs.Content value={section.id}>{@render sectionBody(section.id)}</Tabs.Content>
+          {/each}
+        </Tabs.Root>
+      {:else}
+        {@const onlySection = plan.sections.length === 1 ? plan.sections[0]! : null}
+        {#if onlySection || plan.openFile}
+          <div class="tool-body-bar">
+            {#if onlySection}<span class="tool-tab-static">{onlySection.label}</span>{/if}
+            {@render fileAction()}
+          </div>
         {/if}
-      </div>
+        {@render sectionBody(activeSection)}
+      {/if}
+    </div>
+  </Collapsible.Content>
+</Collapsible.Root>
+
+{#snippet fileAction()}
+  {#if plan.openFile}
+    {@const target = plan.openFile}
+    <button
+      type="button"
+      class="tool-action"
+      onclick={() => postToHost({ type: "openFile", path: target.path, ...(target.line ? { line: target.line } : {}) })}
+    >
+      <span class="codicon codicon-go-to-file" aria-hidden="true"></span>
+      <span class="tool-action-label">Open file</span>
+    </button>
+  {/if}
+{/snippet}
+
+{#snippet sectionBody(sectionId: ToolSectionId | null)}
+  {#if tool.state === "preparing"}
+    {#if sectionId === "input"}<pre class="tool-json">{tool.rawArguments}</pre>{/if}
+  {:else}
+    {@const diff = tool.recognized?.diff}
+    {#if sectionId === "changes"}
       {#if diff}
-        <div class="tool-section-label">Changes</div>
         <pre class="tool-diff" aria-label="Changes"><code class="tool-diff-content">{#each presentDiff(diff) as line, index (index)}<span
           class="tool-diff-line"
           class:added={line.kind === "addition"}
           class:removed={line.kind === "deletion"}
         >{#if line.marker}<span class="tool-diff-marker">{line.marker}</span>{/if}{line.before}{#if line.emphasis}<span class="tool-diff-emphasis">{line.emphasis}</span>{/if}{line.after}{#if !line.marker && !line.before && !line.emphasis && !line.after}<span aria-hidden="true">&nbsp;</span>{/if}</span>{/each}</code></pre>
       {/if}
-      {#if Object.keys(tool.args).length}
-        <div class="tool-section-label">Input</div>
-        <div class="tool-input">
-          {#each Object.entries(tool.args) as [key, value] (key)}
-            {@const rendered = renderArg(value)}
-            {#if rendered.kind === "block"}
-              <div class="tool-section-label">{key}</div>
-              <pre class="tool-json">{rendered.text}</pre>
-            {:else}
-              <div class="tool-input-row">
-                <span class="tool-input-key">{key}:</span>
-                <span class="tool-input-value">{rendered.text}</span>
-              </div>
-            {/if}
-          {/each}
-        </div>
-      {/if}
-      {#if tool.output}
-        <div class="tool-section-label">Output</div>
-        <pre class="tool-output">{tool.output}</pre>
-      {/if}
+    {:else if sectionId === "input"}
+      <div class="tool-input">
+        {#each Object.entries(tool.args) as [key, value] (key)}
+          {@const rendered = renderArg(value)}
+          {#if rendered.kind === "block"}
+            <div class="tool-arg-key">{key}</div>
+            <pre class="tool-json">{rendered.text}</pre>
+          {:else}
+            <div class="tool-input-row">
+              <span class="tool-input-key">{key}:</span>
+              <span class="tool-input-value">{rendered.text}</span>
+            </div>
+          {/if}
+        {/each}
+      </div>
+    {:else if sectionId === "output" && tool.output}
+      <pre class="tool-output">{tool.output}</pre>
     {/if}
-  </Collapsible.Content>
-</Collapsible.Root>
+  {/if}
+{/snippet}
 
 <script lang="ts" module>
   function toolIcon(name: string): string {
@@ -149,28 +202,47 @@
   background-clip: padding-box;
   border-radius: 99px;
 }
-.tool-actions { display: flex; gap: 5px; margin-bottom: 7px; }
-.tool-actions:empty { display: none; }
-.tool-actions :global(button) {
+/* Section switcher and file action share one row so the body costs the height of its
+   largest section instead of the height of every section stacked. */
+.tool-body { min-width: 0; }
+.tool-body-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-bottom: 7px; }
+.tool-tabs { display: flex; min-width: 0; }
+.tool-tabs :global([role="tablist"]) { display: flex; gap: 1px; min-width: 0; }
+.tool-tabs :global(button) {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--frost-muted);
+  font: 11px var(--font-ui);
+  cursor: pointer;
+}
+.tool-tabs :global(button:hover) { color: var(--frost-text); background: var(--frost-hover); }
+.tool-tabs :global(button[data-state="active"]) {
+  background: color-mix(in srgb, var(--frost-surface) 90%, transparent);
+  color: var(--frost-text);
+}
+.tool-tabs :global(button:focus-visible) { outline: 1px solid var(--frost-focus); outline-offset: 1px; }
+/* The lone section of a single-section card keeps the switcher row's geometry, so cards
+   still line up with each other without offering a choice that does not exist. */
+.tool-tab-static { padding: 2px 8px; color: var(--frost-muted); font: 11px var(--font-ui); }
+.tool-action {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 7px;
-  background: var(--frost-secondary-bg);
+  margin-left: auto;
+  padding: 2px 7px;
+  border: 0;
   border-radius: 4px;
-  cursor: pointer;
-  font-size: 11px;
-}
-.tool-actions :global(button:hover) { background: var(--frost-secondary-hover); }
-.tool-section-label {
-  margin: 7px 0 4px;
+  background: transparent;
   color: var(--frost-muted);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: .08em;
+  font: 11px var(--font-ui);
+  cursor: pointer;
 }
+.tool-action:hover { color: var(--frost-text); background: var(--frost-hover); }
+.tool-action:focus-visible { outline: 1px solid var(--frost-focus); outline-offset: 1px; }
 .tool-json {
-  max-height: 240px;
+  max-height: 280px;
   overflow: auto;
   padding: 8px;
   background: var(--frost-code-bg);
@@ -181,7 +253,7 @@
   word-break: break-word;
 }
 .tool-output {
-  max-height: 240px;
+  max-height: 280px;
   overflow: auto;
   padding: 8px;
   background: var(--frost-code-bg);
@@ -227,6 +299,10 @@
 .tool-input-row { display: flex; gap: 6px; align-items: baseline; font: 11px/1.48 var(--font-mono); }
 .tool-input-key { flex: none; color: var(--frost-muted); }
 .tool-input-value { min-width: 0; color: var(--frost-text); word-break: break-word; }
+/* Argument names sit inside a section rather than beside it, so they are labelled quietly
+   instead of reusing a section heading's weight. */
+.tool-arg-key { margin: 6px 0 3px; color: var(--frost-muted); font-size: 10px; }
+.tool-arg-key:first-child { margin-top: 0; }
 .tool-activity-name {
   flex: none;
   color: color-mix(in srgb, var(--frost-text) 88%, var(--frost-muted));
@@ -252,9 +328,6 @@
   font-size: 10px;
 }
 .tool-activity-content { overflow: hidden; }
-.tool-actions { margin-top: 0; }
-.tool-json { max-height: 280px; }
-.tool-output { max-height: 280px; }
 
 @media (max-width: 430px) {
   .tool-error-summary { display: none; }

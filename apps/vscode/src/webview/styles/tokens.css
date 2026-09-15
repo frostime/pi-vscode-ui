@@ -145,15 +145,15 @@
   min-height: 31px;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 7px;
+  gap: 5px;
+  padding: 4px 5px;
   background: transparent;
   color: inherit;
   cursor: pointer;
   text-align: left;
 }
 .activity-trigger:hover { color: var(--frost-text); }
-.activity-leading { width: 15px; flex: 0 0 15px; color: var(--frost-muted); font-size: 13px; text-align: center; }
+.activity-leading { width: 13px; flex: 0 0 13px; color: var(--frost-muted); font-size: 12px; text-align: center; }
 .activity-title {
   flex: none;
   color: color-mix(in srgb, var(--frost-text) 88%, var(--frost-muted));
@@ -163,7 +163,9 @@
 .activity-status { flex: none; margin-left: auto; color: var(--frost-success); font-size: 12px; }
 .activity-error .activity-status { color: var(--frost-error); }
 .activity-chevron { flex: none; color: var(--frost-faint); font-size: 11px; }
-.activity-content { margin: 0 7px 7px 28px; padding: 7px 0 0 9px; border-left: 1px solid var(--frost-border-soft); }
+/* The expanded body aligns with the row's leading icon, not with its title text: the card
+   keeps one left edge while the panel keeps the full panel width. */
+.activity-content { margin: 0 5px 6px 5px; padding: 6px 0 0; }
 .thinking-pulse { margin-left: 1px; }
 :root {
   --font-size-ui: var(--vscode-font-size, 13px);
@@ -173,11 +175,9 @@
 
 @media (max-width: 330px) {
   .activity-leading { display: none; }
-  .activity-content { margin-left: 7px; }
 }
 
 @media (max-width: 430px) {
   .message-user { padding-left: 6%; }
   .activity-trigger { padding-left: 4px; padding-right: 4px; }
-  .activity-content { margin-left: 20px; }
 }

@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Highlight `diff` and `patch` fenced Markdown code blocks with theme-aware full-line additions and removals, plus changed-substring emphasis for similar replacement lines; edit-tool change previews use the same presentation.
 - Toggle soft wrapping independently on each fenced Markdown code block while preserving the default wrapped behavior for prose-like languages.
 
+### Changed
+
+- Present an expanded tool call as one section at a time — Changes, Input, or Output — behind a single-row switcher that also carries its file action, and open the card on the section that explains the outcome: the diff for a successful change, the result otherwise. The section is fixed when the card is first expanded, so a tool that streams in its diff or result cannot move the reader.
+- Narrow the left inset reserved by reasoning and tool cards, and align an expanded body with the row's leading icon instead of its title text.
+
 ## [0.14.2] - 2026-09-11
 
 ### Added
