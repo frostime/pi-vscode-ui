@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Present an expanded tool call as one section at a time — Changes, Input, or Output — behind a single-row switcher that also carries its file action, and open the card on the section that explains the outcome: the diff for a successful change, the result otherwise. The section is fixed when the card is first expanded, so a tool that streams in its diff or result cannot move the reader.
+- Present an expanded tool call as one section at a time — Changes, Input, or Output — behind a single-row switcher that also carries its file action, and open the card on the section that explains the outcome: the diff for a successful change, the written content for a successful `write` call, the result otherwise. The section is fixed when the card is first expanded, so a tool that streams in its diff or result cannot move the reader.
 - Narrow the left inset reserved by reasoning and tool cards, and align an expanded body with the row's leading icon instead of its title text.
 
 ## [0.14.2] - 2026-09-11

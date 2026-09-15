@@ -65,6 +65,38 @@ describe("planToolSections default section", () => {
 
     expect(plan.defaultSectionId).toBe("input");
   });
+
+  it("opens a successful write on the content it wrote", () => {
+    const plan = planToolSections(bound({
+      name: "write",
+      args: { path: "a.ts", content: "export const a = 1;\n" },
+      output: "Wrote 20 bytes to a.ts",
+    }));
+
+    expect(plan.defaultSectionId).toBe("input");
+  });
+
+  it("still opens a successful write on its content when it also reports a diff", () => {
+    const plan = planToolSections(bound({
+      name: "write",
+      args: { path: "a.ts", content: "b" },
+      diff: "--- a\n+++ b",
+      output: "ok",
+    }));
+
+    expect(plan.defaultSectionId).toBe("input");
+  });
+
+  it("opens a failed write on its result like any other failure", () => {
+    const plan = planToolSections(bound({
+      status: "error",
+      name: "write",
+      args: { path: "a.ts", content: "b" },
+      output: "boom",
+    }));
+
+    expect(plan.defaultSectionId).toBe("output");
+  });
 });
 
 describe("sectionToShow", () => {
@@ -101,6 +133,7 @@ function preparing(rawArguments: string): PreparingToolCallView {
 
 function bound(options: {
   status?: BoundToolCallView["status"];
+  name?: string;
   args?: Record<string, unknown>;
   output?: string;
   diff?: string;
@@ -115,7 +148,7 @@ function bound(options: {
   return {
     state: "bound",
     id: "tool-1",
-    name: "edit",
+    name: options.name ?? "edit",
     label: "a.ts",
     args: options.args ?? {},
     ...(options.output !== undefined ? { output: options.output } : {}),

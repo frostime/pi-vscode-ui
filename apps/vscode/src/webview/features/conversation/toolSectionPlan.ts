@@ -63,13 +63,21 @@ function availableSectionIds(tool: BoundToolCallView): ToolSectionId[] {
 }
 
 /**
- * A failed call is explained by its result, a successful change by its diff, anything else
- * by its result. Input comes last because it repeats what the header already labels.
+ * A failed call is explained by its result, a successful change by its diff, anything else by
+ * its result. Input normally comes last because it repeats what the header already labels.
+ *
+ * A successful `write` is the exception: its arguments carry the file content, so they say what
+ * the file now holds without the diff's addition marker on every written line.
  */
 function defaultSectionId(tool: BoundToolCallView, available: ToolSectionId[]): ToolSectionId | null {
-  const priority: ToolSectionId[] = tool.status === "error" || tool.status === "cancelled"
-    ? ["output", "changes", "input"]
-    : ["changes", "output", "input"];
+  if (tool.status === "error" || tool.status === "cancelled") {
+    return preferred(available, ["output", "changes", "input"]);
+  }
+  if (tool.name === "write") return preferred(available, ["input", "changes", "output"]);
+  return preferred(available, ["changes", "output", "input"]);
+}
+
+function preferred(available: ToolSectionId[], priority: ToolSectionId[]): ToolSectionId | null {
   return priority.find((id) => available.includes(id)) ?? null;
 }
 
