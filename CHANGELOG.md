@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-09-16
+
 ### Added
 
 - Highlight `diff` and `patch` fenced Markdown code blocks with theme-aware full-line additions and removals, plus changed-substring emphasis for similar replacement lines; edit-tool change previews use the same presentation.
@@ -442,7 +444,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.2...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.3...HEAD
+[0.14.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.2...v0.14.3
 [0.14.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.0...v0.14.1
 [0.13.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.13.1...v0.13.2
