@@ -25,6 +25,26 @@ export function presentDiff(source: string): DiffLinePresentation[] {
   return lines.map(presentDiffLine);
 }
 
+export interface DiffStats {
+  additions: number;
+  deletions: number;
+}
+
+/**
+ * Added/removed line counts for a tool card header, classified exactly like the rendered
+ * Changes body (file headers and hunk markers never count). Undefined when the diff shows
+ * no edited line, e.g. a no-op write.
+ */
+export function diffStats(source: string): DiffStats | undefined {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of splitDiffLines(source)) {
+    if (line.kind === "addition") additions += 1;
+    else if (line.kind === "deletion") deletions += 1;
+  }
+  return additions + deletions > 0 ? { additions, deletions } : undefined;
+}
+
 export function renderDiffHtml(source: string): string {
   return presentDiff(source).map(renderDiffLine).join("");
 }
