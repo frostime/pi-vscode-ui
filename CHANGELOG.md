@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.4] - 2026-09-25
+
 ### Added
 
 - Show the change size of file-mutating tool calls in the card header, taking the completion slot from the check icon: any tool whose result carries a diff reports `+N` / `−N` from it (a no-op change reads as `+0 −0`), and `write` calls report `+N` from the number of written lines; failed, cancelled, and running calls keep their existing status indicators.
@@ -447,7 +449,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.3...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.4...HEAD
+[0.14.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.2...v0.14.3
 [0.14.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.0...v0.14.1
