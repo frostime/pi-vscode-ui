@@ -211,6 +211,7 @@ FrostPi also provides context metrics, diagnostics export, strict LF-delimited J
 Common settings include:
 
 - `frostpi.pi.executable`
+- `frostpi.pi.runtimeCompatibility` — choose the limited Pi or Oh My Pi compatibility contract; this does not enable all runtime-specific OMP features.
 - `frostpi.pi.arguments`
 - `frostpi.session.startOnOpen`
 - `frostpi.composer.streamingBehavior`

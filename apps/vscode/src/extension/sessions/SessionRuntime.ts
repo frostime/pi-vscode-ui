@@ -30,6 +30,7 @@ import { ExtensionUiCoordinator } from "../extension-ui/ExtensionUiCoordinator.j
 import { QuestionToolExtensionBridge } from "../question-tool/QuestionToolExtensionBridge.js";
 import { commandName, normalizePiSlashPrompt } from "./normalizePiSlashPrompt.js";
 import { configuredPiInvocation } from "../configuration/configuredPiInvocation.js";
+import { runtimeCompatibilityProfile } from "../configuration/runtimeCompatibility.js";
 import { buildPiProcessEnvironment, proxyFingerprint, proxyModeLabel } from "../network/buildPiProcessEnvironment.js";
 import type { ProxySecretStore } from "../network/ProxySecretStore.js";
 import { SessionTreeExtensionBridge, type SessionTreeSummaryOptions } from "./tree/SessionTreeExtensionBridge.js";
@@ -556,7 +557,8 @@ export class SessionRuntime {
       // Verbatim by contract — never validate or reorder here (session-lifecycle.SPEC.md).
       ...this.customLaunchArguments,
     ];
-    const cacheMissNotices = configuration.runtimeCompatibility !== "oh-my-pi"
+    const compatibilityProfile = runtimeCompatibilityProfile(configuration.runtimeCompatibility);
+    const cacheMissNotices = compatibilityProfile.usesPiSettings
       ? showCacheMissNoticesEnabled(await loadPiSettings(this.cwd, { piArguments: args }))
       : false;
     if (this.#disposed || lifecycleVersion !== this.#lifecycleVersion) return;

@@ -3,7 +3,7 @@ import { minimatch } from "minimatch";
 import type { RpcModel } from "@frostime/pi-rpc";
 
 import { loadPiSettings, type PiSettings } from "../_shared/pi-settings/loadPiSettings.js";
-import type { RuntimeCompatibility } from "../configuration/runtimeCompatibility.js";
+import { runtimeCompatibilityProfile, type RuntimeCompatibility } from "../configuration/runtimeCompatibility.js";
 
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 const DATED_MODEL_ID = /-\d{8}$/;
@@ -59,7 +59,8 @@ export async function resolvePiModelScope(
   models: readonly RpcModel[],
   compatibility: RuntimeCompatibility = "pi",
 ): Promise<string[]> {
-  if (compatibility === "oh-my-pi") {
+  const compatibilityProfile = runtimeCompatibilityProfile(compatibility);
+  if (!compatibilityProfile.usesPiSettings) {
     return resolveModelScopePatterns(modelsArgument(piArguments), models);
   }
   const settings = await loadPiSettings(cwd, { piArguments });

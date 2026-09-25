@@ -208,6 +208,7 @@ FrostPi 还提供上下文指标、诊断导出、严格的 LF 分隔 JSONL 传�
 常用设置包括：
 
 - `frostpi.pi.executable`
+- `frostpi.pi.runtimeCompatibility` — 选择有限的 Pi 或 Oh My Pi 兼容契约；这不代表启用 OMP 的全部专属功能。
 - `frostpi.pi.arguments`
 - `frostpi.session.startOnOpen`
 - `frostpi.composer.streamingBehavior`

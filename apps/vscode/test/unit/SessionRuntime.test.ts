@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentTurnView, SessionNoticeView } from "../../src/shared/model/conversationModel.js";
 import type { SessionViewModel } from "../../src/shared/model/sessionViewModel.js";
+import type { FrostPiConfiguration } from "../../src/extension/configuration/configurationTypes.js";
+import type { RuntimeCompatibility } from "../../src/extension/configuration/runtimeCompatibility.js";
 
 vi.mock("vscode", () => ({
   Uri: { file: (fsPath: string) => ({ fsPath }) },
@@ -66,11 +68,8 @@ describe("Pi session startup and conversation history", () => {
     await mkdir(join(dir, ".pi"));
     await writeFile(join(dir, ".pi", "settings.json"), JSON.stringify({ showCacheMissNotices: true }));
     const fakePi = await writeCacheMissPi(dir);
-    const configuration = {
-      ...runtimeConfiguration(fakePi),
-      piArguments: ["--approve"] as string[],
-      runtimeCompatibility: "pi" as "pi" | "oh-my-pi",
-    };
+    const configuration = runtimeConfiguration(fakePi, "pi");
+    configuration.piArguments = ["--approve"];
     const runtime = new SessionRuntime(
       "cache-miss",
       dir,
@@ -218,21 +217,7 @@ process.stdin.on("data", chunk => {
 process.on("SIGTERM", () => process.exit(0));
 `);
 
-    const configuration = {
-      piExecutable: fakePi,
-      piArguments: [],
-      startSessionOnOpen: true,
-      streamingBehavior: "followUp" as const,
-      collapseTurnTrace: true,
-      questionToolEnabled: false,
-      maxImageBytes: 10 * 1024 * 1024,
-      diagnosticsLevel: "info" as const,
-      experimentalNotificationsEnabled: true,
-      proxy: { mode: "inherit" as const },
-      fileMentionRespectSearchExclude: true,
-      fileMentionRespectIgnoreFiles: true,
-      fileMentionFollowSymlinks: true,
-    };
+    const configuration = runtimeConfiguration(fakePi);
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
     const logger = { error: vi.fn(), info: vi.fn() };
     const runtime = new SessionRuntime("session", dir, "History", () => configuration, secrets, logger as never, {
@@ -334,21 +319,7 @@ process.stdin.on("data", chunk => {
 process.on("SIGTERM", () => process.exit(0));
 `);
 
-    const configuration = {
-      piExecutable: fakePi,
-      piArguments: [],
-      startSessionOnOpen: true,
-      streamingBehavior: "followUp" as const,
-      collapseTurnTrace: true,
-      questionToolEnabled: false,
-      maxImageBytes: 10 * 1024 * 1024,
-      diagnosticsLevel: "info" as const,
-      experimentalNotificationsEnabled: true,
-      proxy: { mode: "inherit" as const },
-      fileMentionRespectSearchExclude: true,
-      fileMentionRespectIgnoreFiles: true,
-      fileMentionFollowSymlinks: true,
-    };
+    const configuration = runtimeConfiguration(fakePi);
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
     const logger = { error: vi.fn(), info: vi.fn() };
     const runtime = new SessionRuntime("session", dir, "Extension command", () => configuration, secrets, logger as never, {
@@ -413,21 +384,7 @@ process.stdin.on("data", chunk => {
 process.on("SIGTERM", () => process.exit(0));
 `);
 
-    const configuration = {
-      piExecutable: fakePi,
-      piArguments: [],
-      startSessionOnOpen: true,
-      streamingBehavior: "followUp" as const,
-      collapseTurnTrace: true,
-      questionToolEnabled: false,
-      maxImageBytes: 10 * 1024 * 1024,
-      diagnosticsLevel: "info" as const,
-      experimentalNotificationsEnabled: true,
-      proxy: { mode: "inherit" as const },
-      fileMentionRespectSearchExclude: true,
-      fileMentionRespectIgnoreFiles: true,
-      fileMentionFollowSymlinks: true,
-    };
+    const configuration = runtimeConfiguration(fakePi);
     const warnings: string[] = [];
     const runtime = new SessionRuntime(
       "session",
@@ -493,21 +450,7 @@ process.stdin.on("data", chunk => {
 process.on("SIGTERM", () => process.exit(0));
 `);
 
-    const configuration = {
-      piExecutable: fakePi,
-      piArguments: [],
-      startSessionOnOpen: true,
-      streamingBehavior: "followUp" as const,
-      collapseTurnTrace: true,
-      questionToolEnabled: false,
-      maxImageBytes: 10 * 1024 * 1024,
-      diagnosticsLevel: "info" as const,
-      experimentalNotificationsEnabled: true,
-      proxy: { mode: "inherit" as const },
-      fileMentionRespectSearchExclude: true,
-      fileMentionRespectIgnoreFiles: true,
-      fileMentionFollowSymlinks: true,
-    };
+    const configuration = runtimeConfiguration(fakePi);
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
     const logger = { error: vi.fn(), info: vi.fn() };
     const runtime = new SessionRuntime("session", dir, "Prompt command", () => configuration, secrets, logger as never, {
@@ -570,21 +513,7 @@ process.stdin.on("data", chunk => {
 process.on("SIGTERM", () => process.exit(0));
 `);
 
-    const configuration = {
-      piExecutable: fakePi,
-      piArguments: [],
-      startSessionOnOpen: true,
-      streamingBehavior: "followUp" as const,
-      collapseTurnTrace: true,
-      questionToolEnabled: false,
-      maxImageBytes: 10 * 1024 * 1024,
-      diagnosticsLevel: "info" as const,
-      experimentalNotificationsEnabled: true,
-      proxy: { mode: "inherit" as const },
-      fileMentionRespectSearchExclude: true,
-      fileMentionRespectIgnoreFiles: true,
-      fileMentionFollowSymlinks: true,
-    };
+    const configuration = runtimeConfiguration(fakePi);
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
     const logger = { error: vi.fn(), info: vi.fn() };
     const runtime = new SessionRuntime("session", dir, "Follow-up", () => configuration, secrets, logger as never, {
@@ -653,21 +582,7 @@ process.stdin.on("data", chunk => {
 process.on("SIGTERM", () => process.exit(0));
 `);
 
-    const configuration = {
-      piExecutable: fakePi,
-      piArguments: [],
-      startSessionOnOpen: true,
-      streamingBehavior: "followUp" as const,
-      collapseTurnTrace: true,
-      questionToolEnabled: false,
-      maxImageBytes: 10 * 1024 * 1024,
-      diagnosticsLevel: "info" as const,
-      experimentalNotificationsEnabled: true,
-      proxy: { mode: "inherit" as const },
-      fileMentionRespectSearchExclude: true,
-      fileMentionRespectIgnoreFiles: true,
-      fileMentionFollowSymlinks: true,
-    };
+    const configuration = runtimeConfiguration(fakePi);
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
     const logger = { error: vi.fn(), info: vi.fn() };
     const runtime = new SessionRuntime("session", dir, "Live stats", () => configuration, secrets, logger as never, {
@@ -756,21 +671,7 @@ process.stdin.on("data", chunk => {
 process.on("SIGTERM", () => process.exit(0));
 `);
 
-    const configuration = {
-      piExecutable: fakePi,
-      piArguments: ["--no-extensions"],
-      startSessionOnOpen: true,
-      streamingBehavior: "followUp" as const,
-      collapseTurnTrace: true,
-      questionToolEnabled: false,
-      maxImageBytes: 10 * 1024 * 1024,
-      diagnosticsLevel: "info" as const,
-      experimentalNotificationsEnabled: true,
-      proxy: { mode: "inherit" as const },
-      fileMentionRespectSearchExclude: true,
-      fileMentionRespectIgnoreFiles: true,
-      fileMentionFollowSymlinks: true,
-    };
+    const configuration = argsRecordingConfiguration(fakePi);
     const secrets = new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never);
     const runtime = new SessionRuntime("session", dir, "Tree", () => configuration, secrets, { error: vi.fn(), info: vi.fn() } as never, {
       onChange: vi.fn(),
@@ -833,21 +734,7 @@ process.on("SIGTERM", () => process.exit(0));
 
   it("reconciles a complete retry lifecycle after settlement without duplicate completion", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-retry-runtime-"));
-    const configuration = {
-      piExecutable: join(process.cwd(), "test", "e2e", "fake-pi.cjs"),
-      piArguments: [],
-      startSessionOnOpen: true,
-      streamingBehavior: "followUp" as const,
-      collapseTurnTrace: true,
-      questionToolEnabled: false,
-      maxImageBytes: 10 * 1024 * 1024,
-      diagnosticsLevel: "info" as const,
-      experimentalNotificationsEnabled: true,
-      proxy: { mode: "inherit" as const },
-      fileMentionRespectSearchExclude: true,
-      fileMentionRespectIgnoreFiles: true,
-      fileMentionFollowSymlinks: true,
-    };
+    const configuration = runtimeConfiguration(join(process.cwd(), "test", "e2e", "fake-pi.cjs"));
     const onAgentTurnCompleted = vi.fn();
     const runtime = new SessionRuntime(
       "retry-session",
@@ -995,21 +882,8 @@ process.stdin.on("data", chunk => {
 process.on("SIGTERM", () => process.exit(0));
 `);
 
-    const configuration = {
-      piExecutable: fakePi,
-      piArguments: [],
-      startSessionOnOpen: true,
-      streamingBehavior: "followUp" as const,
-      collapseTurnTrace: true,
-      questionToolEnabled: true,
-      maxImageBytes: 10 * 1024 * 1024,
-      diagnosticsLevel: "info" as const,
-      experimentalNotificationsEnabled: true,
-      proxy: { mode: "inherit" as const },
-      fileMentionRespectSearchExclude: true,
-      fileMentionRespectIgnoreFiles: true,
-      fileMentionFollowSymlinks: true,
-    };
+    const configuration = runtimeConfiguration(fakePi);
+    configuration.questionToolEnabled = true;
     const runtime = new SessionRuntime(
       "question-session",
       dir,
@@ -1069,9 +943,10 @@ function conversationNotices(view: Readonly<SessionViewModel>): SessionNoticeVie
   });
 }
 
-function runtimeConfiguration(piExecutable: string) {
+function runtimeConfiguration(piExecutable: string, runtimeCompatibility: RuntimeCompatibility = "pi"): FrostPiConfiguration {
   return {
     piExecutable,
+    runtimeCompatibility,
     piArguments: [],
     startSessionOnOpen: true,
     streamingBehavior: "followUp" as const,
