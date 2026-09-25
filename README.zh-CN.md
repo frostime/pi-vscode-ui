@@ -116,7 +116,7 @@ Pi 会话是树，而不只是线性的聊天记录。FrostPi 将 Pi 原生的�
 - 受信任的文件系统工作区。
 - 在 VS Code Extension Host 所在的同一环境中安装并配置 Pi。
 - Pi 可以通过 `PATH` 中的 `pi` 使用，或者通过 `frostpi.pi.executable` 配置。
-- 建议在 Extension Host 的 `PATH` 中安装 `fd` 和 `rg`。`fd` 是 `@` 工作区文件补全所必需的；`rg` 可以加速 Resume 会话发现。
+- 建议在 Extension Host 的 `PATH` 中安装 `fd` 和 `rg`。
 
 Remote SSH、WSL 和 Dev Container 工作区会在远程工作区 Extension Host 中运行 FrostPi 和 Pi。FrostPi 不会把本地 Pi 进程桥接到远程文件系统。
 
@@ -262,3 +262,63 @@ FrostPi 不包含遥测、远程服务或其他自有的在线服务。提示词
 FrostPi 采用 **AGPL-3.0-only** 许可证。
 
 FrostPi 是独立的客户端，并非 Pi 的官方发行版。
+
+
+## USER QUESTOIN
+
+### 既然定位 `non-intrusive` 为什么还提供 `question` 工具
+
+我们尽量不去触碰用户 Pi 运行时内部，但:
+
+- Questoin/Ask 工具是 Agentic Coding 必要的工具
+- 常见的 Question/Ask 类工具依赖复杂 TUI，无法在GUI中生效
+
+因此，我们将其作为少数例外，以可选的方式提供；建议启用者禁用本地的其他 question 类工具避免冲突。
+
+### 对 Pi 运行时实际做了哪些影响
+
+影响有限，抛开默认禁用的 question 工具外。
+
+如果你配置了 Proxy，会在启动时设置代理环境变量。
+
+同时 FrostPi 会注入一个 `session-tree-adapter` 扩展用来在 GUI 中支持 Pi 的 tree 功能 —— 但请放心，这个扩展不会写入 PI 家目录中，也不会干扰 Agent 运行的上下文。对用户来说它是无感运行的。
+
+### 为什么要求安装 `fd` 和 `rg`
+
+并非强制要求，没有安装也不会造成实质性影响。
+
+但 FrostPi 的 `@` 补全文件功能底层依赖 `fd`，session resume 功能会利用 `rg` 来加速解析 session file。安装二者对使用体验有帮助。
+
+### 会提供和 `vscode` 集成的 Pi 扩展工具吗？
+
+当下没有。但可能在未来集成读取 VsCode Workspace 状态的工具。我们会以克制的方式引入，且所有新引入的扩展类功能，总是默认禁用。
+
+### Write 工具只显示了 `+<lines>` 没有像 `edit` 那样同时显示文件增减，这是为什么
+
+详情请见 github issue `#6`。
+
+TLDR: PI 内置 write 工具只返回更改后的结果，不返回 diff，FrostPi 无法获取实际变更信息。
+
+但 FrostPi 会把所有 details 中返回 `diff` 的工具当做 `edit` 类工具处理，你可以自己开发扩展实现。例如可使用如下 Prompt 发给 AGENT:
+
+> 请在 PI 家目录中实现一个 extension，效果是覆盖 Pi 内置 `write` 工具，让 details 中返回类似 `edit` 工具的 `diff: string` 内容。允许简单地把 `-oldcontent` 和 `+newcontent` 拼接起来，只需要确保反应实际的变更行数即可，无需做精准的 hunk position 匹配。
+
+FrostPi 不会帮你实现这个 extension，我们尽量避免和用户自己的扩展冲突，更不会偷偷在内部变更 PI 的执行行为。
+
+### FrostPi 能兼容 `oh-my-pi` 吗
+
+做了最小兼容。用户可以通过如下做法来切换使用 omp
+
+在 VS Code 设置中将 `FrostPi: Pi Runtime Compatibility` 设置为 `oh-my-pi`；也可以直接在 `settings.json` 中配置：
+
+```json
+{
+  "frostpi.pi.runtimeCompatibility": "oh-my-pi"
+}
+```
+
+如果 `omp` 不在 `PATH` 中，可以另外配置 `frostpi.pi.executable` 指向它的可执行文件。通常不需要手动修改 `frostpi.pi.arguments`；如果使用了自定义会话目录或模型范围，可以通过该设置传入 `--session-dir` 或 `--models`。
+
+但需要注意，我们只做了最小兼容。此兼容只能确保 FrostPi 能够按照 OMP 的基础兼容约定启动 `omp --mode rpc`，进行基本的对话、工具调用、模型切换，以及在 OMP 默认或显式指定的会话目录中发现和恢复会话。
+
+但不会完整支持 OMP 的专属功能，也不会读取或映射 OMP 的 `config.yml`、profiles 等专属配置；例如 OMP 的 Agent Hub、DAP 调试、memory、collaboration 和 TUI 功能不会自动出现在 FrostPi 中。
