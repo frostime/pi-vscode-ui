@@ -15,6 +15,41 @@ import ToolActivity from "../../src/webview/features/conversation/ToolActivity.s
  * state and are not covered here.
  */
 describe("ToolActivity sections", () => {
+  it("shows the change size in place of the check for a successful edit", () => {
+    const card = renderCard(bound({ diff: "-old\n+new 1\n+new 2", args: { path: "a.ts" } }));
+
+    expect(card).toContain("tool-diffstat-add");
+    expect(card).toContain("tool-diffstat-del");
+    expect(card).not.toContain("codicon-check");
+  });
+
+  it("summarizes any tool whose result carries a diff, not just edit", () => {
+    const card = renderCard(bound({ name: "apply-patch", diff: "-old\n+new", args: { patch: "…" } }));
+
+    expect(card).toContain("tool-diffstat-add");
+    expect(card).toContain("tool-diffstat-del");
+    expect(card).not.toContain("codicon-check");
+  });
+
+  it("shows written line count for a successful write", () => {
+    const card = renderCard(bound({ name: "write", args: { path: "a.ts", content: "a\nb\n" } }));
+
+    expect(card).toContain("tool-diffstat-add");
+    expect(card).not.toContain("codicon-check");
+  });
+
+  it("keeps the check while a call runs without its result", () => {
+    const card = renderCard(bound({ status: "running", diff: "-old\n+new", args: { path: "a.ts" } }));
+
+    expect(card).not.toContain("tool-diffstat");
+  });
+
+  it("shows no change size for a call without a diff", () => {
+    const card = renderCard(bound({ args: { command: "pnpm build" } }));
+
+    expect(card).not.toContain("tool-diffstat");
+  });
+
   it("offers every section the call has content for", () => {
     const card = renderCard(bound({ diff: "--- a\n+++ b", args: { path: "a.ts" }, output: "ok" }));
 
@@ -139,6 +174,7 @@ function preparing(rawArguments: string): PreparingToolCallView {
 
 function bound(options: {
   status?: BoundToolCallView["status"];
+  name?: string;
   args?: Record<string, unknown>;
   output?: string;
   diff?: string;
@@ -153,7 +189,7 @@ function bound(options: {
   return {
     state: "bound",
     id: "tool-1",
-    name: "edit",
+    name: options.name ?? "edit",
     label: "a.ts",
     args: options.args ?? {},
     ...(options.output !== undefined ? { output: options.output } : {}),

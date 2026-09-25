@@ -35,6 +35,8 @@
           : "Tool completed",
   );
   const errorSummary = $derived(tool.status === "error" && tool.state === "bound" ? firstLine(tool.output) : "");
+  /** On a successful edit/write the change size takes the completion slot from the check icon. */
+  const stats = $derived(tool.state === "bound" && tool.status === "complete" ? changeStats(tool) : undefined);
 
   /**
    * Fixes the section this card shows the first time the reader expands it. Tools stream in:
@@ -58,6 +60,10 @@
     {#if errorSummary && tool.state === "bound"}<span class="tool-error-summary" title={tool.output}>{errorSummary}</span>{/if}
     {#if tool.status === "running"}
       <span class="status-dot running-dot activity-status" title={statusLabel} aria-label={statusLabel}></span>
+    {:else if tool.state === "bound" && stats}
+      <span class="tool-diffstat" aria-label={statLabel(tool, stats)}>
+        {#each statParts(tool, stats) as part (part.cls)}<span class={part.cls}>{part.sign}{part.n}</span>{/each}
+      </span>
     {:else}
       <span
         class={`codicon codicon-${statusIcon} activity-status${tool.status === "cancelled" ? " tool-status-cancelled" : ""}`}
@@ -149,6 +155,10 @@
 {/snippet}
 
 <script lang="ts" module>
+  import type { BoundToolCallView } from "$shared/model/toolCallModel";
+
+  import { diffStats, type DiffStats } from "./diffPresentation";
+
   function toolIcon(name: string): string {
     if (["read", "grep", "find", "ls"].includes(name)) return "search";
     if (["edit", "write"].includes(name)) return "edit";
@@ -160,6 +170,39 @@
     if (!value) return "Failed";
     const line = value.split(/\r?\n/, 1)[0]?.trim() || "Failed";
     return line.length > 72 ? `${line.slice(0, 69)}…` : line;
+  }
+
+  /** Any tool whose result carries a diff is summarized from that diff; Pi only emits one
+   * for `edit` today, but the rule is by data, not by tool name. A `write` reports the
+   * number of lines it wrote instead. */
+  function changeStats(tool: BoundToolCallView): DiffStats | undefined {
+    const diff = tool.recognized?.diff;
+    // A real but editless diff still reads as +0 −0 instead of pretending nothing happened.
+    if (diff) return diffStats(diff) ?? { additions: 0, deletions: 0 };
+    if (tool.name === "write") {
+      const { content } = tool.args;
+      return typeof content === "string" ? { additions: writtenLineCount(content), deletions: 0 } : undefined;
+    }
+    return undefined;
+  }
+
+  /** Line count of a written file: "a\nb\n" and "a\nb" are both two lines. */
+  function writtenLineCount(content: string): number {
+    const pieces = content.split(/\r\n|\r|\n/);
+    return pieces.length - (pieces.at(-1) === "" ? 1 : 0);
+  }
+
+  function statLabel(tool: BoundToolCallView, stats: DiffStats): string {
+    if (tool.name === "write") return `${stats.additions} lines written`;
+    return `${stats.additions} lines added, ${stats.deletions} lines removed`;
+  }
+
+  /** A diff-based stat renders both signs even at zero, so a no-op change still reads as
+   * +0 −0; a written-line count only ever reports additions, so it never shows a deletion. */
+  function statParts(tool: BoundToolCallView, stats: DiffStats): { cls: string; sign: string; n: number }[] {
+    const parts = [{ cls: "tool-diffstat-add", sign: "+", n: stats.additions }];
+    if (tool.name !== "write") parts.push({ cls: "tool-diffstat-del", sign: "\u2212", n: stats.deletions });
+    return parts;
   }
 
   interface RenderedArg {
@@ -318,6 +361,19 @@
   font: 10.5px/1.35 var(--font-mono);
 }
 .tool-status-cancelled { color: var(--frost-warning); }
+/* The diffstat takes the completion slot from the check icon on a successful edit/write, so
+   the row still reads "how it ended" at a glance; it reuses the Changes body's success/error
+   hues and stays small enough to leave the label room at the narrowest panel width. */
+.tool-diffstat {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  gap: 4px;
+  font: 10.5px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.tool-diffstat-add { color: var(--frost-success); }
+.tool-diffstat-del { color: var(--frost-error); }
 .tool-error-summary {
   min-width: 0;
   max-width: 38%;
