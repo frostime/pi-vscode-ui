@@ -206,7 +206,7 @@ export class SessionRegistry implements vscode.Disposable {
     if (!cwd) throw new Error("Open a workspace folder before resuming a Pi session.");
     const discovery = await this.#discoverWorkingDirectories(cwd);
     const configuration = readConfiguration(workspaceUriForPath(cwd));
-    const entry = await pickPiSession(discovery.directories, configuration.piArguments);
+    const entry = await pickPiSession(discovery.directories, configuration.piArguments, configuration.runtimeCompatibility);
     if (!entry) return undefined;
     const directory = findSessionWorkingDirectory(discovery.directories, entry.cwd);
     return this.#openSession(entry, true, directory);

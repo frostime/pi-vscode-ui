@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import { workspaceUriForPath } from "../../configuration/workspaceScope.js";
+import type { RuntimeCompatibility } from "../../configuration/runtimeCompatibility.js";
 import {
   findSessionWorkingDirectory,
   type SessionWorkingDirectory,
@@ -17,12 +18,13 @@ type PiSessionQuickPickItem = vscode.QuickPickItem & { entry?: PiSessionCatalogE
 export async function pickPiSession(
   directories: readonly SessionWorkingDirectory[],
   piArguments: string[],
+  compatibility: RuntimeCompatibility = "pi",
 ): Promise<PiSessionCatalogEntry | undefined> {
   const current = directories[0];
   if (!current) return undefined;
   const sessions = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Window, title: "Finding Pi sessions…" },
-    () => discoverPiSessions(directories, piArguments),
+    () => discoverPiSessions(directories, piArguments, compatibility),
   );
 
   const browse: PiSessionQuickPickItem = {

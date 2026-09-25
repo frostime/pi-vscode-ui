@@ -171,7 +171,21 @@
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "Optional Pi executable or Node.js CLI path. Leave empty to resolve Pi from PATH."
+          "description": "Optional Pi executable or Node.js CLI path. Leave empty to resolve the selected runtime from PATH."
+        },
+        "frostpi.pi.runtimeCompatibility": {
+          "type": "string",
+          "enum": [
+            "pi",
+            "oh-my-pi"
+          ],
+          "enumDescriptions": [
+            "Existing Pi behavior and Pi settings semantics.",
+            "Limited FrostPi compatibility with Oh My Pi launch, RPC, session discovery, and resume; this does not represent complete OMP support."
+          ],
+          "default": "pi",
+          "scope": "resource",
+          "description": "Select FrostPi's limited compatibility contract for a Pi-compatible runtime; this does not claim support for all runtime-specific features."
         },
         "frostpi.pi.arguments": {
           "type": "array",

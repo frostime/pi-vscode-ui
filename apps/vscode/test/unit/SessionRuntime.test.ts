@@ -66,7 +66,11 @@ describe("Pi session startup and conversation history", () => {
     await mkdir(join(dir, ".pi"));
     await writeFile(join(dir, ".pi", "settings.json"), JSON.stringify({ showCacheMissNotices: true }));
     const fakePi = await writeCacheMissPi(dir);
-    const configuration = { ...runtimeConfiguration(fakePi), piArguments: ["--approve"] };
+    const configuration = {
+      ...runtimeConfiguration(fakePi),
+      piArguments: ["--approve"] as string[],
+      runtimeCompatibility: "pi" as "pi" | "oh-my-pi",
+    };
     const runtime = new SessionRuntime(
       "cache-miss",
       dir,
@@ -96,6 +100,16 @@ describe("Pi session startup and conversation history", () => {
     await waitFor(() => runtime.view.status === "ready");
 
     expect(conversationNotices(runtime.view).filter((notice) => notice.text.startsWith("Cache miss:"))).toEqual([]);
+
+    const noticeCountBeforeOmp = conversationNotices(runtime.view).filter((notice) => notice.text.startsWith("Cache miss:")).length;
+    await runtime.stop();
+    configuration.runtimeCompatibility = "oh-my-pi";
+    await writeFile(join(dir, ".pi", "settings.json"), JSON.stringify({ showCacheMissNotices: true }));
+    await runtime.start();
+    await runtime.sendPrompt("Use tools with OMP compatibility", []);
+    await waitFor(() => runtime.view.status === "ready");
+
+    expect(conversationNotices(runtime.view).filter((notice) => notice.text.startsWith("Cache miss:"))).toHaveLength(noticeCountBeforeOmp);
   });
 
   afterEach(async () => {

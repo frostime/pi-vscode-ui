@@ -53,7 +53,7 @@ A broad "scan every known runtime directory" fallback and a generic runtime plug
 | Compatibility | Default executable | Default session root |
 | --- | --- | --- |
 | `pi` | `pi` and current existing resolution behavior | `~/.pi/agent/sessions` |
-| `oh-my-pi` | `omp` (platform-appropriate command, such as `omp.cmd` on Windows) | `~/.omp/agent/sessions` |
+| `oh-my-pi` | `omp` on Unix-like systems; the official Windows binary `omp.exe` on Windows | `~/.omp/agent/sessions` |
 
 Both profiles continue to use the existing RPC launch contract (`--mode rpc`) and the existing resume argument (`--session <absolute-jsonl-path>`). No separate OMP RPC client or session-file parser is introduced.
 

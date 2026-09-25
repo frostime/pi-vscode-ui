@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { basename, isAbsolute, join, normalize, resolve } from "node:path";
 
 import { loadPiSettings, resolvePiAgentDirectory } from "../../_shared/pi-settings/loadPiSettings.js";
+import { runtimeCompatibilityProfile, type RuntimeCompatibility } from "../../configuration/runtimeCompatibility.js";
 import {
   findSessionWorkingDirectory,
   type SessionWorkingDirectory,
@@ -24,7 +25,7 @@ export interface PiSessionCatalogEntry {
   preview?: string;
 }
 
-type SessionRootResolver = (cwd: string, piArguments: string[]) => Promise<string[]>;
+type SessionRootResolver = (cwd: string, piArguments: string[], compatibility: RuntimeCompatibility) => Promise<string[]>;
 type SessionFileScanner = (roots: readonly string[]) => Promise<SessionFileScanResult>;
 
 const MAX_FILES = 2_000;
@@ -33,10 +34,11 @@ const TAIL_BYTES = 384 * 1024;
 export async function discoverPiSessions(
   directories: readonly SessionWorkingDirectory[],
   piArguments: string[],
+  compatibility: RuntimeCompatibility = "pi",
   resolveRoots: SessionRootResolver = resolveSessionRoots,
   scanFiles: SessionFileScanner = scanSessionFilesWithRipgrep,
 ): Promise<PiSessionCatalogEntry[]> {
-  const rootsByDirectory = await Promise.all(directories.map((directory) => resolveRoots(directory.cwd, piArguments)));
+  const rootsByDirectory = await Promise.all(directories.map((directory) => resolveRoots(directory.cwd, piArguments, compatibility)));
   const roots = prioritizeSessionRoots(directories, rootsByDirectory);
   const fastScanPromise = Promise.resolve()
     .then(() => scanFiles(roots))
@@ -151,20 +153,33 @@ async function readFastOrFallbackMetadata(
   };
 }
 
-export async function resolveSessionRoots(cwd: string, piArguments: string[]): Promise<string[]> {
+export async function resolveSessionRoots(
+  cwd: string,
+  piArguments: string[],
+  compatibility: RuntimeCompatibility = "pi",
+): Promise<string[]> {
   const roots: string[] = [];
   const cli = sessionDirArgument(piArguments);
+  const profile = runtimeCompatibilityProfile(compatibility);
   if (cli) roots.push(resolveSessionDir(cli, cwd));
-  if (process.env.PI_CODING_AGENT_SESSION_DIR) roots.push(resolveSessionDir(process.env.PI_CODING_AGENT_SESSION_DIR, cwd));
+  if (!profile.usesPiSettings && cli) {
+    return [...new Set(roots.map((root) => normalize(resolve(root))))];
+  }
 
-  // Catalog discovery includes both configured scopes even when one is not currently effective,
-  // so sessions remain discoverable after trust or launch-argument changes.
-  const settings = await loadPiSettings(cwd, { piArguments });
-  const projectDir = sessionDirSetting(settings.project);
-  const globalDir = sessionDirSetting(settings.global);
-  if (projectDir) roots.push(resolveSessionDir(projectDir, cwd));
-  if (globalDir) roots.push(resolveSessionDir(globalDir, cwd));
-  roots.push(join(resolvePiAgentDirectory(cwd), "sessions"));
+  if (profile.usesPiSettings) {
+    if (process.env.PI_CODING_AGENT_SESSION_DIR) roots.push(resolveSessionDir(process.env.PI_CODING_AGENT_SESSION_DIR, cwd));
+
+    // Catalog discovery includes both configured scopes even when one is not currently effective,
+    // so sessions remain discoverable after trust or launch-argument changes.
+    const settings = await loadPiSettings(cwd, { piArguments });
+    const projectDir = sessionDirSetting(settings.project);
+    const globalDir = sessionDirSetting(settings.global);
+    if (projectDir) roots.push(resolveSessionDir(projectDir, cwd));
+    if (globalDir) roots.push(resolveSessionDir(globalDir, cwd));
+    roots.push(join(resolvePiAgentDirectory(cwd), "sessions"));
+  } else {
+    roots.push(profile.defaultSessionRoot());
+  }
 
   return [...new Set(roots.map((root) => normalize(resolve(root))))];
 }

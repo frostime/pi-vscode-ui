@@ -417,7 +417,8 @@ export class SessionRuntime {
 
   async refreshModels(): Promise<RpcModel[]> {
     const models = await this.#requireApi().getAvailableModels();
-    const scopedModelIds = await resolvePiModelScope(this.cwd, this.#configurationProvider().piArguments, models);
+    const configuration = this.#configurationProvider();
+    const scopedModelIds = await resolvePiModelScope(this.cwd, configuration.piArguments, models, configuration.runtimeCompatibility);
     this.#viewState.setModels(models);
     this.#viewState.setScopedModelIds(scopedModelIds);
     this.#notifyChange();
@@ -544,7 +545,7 @@ export class SessionRuntime {
     this.#notifyChange();
 
     const configuration = this.#configurationProvider();
-    const invocation = configuredPiInvocation(configuration.piExecutable);
+    const invocation = configuredPiInvocation(configuration.piExecutable, configuration.runtimeCompatibility);
     await this.#sessionTreeBridge?.prepare();
     if (configuration.questionToolEnabled) await this.#questionToolBridge?.prepare();
     const args = [
@@ -555,9 +556,11 @@ export class SessionRuntime {
       // Verbatim by contract — never validate or reorder here (session-lifecycle.SPEC.md).
       ...this.customLaunchArguments,
     ];
-    const piSettings = await loadPiSettings(this.cwd, { piArguments: args });
+    const cacheMissNotices = configuration.runtimeCompatibility !== "oh-my-pi"
+      ? showCacheMissNoticesEnabled(await loadPiSettings(this.cwd, { piArguments: args }))
+      : false;
     if (this.#disposed || lifecycleVersion !== this.#lifecycleVersion) return;
-    this.#conversation.configureCacheMissNotices(showCacheMissNoticesEnabled(piSettings));
+    this.#conversation.configureCacheMissNotices(cacheMissNotices);
     const vscodeProxy = readVsCodeProxy(this.cwd);
     const credentials = await this.#proxySecrets.get();
     if (this.#disposed || lifecycleVersion !== this.#lifecycleVersion) return;
@@ -654,7 +657,8 @@ export class SessionRuntime {
     ]);
     if (this.#disposed || api !== this.#api) return;
     this.#conversation.setCacheModels(models.length > 0 ? models : this.view.model ? [this.view.model] : []);
-    const scopedModelIds = await resolvePiModelScope(this.cwd, this.#configurationProvider().piArguments, models);
+    const configuration = this.#configurationProvider();
+    const scopedModelIds = await resolvePiModelScope(this.cwd, configuration.piArguments, models, configuration.runtimeCompatibility);
     if (this.#disposed || api !== this.#api) return;
     this.#viewState.setModels(models);
     this.#viewState.setScopedModelIds(scopedModelIds);

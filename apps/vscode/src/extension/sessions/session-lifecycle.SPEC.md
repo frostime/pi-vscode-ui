@@ -12,7 +12,7 @@ updated: 2026-08-09
 
 ## Ownership and working directories
 
-One `SessionRuntime` owns exactly one live `pi --mode rpc` process. `SessionRegistry` owns runtimes, sidebar selection (`activeSessionId`), metadata persistence, and arbitrary per-Session views; Pi owns session JSONL and conversation persistence. Sidebar and editor-tab Webviews are disposable presentations and never control Runtime lifetime.
+One `SessionRuntime` owns exactly one live `pi --mode rpc` or selected compatibility-runtime `--mode rpc` process. `SessionRegistry` owns runtimes, sidebar selection (`activeSessionId`), metadata persistence, and arbitrary per-Session views; the child runtime owns session JSONL and conversation persistence. The `oh-my-pi` compatibility profile is limited to FrostPi's launch, RPC, session discovery, and resume surface; it does not claim complete OMP support. Sidebar and editor-tab Webviews are disposable presentations and never control Runtime lifetime.
 
 New/Resume anchor to the active editor's workspace folder, otherwise the first folder. The anchor and existing non-bare, non-prunable worktrees of the same repository are allowed; a workspace opened below a worktree root maps that relative subdirectory into linked worktrees only when it exists. The Webview cannot provide a cwd.
 
