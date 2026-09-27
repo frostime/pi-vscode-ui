@@ -8,6 +8,8 @@
 
   let { activity }: { activity: ToolActivityView } = $props();
   let open = $state(false);
+  /** Soft-wrap choice for this card's change preview; per-card like fence overrides. */
+  let diffWrapped = $state(false);
   /** Section the reader picked; unset until the first expansion latches the plan default. */
   let chosenSection = $state<ToolSectionId | null>(null);
 
@@ -127,11 +129,24 @@
     {@const diff = tool.recognized?.diff}
     {#if sectionId === "changes"}
       {#if diff}
-        <pre class="tool-diff" aria-label="Changes"><code class="tool-diff-content">{#each presentDiff(diff) as line, index (index)}<span
+        <div class="tool-diff-frame">
+          <button
+            type="button"
+            class="tool-wrap-btn"
+            class:active={diffWrapped}
+            aria-pressed={diffWrapped}
+            title={diffWrapped ? "Disable line wrapping" : "Wrap long lines"}
+            onclick={() => (diffWrapped = !diffWrapped)}
+          >
+            <span class="codicon codicon-word-wrap" aria-hidden="true"></span>
+            <span>{diffWrapped ? "Unwrap" : "Wrap"}</span>
+          </button>
+          <pre class="tool-diff" class:wrap={diffWrapped} aria-label="Changes"><code class="tool-diff-content">{#each presentDiff(diff) as line, index (index)}<span
           class="tool-diff-line"
           class:added={line.kind === "addition"}
           class:removed={line.kind === "deletion"}
         >{#if line.marker}<span class="tool-diff-marker">{line.marker}</span>{/if}{#each line.segments as segment, segmentIndex (segmentIndex)}{#if segment.emphasized}<span class="tool-diff-emphasis">{segment.text}</span>{:else}{segment.text}{/if}{/each}{#if !line.marker && !line.segments.some((segment) => segment.text)}<span aria-hidden="true">&nbsp;</span>{/if}</span>{/each}</code></pre>
+        </div>
       {/if}
     {:else if sectionId === "input"}
       <div class="tool-input">
@@ -323,6 +338,32 @@
   font: inherit;
 }
 .tool-diff-line { display: block; box-sizing: border-box; padding: 0 8px; color: var(--frost-muted); }
+/* The frame keeps the wrap toggle fixed over the preview while the pre keeps scrolling,
+   mirroring how fenced-code chrome stays put. */
+.tool-diff-frame { position: relative; }
+.tool-wrap-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid var(--frost-border);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--frost-surface) 88%, transparent);
+  color: var(--frost-muted);
+  font: 10.5px/1.5 system-ui, sans-serif;
+  cursor: pointer;
+  user-select: none;
+  transition: background .12s ease, color .12s ease;
+}
+.tool-wrap-btn:hover { background: var(--frost-surface); color: var(--frost-text); }
+.tool-wrap-btn:focus-visible { outline: 1px solid var(--frost-focus); outline-offset: 1px; }
+.tool-wrap-btn.active { background: var(--frost-active); color: var(--frost-text); }
+.tool-diff.wrap { overflow-x: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-diff.wrap .tool-diff-content { width: 100%; }
 .tool-diff-marker { display: inline-block; width: 1ch; text-align: center; }
 .tool-diff-line.added {
   color: var(--vscode-diffEditor-insertedTextForeground, var(--frost-text));

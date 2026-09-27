@@ -50,6 +50,19 @@ describe("ToolActivity sections", () => {
     expect(card).not.toContain("tool-diffstat");
   });
 
+  it("offers a wrap toggle over the change preview", () => {
+    const card = renderCard(bound({ diff: "-old\n+new", args: { path: "a.ts" } }));
+
+    expect(card).toContain("tool-wrap-btn");
+    expect(card).toContain('aria-pressed="false"');
+  });
+
+  it("shows no wrap toggle where no diff is previewed", () => {
+    const card = renderCard(bound({ args: { command: "pnpm build" } }));
+
+    expect(card).not.toContain("tool-wrap-btn");
+  });
+
   it("offers every section the call has content for", () => {
     const card = renderCard(bound({ diff: "--- a\n+++ b", args: { path: "a.ts" }, output: "ok" }));
 
