@@ -131,7 +131,7 @@
           class="tool-diff-line"
           class:added={line.kind === "addition"}
           class:removed={line.kind === "deletion"}
-        >{#if line.marker}<span class="tool-diff-marker">{line.marker}</span>{/if}{line.before}{#if line.emphasis}<span class="tool-diff-emphasis">{line.emphasis}</span>{/if}{line.after}{#if !line.marker && !line.before && !line.emphasis && !line.after}<span aria-hidden="true">&nbsp;</span>{/if}</span>{/each}</code></pre>
+        >{#if line.marker}<span class="tool-diff-marker">{line.marker}</span>{/if}{#each line.segments as segment, segmentIndex (segmentIndex)}{#if segment.emphasized}<span class="tool-diff-emphasis">{segment.text}</span>{:else}{segment.text}{/if}{/each}{#if !line.marker && !line.segments.some((segment) => segment.text)}<span aria-hidden="true">&nbsp;</span>{/if}</span>{/each}</code></pre>
       {/if}
     {:else if sectionId === "input"}
       <div class="tool-input">

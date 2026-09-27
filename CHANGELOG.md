@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Emphasize intra-line changes at word level inside `diff`/`patch` fenced blocks and tool-card change previews: a line with several separate edits now shows each changed word instead of one band spanning between them, unequal deletion/addition runs get precise emphasis too, CJK text is emphasized per character, and near-complete line rewrites fall back to calm whole-line highlighting.
+
 ## [0.14.4] - 2026-09-25
 
 ### Added

@@ -1,6 +1,78 @@
 import { describe, expect, it } from "vitest";
 
-import { diffStats } from "../../src/webview/features/conversation/diffPresentation.js";
+import {
+  diffStats,
+  presentDiff,
+  type DiffLinePresentation,
+} from "../../src/webview/features/conversation/diffPresentation.js";
+
+function editedLines(source: string): DiffLinePresentation[] {
+  return presentDiff(source).filter((line) => line.kind === "addition" || line.kind === "deletion");
+}
+
+function emphasizedText(line: DiffLinePresentation): string[] {
+  return line.segments.filter((segment) => segment.emphasized).map((segment) => segment.text);
+}
+
+describe("presentDiff", () => {
+  it("keeps two separate changed words apart on one line", () => {
+    const [oldLine, newLine] = editedLines(
+      "-// fetch user data and cache it for 10 minutes\n+// fetch user profile and cache it for 30 minutes",
+    );
+
+    expect(emphasizedText(oldLine!)).toEqual(["data", "10"]);
+    expect(emphasizedText(newLine!)).toEqual(["profile", "30"]);
+  });
+
+  it("emphasizes inside deletion/addition runs of unequal size", () => {
+    const presentations = editedLines(
+      "-function reset(featureFlags) {\n+function reset(featureFlags, options = {}) {\n+  cache.clear();",
+    );
+
+    // The old line survives intact inside the replacement; only the insertion is new.
+    expect(emphasizedText(presentations[0]!)).toEqual([]);
+    expect(emphasizedText(presentations[1]!).join("")).toContain("options");
+    // A wholly new line is caught by the rewrite guard: background only, no word marks.
+    expect(emphasizedText(presentations[2]!)).toEqual([]);
+  });
+
+  it("falls back to whole-line highlight for a rewritten line", () => {
+    const presentations = editedLines(
+      "-The results show a strong correlation between cache hit rate and end-to-end latency.\n+Two confounds break this inference: warmup effects and uneven request sizes.",
+    );
+
+    for (const line of presentations) expect(emphasizedText(line)).toEqual([]);
+  });
+
+  it("never emphasizes purely new lines inside a growing run", () => {
+    const presentations = editedLines(
+      "-const a = 1;\n+const a = 2;\n+const b = 3;",
+    );
+
+    expect(emphasizedText(presentations[0]!)).toEqual(["1"]);
+    expect(emphasizedText(presentations[1]!)).toEqual(["2"]);
+    expect(emphasizedText(presentations[2]!)).toEqual([]);
+  });
+
+  it("emphasizes single changed characters in CJK prose", () => {
+    const [oldLine, newLine] = editedLines("-我认为这个方案可行。\n+我认为这个草案可行。");
+
+    expect(emphasizedText(oldLine!)).toEqual(["方"]);
+    expect(emphasizedText(newLine!)).toEqual(["草"]);
+  });
+
+  it("leaves context, meta, and comment lines unemphasized", () => {
+    const presentations = presentDiff(
+      "@@ -1,2 +1,2 @@\n unchanged context\n-old\n+newer\n context again",
+    );
+
+    for (const line of presentations) {
+      if (line.kind === "context" || line.kind === "meta") {
+        expect(line.segments.every((segment) => !segment.emphasized)).toBe(true);
+      }
+    }
+  });
+});
 
 describe("diffStats", () => {
   it("counts additions and deletions separately", () => {

@@ -1,27 +1,42 @@
+/**
+ * Presentation model for unified-diff text: line classification plus word-level
+ * intra-line emphasis. Both surfaces consume it — Markdown `diff`/`patch` fences
+ * via `renderDiffHtml`, tool-card change previews via `presentDiff` — so they show
+ * one algorithm with different chrome.
+ */
+
 export type DiffLineKind = "addition" | "deletion" | "meta" | "comment" | "context";
+
+/** A maximal same-emphasis run of a rendered diff line. */
+export type DiffSegment = {
+  text: string;
+  emphasized: boolean;
+};
 
 export type DiffLinePresentation = {
   kind: DiffLineKind;
   marker: string;
-  before: string;
-  emphasis?: string;
-  after: string;
+  segments: DiffSegment[];
   ending: string;
 };
 
 type ParsedDiffLine = {
   kind: DiffLineKind;
-  content: string;
+  marker: string;
+  body: string;
   ending: string;
-  emphasized?: { start: number; end: number };
+  /** Per-character emphasis marks over `body`; absent means no intra-line emphasis. */
+  flags?: Uint8Array;
 };
 
-const MIN_SHARED_CHARACTERS = 2;
-const MIN_SHARED_RATIO = 0.3;
-
+/**
+ * Adjacent deletion/addition runs are tokenized as word streams and aligned with an
+ * exact LCS, so a line can carry several separate changed ranges and paired runs may
+ * differ in size. Block-local scope keeps this cheap; `MAX_...` guards bound the worst case.
+ */
 export function presentDiff(source: string): DiffLinePresentation[] {
   const lines = splitDiffLines(source);
-  markChangedSubstrings(lines);
+  markChangedTokens(lines);
   return lines.map(presentDiffLine);
 }
 
@@ -46,135 +61,216 @@ export function diffStats(source: string): DiffStats | undefined {
 }
 
 export function renderDiffHtml(source: string): string {
-  return presentDiff(source).map(renderDiffLine).join("");
+  return presentDiff(source).map(renderDiffLineHtml).join("");
 }
 
+// ---- line model ----
+
 function splitDiffLines(source: string): ParsedDiffLine[] {
-  const rawLines = source.match(/[^\r\n]*(?:\r\n|\r|\n|$)/g)?.filter(Boolean) ?? [];
-  return rawLines.map((rawLine) => {
-    const ending = rawLine.match(/(?:\r\n|\r|\n)$/)?.[0] ?? "";
-    const content = ending ? rawLine.slice(0, -ending.length) : rawLine;
-    return { kind: classifyDiffLine(content), content, ending };
+  const rawLines = source.split(/\r\n|\r|\n/);
+  if (rawLines[rawLines.length - 1] === "") rawLines.pop();
+  const terminated = source.endsWith("\n") || source.endsWith("\r");
+  return rawLines.map((content, index) => {
+    const kind = classifyDiffLine(content);
+    const marked = kind === "addition" || kind === "deletion";
+    return {
+      kind,
+      marker: marked ? content.slice(0, 1) : "",
+      body: marked ? content.slice(1) : content,
+      ending: index < rawLines.length - 1 || terminated ? "\n" : "",
+    };
   });
 }
 
 function classifyDiffLine(line: string): DiffLineKind {
   if (line.startsWith("@@")) return "meta";
   if (/^(?:Index: |index|={3,}|-{3}|\*{3} |\+{3}|diff --git)/.test(line)) return "comment";
-  if (line.startsWith("+")) return "addition";
+  if (line.startsWith("+") || line.startsWith("!")) return "addition";
   if (line.startsWith("-")) return "deletion";
-  if (line.startsWith("!")) return "addition";
   return "context";
 }
 
+// ---- word-level emphasis ----
+
+const MAX_WORD_DIFF_BLOCK_TOKENS = 800;
+const MAX_EMPHASIZED_VISIBLE_SHARE = 0.75;
+
 /**
- * Unified diffs place a deletion run directly before its replacement run.
- * Pair equal-sized runs by position and only emphasize pairs that retain enough
- * visible text; uncertain matches keep the safer whole-line highlight.
+ * Latin words and numbers, single CJK characters (prose diffs from AI discussions have
+ * no word boundaries), punctuation and whitespace runs, each as one token. Newlines are
+ * separate tokens so block alignment stays anchored to line structure.
  */
-function markChangedSubstrings(lines: ParsedDiffLine[]): void {
+const TOKEN_PATTERN = /\r\n|\n|\r|\w+|[\u4e00-\u9fff\uf900-\ufaff]|[\u3000-\u303f\uff01-\uff5e]|[!-/:-@[-`{-~]|\s+/g;
+
+function markChangedTokens(lines: ParsedDiffLine[]): void {
   for (let index = 0; index < lines.length;) {
     if (lines[index]?.kind !== "deletion") {
       index += 1;
       continue;
     }
-
     const deletionsStart = index;
     while (lines[index]?.kind === "deletion") index += 1;
     const additionsStart = index;
     while (lines[index]?.kind === "addition") index += 1;
+    const additionsEnd = index;
+    const deletions = lines.slice(deletionsStart, additionsStart);
+    const additions = lines.slice(additionsStart, additionsEnd);
+    if (deletions.length === 0 || additions.length === 0) continue;
+    markWordDiff(deletions, additions);
+  }
+}
 
-    const deletionCount = additionsStart - deletionsStart;
-    const additionCount = index - additionsStart;
-    if (deletionCount !== additionCount) continue;
+function markWordDiff(deletions: ParsedDiffLine[], additions: ParsedDiffLine[]): void {
+  const oldStream = blockTokenStream(deletions);
+  const newStream = blockTokenStream(additions);
+  if (oldStream.tokens.length + newStream.tokens.length > MAX_WORD_DIFF_BLOCK_TOKENS) return;
 
-    for (let offset = 0; offset < deletionCount; offset += 1) {
-      const deletion = lines[deletionsStart + offset]!;
-      const addition = lines[additionsStart + offset]!;
-      const ranges = findChangedRanges(deletion.content.slice(1), addition.content.slice(1));
-      if (!ranges) continue;
-      deletion.emphasized = { start: ranges.oldStart + 1, end: ranges.oldEnd + 1 };
-      addition.emphasized = { start: ranges.newStart + 1, end: ranges.newEnd + 1 };
+  const { oldMarks, newMarks } = diffTokenMarks(oldStream.tokens, newStream.tokens);
+  applyTokenMarks(deletions, oldStream, oldMarks);
+  applyTokenMarks(additions, newStream, newMarks);
+}
+
+/** A block's concatenated token stream plus, per token, the owning line and its offset there. */
+type BlockTokenStream = {
+  tokens: string[];
+  owners: number[];
+  starts: number[];
+};
+
+function blockTokenStream(block: ParsedDiffLine[]): BlockTokenStream {
+  const tokens: string[] = [];
+  const owners: number[] = [];
+  const starts: number[] = [];
+  block.forEach((line, lineIndex) => {
+    let offset = 0;
+    for (const token of line.body.match(TOKEN_PATTERN) ?? []) {
+      tokens.push(token);
+      owners.push(lineIndex);
+      starts.push(offset);
+      offset += token.length;
+    }
+    // Separator between block lines; owner -1 marks it as not belonging to any line.
+    if (lineIndex < block.length - 1) {
+      tokens.push("\n");
+      owners.push(-1);
+      starts.push(-1);
+    }
+  });
+  return { tokens, owners, starts };
+}
+
+/**
+ * Exact LCS over tokens; every token outside the longest common subsequence is marked
+ * as changed. Token counts are capped by MAX_WORD_DIFF_BLOCK_TOKENS, so the O(n·m)
+ * table stays small — no Myers machinery needed at this scale.
+ */
+function diffTokenMarks(oldTokens: string[], newTokens: string[]): {
+  oldMarks: Uint8Array;
+  newMarks: Uint8Array;
+} {
+  const oldLength = oldTokens.length;
+  const newLength = newTokens.length;
+  const commonSuffixCounts: Uint16Array[] = Array.from(
+    { length: oldLength + 1 },
+    () => new Uint16Array(newLength + 1),
+  );
+  for (let oldIndex = oldLength - 1; oldIndex >= 0; oldIndex--) {
+    const row = commonSuffixCounts[oldIndex]!;
+    const nextRow = commonSuffixCounts[oldIndex + 1]!;
+    for (let newIndex = newLength - 1; newIndex >= 0; newIndex--) {
+      row[newIndex] = oldTokens[oldIndex] === newTokens[newIndex]
+        ? nextRow[newIndex + 1]! + 1
+        : Math.max(nextRow[newIndex]!, row[newIndex + 1]!);
     }
   }
+
+  const oldMarks = new Uint8Array(oldLength).fill(1);
+  const newMarks = new Uint8Array(newLength).fill(1);
+  let oldIndex = 0;
+  let newIndex = 0;
+  while (oldIndex < oldLength && newIndex < newLength) {
+    if (oldTokens[oldIndex] === newTokens[newIndex]) {
+      oldMarks[oldIndex] = 0;
+      newMarks[newIndex] = 0;
+      oldIndex += 1;
+      newIndex += 1;
+    } else if (commonSuffixCounts[oldIndex + 1]![newIndex]! >= commonSuffixCounts[oldIndex]![newIndex + 1]!) {
+      oldIndex += 1;
+    } else {
+      newIndex += 1;
+    }
+  }
+  return { oldMarks, newMarks };
 }
 
-function findChangedRanges(oldText: string, newText: string): {
-  oldStart: number;
-  oldEnd: number;
-  newStart: number;
-  newEnd: number;
-} | undefined {
-  let prefixLength = 0;
-  while (
-    prefixLength < oldText.length
-    && prefixLength < newText.length
-    && oldText[prefixLength] === newText[prefixLength]
-  ) {
-    prefixLength += 1;
-  }
+function applyTokenMarks(
+  block: ParsedDiffLine[],
+  stream: BlockTokenStream,
+  marks: Uint8Array,
+): void {
+  const flagsPerLine = block.map((line) => new Uint8Array(line.body.length));
+  stream.tokens.forEach((token, tokenIndex) => {
+    const owner = stream.owners[tokenIndex]!;
+    if (!marks[tokenIndex] || owner < 0) return;
+    const flags = flagsPerLine[owner]!;
+    const start = stream.starts[tokenIndex]!;
+    for (let offset = 0; offset < token.length; offset++) flags[start + offset] = 1;
+  });
 
-  let suffixLength = 0;
-  while (
-    suffixLength < oldText.length - prefixLength
-    && suffixLength < newText.length - prefixLength
-    && oldText[oldText.length - suffixLength - 1] === newText[newText.length - suffixLength - 1]
-  ) {
-    suffixLength += 1;
-  }
-
-  if (prefixLength === oldText.length && prefixLength === newText.length) return undefined;
-
-  const sharedText = oldText.slice(0, prefixLength) + oldText.slice(oldText.length - suffixLength);
-  const sharedCharacters = sharedText.replace(/\s/g, "").length;
-  const longestVisibleLength = Math.max(
-    oldText.replace(/\s/g, "").length,
-    newText.replace(/\s/g, "").length,
-  );
-  if (
-    sharedCharacters < MIN_SHARED_CHARACTERS
-    || longestVisibleLength === 0
-    || sharedCharacters / longestVisibleLength < MIN_SHARED_RATIO
-  ) {
-    return undefined;
-  }
-
-  return {
-    oldStart: prefixLength,
-    oldEnd: oldText.length - suffixLength,
-    newStart: prefixLength,
-    newEnd: newText.length - suffixLength,
-  };
+  block.forEach((line, lineIndex) => {
+    const flags = flagsPerLine[lineIndex]!;
+    // A line whose emphasis covers nearly all visible text is a rewrite, not an edit;
+    // word-level marks would only add noise over the whole-line background.
+    if (!coversMostVisibleText(line.body, flags)) line.flags = flags;
+  });
 }
+
+function coversMostVisibleText(body: string, flags: Uint8Array): boolean {
+  let visible = 0;
+  let emphasized = 0;
+  for (let index = 0; index < body.length; index++) {
+    if (/\s/.test(body[index]!)) continue;
+    visible += 1;
+    if (flags[index]) emphasized += 1;
+  }
+  return visible > 0 && emphasized / visible >= MAX_EMPHASIZED_VISIBLE_SHARE;
+}
+
+// ---- presentation ----
 
 function presentDiffLine(line: ParsedDiffLine): DiffLinePresentation {
-  const markerLength = line.kind === "addition" || line.kind === "deletion" ? 1 : 0;
-  const marker = markerLength ? line.content[0]! : "";
-  if (!line.emphasized) {
-    return { kind: line.kind, marker, before: line.content.slice(markerLength), after: "", ending: line.ending };
-  }
-
-  const emphasis = line.content.slice(line.emphasized.start, line.emphasized.end);
   return {
     kind: line.kind,
-    marker,
-    before: line.content.slice(markerLength, line.emphasized.start),
-    ...(emphasis ? { emphasis } : {}),
-    after: line.content.slice(line.emphasized.end),
+    marker: line.marker,
+    segments: buildSegments(line.body, line.flags),
     ending: line.ending,
   };
 }
 
-function renderDiffLine(line: DiffLinePresentation): string {
+function buildSegments(body: string, flags: Uint8Array | undefined): DiffSegment[] {
+  if (!flags || body.length === 0) return [{ text: body, emphasized: false }];
+  const segments: DiffSegment[] = [];
+  let start = 0;
+  for (let index = 1; index <= body.length; index++) {
+    if (index === body.length || flags[index] !== flags[start]) {
+      segments.push({ text: body.slice(start, index), emphasized: flags[start] === 1 });
+      start = index;
+    }
+  }
+  return segments;
+}
+
+function renderDiffLineHtml(line: DiffLinePresentation): string {
   const lineClass = line.kind === "context" ? "hljs-diff-line" : `hljs-diff-line hljs-${line.kind}`;
   const marker = line.marker
     ? `<span class="hljs-diff-marker">${escapeHtml(line.marker)}</span>`
     : "";
-  const emphasis = line.emphasis
-    ? `<span class="hljs-diff-emphasis">${escapeHtml(line.emphasis)}</span>`
-    : "";
-  const content = `<span class="hljs-diff-content">${escapeHtml(line.before)}${emphasis}${escapeHtml(line.after)}</span>`;
-  return `<span class="${lineClass}">${marker}${content}</span>${escapeHtml(line.ending)}`;
+  const content = line.segments
+    .map((segment) => (segment.emphasized
+      ? `<span class="hljs-diff-emphasis">${escapeHtml(segment.text)}</span>`
+      : escapeHtml(segment.text)))
+    .join("");
+  return `<span class="${lineClass}">${marker}<span class="hljs-diff-content">${content}</span></span>${escapeHtml(line.ending)}`;
 }
 
 function escapeHtml(value: string): string {
