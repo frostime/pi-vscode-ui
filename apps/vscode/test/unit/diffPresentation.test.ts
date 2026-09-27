@@ -1,8 +1,10 @@
+/** @vitest-environment jsdom */
 import { describe, expect, it } from "vitest";
 
 import {
   diffStats,
   presentDiff,
+  renderDiffHtml,
   type DiffLinePresentation,
 } from "../../src/webview/features/conversation/diffPresentation.js";
 
@@ -59,6 +61,24 @@ describe("presentDiff", () => {
 
     expect(emphasizedText(oldLine!)).toEqual(["方"]);
     expect(emphasizedText(newLine!)).toEqual(["草"]);
+  });
+
+  it("keeps emphasis aligned after accented characters", () => {
+    const [oldLine, newLine] = editedLines("-café old\n+café new");
+
+    expect(emphasizedText(oldLine!)).toEqual(["old"]);
+    expect(emphasizedText(newLine!)).toEqual(["new"]);
+  });
+
+  it("emphasizes complete emoji without breaking rendered text", () => {
+    const source = "-status: 😊 ready\n+status: 😢 ready";
+    const [oldLine, newLine] = editedLines(source);
+    const container = document.createElement("div");
+    container.innerHTML = renderDiffHtml(source);
+
+    expect(emphasizedText(oldLine!)).toEqual(["😊"]);
+    expect(emphasizedText(newLine!)).toEqual(["😢"]);
+    expect(container.textContent).toBe(source);
   });
 
   it("leaves context, meta, and comment lines unemphasized", () => {

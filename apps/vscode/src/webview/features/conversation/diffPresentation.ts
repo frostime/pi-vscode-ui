@@ -97,10 +97,11 @@ const MAX_EMPHASIZED_VISIBLE_SHARE = 0.75;
 
 /**
  * Latin words and numbers, single CJK characters (prose diffs from AI discussions have
- * no word boundaries), punctuation and whitespace runs, each as one token. Newlines are
- * separate tokens so block alignment stays anchored to line structure.
+ * no word boundaries), punctuation and whitespace runs, each as one token. Any other
+ * Unicode code point is still a token so no text is skipped. Newlines are separate
+ * tokens so block alignment stays anchored to line structure.
  */
-const TOKEN_PATTERN = /\r\n|\n|\r|\w+|[\u4e00-\u9fff\uf900-\ufaff]|[\u3000-\u303f\uff01-\uff5e]|[!-/:-@[-`{-~]|\s+/g;
+const TOKEN_PATTERN = /\r\n|\n|\r|\w+|[\u4e00-\u9fff\uf900-\ufaff]|[\u3000-\u303f\uff01-\uff5e]|[!-/:-@[-`{-~]|\s+|[\s\S]/gu;
 
 function markChangedTokens(lines: ParsedDiffLine[]): void {
   for (let index = 0; index < lines.length;) {
@@ -142,12 +143,10 @@ function blockTokenStream(block: ParsedDiffLine[]): BlockTokenStream {
   const owners: number[] = [];
   const starts: number[] = [];
   block.forEach((line, lineIndex) => {
-    let offset = 0;
-    for (const token of line.body.match(TOKEN_PATTERN) ?? []) {
-      tokens.push(token);
+    for (const match of line.body.matchAll(TOKEN_PATTERN)) {
+      tokens.push(match[0]);
       owners.push(lineIndex);
-      starts.push(offset);
-      offset += token.length;
+      starts.push(match.index);
     }
     // Separator between block lines; owner -1 marks it as not belonging to any line.
     if (lineIndex < block.length - 1) {
