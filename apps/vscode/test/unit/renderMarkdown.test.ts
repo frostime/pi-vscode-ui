@@ -29,7 +29,7 @@ describe("renderMarkdownHtml", () => {
     expect(html).not.toContain("<script>");
   });
 
-  it("highlights diff lines and the changed substring of similar replacements", () => {
+  it("highlights diff lines and the changed words of similar replacements", () => {
     const html = renderMarkdownHtml([
       "```diff",
       "@@ -1 +1 @@",
@@ -46,8 +46,8 @@ describe("renderMarkdownHtml", () => {
     expect(root.querySelector(".hljs-addition")?.textContent).toBe("+const total = newValue;");
     expect(root.querySelector(".hljs-deletion .hljs-diff-marker")?.textContent).toBe("-");
     expect(root.querySelector(".hljs-addition .hljs-diff-marker")?.textContent).toBe("+");
-    expect(root.querySelector(".hljs-deletion .hljs-diff-emphasis")?.textContent).toBe("old");
-    expect(root.querySelector(".hljs-addition .hljs-diff-emphasis")?.textContent).toBe("new");
+    expect(root.querySelector(".hljs-deletion .hljs-diff-emphasis")?.textContent).toBe("oldValue");
+    expect(root.querySelector(".hljs-addition .hljs-diff-emphasis")?.textContent).toBe("newValue");
     expect(root.querySelector("code")?.textContent).toBe(
       "@@ -1 +1 @@\n-const total = oldValue;\n+const total = newValue;\n",
     );

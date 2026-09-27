@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.5] - 2026-09-28
+
+### Added
+
+- Toggle soft wrapping on a tool card's change preview via a Wrap button pinned to its top-right corner, matching the per-fence wrap control on Markdown code blocks.
+
+### Changed
+
+- Emphasize intra-line changes at word level inside `diff`/`patch` fenced blocks and tool-card change previews: a line with several separate edits now shows each changed word instead of one band spanning between them, unequal deletion/addition runs get precise emphasis too, CJK text is emphasized per character, and near-complete line rewrites fall back to calm whole-line highlighting.
+
 ## [0.14.4] - 2026-09-25
 
 ### Added
@@ -449,7 +459,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.4...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.5...HEAD
+[0.14.5]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.2...v0.14.3
 [0.14.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.1...v0.14.2
