@@ -1,4 +1,4 @@
-name: Release artifact
+name: Release
 
 on:
   push:
@@ -6,10 +6,12 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   package:
     runs-on: ubuntu-latest
+    environment: marketplace-publish
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -20,14 +22,50 @@ jobs:
           node-version: 22.20.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm version:check "${GITHUB_REF_NAME#v}"
+      - name: Check tag version and release channel
+        id: release
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          pnpm version:check "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "stable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "stable=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check publishing configuration
+        if: steps.release.outputs.stable == 'true'
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          [[ -n "$AZURE_CLIENT_ID" ]] || { echo "::error::Missing AZURE_CLIENT_ID"; exit 1; }
+          [[ -n "$AZURE_TENANT_ID" ]] || { echo "::error::Missing AZURE_TENANT_ID"; exit 1; }
+          [[ -n "$OVSX_PAT" ]] || { echo "::error::Missing OVSX_PAT"; exit 1; }
       - run: pnpm check
       - run: pnpm build
       - run: pnpm package:vsix
       - run: pnpm verify:vsix
       - run: pnpm package:zip
+      - name: Sign in to Microsoft Entra
+        if: steps.release.outputs.stable == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Publish to VS Code Marketplace
+        if: steps.release.outputs.stable == 'true'
+        run: pnpm --dir apps/vscode exec vsce publish --azure-credential --packagePath "$GITHUB_WORKSPACE/artifacts/FrostPi-${{ steps.release.outputs.version }}.vsix" --skip-duplicate
+      - name: Publish to Open VSX
+        if: steps.release.outputs.stable == 'true'
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: npx --yes ovsx@1.2.0 publish "$GITHUB_WORKSPACE/artifacts/FrostPi-${{ steps.release.outputs.version }}.vsix" --skip-duplicate
       - uses: softprops/action-gh-release@v3
         with:
+          prerelease: ${{ steps.release.outputs.stable != 'true' }}
           files: |
             artifacts/FrostPi-*.vsix
             artifacts/FrostPi-*-source.zip

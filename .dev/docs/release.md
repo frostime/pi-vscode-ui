@@ -7,7 +7,7 @@ scope:
   - /package.json
   - /apps/vscode/package.json
   - /packages/pi-rpc/package.json
-updated: 2026-07-28
+updated: 2026-09-28
 ---
 
 # Release Procedure
@@ -18,7 +18,6 @@ updated: 2026-07-28
 4. Run `pnpm package:vsix` and `pnpm verify:vsix`.
 5. Install the versioned VSIX into clean local and remote hosts; smoke-test prompt, image, command, model, extension UI, stop, restore, diff, and failure paths.
 6. Review README, screenshots, privacy documents, notices, and diagnostics for correctness and sensitive content.
-7. Publish with `pnpm publish:marketplace`; it writes `artifacts/FrostPi-<version>.vsix`. Provide `VSCE_PAT` or use prior `vsce login frostime`, pass extra vsce flags after `--`, and publish that same VSIX to Open VSX with `ovsx`.
-8. Tag the matching commit and attach the VSIX plus source archive, or use the tag-triggered Release workflow artifacts.
-
-Publisher credentials belong in CI secret storage. The repository and extension package never contain tokens.
+7. Before the first automated release, configure the `marketplace-publish` GitHub environment, its `AZURE_CLIENT_ID` and `AZURE_TENANT_ID` variables, a matching GitHub federated credential on a Microsoft Entra managed identity with Contributor access to the `frostime` Marketplace publisher, and an `OVSX_PAT` Actions secret with access to the `frostime` Open VSX namespace. Do not push a release tag until both publishing identities are ready. Never put tokens in git, VSIX content, logs, or chat.
+8. Push a tag `v<version>` on the tested version commit. [The Release workflow](../../.github/workflows/release.yml) checks the tag against the manifest, builds and verifies one VSIX, then publishes that exact file to both registries for stable `vX.Y.Z` tags before creating the GitHub Release. Pre-release `v*` tags still build a GitHub prerelease with artifacts, but do not publish to either registry. Missing configuration or failed publication fails the workflow; a rerun skips already published versions so the other registry can finish. Do not move a tag after publication.
+9. Check the version on both registry pages and install from VS Code and VSCodium; packaging verification does not establish runtime compatibility. `pnpm publish:marketplace` remains an opt-in local command, but is not used by the tag workflow.
