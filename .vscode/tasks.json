@@ -7,6 +7,16 @@
       "command": "pnpm build",
       "group": "build",
       "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "build:debug",
+      "type": "shell",
+      "command": "pnpm build",
+      "options": {
+        "env": { "FROSTPI_SOURCEMAP": "1" }
+      },
+      "group": "build",
+      "problemMatcher": ["$tsc"]
     }
   ]
 }

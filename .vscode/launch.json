@@ -6,8 +6,8 @@
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}/apps/vscode"],
-      "outFiles": ["${workspaceFolder}/apps/vscode/dist/extension/**/*.js"],
-      "preLaunchTask": "build"
+      "outFiles": ["${workspaceFolder}/apps/vscode/dist/extension/**/*.cjs", "${workspaceFolder}/apps/vscode/dist/pi-extensions/**/*.js"],
+      "preLaunchTask": "build:debug"
     }
   ]
 }
