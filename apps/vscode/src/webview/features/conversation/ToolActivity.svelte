@@ -5,6 +5,8 @@
   import { postToHost } from "../../bridge/vscodeBridge";
   import { presentDiff } from "./diffPresentation";
   import { isToolSectionId, planToolSections, sectionToShow, type ToolSectionId } from "./toolSectionPlan";
+  import ToolElapsedTimer from "./ToolElapsedTimer.svelte";
+  import { formatTurnDuration, isElapsedTimerTool } from "./toolElapsedTimers";
 
   let { activity }: { activity: ToolActivityView } = $props();
   let open = $state(false);
@@ -39,6 +41,15 @@
   const errorSummary = $derived(tool.status === "error" && tool.state === "bound" ? firstLine(tool.output) : "");
   /** On a successful edit/write the change size takes the completion slot from the check icon. */
   const stats = $derived(tool.state === "bound" && tool.status === "complete" ? changeStats(tool) : undefined);
+  /** Long-running tools read out elapsed time instead of the breathing dot; the name is
+   * only known once arguments are bound, so a preparing call still shows the dot. */
+  const elapsedTimer = $derived(tool.state === "bound" && isElapsedTimerTool(tool.name));
+  /** Final wall-clock duration for a matched call that ended; cancelled has no end time. */
+  const finishedElapsed = $derived(
+    elapsedTimer && tool.state === "bound" && tool.status !== "running" && tool.endedAt !== undefined
+      ? formatTurnDuration(tool.startedAt, tool.endedAt)
+      : null,
+  );
 
   /**
    * Fixes the section this card shows the first time the reader expands it. Tools stream in:
@@ -61,17 +72,26 @@
     <span class="tool-activity-label" title={label}>{label}</span>
     {#if errorSummary && tool.state === "bound"}<span class="tool-error-summary" title={tool.output}>{errorSummary}</span>{/if}
     {#if tool.status === "running"}
-      <span class="status-dot running-dot activity-status" title={statusLabel} aria-label={statusLabel}></span>
-    {:else if tool.state === "bound" && stats}
-      <span class="tool-diffstat" aria-label={statLabel(tool, stats)}>
-        {#each statParts(tool, stats) as part (part.cls)}<span class={part.cls}>{part.sign}{part.n}</span>{/each}
+      {#if elapsedTimer}
+        <ToolElapsedTimer startedAt={tool.startedAt} label={statusLabel} />
+      {:else}
+        <span class="status-dot running-dot activity-status" title={statusLabel} aria-label={statusLabel}></span>
+      {/if}
+    {:else if tool.state === "bound"}
+      <span class="tool-end-status">
+        {#if finishedElapsed}<span class="tool-duration">{finishedElapsed}</span>{/if}
+        {#if stats}
+          <span class="tool-diffstat" aria-label={statLabel(tool, stats)}>
+            {#each statParts(tool, stats) as part (part.cls)}<span class={part.cls}>{part.sign}{part.n}</span>{/each}
+          </span>
+        {:else}
+          <span
+            class={`codicon codicon-${statusIcon} activity-status${tool.status === "cancelled" ? " tool-status-cancelled" : ""}`}
+            title={statusLabel}
+            aria-label={statusLabel}
+          ></span>
+        {/if}
       </span>
-    {:else}
-      <span
-        class={`codicon codicon-${statusIcon} activity-status${tool.status === "cancelled" ? " tool-status-cancelled" : ""}`}
-        title={statusLabel}
-        aria-label={statusLabel}
-      ></span>
     {/if}
     <span class={`codicon codicon-chevron-${open ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
   </Collapsible.Trigger>
@@ -402,6 +422,31 @@
   font: 10.5px/1.35 var(--font-mono);
 }
 .tool-status-cancelled { color: var(--frost-warning); }
+/* Right-aligned end of the header row: final elapsed duration beside the status icon or
+   diffstat it qualifies. The auto margin lives here so both slots share one alignment. */
+.tool-end-status {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+.tool-duration {
+  flex: none;
+  color: var(--frost-muted);
+  font: 10.5px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.tool-duration::before { content: "\00b7\00a0"; color: var(--frost-faint); }
+/* Live elapsed readout for long-running tools, in place of the breathing dot. Same voice
+   as the duration label so a run reads continuously from ticking to final. */
+.tool-timer {
+  flex: none;
+  margin-left: auto;
+  color: var(--frost-text);
+  font: 10.5px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
 /* The diffstat takes the completion slot from the check icon on a successful edit/write, so
    the row still reads "how it ended" at a glance; it reuses the Changes body's success/error
    hues and stays small enough to leave the label room at the narrowest panel width. */

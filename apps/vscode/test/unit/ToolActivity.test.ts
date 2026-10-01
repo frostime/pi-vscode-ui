@@ -50,6 +50,80 @@ describe("ToolActivity sections", () => {
     expect(card).not.toContain("tool-diffstat");
   });
 
+  it("replaces the breathing dot with an elapsed timer on a listed tool", () => {
+    const card = renderCard(bound({
+      name: "bash",
+      args: { command: "pnpm build" },
+      status: "running",
+      startedAt: Date.now() - 3_000,
+    }));
+
+    expect(card).toContain("tool-timer");
+    expect(card).not.toContain("running-dot");
+  });
+
+  it("keeps the breathing dot on a tool outside the elapsed list", () => {
+    const card = renderCard(bound({
+      name: "read",
+      args: { path: "a.ts" },
+      status: "running",
+      startedAt: Date.now() - 3_000,
+    }));
+
+    expect(card).toContain("running-dot");
+    expect(card).not.toContain("tool-timer");
+  });
+
+  it("keeps the final duration beside the check on a completed listed tool", () => {
+    const card = renderCard(bound({
+      name: "bash",
+      args: { command: "pnpm build" },
+      startedAt: Date.now() - 10_000,
+      endedAt: Date.now(),
+    }));
+
+    expect(card).toContain("tool-duration");
+    expect(card).toContain("codicon-check");
+  });
+
+  it("pairs the final duration with the diffstat when a listed tool carries a diff", () => {
+    const card = renderCard(bound({
+      name: "bash",
+      args: { patch: "…" },
+      diff: "-old\n+new",
+      startedAt: Date.now() - 10_000,
+      endedAt: Date.now(),
+    }));
+
+    expect(card).toContain("tool-duration");
+    expect(card).toContain("tool-diffstat-add");
+  });
+
+  it("keeps the duration on a failed listed tool", () => {
+    const card = renderCard(bound({
+      name: "bash",
+      args: { command: "pnpm test" },
+      status: "error",
+      output: "boom",
+      startedAt: Date.now() - 10_000,
+      endedAt: Date.now(),
+    }));
+
+    expect(card).toContain("tool-duration");
+    expect(card).toContain("codicon-error");
+  });
+
+  it("shows no duration for an interrupted call without an end time", () => {
+    const card = renderCard(bound({
+      name: "bash",
+      args: { command: "pnpm build" },
+      status: "cancelled",
+      startedAt: Date.now() - 10_000,
+    }));
+
+    expect(card).not.toContain("tool-duration");
+  });
+
   it("offers a wrap toggle over the change preview", () => {
     const card = renderCard(bound({ diff: "-old\n+new", args: { path: "a.ts" } }));
 
@@ -192,6 +266,8 @@ function bound(options: {
   output?: string;
   diff?: string;
   location?: { path: string; line?: number };
+  startedAt?: number;
+  endedAt?: number;
 }): BoundToolCallView {
   const recognized = options.diff !== undefined || options.location !== undefined
     ? {
@@ -209,6 +285,7 @@ function bound(options: {
     ...(recognized ? { recognized } : {}),
     status: options.status ?? "complete",
     isError: options.status === "error",
-    startedAt: 0,
+    startedAt: options.startedAt ?? 0,
+    ...(options.endedAt !== undefined ? { endedAt: options.endedAt } : {}),
   };
 }
