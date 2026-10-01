@@ -124,6 +124,17 @@ describe("ToolActivity sections", () => {
     expect(card).not.toContain("tool-duration");
   });
 
+  it("shows no duration when the persisted timestamps are missing", () => {
+    const card = renderCard(bound({
+      name: "bash",
+      args: { command: "pnpm build" },
+      startedAt: 0,
+      endedAt: Date.now(),
+    }));
+
+    expect(card).not.toContain("tool-duration");
+  });
+
   it("offers a wrap toggle over the change preview", () => {
     const card = renderCard(bound({ diff: "-old\n+new", args: { path: "a.ts" } }));
 

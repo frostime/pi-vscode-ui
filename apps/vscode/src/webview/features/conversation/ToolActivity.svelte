@@ -44,9 +44,11 @@
   /** Long-running tools read out elapsed time instead of the breathing dot; the name is
    * only known once arguments are bound, so a preparing call still shows the dot. */
   const elapsedTimer = $derived(tool.state === "bound" && isElapsedTimerTool(tool.name));
-  /** Final wall-clock duration for a matched call that ended; cancelled has no end time. */
+  /** Final wall-clock duration for a matched call that ended; cancelled has no end time,
+   * and a missing persisted timestamp (projection fallback 0) cannot show a duration. */
   const finishedElapsed = $derived(
-    elapsedTimer && tool.state === "bound" && tool.status !== "running" && tool.endedAt !== undefined
+    elapsedTimer && tool.state === "bound" && tool.status !== "running"
+      && tool.endedAt !== undefined && tool.startedAt > 0
       ? formatTurnDuration(tool.startedAt, tool.endedAt)
       : null,
   );
