@@ -131,7 +131,7 @@ The executable may be the `pi` command, an absolute native executable, or Pi's c
 
 Remote SSH, WSL, and Dev Container workspaces run Pi in the remote Extension Host.
 
-For best workspace and session discovery, install `fd` and `rg` on the Extension Host's `PATH`. `fd` is required for `@` workspace file completion; `rg` accelerates Resume session discovery, with bounded metadata scanning used as a fallback when it is unavailable.
+For best workspace and session discovery, install `fd` and `rg` on the Extension Host's `PATH`.
 
 ## Reference
 
@@ -193,6 +193,7 @@ FrostPi also provides context metrics, diagnostics export, strict LF-delimited J
 ### Settings
 
 - `frostpi.pi.executable`
+- `frostpi.pi.runtimeCompatibility` — choose the limited Pi or Oh My Pi compatibility contract; this does not enable all runtime-specific OMP features.
 - `frostpi.pi.arguments`
 - `frostpi.session.startOnOpen`
 - `frostpi.composer.streamingBehavior`
@@ -226,3 +227,60 @@ For comparisons, architecture, development instructions, and protocol documentat
 FrostPi is licensed under **AGPL-3.0-only**.
 
 FrostPi is an independent client and is not an official Pi distribution.
+
+## FAQ
+
+### Why does FrostPi provide a `question` tool if it is non-intrusive?
+
+We try not to touch the internals of the user's Pi runtime. However:
+
+- Question/Ask tools are important for agentic coding.
+- Common Question/Ask tools depend on a complex TUI and cannot work properly in a GUI.
+
+For that reason, FrostPi provides this as one of the few optional exceptions. If you enable it, we recommend disabling other local question tools to avoid conflicts.
+
+### What impact does FrostPi have on the Pi runtime?
+
+The impact is limited, apart from the optional `question` tool, which is disabled by default.
+
+If you configure a proxy, FrostPi sets the proxy environment variables when the process starts.
+
+FrostPi also injects a `session-tree-adapter` extension to provide Pi's tree functionality in the GUI. This extension is process-local: it does not write to Pi's home directory or interfere with the Agent's runtime context.
+
+### Why are `fd` and `rg` recommended?
+
+They are not mandatory, and not having them does not prevent FrostPi from working.
+
+FrostPi's `@` workspace completion uses `fd` internally, while session resume uses `rg` to accelerate session-file parsing. Installing both improves the experience.
+
+### Will FrostPi provide Pi extension tools integrated with VS Code?
+
+Not currently. We may integrate tools that read VS Code workspace state in the future. Any such extension features will be introduced cautiously and disabled by default.
+
+### Why does the Write tool show only `+<lines>` instead of file additions and removals like Edit?
+
+See GitHub issue [#6](https://github.com/frostime/pi-vscode-ui/issues/6).
+
+**TL;DR:** Pi's built-in Write tool returns only the changed result, not a diff, so FrostPi cannot obtain the actual file changes.
+
+However, FrostPi treats any tool details that include a `diff` as an Edit-like tool. You can implement an extension yourself. For example, you can send the following prompt to your Agent:
+
+> Implement an extension in Pi's home directory that overrides Pi's built-in Write tool and returns a `diff: string` field in its details, similar to the Edit tool. It is acceptable to construct the value by concatenating `-oldcontent` and `+newcontent`; only the changed line counts need to be accurate, not the hunk positions.
+
+FrostPi will not implement this extension for you. We try to avoid conflicting with user extensions and will not silently change Pi's execution behavior.
+
+### Does FrostPi support `oh-my-pi`?
+
+FrostPi provides a minimal compatibility profile for Oh My Pi. To use it, select `oh-my-pi` for `FrostPi: Pi Runtime Compatibility`, or add this to VS Code's `settings.json`:
+
+```json
+{
+  "frostpi.pi.runtimeCompatibility": "oh-my-pi"
+}
+```
+
+If `omp` is not on `PATH`, configure `frostpi.pi.executable` with the path to the OMP executable. You can also pass explicit `--session-dir` or `--models` arguments through `frostpi.pi.arguments` when using a custom session directory or model scope.
+
+This compatibility profile covers FrostPi's minimum OMP-compatible surface: launching `omp --mode rpc`, basic conversation and tool calls, model switching, and discovering or resuming sessions from OMP's default or explicitly configured session directory.
+
+It does not provide complete support for OMP-specific features or map OMP's `config.yml` and profiles into FrostPi. OMP features such as Agent Hub, DAP debugging, memory, collaboration, and the TUI do not automatically appear in FrostPi.

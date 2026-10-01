@@ -56,6 +56,19 @@ describe("Pi model scope resolution", () => {
       .toEqual([]);
   });
 
+  it("does not read Pi enabledModels settings for Oh My Pi", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "frostpi-omp-model-scope-"));
+    try {
+      await mkdir(join(cwd, ".pi"), { recursive: true });
+      await writeFile(join(cwd, ".pi", "settings.json"), JSON.stringify({ enabledModels: ["deepseek/*"] }));
+      await expect(resolvePiModelScope(cwd, [], models, "oh-my-pi")).resolves.toEqual([]);
+      await expect(resolvePiModelScope(cwd, ["--models", "opencode-go/*"], models, "oh-my-pi"))
+        .resolves.toEqual(["opencode-go/glm-5.1", "opencode-go/glm-5.1-20260701", "opencode-go/kimi-k2.6"]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("resolves a relative PI_CODING_AGENT_DIR from the session cwd", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "frostpi-model-scope-"));
     const previousAgentDir = process.env.PI_CODING_AGENT_DIR;

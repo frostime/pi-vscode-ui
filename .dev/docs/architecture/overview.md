@@ -4,7 +4,7 @@ description: Cross-module process topology, ownership, trust, persistence, and d
 scope:
   - /apps/vscode/**
   - /packages/pi-rpc/**
-updated: 2026-07-28
+updated: 2026-09-26
 ---
 
 # Architecture Overview
@@ -30,22 +30,26 @@ Workspace Extension Host (local, SSH, WSL, or Dev Container)
   ├─ proxy/process policy
   └─ workspace, editor, diff, and diagnostics integration
           ⇅ LF-delimited JSONL over stdio
-     pi --mode rpc × N
+     Pi-compatible child --mode rpc × N
 ```
 
 ## Product and process boundary
 
-FrostPi is a self-contained Pi-only VS Code GUI adapter over Pi native RPC. It does not define a generic agent backend or target ACP compatibility. One `SessionRuntime` owns one Pi process; sessions execute independently, and FrostPi adds no global execution or file-write lock.
+FrostPi is a self-contained VS Code GUI adapter over Pi's native RPC surface. A small `runtimeCompatibility` policy selects the executable fallback, default session root, and Pi-settings projection rules for the supported Pi-compatible child; it is not a generic agent backend or ACP compatibility layer. One `SessionRuntime` owns one child process; sessions execute independently, and FrostPi adds no global execution or file-write lock.
 
-Local workspaces run Pi locally. Remote SSH, WSL, and Dev Containers run Pi in that workspace's Extension Host; there is no local-to-remote process bridge. Untrusted and virtual workspaces are unsupported because Pi may execute commands and modify files.
+Local workspaces run the child process locally. Remote SSH, WSL, and Dev Containers run it in that workspace's Extension Host; there is no local-to-remote process bridge. Untrusted and virtual workspaces are unsupported because the child may execute commands and modify files.
+
+## Runtime compatibility boundary
+
+`apps/vscode/src/extension/configuration/runtimeCompatibility.ts` is the single owner of the small compatibility policy. It defines the supported profile defaults and whether FrostPi may use Pi settings for its own projections. It does not own RPC transport, session scanning, model selection, or child-runtime-specific configuration; those responsibilities remain in their existing modules. The current `oh-my-pi` profile is limited to FrostPi's launch, RPC, session discovery, and resume surface.
 
 ## State and data ownership
 
 `SessionRegistry` owns the runtime collection, sidebar active selection, and metadata persistence. `SessionWebviewCoordinator` owns disposable sidebar/editor-tab projections and transient Composer draft handoff; editor-tab placement is not persisted. Within a runtime, `SessionEntryState` owns the persisted entry cursor/tree and active path, `ConversationProjection` owns persisted/live conversation identity and order, and `SessionViewState` owns session scalar state. Their detailed behavior belongs to adjacent SPECs.
 
-Runtime flow is `Webview → shared contracts ← Extension Host → @frostime/pi-rpc → Pi`. The Host is authoritative for conversation order and turn membership; the Webview renders that order and owns only presentation state such as disclosure and scroll position. Raw Pi events and session entries never cross the bridge.
+Runtime flow is `Webview → shared contracts ← Extension Host → @frostime/pi-rpc → Pi-compatible child`. The Host is authoritative for conversation order and turn membership; the Webview renders that order and owns only presentation state such as disclosure and scroll position. Raw child-runtime events and session entries never cross the bridge.
 
-Pi owns conversation JSONL, provider credentials, model/session state, and file writes. VS Code workspace state stores FrostPi session metadata only. Composer text and pasted images are held transiently by the Extension Host while presentations hand off, but are not persisted and do not survive Extension Host restart; `/editor` uses a temporary Host-owned file, and Host-projected Fork/tree seeds remain runtime-only. FrostPi file mentions expose paths and line references without injecting file content. Markdown local images are a separate, bounded presentation resource: the Host mediates filesystem reads for the displayed Session and returns bytes only to the requesting Webview Connection.
+The selected child owns conversation JSONL, provider credentials, model/session state, and file writes. VS Code workspace state stores FrostPi session metadata only. Composer text and pasted images are held transiently by the Extension Host while presentations hand off, but are not persisted and do not survive Extension Host restart; `/editor` uses a temporary Host-owned file, and Host-projected Fork/tree seeds remain runtime-only. FrostPi file mentions expose paths and line references without injecting file content. Markdown local images are a separate, bounded presentation resource: the Host mediates filesystem reads for the displayed Session and returns bytes only to the requesting Webview Connection.
 
 ## Dependency and trust boundaries
 

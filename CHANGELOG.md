@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add a limited Oh My Pi compatibility profile through `frostpi.pi.runtimeCompatibility`. Selecting `oh-my-pi` uses the OMP executable and session-directory defaults for RPC conversations, model switching, and session discovery/resume; explicit executable, `--session-dir`, and `--models` overrides remain supported. The profile does not read Pi settings or map OMP configuration and runtime-specific features into FrostPi. Running sessions retain their launched compatibility profile for model projection until restart.
+
 ## [0.14.5] - 2026-09-28
 
 ### Added
