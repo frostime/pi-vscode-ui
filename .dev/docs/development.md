@@ -14,6 +14,6 @@ Run `pnpm install --frozen-lockfile` from the repository root, then use `pnpm ch
 
 Packages own local `build`, `clean`, `lint`, `typecheck`, and `test` scripts; root commands only orchestrate them. Add shared tools with `pnpm add -Dw <package>` and package dependencies with `pnpm --filter <workspace-name> add <package>`.
 
-Launch the Extension Development Host with `.vscode/launch.json`. esbuild bundles the extension and Vite builds the Webview; production source maps require `FROSTPI_SOURCEMAP=1`.
+Launch the Extension Development Host with `.vscode/launch.json`. esbuild bundles the extension and Vite builds the Webview; production source maps require `FROSTPI_SOURCEMAP=1`. The launch configuration runs the `build:debug` task, which sets that variable automatically, so TypeScript breakpoints bind in the Development Host without any manual step.
 
 Start transport work in `packages/pi-rpc`, lifecycle work in `apps/vscode/src/extension/sessions/`, projection work in `apps/vscode/src/extension/conversation/`, and rendering work in the owning Webview feature. Preserve adjacent SPECs and never bridge raw Pi events or entries.

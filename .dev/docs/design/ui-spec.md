@@ -3,7 +3,7 @@ title: UI Design Specification
 description: Cross-feature visual, layout, accessibility, theme, and user-owned interaction constraints.
 scope:
   - /apps/vscode/src/webview/**
-updated: 2026-09-04
+updated: 2026-10-02
 ---
 
 # UI Design Specification
@@ -20,6 +20,7 @@ FrostPi uses a first-party VS Code visual language: compact, low-noise, keyboard
 - Conversation owns the scrollable transcript region. Composer remains bottom-anchored and may temporarily take the panel while preserving a clear restore path.
 - Response annotation temporarily replaces conversation and Composer only after an explicit action on finalized assistant text. Its source and notes scroll independently when side by side, while the stacked narrow layout uses one bounded workspace scroller. It remains usable at 280px and returns only an ordinary editable Composer draft; required Extension UI requests remain reachable during review.
 - The Question panel and `select`, `confirm`, `input`, and `editor` extension-request UI sit between conversation and Composer, use bounded independent scrolling, and must not take ownership of conversation scrolling. A blocking request's action controls remain reachable while its content scrolls.
+- Tool-call cards for shell/code tools (`bash`, `powershell`, `codemode`) replace the breathing status dot with a ticking elapsed readout while the call runs, and keep the final wall-clock duration beside the status icon or diffstat once it ends; cancelled calls have no end time and show no duration. Tools outside that list keep the quiet dot-and-icon presentation.
 
 ## User-owned interaction state
 
