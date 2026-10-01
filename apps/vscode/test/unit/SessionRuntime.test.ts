@@ -111,6 +111,42 @@ describe("Pi session startup and conversation history", () => {
     expect(conversationNotices(runtime.view).filter((notice) => notice.text.startsWith("Cache miss:"))).toHaveLength(noticeCountBeforeOmp);
   });
 
+  it.each(["pi", "oh-my-pi"] as const)("keeps %s model projections until restart after a compatibility change", async (initialCompatibility) => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-model-compatibility-"));
+    await mkdir(join(dir, ".pi"));
+    await writeFile(join(dir, ".pi", "settings.json"), JSON.stringify({ enabledModels: ["e2e/model"] }));
+    const configuration = runtimeConfiguration(join(process.cwd(), "test", "e2e", "fake-pi.cjs"), initialCompatibility);
+    const nextCompatibility = initialCompatibility === "pi" ? "oh-my-pi" : "pi";
+    const initialScope = initialCompatibility === "pi" ? ["e2e/model"] : [];
+    const nextScope = nextCompatibility === "pi" ? ["e2e/model"] : [];
+    const runtime = new SessionRuntime(
+      "model-compatibility",
+      dir,
+      "Models",
+      () => configuration,
+      new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
+      { error: vi.fn(), info: vi.fn() } as never,
+      {
+        onChange: (runtime) => {
+          if (runtime.view.status === "ready") configuration.runtimeCompatibility = nextCompatibility;
+        },
+        onEditorText: vi.fn(),
+      },
+    );
+    runtimes.push(runtime);
+
+    await runtime.start();
+    await waitFor(() => runtime.view.availableModels.length === 1);
+    expect(runtime.view.scopedModelIds).toEqual(initialScope);
+    await runtime.refreshModels();
+    expect(runtime.view.scopedModelIds).toEqual(initialScope);
+
+    await runtime.stop();
+    await runtime.start();
+    await waitFor(() => runtime.view.scopedModelIds.length === nextScope.length);
+    expect(runtime.view.scopedModelIds).toEqual(nextScope);
+  });
+
   afterEach(async () => {
     await Promise.all(runtimes.splice(0).map((runtime) => runtime.dispose()));
   });

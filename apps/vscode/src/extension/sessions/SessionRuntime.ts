@@ -30,7 +30,7 @@ import { ExtensionUiCoordinator } from "../extension-ui/ExtensionUiCoordinator.j
 import { QuestionToolExtensionBridge } from "../question-tool/QuestionToolExtensionBridge.js";
 import { commandName, normalizePiSlashPrompt } from "./normalizePiSlashPrompt.js";
 import { configuredPiInvocation } from "../configuration/configuredPiInvocation.js";
-import { runtimeCompatibilityProfile } from "../configuration/runtimeCompatibility.js";
+import { runtimeCompatibilityProfile, type RuntimeCompatibility } from "../configuration/runtimeCompatibility.js";
 import { buildPiProcessEnvironment, proxyFingerprint, proxyModeLabel } from "../network/buildPiProcessEnvironment.js";
 import type { ProxySecretStore } from "../network/ProxySecretStore.js";
 import { SessionTreeExtensionBridge, type SessionTreeSummaryOptions } from "./tree/SessionTreeExtensionBridge.js";
@@ -79,6 +79,7 @@ export class SessionRuntime {
   #appliedProxyFingerprint: string | null = null;
   #proxyRestartForced = false;
   #appliedQuestionToolEnabled: boolean | null = null;
+  #appliedRuntimeCompatibility: RuntimeCompatibility = "pi";
   #abortRequested = false;
   readonly #sessionTreeBridge: SessionTreeExtensionBridge | null;
   readonly #questionToolBridge: QuestionToolExtensionBridge | null;
@@ -419,7 +420,7 @@ export class SessionRuntime {
   async refreshModels(): Promise<RpcModel[]> {
     const models = await this.#requireApi().getAvailableModels();
     const configuration = this.#configurationProvider();
-    const scopedModelIds = await resolvePiModelScope(this.cwd, configuration.piArguments, models, configuration.runtimeCompatibility);
+    const scopedModelIds = await resolvePiModelScope(this.cwd, configuration.piArguments, models, this.#appliedRuntimeCompatibility);
     this.#viewState.setModels(models);
     this.#viewState.setScopedModelIds(scopedModelIds);
     this.#notifyChange();
@@ -546,7 +547,8 @@ export class SessionRuntime {
     this.#notifyChange();
 
     const configuration = this.#configurationProvider();
-    const invocation = configuredPiInvocation(configuration.piExecutable, configuration.runtimeCompatibility);
+    const compatibilityProfile = runtimeCompatibilityProfile(configuration.runtimeCompatibility);
+    const invocation = configuredPiInvocation(configuration.piExecutable, compatibilityProfile.id);
     await this.#sessionTreeBridge?.prepare();
     if (configuration.questionToolEnabled) await this.#questionToolBridge?.prepare();
     const args = [
@@ -557,7 +559,6 @@ export class SessionRuntime {
       // Verbatim by contract — never validate or reorder here (session-lifecycle.SPEC.md).
       ...this.customLaunchArguments,
     ];
-    const compatibilityProfile = runtimeCompatibilityProfile(configuration.runtimeCompatibility);
     const cacheMissNotices = compatibilityProfile.usesPiSettings
       ? showCacheMissNoticesEnabled(await loadPiSettings(this.cwd, { piArguments: args }))
       : false;
@@ -629,6 +630,7 @@ export class SessionRuntime {
       this.#appliedProxyFingerprint = proxyFingerprint(configuration.proxy, vscodeProxy);
       this.#proxyRestartForced = false;
       this.#appliedQuestionToolEnabled = configuration.questionToolEnabled;
+      this.#appliedRuntimeCompatibility = compatibilityProfile.id;
       this.#viewState.setNetworkProxy({ mode: configuration.proxy.mode, label: proxyEnvironment.label, restartRequired: false });
       this.#viewState.applyState(state);
       this.#conversation.setCacheModels(state.model ? [state.model] : []);
@@ -660,7 +662,7 @@ export class SessionRuntime {
     if (this.#disposed || api !== this.#api) return;
     this.#conversation.setCacheModels(models.length > 0 ? models : this.view.model ? [this.view.model] : []);
     const configuration = this.#configurationProvider();
-    const scopedModelIds = await resolvePiModelScope(this.cwd, configuration.piArguments, models, configuration.runtimeCompatibility);
+    const scopedModelIds = await resolvePiModelScope(this.cwd, configuration.piArguments, models, this.#appliedRuntimeCompatibility);
     if (this.#disposed || api !== this.#api) return;
     this.#viewState.setModels(models);
     this.#viewState.setScopedModelIds(scopedModelIds);
