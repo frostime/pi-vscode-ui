@@ -5,7 +5,7 @@ scope:
   - /apps/vscode/src/extension/configuration/**
   - /apps/vscode/src/extension/sessions/**
   - /apps/vscode/src/extension/models/**
-updated: 2026-09-15
+updated: 2026-10-02
 ---
 
 # Runtime compatibility profiles for Pi-compatible agents
@@ -75,6 +75,13 @@ When `oh-my-pi` is selected, Pi's default and project-configured session roots a
 - In `oh-my-pi` compatibility, Pi `enabledModels` is not read. Without an explicit `--models`, FrostPi shows the complete model catalogue returned by OMP (`All`); this does not prevent the user from selecting a model or prevent OMP from applying its own model policy.
 - `Scoped` and `All` remain presentation choices. Actual model acceptance remains the responsibility of the child runtime through the existing `setModel` RPC command.
 
+### Turn settle event projection
+
+- Pi reports the end of a stretch of work as `agent_settled`; Oh My Pi reports the same boundary as `session_settled`.
+- Oh My Pi event-vocabulary differences live in one named adapter (`PI_OMP_ADAPTER`) in the session runtime, not as inline branches at the consumers. It projects the Oh My Pi settle event onto Pi's `agent_settled` at the runtime's single event ingress; every other event passes through unchanged.
+- In `pi` compatibility the adapter returns the event untouched, so Pi behavior is unchanged.
+- The Composer returns to its idle state only through that settle signal; an Oh My Pi turn that ends without it would leave the stop button active and skip the post-settle refresh.
+
 ### Explicit non-goals
 
 This change does not promise:
@@ -92,6 +99,7 @@ This change does not promise:
 - Compatibility selection owns runtime defaults that FrostPi must know: executable fallback and default session discovery root.
 - `pi.executable` and explicit `--session-dir`/`--models` arguments remain user overrides and are not rewritten by compatibility selection.
 - The existing RPC transport and compatibility-tolerant JSONL session scanner remain shared by both profiles because OMP's minimum supported surface is Pi-compatible.
+- Oh My Pi event-vocabulary differences live in one named adapter in the session runtime; it projects the settle event at the runtime's single event ingress, so every downstream consumer keeps one Pi-shaped settle signal.
 - Pi settings loading is selected by compatibility profile at its consumers, rather than treating OMP's configuration as if it were Pi's JSON settings. OMP settings support is a separate future decision.
 - A missing or incompatible resumed session continues to fail visibly; FrostPi does not create a replacement empty session.
 - The compatibility policy is a small pure configuration-level module, not a runtime adapter registry or plugin mechanism. Consumers receive the selected profile/policy through their existing configuration or function boundaries.
@@ -111,6 +119,7 @@ This change does not promise:
 - An explicit `--models` argument produces the existing `Scoped`/`All` model-picker behavior in `oh-my-pi` mode; without it, the picker fails open to `All` and model switching still uses the existing RPC path.
 - Selecting a discovered OMP session starts the child with its absolute JSONL path and does not require a new resume implementation.
 - Unit tests cover profile defaults, explicit executable/argument precedence, Pi-versus-OMP session-root isolation, Pi-settings exclusion in OMP mode, and explicit `--models`/`--session-dir` behavior.
+- In `oh-my-pi` mode, Oh My Pi's settle event returns the session to `ready`, completes the running turn, and runs the post-settle refresh; unit tests cover that projection.
 - Tests verify that existing Pi behavior remains unchanged when the setting is absent or set to `pi`.
 - `pnpm check` and the focused VS Code unit tests pass after implementation.
 

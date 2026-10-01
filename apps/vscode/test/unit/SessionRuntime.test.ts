@@ -950,6 +950,64 @@ process.on("SIGTERM", () => process.exit(0));
     await runtime.stop();
     await expect(access(launch.requestDirectory)).rejects.toThrow();
   });
+
+  it("returns to ready when an Oh My Pi runtime settles with session_settled", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-runtime-omp-settle-"));
+    const fakeOmp = join(dir, "fake-omp.cjs");
+    await writeFile(fakeOmp, String.raw`#!/usr/bin/env node
+let input = "";
+const write = value => process.stdout.write(JSON.stringify(value) + "\n");
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => {
+  input += chunk;
+  while (input.includes("\n")) {
+    const index = input.indexOf("\n");
+    const command = JSON.parse(input.slice(0, index));
+    input = input.slice(index + 1);
+    const response = { type: "response", id: command.id, command: command.type, success: true };
+    if (command.type === "get_state") response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionId: "omp-settle" };
+    else if (command.type === "get_available_models") response.data = { models: [] };
+    else if (command.type === "get_commands") { response.success = false; response.error = "Unknown command: get_commands"; }
+    else if (command.type === "get_entries") response.data = { entries: [], leafId: null };
+    else if (command.type === "get_session_stats") response.data = { sessionId: "omp-settle", userMessages: 1, assistantMessages: 1, toolCalls: 0, toolResults: 0, totalMessages: 2, tokens: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, total: 15 }, cost: 0 };
+    else if (command.type === "prompt") {
+      write(response);
+      write({ type: "agent_start" });
+      write({ type: "message_start", message: { role: "user", content: command.message, timestamp: 1 } });
+      write({ type: "message_start", message: { role: "assistant", id: "a1", timestamp: 2, content: [] } });
+      write({ type: "message_end", message: { id: "a1", role: "assistant", provider: "opencode-go", model: "deepseek", timestamp: 2, stopReason: "stop", content: [{ type: "text", text: "ok" }] } });
+      write({ type: "agent_end", messages: [] });
+      write({ type: "prompt_result", id: command.id, agentInvoked: true, status: "completed" });
+      write({ type: "session_settled" });
+      continue;
+    }
+    write(response);
+  }
+});
+process.on("SIGTERM", () => process.exit(0));
+`);
+
+    const configuration = runtimeConfiguration(fakeOmp, "oh-my-pi");
+    const completed = vi.fn();
+    const runtime = new SessionRuntime(
+      "omp-settle",
+      dir,
+      "OMP settle",
+      () => configuration,
+      new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
+      { error: vi.fn(), info: vi.fn() } as never,
+      { onChange: vi.fn(), onEditorText: vi.fn(), onAgentTurnCompleted: completed },
+    );
+    runtimes.push(runtime);
+
+    await runtime.start();
+    await runtime.sendPrompt("hi", []);
+    await waitFor(() => completed.mock.calls.length === 1);
+
+    expect(runtime.view.status).toBe("ready");
+    expect(runtime.view.isStreaming).toBe(false);
+    expect(conversationTurns(runtime.view).at(-1)?.status).toBe("completed");
+  });
 });
 
 function conversationTurns(view: Readonly<SessionViewModel>): AgentTurnView[] {

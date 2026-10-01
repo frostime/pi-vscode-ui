@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Render Mermaid node and edge labels again: sanitization stripped every HTML label inside `foreignObject`, leaving diagrams as boxes and arrows without text; label subtrees are now sanitized separately and spliced back, keeping scripts and event handlers removed.
+- Return the Composer to its idle state after an Oh My Pi turn: the `oh-my-pi` profile now names OMP's `session_settled` as its settle event and FrostPi projects that event onto Pi's `agent_settled`, so the stop button no longer stays active after a finished turn and post-settle reconciliation runs again.
 
 ### Added
 

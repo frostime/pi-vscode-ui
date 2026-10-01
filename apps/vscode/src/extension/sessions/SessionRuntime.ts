@@ -719,31 +719,32 @@ export class SessionRuntime {
   }
 
   #applyConnectionEvent(event: RpcEvent): void {
-    const latestTurn = event.type === "agent_settled" ? conversationTurns(this.view).at(-1) : undefined;
+    const projected = PI_OMP_ADAPTER.projectSettleEvent(event, this.#appliedRuntimeCompatibility);
+    const latestTurn = projected.type === "agent_settled" ? conversationTurns(this.view).at(-1) : undefined;
     const settlingTurnId = this.view.isStreaming ? latestTurn?.id : undefined;
     const abortRequested = this.#abortRequested;
-    if (isExtensionUiRequest(event)) {
-      if (this.#questionToolBridge?.recognizes(event)) void this.#handleQuestionUiRequest(event);
-      else this.#extensionUi?.handle(event);
+    if (isExtensionUiRequest(projected)) {
+      if (this.#questionToolBridge?.recognizes(projected)) void this.#handleQuestionUiRequest(projected);
+      else this.#extensionUi?.handle(projected);
     } else {
-      this.#viewState.applyEvent(event);
-      this.#conversation.applyEvent(event);
-      if (event.type === "compaction_end" && typeof event.errorMessage === "string") {
-        this.#conversation.appendNotice(event.errorMessage, "error");
+      this.#viewState.applyEvent(projected);
+      this.#conversation.applyEvent(projected);
+      if (projected.type === "compaction_end" && typeof projected.errorMessage === "string") {
+        this.#conversation.appendNotice(projected.errorMessage, "error");
       }
     }
-    if (event.type === "agent_start") {
+    if (projected.type === "agent_start") {
       this.#abortRequested = false;
       this.#startLiveStatsRefresh();
     }
-    if (event.type === "agent_settled") {
+    if (projected.type === "agent_settled") {
       this.#abortRequested = false;
       this.#stopLiveStatsRefresh();
       const settledTurn = settlingTurnId ? conversationTurns(this.view).find((turn) => turn.id === settlingTurnId) : undefined;
       if (!abortRequested && settledTurn?.status === "completed") this.#hooks.onAgentTurnCompleted?.(this);
       void this.#refreshAfterSettled();
     }
-    if (event.type === "compaction_end") void this.#refreshAfterCompaction();
+    if (projected.type === "compaction_end") void this.#refreshAfterCompaction();
   }
 
   async #handleQuestionUiRequest(request: RpcExtensionUiRequest): Promise<void> {
@@ -967,6 +968,27 @@ const IMMEDIATE_EXTENSION_UI_METHODS = new Set(["select", "confirm", "input", "e
 function shouldBufferDuringHistoryLoad(event: RpcEvent): boolean {
   return !isExtensionUiRequest(event) || !IMMEDIATE_EXTENSION_UI_METHODS.has(event.method);
 }
+
+/**
+ * Oh My Pi event compatibility.
+ *
+ * FrostPi's turn state machine, live-stats refresh, and post-settle reconciliation all key on Pi's
+ * `agent_settled` boundary. Oh My Pi reports that boundary as `session_settled` instead, so this
+ * adapter renames it before any consumer sees the event; every other event passes through untouched.
+ * Further Oh My Pi event-vocabulary differences belong here rather than at their call sites.
+ */
+const PI_OMP_ADAPTER = {
+  /**
+   * Pi settles with `agent_settled` and Oh My Pi with `session_settled`; project the selected
+   * runtime's settle event onto Pi's vocabulary and leave everything else alone.
+   */
+  projectSettleEvent(event: RpcEvent, compatibility: RuntimeCompatibility): RpcEvent {
+    if (compatibility !== "oh-my-pi") return event;
+    if (event.type === "agent_settled") return event;
+    if (event.type !== "session_settled") return event;
+    return { ...event, type: "agent_settled" };
+  },
+};
 
 function latestAssistantCacheHit(entries: readonly RpcSessionEntry[]): { found: boolean; percent?: number } {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
