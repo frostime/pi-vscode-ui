@@ -253,6 +253,33 @@ FrostPi 还提供上下文指标、诊断导出、严格的 LF 分隔 JSONL 传�
 
 当 Chat 字体保持为 `default` 时，FrostPi 会回退到 VS Code 的常规界面字体或编辑器字体。
 
+### 对 `oh-my-pi` 的有限兼容
+
+FrostPi 对 `oh-my-pi` 做了有限的兼容。用户可以通过如下做法来切换使用 omp
+
+在 VS Code 设置中将 `FrostPi: Pi Runtime Compatibility` 设置为 `oh-my-pi`；可在 `settings.json` 中配置：
+
+```json
+{
+  "frostpi.pi.runtimeCompatibility": "oh-my-pi"
+}
+```
+
+设置之后影响:
+
+- 默认使用 `omp` 而非 `pi`
+
+  注意，如果 `omp` 不在 `PATH` 中，可以另外配置 `frostpi.pi.executable` 指向它的可执行文件。
+- 默认从 `.omp/sessions` 而非 `.pi` 中读取历史回话记录
+
+  如果使用了自定义会话目录或模型范围，可以通过`frostpi.pi.arguments`传入 `--session-dir`
+
+**限制**:
+
+我们只做了最小兼容。此兼容只能确保: FrostPi 能够按照 OMP 的基础兼容约定启动 `omp --mode rpc`，进行基本的对话、工具调用、模型切换，以及在 OMP 默认或显式指定的会话目录中发现和恢复会话。
+
+但在 FrostPi 中可能无法获得 omp 的完整体验 —— 由于 omp rpc 格式存在不兼容，实际使用中可能存在奇奇怪怪的 bug。
+
 ### 开发
 
 ```bash
@@ -322,21 +349,3 @@ TLDR: PI 内置 write 工具只返回更改后的结果，不返回 diff，Frost
 > 请在 PI 家目录中实现一个 extension，效果是覆盖 Pi 内置 `write` 工具，让 details 中返回类似 `edit` 工具的 `diff: string` 内容。允许简单地把 `-oldcontent` 和 `+newcontent` 拼接起来，只需要确保反应实际的变更行数即可，无需做精准的 hunk position 匹配。
 
 FrostPi 不会帮你实现这个 extension，我们尽量避免和用户自己的扩展冲突，更不会偷偷在内部变更 PI 的执行行为。
-
-### FrostPi 能兼容 `oh-my-pi` 吗
-
-做了最小兼容。用户可以通过如下做法来切换使用 omp
-
-在 VS Code 设置中将 `FrostPi: Pi Runtime Compatibility` 设置为 `oh-my-pi`；也可以直接在 `settings.json` 中配置：
-
-```json
-{
-  "frostpi.pi.runtimeCompatibility": "oh-my-pi"
-}
-```
-
-如果 `omp` 不在 `PATH` 中，可以另外配置 `frostpi.pi.executable` 指向它的可执行文件。通常不需要手动修改 `frostpi.pi.arguments`；如果使用了自定义会话目录或模型范围，可以通过该设置传入 `--session-dir` 或 `--models`。
-
-但需要注意，我们只做了最小兼容。此兼容只能确保 FrostPi 能够按照 OMP 的基础兼容约定启动 `omp --mode rpc`，进行基本的对话、工具调用、模型切换，以及在 OMP 默认或显式指定的会话目录中发现和恢复会话。
-
-但不会完整支持 OMP 的专属功能，也不会读取或映射 OMP 的 `config.yml`、profiles 等专属配置；例如 OMP 的 Agent Hub、DAP 调试、memory、collaboration 和 TUI 功能不会自动出现在 FrostPi 中。

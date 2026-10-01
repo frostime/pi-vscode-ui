@@ -256,6 +256,32 @@ When supported by the installed VS Code version, FrostPi follows these VS Code C
 
 When a Chat font remains `default`, FrostPi falls back to VS Code's normal interface or editor font.
 
+### Limited `oh-my-pi` compatibility
+
+FrostPi provides limited compatibility with `oh-my-pi`. You can switch to omp as follows:
+
+Set `FrostPi: Pi Runtime Compatibility` to `oh-my-pi` in the VS Code settings, or configure it in `settings.json`:
+
+```json
+{
+  "frostpi.pi.runtimeCompatibility": "oh-my-pi"
+}
+```
+
+Effects after selecting it:
+
+- Uses `omp` instead of `pi` by default.
+
+  If `omp` is not on `PATH`, configure `frostpi.pi.executable` with the path to its executable.
+- Reads session history from `.omp/sessions` instead of `.pi` by default.
+
+  If you use a custom session directory or model scope, pass `--session-dir` through `frostpi.pi.arguments`.
+
+**Limitations**:
+
+We only provide a minimal compatibility layer. It only guarantees that FrostPi can launch `omp --mode rpc` under OMP's basic compatibility contract, covering basic conversation, tool calls, model switching, and discovering and resuming sessions in OMP's default or explicitly configured session directories.
+
+However, you may not get the complete omp experience in FrostPi — because omp's RPC format is incompatible in places, you may hit odd bugs in practice.
 
 ### Development
 
@@ -325,19 +351,3 @@ However, FrostPi treats any tool details that include a `diff` as an Edit-like t
 > Implement an extension in Pi's home directory that overrides Pi's built-in Write tool and returns a `diff: string` field in its details, similar to the Edit tool. It is acceptable to construct the value by concatenating `-oldcontent` and `+newcontent`; only the changed line counts need to be accurate, not the hunk positions.
 
 FrostPi will not implement this extension for you. We try to avoid conflicting with user extensions and will not silently change Pi's execution behavior.
-
-### Does FrostPi support `oh-my-pi`?
-
-FrostPi provides a minimal compatibility profile for Oh My Pi. To use it, select `oh-my-pi` for `FrostPi: Pi Runtime Compatibility`, or add this to VS Code's `settings.json`:
-
-```json
-{
-  "frostpi.pi.runtimeCompatibility": "oh-my-pi"
-}
-```
-
-If `omp` is not on `PATH`, configure `frostpi.pi.executable` with the path to the OMP executable. You can also pass explicit `--session-dir` or `--models` arguments through `frostpi.pi.arguments` when using a custom session directory or model scope.
-
-This compatibility profile covers FrostPi's minimum OMP-compatible surface: launching `omp --mode rpc`, basic conversation and tool calls, model switching, and discovering or resuming sessions from OMP's default or explicitly configured session directory.
-
-It does not provide complete support for OMP-specific features or map OMP's `config.yml` and profiles into FrostPi. OMP features such as Agent Hub, DAP debugging, memory, collaboration, and the TUI do not automatically appear in FrostPi.
