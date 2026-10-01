@@ -19,6 +19,10 @@ FrostPi brings your existing Pi Coding Agent workflow into VS Code without repla
   <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/assets/screenshots/preview.png" alt="FrostPi conversation view" width="430">
 </p>
 
+This extension is available on both **[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=frostime.frostpi)** and **[Open VSX](https://open-vsx.org/extension/frostime/frostpi)**.
+
+If network restrictions prevent access to the extension registries, you can also download a `.vsix` file from [GitHub Releases](https://github.com/frostime/pi-vscode-ui/releases) and install it manually.
+
 ## Why FrostPi
 
 If you already use Pi and have built your own workflow around it, getting a GUI shouldn't mean adopting another one.

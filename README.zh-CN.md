@@ -18,6 +18,10 @@ FrostPi 将你现有的 Pi Coding Agent 工作流带入 VS Code，同时保留�
   <img src="assets/screenshots/preview.png" alt="FrostPi 会话视图" width="430">
 </p>
 
+本扩展已发布到 **[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=frostime.frostpi)** 和 **[Open VSX](https://open-vsx.org/extension/frostime/frostpi)**。
+
+如果你的网络环境无法访问扩展市场，也可以从 [GitHub Releases](https://github.com/frostime/pi-vscode-ui/releases) 下载 `.vsix` 文件并手动安装。
+
 ## 为什么选择 FrostPi
 
 如果你已经在使用 Pi，并围绕它建立了自己的工作流，那么获得一个图形界面不应该意味着改用另一套工作流。
