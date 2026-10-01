@@ -108,6 +108,22 @@ Pi 会话是树，而不只是线性的聊天记录。FrostPi 将 Pi 原生的�
   </tr>
 </table>
 
+**对话渲染，而不是压成纯文本。**
+
+Agent 的输出保持可读，不会退化成一堆纯文本：
+
+- 完整 **Markdown**：经过消毒处理，代码围栏带语法高亮。
+- **Mermaid** 图表——流式输出期间未完成的围栏保持源码显示，完整后才渲染为图表。
+- **数学公式**：基于 KaTeX，支持行内 `$...$` 与块级 `$$...$$`。
+- **嵌入图片**——PNG、JPEG、WebP、GIF、SVG，带标题、共享 Lightbox、本地图片懒加载，远程 HTTPS 图片需点击加载。
+- **Diff 展示**——`diff`/`patch` 围栏与工具 diff 采用 VS Code diff 配色，并可深入到行内逐词标注增删。
+
+<p align="center">
+  <img src="assets/screenshots/RenderMD.webp" alt="FrostPi 实时渲染的 Markdown" width="640">
+  <br>
+  <sub>一条助手消息的实时渲染</sub>
+</p>
+
 ## 开始使用
 
 ### 环境要求
@@ -137,6 +153,8 @@ Remote SSH、WSL 和 Dev Container 工作区会在远程工作区 Extension Host
 可以直接将 PNG、JPEG 或 WebP 图片粘贴到编辑框中。
 
 使用 `/` 补全来查找 Pi 扩展命令、提示词模板、技能和 FrostPi 本地操作。
+
+流式 Mermaid 行为、图片加载规则、diff 强调等渲染细节见 [`apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md`](apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md)。
 
 使用 `@Selection`、`@CurrentFile` 或 `@path/to/file` 引用工作区内容。FrostPi 会将路径和行号信息插入提示词；至于是否读取文件以及如何读取，仍由 Pi 决定。
 

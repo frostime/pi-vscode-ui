@@ -86,6 +86,16 @@ FrostPi keeps Pi's functional workflows available from the GUI:
   </tr>
 </table>
 
+**Rich conversation rendering.**
+
+One assistant message, rendered live — Mermaid diagrams, KaTeX math, embedded images, and word-level diff highlighting.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/assets/screenshots/RenderMD.webp" alt="Rendered Markdown in FrostPi" width="640">
+  <br>
+  <sub>Rich conversation rendering</sub>
+</p>
+
 **Pi's session tree, directly in the GUI.**
 
 Branch from an earlier prompt, move between existing paths, and optionally preserve context with Pi's branch summaries — all inside the current Pi session.

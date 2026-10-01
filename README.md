@@ -111,6 +111,22 @@ Create, resume, switch, rename, and concurrently run independent Pi sessions. If
 
 
 
+**Conversation rendered, not flattened.**
+
+Agent output stays readable instead of collapsing into plain text:
+
+- Full **Markdown** with sanitization and syntax-highlighted code fences.
+- **Mermaid** diagrams — incomplete fences remain plain source while streaming; complete ones render as diagrams.
+- **Math** via KaTeX — inline `$...$` and block `$$...$$` display formulas.
+- **Embedded images** — PNG, JPEG, WebP, GIF, and SVG with captions, the shared Lightbox, lazy local loading, and click-to-load for remote HTTPS images.
+- **Diffs** — `diff`/`patch` fences and tool diffs use VS Code diff colors, down to word-level intra-line additions and deletions.
+
+<p align="center">
+  <img src="assets/screenshots/RenderMD.webp" alt="Rendered Markdown in FrostPi" width="640">
+  <br>
+  <sub>One assistant message, rendered live</sub>
+</p>
+
 ## Getting Started
 
 ### Requirements
@@ -140,6 +156,8 @@ The executable may be the `pi` command, an absolute native executable, or Pi's c
 Paste PNG, JPEG, or WebP images directly into the composer.
 
 Use `/` completion for Pi extension commands, prompt templates, skills, and FrostPi-local actions.
+
+For rendering details such as streaming Mermaid behavior, image loading rules, and diff emphasis, see [`apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md`](apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md).
 
 Use `@Selection`, `@CurrentFile`, or `@path/to/file` for workspace references. FrostPi inserts path and line information into the prompt; Pi remains responsible for deciding whether and how to read the file.
 
