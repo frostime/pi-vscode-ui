@@ -440,15 +440,6 @@
   font-variant-numeric: tabular-nums;
 }
 .tool-duration::before { content: "\00b7\00a0"; color: var(--frost-faint); }
-/* Live elapsed readout for long-running tools, in place of the breathing dot. Same voice
-   as the duration label so a run reads continuously from ticking to final. */
-.tool-timer {
-  flex: none;
-  margin-left: auto;
-  color: var(--frost-text);
-  font: 10.5px/1 var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
 /* The diffstat takes the completion slot from the check icon on a successful edit/write, so
    the row still reads "how it ended" at a glance; it reuses the Changes body's success/error
    hues and stays small enough to leave the label room at the narrowest panel width. */
