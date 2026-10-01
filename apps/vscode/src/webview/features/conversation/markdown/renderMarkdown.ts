@@ -392,14 +392,33 @@ export function sanitizeSvg(svg: string): string {
   });
 }
 
+/**
+ * DOMPurify strips HTML-namespace children inside SVG-namespace parents
+ * (Mermaid puts every node/edge label in `foreignObject > div > span`), so the
+ * label subtree is sanitized separately in HTML mode and spliced back in.
+ */
+function restoreForeignObjectLabels(cleaned: string, original: string): string {
+  const cleanedDoc = new DOMParser().parseFromString(cleaned, "text/html");
+  const originalDoc = new DOMParser().parseFromString(original, "text/html");
+  const cleanedHosts = [...cleanedDoc.querySelectorAll("foreignObject")];
+  const originalHosts = [...originalDoc.querySelectorAll("foreignObject")];
+  if (cleanedHosts.length !== originalHosts.length) return cleaned; // fail closed, labels stay empty
+  for (let i = 0; i < cleanedHosts.length; i += 1) {
+    const labelHtml = DOMPurify.sanitize(originalHosts[i]!.innerHTML);
+    cleanedHosts[i]!.innerHTML = labelHtml;
+  }
+  return cleanedDoc.body.innerHTML;
+}
+
 /** Fail closed: never return unsanitized Mermaid output. */
 export function sanitizeMermaidSvg(svg: string): string | null {
   const cleaned = sanitizeSvg(svg);
   if (!cleaned.includes("<svg")) return null;
+  const restored = restoreForeignObjectLabels(cleaned, svg);
 
   // The Webview permits HTTPS images only for the explicit Markdown-image
   // consent flow. Mermaid output must not gain an implicit network channel.
-  const document = new DOMParser().parseFromString(cleaned, "text/html");
+  const document = new DOMParser().parseFromString(restored, "text/html");
   const root = document.querySelector("svg");
   if (!root) return null;
   for (const element of [root, ...root.querySelectorAll("*")]) {
