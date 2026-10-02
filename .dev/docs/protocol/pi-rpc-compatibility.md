@@ -9,7 +9,7 @@ updated: 2026-09-15
 
 # Pi RPC Compatibility
 
-FrostPi targets the current documented Pi-compatible RPC mode and launches the selected runtime with `--mode rpc`. It does not bundle or pin Pi, does not target a generic backend or ACP compatibility layer, and does not claim complete support for runtime-specific features of an alternate executable.
+FrostPi targets the current documented Pi-compatible RPC mode and launches the selected runtime with `--mode rpc`. The selected RPC dialect owns runtime-specific handshake and isomorphic event vocabulary; the VS Code runtime contract owns product capability declarations. FrostPi does not bundle or pin Pi, does not target a generic backend or ACP compatibility layer, and does not claim complete support for runtime-specific features of an alternate executable.
 
 ## Required surface
 
@@ -19,7 +19,7 @@ FrostPi targets the current documented Pi-compatible RPC mode and launches the s
 - Pi 0.83 cumulative `message_update.message` and Pi 0.84 delta-only `message_update.assistantMessageEvent` are both supported by shape. Delta assembly is extension conversation policy; the transport forwards either form unchanged.
 - Malformed JSONL, invalid envelopes, stdin/stdout failure, startup timeout, and unexpected process exit remain visible connection failures. Malformed assistant content deltas are ignored locally and do not weaken transport failures.
 
-Private adapters for capability gaps such as session-tree navigation and the Question tool remain product modules above the generic transport. Availability is capability-based; missing capability is visible and never inferred away by a silent fallback.
+Private adapters for capability gaps such as session-tree navigation, fork, and the Question tool remain product modules above the normalized transport. Availability is capability-based; missing capability is visible and never inferred away by a silent fallback. The FrostPi Question tool uses extension `input` UI and remains distinct from OMP's runtime `ask` UI.
 
 ## Executable and authority rules
 

@@ -1,7 +1,7 @@
 ---
 title: OMP RPC 方言分层 — 实现交接
 created: 2026-10-02T12:37:31+08:00
-consumed: false # 接收方读完请置 true
+consumed: true # 接收方读完请置 true
 ---
 
 # OMP RPC 方言分层 — 实现交接

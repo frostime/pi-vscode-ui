@@ -957,6 +957,7 @@ process.on("SIGTERM", () => process.exit(0));
     await writeFile(fakeOmp, String.raw`#!/usr/bin/env node
 let input = "";
 const write = value => process.stdout.write(JSON.stringify(value) + "\n");
+write({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1, 2], maxFrameBytes: 1048576, maxReassembledFrameBytes: 67108864 });
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", chunk => {
   input += chunk;
@@ -965,7 +966,8 @@ process.stdin.on("data", chunk => {
     const command = JSON.parse(input.slice(0, index));
     input = input.slice(index + 1);
     const response = { type: "response", id: command.id, command: command.type, success: true };
-    if (command.type === "get_state") response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionId: "omp-settle" };
+    if (command.type === "negotiate_protocol") response.data = { protocolVersion: 2 };
+    else if (command.type === "get_state") response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionId: "omp-settle" };
     else if (command.type === "get_available_models") response.data = { models: [] };
     else if (command.type === "get_commands") { response.success = false; response.error = "Unknown command: get_commands"; }
     else if (command.type === "get_entries") response.data = { entries: [], leafId: null };
@@ -1094,6 +1096,7 @@ async function writeCacheMissPi(dir: string): Promise<string> {
 let input = "";
 const model = { provider: "anthropic", id: "claude", name: "Claude", cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 } };
 const write = value => process.stdout.write(JSON.stringify(value) + "\n");
+write({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1, 2], maxFrameBytes: 1048576, maxReassembledFrameBytes: 67108864 });
 const assistant = (id, timestamp, inputTokens, cacheRead, cacheWrite, stopReason) => ({
   id,
   role: "assistant",
@@ -1119,7 +1122,8 @@ process.stdin.on("data", chunk => {
     const command = JSON.parse(input.slice(0, index));
     input = input.slice(index + 1);
     const response = { type: "response", id: command.id, command: command.type, success: true };
-    if (command.type === "get_state") response.data = { model, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionId: "cache-miss" };
+    if (command.type === "negotiate_protocol") response.data = { protocolVersion: 2 };
+    else if (command.type === "get_state") response.data = { model, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionId: "cache-miss" };
     else if (command.type === "get_available_models") response.data = { models: [model] };
     else if (command.type === "get_commands") response.data = { commands: [] };
     else if (command.type === "get_entries") response.data = { entries: [], leafId: null };

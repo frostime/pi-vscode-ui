@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { PiRpcConnection } from "../src/PiRpcConnection.js";
+import { ohMyPiRpcDialect } from "../src/dialects/ohMyPi/ohMyPiRpcDialect.js";
 
 let fixtureDir = "";
 let fixturePath = "";
@@ -17,14 +18,46 @@ beforeAll(async () => {
     fixturePath,
     `
 let buffer = "";
+const isOmp = process.argv.includes("--fake-omp");
+let negotiated = false;
+if (isOmp) {
+  send({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1, 2], maxFrameBytes: 1048576, maxReassembledFrameBytes: 67108864 });
+}
 function send(value, split = false) {
   const line = JSON.stringify(value) + "\\n";
   if (!split) return void process.stdout.write(line);
   process.stdout.write(line.slice(0, 7));
   setTimeout(() => process.stdout.write(line.slice(7)), 1);
 }
+function sendChunked(value) {
+  const bytes = Buffer.from(JSON.stringify(value));
+  const chunkBytes = 256 * 1024;
+  const count = Math.ceil(bytes.byteLength / chunkBytes);
+  let encoded = "";
+  for (let index = 0; index < count; index += 1) {
+    encoded += JSON.stringify({
+      type: "rpc_chunk",
+      chunkId: "rpc-test",
+      index,
+      count,
+      byteLength: bytes.byteLength,
+      data: bytes.subarray(index * chunkBytes, (index + 1) * chunkBytes).toString("base64"),
+    }) + "\\n";
+  }
+  process.stdout.write(encoded.slice(0, 7));
+  setTimeout(() => process.stdout.write(encoded.slice(7)), 1);
+}
 function handle(command) {
+  if (command.type === "negotiate_protocol") {
+    negotiated = true;
+    send({ type: "response", id: command.id, command: command.type, success: true, data: { protocolVersion: 2 } });
+    return;
+  }
   if (command.type === "get_state") {
+    if (isOmp && !negotiated) {
+      send({ type: "response", id: command.id, command: command.type, success: false, error: "protocol v2 required before get_state" });
+      return;
+    }
     send({ type: "response", id: command.id, success: true, data: {
       model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false,
       steeringMode: "one-at-a-time", followUpMode: "one-at-a-time",
@@ -33,11 +66,15 @@ function handle(command) {
     }}, true);
     return;
   }
+  if (command.type === "chunked") {
+    sendChunked({ type: "response", id: command.id, command: command.type, success: true, data: { text: "x".repeat(1048576) } });
+    return;
+  }
   if (command.type === "prompt") {
     send({ type: "response", id: command.id, success: true });
     send({ type: "agent_start" });
     send({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "hello" }});
-    send({ type: "agent_settled" });
+    send(isOmp ? { type: "session_settled" } : { type: "agent_settled" });
     return;
   }
   if (command.type === "never") return;
@@ -90,6 +127,29 @@ describe("PiRpcConnection", () => {
     }
   });
 
+  it("negotiates OMP protocol v2 before the initial state request and normalizes settle", async () => {
+    const connection = new PiRpcConnection({
+      cwd: fixtureDir,
+      command: process.execPath,
+      commandArgs: [fixturePath, "--fake-omp"],
+      dialect: ohMyPiRpcDialect,
+      startupTimeoutMs: 2_000,
+      stopTimeoutMs: 100,
+    });
+    const events: string[] = [];
+    connection.onEvent((event) => events.push(event.type));
+
+    try {
+      await connection.start();
+      const chunked = await connection.request<{ text: string }>({ type: "chunked" });
+      expect(chunked.text).toHaveLength(1_048_576);
+      await connection.request({ type: "prompt", message: "hello" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(events).toEqual(["agent_start", "message_update", "agent_settled"]);
+    } finally {
+      await connection.stop();
+    }
+  });
   it("passes the resolved invocation to an injected launcher", async () => {
     let launchArgs: readonly string[] = [];
     const connection = new PiRpcConnection({

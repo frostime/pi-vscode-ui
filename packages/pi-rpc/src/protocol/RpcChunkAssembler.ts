@@ -15,6 +15,10 @@ export const RPC_MAX_REASSEMBLED_BYTES = 64 * 1024 * 1024;
 const RPC_CHUNK_PAYLOAD_BYTES = 256 * 1024;
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
+export function isRpcChunkFrame(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && "type" in value && value.type === "rpc_chunk";
+}
+
 type ChunkMetadata = { chunkId: string; index: number; count: number; byteLength: number };
 
 type PendingChunks = {
@@ -29,12 +33,16 @@ type PendingChunks = {
 export class RpcChunkAssembler {
   #pending: PendingChunks | null = null;
 
+  reset(): void {
+    this.#pending = null;
+  }
+
   /**
    * Feed one parsed JSONL value. Returns the complete frame, or `undefined` while a chunk sequence
    * is still incomplete. Non-chunk values pass through untouched.
    */
   push(value: unknown): unknown {
-    if (!isChunkFrame(value)) {
+    if (!isRpcChunkFrame(value)) {
       if (this.#pending) throw new Error("RPC chunk sequence interrupted");
       return value;
     }
@@ -66,12 +74,12 @@ export class RpcChunkAssembler {
     if (pending.receivedBytes !== pending.byteLength) throw new Error("RPC chunk sequence length mismatch");
 
     this.#pending = null;
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(pending.chunks)));
+    const frame: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(pending.chunks)));
+    if (typeof frame !== "object" || frame === null || Array.isArray(frame)) {
+      throw new Error("RPC chunk payload must reassemble to an object frame");
+    }
+    return frame;
   }
-}
-
-function isChunkFrame(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && "type" in value && value.type === "rpc_chunk";
 }
 
 /** `Number.isSafeInteger` is a boolean check, so it cannot narrow the unparsed RPC payload by itself. */
