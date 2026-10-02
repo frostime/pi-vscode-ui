@@ -14,9 +14,9 @@ updated: 2026-08-09
 
 Transport framing is runtime-independent. A dialect may require a startup handshake, negotiate a transport capability, and normalize an isomorphic runtime event into the Pi-shaped contract. A dialect must not implement product policy or silently emulate a non-isomorphic feature.
 
-Protocol v2 chunk reassembly is a transport mechanism and is available through the connection when the selected dialect enables it. The OMP dialect requires a `ready` frame advertising v2, negotiates v2 before the initial `get_state`, and normalizes `session_settled` to `agent_settled`. The Pi dialect preserves the existing one-line behavior and does not wait for an OMP handshake.
+Protocol v2 chunk reassembly is a transport mechanism and is available through the connection when the selected dialect enables it. The OMP dialect waits for `ready` and negotiates v2 before the initial `get_state` when the frame advertises v2 with compatible framing limits. Otherwise it continues using v1 without negotiation. A failed v2 negotiation fails startup rather than silently falling back to v1. In v1, oversized responses remain visible command errors; they do not terminate the connection. Both versions normalize `session_settled` to `agent_settled`. The Pi dialect preserves the existing one-line behavior and does not wait for an OMP handshake.
 
-Product capabilities such as slash commands, session tree, fork, runtime tool UI, and the FrostPi Question tool are selected by the VS Code runtime contract. The Question tool uses extension `input` UI and is independent of OMP's runtime `ask` UI.
+Product capabilities such as slash commands, session tree, fork, and the FrostPi Question tool are selected by the VS Code runtime contract. The Question tool uses extension `input` UI. OMP's built-in `ask` tool is not registered in the ordinary `--mode rpc` launch; FrostPi does not represent that separate UI path as a runtime capability.
 
 Assistant `message_update` records are forwarded unchanged whether they contain a cumulative `message` or only an indexed `assistantMessageEvent`. This package must not assemble deltas or synthesize legacy events.
 

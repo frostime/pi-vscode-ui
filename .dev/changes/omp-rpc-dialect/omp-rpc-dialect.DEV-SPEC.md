@@ -49,6 +49,8 @@ updated: 2026-10-02
 
 ### 帧与上限
 
+用户已明确确认同时支持 RPC v1 和 v2:支持 v2 时协商,否则保持 v1;不以缺少 v2 为由拒绝启动。
+
 - Pi:一行一条消息,无上限声明、无分片概念;行为不变。
 - OMP:单行上限 1 MiB,并在启动 `ready` 帧宣告协议版本与帧上限。
 - 当 profile 为 `oh-my-pi` 且运行时宣告支持协议 v2 时,FrostPi 协商 v2;协商成功后,超出单行上限的逻辑帧以分片帧送达并由 FrostPi 重组。
@@ -62,6 +64,8 @@ updated: 2026-10-02
 
 ### OMP 支持面(本轮显式声明)
 
+用户已确认移除 `runtimeToolUi` 能力字段。OMP 内置 `ask` 在普通 `--mode rpc` 下不注册,不需要额外的能力门控;FrostPi Question tool 继续通过扩展 `input` UI 启用。
+
 支持:
 
 - 启动与进程生命周期;普通对话(`prompt`,含流式过程中的 steer / follow-up 与中止);
@@ -73,7 +77,7 @@ updated: 2026-10-02
 
 - session-tree 与 fork(分支切换);
 - slash 命令发现与 `/` 补全(含 skill 命令列表)——许多 slash 命令依赖 TUI,当前无法逐一分辨,因此整类不支持;
-- 运行时 tool UI(`--mode rpc-ui` 的 `ask` 对话框)。
+OMP 内置 `ask` 的 `rpc-ui` 启动与宿主 UI 路径不在本轮范围内,也不设单独的运行时能力字段。
 
 说明:skill 的**内容**仍可经普通 prompt 正常使用;被拒绝的只是"命令列表/补全"这一层。
 
@@ -111,7 +115,7 @@ updated: 2026-10-02
   - 分片重组:非分片直通;多片按序重组;分片跨 stdout 写入边界;元数据/长度/序列不合法判为协议错误。
   - 协议协商:运行时宣告 v2 且 profile 允许 → 发出协商请求并成功后启用 v2;未宣告 v2 或 profile 不允许 → 不发出协商请求且保持 v1;协商失败 → 显式失败,不得退化成"后来才出现的错误"。
   - 方言归一化:`oh-my-pi` 方言把会话结束事件归一化为 `agent_settled`;`pi` 方言行为不变。
-- `apps/vscode` 单测:`oh-my-pi` profile 下,归一化后的 settle 到达时会话状态为 `ready`、回合 completed、settle 后的刷新路径被执行;`pi` profile 逐条不变;运行时契约对不支持项(会话树/分支、命令发现、tool UI)声明为 false 并被断言。
+- `apps/vscode` 单测:`oh-my-pi` profile 下,归一化后的 settle 到达时会话状态为 `ready`、回合 completed、settle 后的刷新路径被执行;`pi` profile 逐条不变;运行时契约对不支持项(会话树/分支、命令发现)声明为 false 并被断言;Question tool 保持启用,不包含 `runtimeToolUi` 字段。
 - 真实 OMP 冒烟(会话文件副本,不触碰在线会话):v2 下 `get_entries` 成功且条目数一致;v1 对照报 `RPC response exceeded the transport limit`。
 - `pnpm check`(版本检查、lint、typecheck、单测、build、bundle size)通过。
 
@@ -127,5 +131,5 @@ updated: 2026-10-02
 - **同构翻译(isomorphic translation)**:满足上面四条件的方言差异,可在 RPC 层直接改写而不丢失含义。
 - **标记(marker)**:归一化输出上的可选兼容注记,只携带诊断/可选信息,不参与状态判断。
 - **传输机制(transport mechanism)**:与运行时无关的分帧、分片重组、请求关联、超时与子进程管理。
-- **运行时契约(runtime contract)**:非 RPC 的运行时事实与能力声明——可执行名回退、默认 session root、是否读 Pi settings、启动模式,以及是否支持会话树/分支、命令发现、tool UI。
+- **运行时契约(runtime contract)**:非 RPC 的运行时事实与能力声明——可执行名回退、默认 session root、是否读 Pi settings、启动模式,以及是否支持会话树/分支、命令发现和 FrostPi Question tool。
 - **兼容 profile**:设置项 `frostpi.pi.runtimeCompatibility` 的取值,当前为 `pi` 与 `oh-my-pi`。

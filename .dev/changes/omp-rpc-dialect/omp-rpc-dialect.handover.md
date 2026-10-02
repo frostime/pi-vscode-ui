@@ -106,6 +106,11 @@ OMP 内部(完整导航见 MAP):`<OMP_NPM_DIR>/pi-coding-agent/src/modes/rpc/rpc
 - `<OMP_NPM_DIR>/pi-coding-agent/src/modes/rpc/rpc-mode.ts` — `ready`/`negotiate_protocol`/`get_available_commands`/`branch`/settle 接线
 - `<OMP_NPM_DIR>/pi-coding-agent/src/modes/rpc/rpc-session-settle.ts` — `session_settled` 的发射条件
 
+## 接收后的用户决定
+
+- 同时支持 RPC v1/v2:当 `ready` 宣告兼容的 v2 传输能力时协商 v2,否则继续 v1;不再硬性要求 v2。
+- 移除 `runtimeToolUi` 能力字段。普通 `--mode rpc` 不注册 OMP 内置 `ask`;FrostPi Question tool 仍通过扩展 `input` UI 保留。
+
 ## Clarifications & Discussion
 
 接收方若发现缺漏、歧义或阻塞,在此追加问题;用户可切回作者会话作答。

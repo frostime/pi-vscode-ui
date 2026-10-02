@@ -13,4 +13,4 @@ These capabilities are intentionally disabled in the initial OMP integration. Th
 - Prompt result lifecycle: evaluate `prompt_result` as request-correlated completion without confusing it with session-wide `session_settled`.
 - Retry semantics: map OMP `isTerminal`, `yielded`, `awaitingAsyncWork`, and `auto_retry_*` to FrostPi's retry contract only after a verified state mapping.
 - Runtime ask UI: add the separate `rpc-ui` / `set_ask_dialog` path if FrostPi intentionally supports OMP's built-in ask tool. This is distinct from the enabled FrostPi Question tool.
-- v1 truncation diagnostics: define an observational marker for OMP event shrinking if deployments without v2 must remain supported.
+- v1 truncation diagnostics: define an observational marker for OMP event shrinking on the supported v1 transport path. It must not drive session state.

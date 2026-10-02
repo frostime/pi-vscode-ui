@@ -8,7 +8,6 @@ export interface RuntimeCapabilities {
   readonly sessionTree: boolean;
   readonly fork: boolean;
   readonly slashCommands: boolean;
-  readonly runtimeToolUi: boolean;
   readonly questionTool: boolean;
 }
 
@@ -29,7 +28,6 @@ const PI_PROFILE: RuntimeCompatibilityProfile = {
     sessionTree: true,
     fork: true,
     slashCommands: true,
-    runtimeToolUi: false,
     questionTool: true,
   },
   defaultSessionRoot: () => join(homedir(), ".pi", "agent", "sessions"),
@@ -43,7 +41,6 @@ const OH_MY_PI_PROFILE: RuntimeCompatibilityProfile = {
     sessionTree: false,
     fork: false,
     slashCommands: false,
-    runtimeToolUi: false,
     questionTool: true,
   },
   defaultSessionRoot: () => join(homedir(), ".omp", "agent", "sessions"),

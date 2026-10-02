@@ -8,6 +8,8 @@ status: accepted
 
 > 修订(2026-10-02,spec 细化后):本轮 OMP 支持面收敛为"普通对话 + resume + 模型/思考级别 + 扩展 UI 对话框";session-tree / fork / slash 命令发现 / 运行时 tool UI 四类**显式声明为不支持**,并由运行时契约断言。新增迁移基线文档。方向未变,状态保持 accepted。
 
+> 用户后续确认:同时支持 RPC v1/v2,支持 v2 时协商,否则保持 v1。移除 `runtimeToolUi` 能力字段;普通 `--mode rpc` 不注册 OMP 内置 `ask`,不另做能力门控。FrostPi Question tool 保持启用。下列历史预测中的 tool UI 能力声明由本条修订取代。
+
 ## 叙述
 
 变更把一个"每修一处 OMP 差异就往 Pi 路径里加分支"的现状,改成两层显式归属:RPC 包内新增**传输机制 / 运行时方言**的分界,并让协议协商与分片重组成为机制能力;app 侧把现有的运行时配置数据收敛成**运行时契约**,业务层只留一个 OMP 兼容模块。结果是 Pi 路径(SessionRuntime / ConversationProjection / SessionViewState / 模型与目录)"看不到" OMP,而 OMP 的全部怪癖集中在方言与业务兼容两个文件/目录里。

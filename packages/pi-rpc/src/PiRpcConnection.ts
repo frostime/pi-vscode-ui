@@ -63,8 +63,8 @@ export class PiRpcConnection {
   #failure: Error | null = null;
   #stopping = false;
   #chunkFramesEnabled = false;
-  #startupReadyPromise: Promise<void> = Promise.resolve();
-  #resolveStartupReady: (() => void) | null = null;
+  #startupReadyPromise: Promise<Record<string, unknown> | undefined> = Promise.resolve(undefined);
+  #resolveStartupReady: ((frame: Record<string, unknown>) => void) | null = null;
   #rejectStartupReady: ((error: Error) => void) | null = null;
 
   constructor(options: PiRpcConnectionOptions) {
@@ -94,11 +94,11 @@ export class PiRpcConnection {
     this.#chunkFramesEnabled = false;
     this.#chunkAssembler.reset();
     this.#startupReadyPromise = this.#dialect.requiresStartupReady
-      ? new Promise<void>((resolve, reject) => {
+      ? new Promise<Record<string, unknown>>((resolve, reject) => {
           this.#resolveStartupReady = resolve;
           this.#rejectStartupReady = reject;
         })
-      : Promise.resolve();
+      : Promise.resolve(undefined);
     this.#decoder = new JsonlDecoder((record) => this.#handleRecord(record));
 
     const invocation = resolvePiExecutable({
@@ -129,10 +129,11 @@ export class PiRpcConnection {
     child.once("close", (code, signal) => this.#handleClose(child, code, signal));
 
     try {
-      await this.#waitForStartupReady(this.#options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS);
-      if (this.#dialect.startupNegotiation) {
+      const startupFrame = await this.#waitForStartupReady(this.#options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS);
+      const negotiation = startupFrame ? this.#dialect.getStartupNegotiation?.(startupFrame) : undefined;
+      if (negotiation) {
         this.#chunkFramesEnabled = true;
-        const negotiationData = await this.request(this.#dialect.startupNegotiation, this.#options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS);
+        const negotiationData = await this.request(negotiation, this.#options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS);
         this.#dialect.validateNegotiationResponse?.(negotiationData);
       }
       return await this.request<RpcSessionState>(
@@ -235,7 +236,7 @@ export class PiRpcConnection {
       if (value === undefined) return;
       if (!isRpcMessage(value)) throw new Error("Invalid RPC message from Pi");
       if (this.#dialect.acceptStartupFrame(value)) {
-        this.#resolveStartupReady?.();
+        this.#resolveStartupReady?.(value);
         this.#resolveStartupReady = null;
         this.#rejectStartupReady = null;
         return;
@@ -278,11 +279,11 @@ export class PiRpcConnection {
     if (!this.#stopping) this.#fail(new PiRpcProcessError(`Pi RPC process exited (code=${code} signal=${signal})`));
   }
 
-  async #waitForStartupReady(timeoutMs: number): Promise<void> {
+  async #waitForStartupReady(timeoutMs: number): Promise<Record<string, unknown> | undefined> {
     if (!this.#dialect.requiresStartupReady) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await Promise.race([
+      return await Promise.race([
         this.#startupReadyPromise,
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new PiRpcProtocolError("Timed out waiting for RPC ready frame")), timeoutMs);

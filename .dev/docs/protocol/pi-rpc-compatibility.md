@@ -14,6 +14,7 @@ FrostPi targets the current documented Pi-compatible RPC mode and launches the s
 ## Required surface
 
 - Startup requires `get_state`; product features use prompt/abort, compaction, entries, fork, commands, models, thinking level, naming, statistics, and extension UI responses.
+- The OMP dialect supports RPC v1 and v2: `ready` advertising compatible v2 framing triggers negotiation before `get_state`; otherwise startup proceeds in v1. Failed negotiation is a visible startup failure. V1 retains OMP's one-line response limit, so large history loads may fail with the runtime's transport-limit error; v2 reassembles chunked responses.
 - Runtime projection consumes documented agent, message, tool, compaction, and extension UI events. Unknown additive events or fields are accepted unless a required invariant becomes impossible.
 - Cache-miss projection derives Pi TUI-compatible notices from documented assistant `provider`, `model`, `timestamp`, and `usage` fields on `message_end` and session entries, plus full Model cost data from `get_available_models`. RPC does not carry Pi TUI's rendered warning text. Missing or malformed diagnostic fields are ignored locally without weakening generic event forwarding.
 - Pi 0.83 cumulative `message_update.message` and Pi 0.84 delta-only `message_update.assistantMessageEvent` are both supported by shape. Delta assembly is extension conversation policy; the transport forwards either form unchanged.

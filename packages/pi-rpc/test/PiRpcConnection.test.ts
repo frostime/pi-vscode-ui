@@ -19,9 +19,17 @@ beforeAll(async () => {
     `
 let buffer = "";
 const isOmp = process.argv.includes("--fake-omp");
+const v1Only = process.argv.includes("--v1-only") || process.argv.includes("--no-v2-advertisement");
+const negotiationFails = process.argv.includes("--fail-negotiation");
 let negotiated = false;
 if (isOmp) {
-  send({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1, 2], maxFrameBytes: 1048576, maxReassembledFrameBytes: 67108864 });
+  send({
+    type: "ready",
+    protocolVersion: 1,
+    ...(process.argv.includes("--no-v2-advertisement") ? {} : { supportedProtocolVersions: v1Only ? [1] : [1, 2] }),
+    maxFrameBytes: 1048576,
+    ...(v1Only ? {} : { maxReassembledFrameBytes: 67108864 }),
+  });
 }
 function send(value, split = false) {
   const line = JSON.stringify(value) + "\\n";
@@ -49,12 +57,16 @@ function sendChunked(value) {
 }
 function handle(command) {
   if (command.type === "negotiate_protocol") {
+    if (v1Only || negotiationFails) {
+      send({ type: "response", id: command.id, command: command.type, success: false, error: "Protocol negotiation unavailable" });
+      return;
+    }
     negotiated = true;
     send({ type: "response", id: command.id, command: command.type, success: true, data: { protocolVersion: 2 } });
     return;
   }
   if (command.type === "get_state") {
-    if (isOmp && !negotiated) {
+    if (isOmp && !v1Only && !negotiated) {
       send({ type: "response", id: command.id, command: command.type, success: false, error: "protocol v2 required before get_state" });
       return;
     }
@@ -66,7 +78,15 @@ function handle(command) {
     }}, true);
     return;
   }
+  if (command.type === "get_entries") {
+    send({ type: "response", id: command.id, success: true, data: { entries: [], leafId: null } });
+    return;
+  }
   if (command.type === "chunked") {
+    if (!negotiated) {
+      send({ type: "response", id: command.id, success: false, error: "RPC response exceeded the transport limit" });
+      return;
+    }
     sendChunked({ type: "response", id: command.id, command: command.type, success: true, data: { text: "x".repeat(1048576) } });
     return;
   }
@@ -150,6 +170,49 @@ describe("PiRpcConnection", () => {
       await connection.stop();
     }
   });
+  it.each(["--v1-only", "--no-v2-advertisement"])("keeps OMP v1 usable without v2 negotiation (%s)", async (flag) => {
+    const connection = new PiRpcConnection({
+      cwd: fixtureDir,
+      command: process.execPath,
+      commandArgs: [fixturePath, "--fake-omp", flag],
+      dialect: ohMyPiRpcDialect,
+      startupTimeoutMs: 2_000,
+      stopTimeoutMs: 100,
+    });
+    const events: string[] = [];
+    connection.onEvent((event) => events.push(event.type));
+
+    try {
+      const state = await connection.start();
+      expect(state.sessionName).toBe("a\u2028b");
+      expect(await connection.request({ type: "get_entries" })).toEqual({ entries: [], leafId: null });
+      await expect(connection.request({ type: "chunked" })).rejects.toThrow("RPC response exceeded the transport limit");
+      await connection.request({ type: "prompt", message: "hello" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(events).toEqual(["agent_start", "message_update", "agent_settled"]);
+    } finally {
+      await connection.stop();
+    }
+  });
+
+  it("fails startup when advertised v2 negotiation fails rather than falling back to v1", async () => {
+    const connection = new PiRpcConnection({
+      cwd: fixtureDir,
+      command: process.execPath,
+      commandArgs: [fixturePath, "--fake-omp", "--fail-negotiation"],
+      dialect: ohMyPiRpcDialect,
+      startupTimeoutMs: 2_000,
+      stopTimeoutMs: 100,
+    });
+
+    try {
+      await expect(connection.start()).rejects.toThrow("Protocol negotiation unavailable");
+      expect(connection.started).toBe(false);
+    } finally {
+      await connection.stop();
+    }
+  });
+
   it("passes the resolved invocation to an injected launcher", async () => {
     let launchArgs: readonly string[] = [];
     const connection = new PiRpcConnection({

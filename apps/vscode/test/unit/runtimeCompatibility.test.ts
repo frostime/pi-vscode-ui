@@ -14,7 +14,6 @@ describe("runtime compatibility profiles", () => {
       sessionTree: true,
       fork: true,
       slashCommands: true,
-      runtimeToolUi: false,
       questionTool: true,
     });
     expect(profile.defaultSessionRoot()).toBe(join(homedir(), ".pi", "agent", "sessions"));
@@ -31,7 +30,6 @@ describe("runtime compatibility profiles", () => {
         sessionTree: false,
         fork: false,
         slashCommands: false,
-        runtimeToolUi: false,
         questionTool: true,
       },
     });
