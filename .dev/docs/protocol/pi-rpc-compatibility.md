@@ -4,7 +4,7 @@ description: Cross-module policy for Pi native RPC surface, authority, failures,
 scope:
   - /packages/pi-rpc/**
   - /apps/vscode/src/extension/**
-updated: 2026-09-15
+updated: 2026-10-03
 ---
 
 # Pi RPC Compatibility
@@ -33,5 +33,7 @@ The selected `get_entries` parent chain and reported leaf are transcript authori
 A missing or incompatible restored session fails visibly; FrostPi never substitutes a new empty session under the same UI identity.
 
 ## Change evidence
+
+For OMP-specific ownership decisions, capability expansion, and preserving maintenance knowledge before change archival, follow [OMP compatibility maintenance](../architecture/omp-compatibility.md).
 
 Compatibility changes require captured fixtures or fake-process tests, updates to `packages/pi-rpc/SPEC.md`, and updates to every affected product SPEC.
