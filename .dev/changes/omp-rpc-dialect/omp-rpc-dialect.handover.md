@@ -108,7 +108,7 @@ OMP 内部(完整导航见 MAP):`<OMP_NPM_DIR>/pi-coding-agent/src/modes/rpc/rpc
 
 ## 接收后的用户决定
 
-- 同时支持 RPC v1/v2:当 `ready` 宣告兼容的 v2 传输能力时协商 v2,否则继续 v1;不再硬性要求 v2。
+- 同时支持 RPC v1/v2:当 `ready` 宣告 v2 时协商 v2,否则继续 v1;不再硬性要求 v2。对端宣告的字节上限配置该连接的重组器,不作为协商门槛,也不施加额外的固定本地预算。
 - 移除 `runtimeToolUi` 能力字段。普通 `--mode rpc` 不注册 OMP 内置 `ask`;FrostPi Question tool 仍通过扩展 `input` UI 保留。
 
 ## Clarifications & Discussion

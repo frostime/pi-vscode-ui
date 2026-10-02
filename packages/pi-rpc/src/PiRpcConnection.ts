@@ -55,7 +55,7 @@ export class PiRpcConnection {
   readonly #pendingRequests = new Map<string, PendingRequest>();
   readonly #stderr: BoundedTextBuffer;
   readonly #dialect: RpcDialect;
-  readonly #chunkAssembler = new RpcChunkAssembler();
+  #chunkAssembler = new RpcChunkAssembler();
 
   #child: ChildProcess | null = null;
   #decoder: JsonlDecoder | null = null;
@@ -92,7 +92,7 @@ export class PiRpcConnection {
     this.#stopping = false;
     this.#stderr.clear();
     this.#chunkFramesEnabled = false;
-    this.#chunkAssembler.reset();
+    this.#chunkAssembler = new RpcChunkAssembler();
     this.#startupReadyPromise = this.#dialect.requiresStartupReady
       ? new Promise<Record<string, unknown>>((resolve, reject) => {
           this.#resolveStartupReady = resolve;
@@ -132,8 +132,9 @@ export class PiRpcConnection {
       const startupFrame = await this.#waitForStartupReady(this.#options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS);
       const negotiation = startupFrame ? this.#dialect.getStartupNegotiation?.(startupFrame) : undefined;
       if (negotiation) {
+        this.#chunkAssembler = new RpcChunkAssembler(negotiation.chunkLimits);
         this.#chunkFramesEnabled = true;
-        const negotiationData = await this.request(negotiation, this.#options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS);
+        const negotiationData = await this.request(negotiation.command, this.#options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS);
         this.#dialect.validateNegotiationResponse?.(negotiationData);
       }
       return await this.request<RpcSessionState>(
@@ -236,7 +237,8 @@ export class PiRpcConnection {
       if (isRpcChunkFrame(value) && !this.#chunkFramesEnabled) {
         throw new Error("RPC chunk received before protocol negotiation");
       }
-      value = this.#chunkAssembler.push(value);
+      const frameBytes = isRpcChunkFrame(value) ? Buffer.byteLength(record, "utf8") + 1 : undefined;
+      value = this.#chunkAssembler.push(value, frameBytes);
       if (value === undefined) return;
       if (!isRpcMessage(value)) throw new Error("Invalid RPC message from Pi");
       if (this.#dialect.acceptStartupFrame(value)) {

@@ -1,18 +1,12 @@
-/**
- * Reassembly of the chunked RPC frames an Oh My Pi child sends under protocol v2.
- *
- * Oh My Pi caps one JSONL line at `RPC_MAX_FRAME_BYTES` and, once protocol v2 is negotiated, splits
- * any larger logical frame into `rpc_chunk` frames carrying base64 payloads of at most
- * `RPC_CHUNK_PAYLOAD_BYTES`. Those chunks are the only way a runtime can deliver a response above
- * the line ceiling — for example the full entry list of a long session — so a client that negotiated
- * v2 must reassemble them before parsing the frame.
- */
-
-/** Ceiling for one newline-delimited RPC frame, mirrored from the Oh My Pi framing contract. */
+/** Baseline OMP v2 physical-frame ceiling; a ready declaration overrides it per connection. */
 export const RPC_MAX_FRAME_BYTES = 1024 * 1024;
-/** Ceiling for one logical frame reassembled from chunks, mirrored from the Oh My Pi framing contract. */
+/** Baseline OMP v2 logical-frame ceiling; not a fixed FrostPi resource budget. */
 export const RPC_MAX_REASSEMBLED_BYTES = 64 * 1024 * 1024;
-const RPC_CHUNK_PAYLOAD_BYTES = 256 * 1024;
+
+export interface RpcChunkLimits {
+  readonly maxFrameBytes: number;
+  readonly maxReassembledFrameBytes: number;
+}
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
 export function isRpcChunkFrame(value: unknown): value is Record<string, unknown> {
@@ -30,8 +24,17 @@ type PendingChunks = {
   receivedBytes: number;
 };
 
+/** Reassemble logical RPC frames before response correlation and event dispatch. */
 export class RpcChunkAssembler {
   #pending: PendingChunks | null = null;
+  readonly #limits: RpcChunkLimits;
+
+  constructor(limits: RpcChunkLimits = {
+    maxFrameBytes: RPC_MAX_FRAME_BYTES,
+    maxReassembledFrameBytes: RPC_MAX_REASSEMBLED_BYTES,
+  }) {
+    this.#limits = { ...limits };
+  }
 
   reset(): void {
     this.#pending = null;
@@ -41,15 +44,23 @@ export class RpcChunkAssembler {
    * Feed one parsed JSONL value. Returns the complete frame, or `undefined` while a chunk sequence
    * is still incomplete. Non-chunk values pass through untouched.
    */
-  push(value: unknown): unknown {
+  push(value: unknown, frameBytes?: number): unknown {
     if (!isRpcChunkFrame(value)) {
       if (this.#pending) throw new Error("RPC chunk sequence interrupted");
       return value;
     }
 
     const { chunkId, index, count, byteLength } = readChunkMetadata(value);
+    // The runtime's ready limits govern this stream, not the current OMP encoder's 256 KiB
+    // chunk size or 256-chunk count. A smaller line ceiling can require sub-1-MiB logical frames
+    // or more chunks; a larger ceiling can permit larger chunks and histories. Validate the
+    // actual physical frame and declared total instead of imposing those baseline assumptions.
+    const physicalBytes = frameBytes ?? Buffer.byteLength(JSON.stringify(value), "utf8") + 1;
+    if (physicalBytes > this.#limits.maxFrameBytes) throw new Error("RPC chunk exceeds the advertised physical frame limit");
+    if (byteLength > this.#limits.maxReassembledFrameBytes) {
+      throw new Error("RPC chunk logical frame exceeds the advertised reassembly limit");
+    }
     const payload = decodeChunkPayload(value.data);
-    if (payload.byteLength > RPC_CHUNK_PAYLOAD_BYTES) throw new Error("RPC chunk payload exceeds the transport limit");
 
     let pending = this.#pending;
     if (!pending) {
@@ -95,14 +106,9 @@ function readChunkMetadata(value: Record<string, unknown>): ChunkMetadata {
   if (!isSafeInteger(index) || !isSafeInteger(count) || !isSafeInteger(byteLength)) {
     throw new Error("Invalid RPC chunk metadata");
   }
-  if (
-    index < 0 ||
-    count < 2 ||
-    count > Math.ceil(RPC_MAX_REASSEMBLED_BYTES / RPC_CHUNK_PAYLOAD_BYTES) ||
-    index >= count ||
-    byteLength < RPC_MAX_FRAME_BYTES ||
-    byteLength > RPC_MAX_REASSEMBLED_BYTES
-  ) {
+  // OMP v2 requires multiple non-empty chunks. Each chunk contributes at least one decoded
+  // byte, so count <= byteLength is an integrity invariant, not a fixed chunk-count budget.
+  if (index < 0 || count < 2 || index >= count || byteLength < 1 || count > byteLength) {
     throw new Error("Invalid RPC chunk metadata");
   }
   return { chunkId, index, count, byteLength };
