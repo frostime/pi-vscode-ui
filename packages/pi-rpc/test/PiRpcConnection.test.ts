@@ -22,7 +22,7 @@ const isOmp = process.argv.includes("--fake-omp");
 const v1Only = process.argv.includes("--v1-only") || process.argv.includes("--no-v2-advertisement");
 const negotiationFails = process.argv.includes("--fail-negotiation");
 let negotiated = false;
-if (isOmp) {
+if (isOmp && !process.argv.includes("--no-ready")) {
   send({
     type: "ready",
     protocolVersion: 1,
@@ -271,6 +271,49 @@ describe("PiRpcConnection", () => {
       await connection.stop();
     }
   });
+
+  it("cancels startup when stopped before the runtime sends ready", async () => {
+    let signalSpawned!: () => void;
+    const spawned = new Promise<void>((resolve) => { signalSpawned = resolve; });
+    const connection = new PiRpcConnection({
+      cwd: fixtureDir,
+      command: process.execPath,
+      commandArgs: [fixturePath, "--fake-omp", "--no-ready"],
+      dialect: ohMyPiRpcDialect,
+      startupTimeoutMs: 5_000,
+      stopTimeoutMs: 100,
+      launcher(spec) {
+        const child = spawn(spec.command, [...spec.args], { cwd: spec.cwd, env: spec.env, stdio: ["pipe", "pipe", "pipe"] });
+        child.once("spawn", signalSpawned);
+        return child;
+      },
+    });
+    const failures: Error[] = [];
+    connection.onFailure((error) => failures.push(error));
+    const startupResult = connection.start().then(
+      () => "started",
+      (error: Error) => error.message,
+    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      await spawned;
+      await connection.stop();
+      const result = await Promise.race([
+        startupResult,
+        new Promise<string>((resolve) => {
+          timer = setTimeout(() => resolve("startup still pending after stop"), 1_000);
+        }),
+      ]);
+      expect(result).toBe("Pi RPC connection stopped");
+      expect(connection.started).toBe(false);
+      expect(failures).toEqual([]);
+    } finally {
+      if (timer) clearTimeout(timer);
+      await connection.stop();
+      await startupResult;
+    }
+  }, 10_000);
 
   it("does not emit a failure for caller-requested shutdown", async () => {
     const connection = createConnection();

@@ -44,7 +44,7 @@ Do not replace `/src/protocol/JsonlDecoder.ts` with `node:readline`; it does not
 
 - `start()` is successful only after `get_state` completes.
 - startup failure stops the child and includes bounded stderr diagnostics.
-- `stop()` rejects pending requests immediately, sends `SIGTERM`, then escalates to `SIGKILL` after the grace period.
+- `stop()` rejects pending requests and any startup `ready` wait immediately with a connection-stopped error, sends `SIGTERM`, then escalates to `SIGKILL` after the grace period. Cancelling startup must not wait for the startup deadline or report a ready-frame timeout.
 - caller-requested stop is not reported as an unexpected failure.
 - process, stdin, protocol, and unexpected exit failures reject all pending requests once and emit one failure notification.
 

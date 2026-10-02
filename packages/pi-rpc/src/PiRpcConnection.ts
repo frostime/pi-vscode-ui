@@ -151,7 +151,11 @@ export class PiRpcConnection {
     if (!child) return;
 
     this.#stopping = true;
-    this.#rejectPending(new PiRpcProcessError("Pi RPC connection stopped"));
+    const error = new PiRpcProcessError("Pi RPC connection stopped");
+    this.#rejectStartupReady?.(error);
+    this.#resolveStartupReady = null;
+    this.#rejectStartupReady = null;
+    this.#rejectPending(error);
     if (child.exitCode !== null) return;
 
     child.kill("SIGTERM");
