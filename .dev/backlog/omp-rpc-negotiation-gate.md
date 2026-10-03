@@ -16,7 +16,7 @@ origin: omp-rpc-dialect
 
 - 判据:`packages/pi-rpc/src/dialects/ohMyPi/ohMyPiRpcDialect.ts` 的 `getStartupNegotiation`
 - 被误用的常量:`RPC_MAX_FRAME_BYTES` / `RPC_MAX_REASSEMBLED_BYTES`(定义在 `packages/pi-rpc/src/protocol/RpcChunkAssembler.ts`,职责是本方分片校验边界)
-- 期望行为来源:`.dev/changes/omp-rpc-dialect/omp-rpc-dialect.DEV-SPEC.md` 的 Behavior Contract —— "当 profile 为 `oh-my-pi` 且运行时宣告支持协议 v2 时,FrostPi 协商 v2"(只有宣告这一个条件)
+- 期望行为来源:[OMP RPC transport contract](../docs/architecture/omp-compatibility.md#layer-one-adapt-the-rpc-conversation) —— 当运行时宣告支持 v2 时协商;ready 中的字节上限不作为协商门槛
 
 ## 为什么是问题
 
