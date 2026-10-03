@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Support slash completion and submission for OMP's discovered Markdown commands and `/skill:<name>`, including Steer/Queue delivery. Skill messages retain their original invocation in live and restored conversations rather than displaying expanded instructions. Unsupported runtime commands and leading skill submissions with images are rejected explicitly; OMP's separate `prompts/` templates remain outside this limited support.
+
 ## [0.15.0] - 2026-10-03
 
 ### Fixed
