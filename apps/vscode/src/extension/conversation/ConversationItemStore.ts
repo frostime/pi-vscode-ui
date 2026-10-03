@@ -81,6 +81,7 @@ export interface ToolPlacementUpdate {
   output?: string;
   diff?: string;
   isError: boolean;
+  startedAt?: number;
   endedAt?: number;
   timestamp: number;
 }
@@ -249,7 +250,7 @@ export class ConversationItemStore {
       input.toolCallId,
       input.name || currentTool?.name || "tool",
       args,
-      currentTool?.startedAt ?? input.timestamp,
+      input.startedAt ?? currentTool?.startedAt ?? input.timestamp,
     );
     const recognized = {
       ...currentTool?.recognized,
@@ -259,6 +260,7 @@ export class ConversationItemStore {
     const tool: ToolCallView = {
       ...created,
       ...currentTool,
+      startedAt: input.startedAt ?? currentTool?.startedAt ?? created.startedAt,
       name: input.name || currentTool?.name || created.name,
       args,
       status: input.status,
@@ -382,6 +384,7 @@ export class ConversationItemStore {
           ...activity.tool,
           status: current.tool.status,
           isError: current.tool.isError,
+          startedAt: current.tool.startedAt,
           ...(current.tool.output !== undefined ? { output: current.tool.output } : {}),
           ...(current.tool.endedAt !== undefined ? { endedAt: current.tool.endedAt } : {}),
         },

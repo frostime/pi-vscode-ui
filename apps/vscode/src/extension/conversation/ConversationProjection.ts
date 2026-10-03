@@ -558,6 +558,7 @@ export class ConversationProjection {
 
   #applyToolStart(event: RpcEvent): void {
     if (typeof event.toolCallId !== "string") return;
+    const startedAt = Date.now();
     const turn = this.#liveToolTurnOrCreate(event.toolCallId);
     if (turn) this.#activeTurnId = turn.id;
     this.#store.upsertTool({
@@ -568,7 +569,8 @@ export class ConversationProjection {
       args: recordValue(event.args),
       status: "running",
       isError: false,
-      timestamp: Date.now(),
+      startedAt,
+      timestamp: startedAt,
     });
   }
 
@@ -590,6 +592,7 @@ export class ConversationProjection {
 
   #applyToolEnd(event: RpcEvent): void {
     if (typeof event.toolCallId !== "string") return;
+    const endedAt = Date.now();
     const turn = this.#liveToolTurnOrCreate(event.toolCallId);
     const isError = event.isError === true;
     const diff = extractToolDiff(event.result);
@@ -603,8 +606,8 @@ export class ConversationProjection {
       output: extractText(event.result).slice(-160_000),
       ...(diff ? { diff } : {}),
       isError,
-      endedAt: Date.now(),
-      timestamp: Date.now(),
+      endedAt,
+      timestamp: endedAt,
     });
   }
 

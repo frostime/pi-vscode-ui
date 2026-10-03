@@ -60,6 +60,39 @@ describe("ConversationItemStore", () => {
     });
   });
 
+  it("uses execution start time and preserves it through persisted assistant takeover", () => {
+    const store = storeWithTurns("live", "persisted");
+    store.placeAssistant({
+      turnId: "live",
+      source: liveSource("live-message"),
+      buildActivities: assistantParts,
+    });
+
+    store.upsertTool({
+      source: { kind: "live" },
+      fallbackTurnId: "live",
+      toolCallId: "call-1",
+      name: "read",
+      args: {},
+      status: "running",
+      isError: false,
+      startedAt: 10,
+      timestamp: 10,
+    });
+    expect(store.turn("live").items.find((item) => item.type === "tool")).toMatchObject({
+      tool: { startedAt: 10 },
+    });
+
+    store.placeAssistant({
+      turnId: "persisted",
+      source: persistedSource("entry-a", "persisted-message"),
+      buildActivities: assistantParts,
+    });
+    expect(store.turn("persisted").items.find((item) => item.type === "tool")).toMatchObject({
+      tool: { startedAt: 10 },
+    });
+  });
+
   it("moves every assistant part on persisted takeover and ignores a late live replay", () => {
     const store = storeWithTurns("live", "persisted");
     store.placeAssistant({
