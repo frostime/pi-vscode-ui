@@ -282,6 +282,36 @@ describe("sanitizeMermaidSvg", () => {
     expect(cleaned).toContain("https://example.com/docs");
   });
 
+  it("keeps Mermaid label content inside foreignObject", () => {
+    const svg = [
+      '<svg xmlns="http://www.w3.org/2000/svg">',
+      '<foreignObject><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg">',
+      '<span class="nodeLabel"><p>User prompt</p></span>',
+      '</div></foreignObject>',
+      '</svg>',
+    ].join("");
+    const cleaned = sanitizeMermaidSvg(svg);
+
+    expect(cleaned).toContain("nodeLabel");
+    expect(cleaned).toContain("User prompt");
+    expect(cleaned).toContain("<p>");
+  });
+
+  it("strips hostile markup inside foreignObject while keeping label text", () => {
+    const svg = [
+      '<svg xmlns="http://www.w3.org/2000/svg">',
+      '<foreignObject><div xmlns="http://www.w3.org/1999/xhtml">',
+      '<span class="nodeLabel"><p onclick="alert(1)">Bad</p><script>alert(2)<\\/script></span>',
+      '</div></foreignObject>',
+      '</svg>',
+    ].join("");
+    const cleaned = sanitizeMermaidSvg(svg);
+
+    expect(cleaned).not.toContain("onclick");
+    expect(cleaned).not.toContain("<script");
+    expect(cleaned).toContain("Bad");
+  });
+
   it("fails closed on non-svg payload", () => {
     expect(sanitizeMermaidSvg("<div onclick=\"alert(1)\">x</div>")).toBeNull();
     expect(sanitizeMermaidSvg("")).toBeNull();

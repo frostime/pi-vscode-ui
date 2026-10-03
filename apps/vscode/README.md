@@ -86,6 +86,16 @@ FrostPi keeps Pi's functional workflows available from the GUI:
   </tr>
 </table>
 
+**Rich conversation rendering.**
+
+One assistant message, rendered live — Mermaid diagrams, KaTeX math, embedded images, and word-level diff highlighting.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/assets/screenshots/RenderMD.webp" alt="Rendered Markdown in FrostPi" width="640">
+  <br>
+  <sub>Rich conversation rendering</sub>
+</p>
+
 **Pi's session tree, directly in the GUI.**
 
 Branch from an earlier prompt, move between existing paths, and optionally preserve context with Pi's branch summaries — all inside the current Pi session.
@@ -131,7 +141,7 @@ The executable may be the `pi` command, an absolute native executable, or Pi's c
 
 Remote SSH, WSL, and Dev Container workspaces run Pi in the remote Extension Host.
 
-For best workspace and session discovery, install `fd` and `rg` on the Extension Host's `PATH`. `fd` is required for `@` workspace file completion; `rg` accelerates Resume session discovery, with bounded metadata scanning used as a fallback when it is unavailable.
+For best workspace and session discovery, install `fd` and `rg` on the Extension Host's `PATH`.
 
 ## Reference
 
@@ -193,6 +203,7 @@ FrostPi also provides context metrics, diagnostics export, strict LF-delimited J
 ### Settings
 
 - `frostpi.pi.executable`
+- `frostpi.pi.runtimeCompatibility` — choose the limited Pi or Oh My Pi compatibility contract; this does not enable all runtime-specific OMP features.
 - `frostpi.pi.arguments`
 - `frostpi.session.startOnOpen`
 - `frostpi.composer.streamingBehavior`
@@ -215,6 +226,33 @@ FrostPi also follows VS Code's Chat typography settings as soon as they change:
 
 When a Chat font remains `default`, FrostPi falls back to VS Code's normal interface or editor font.
 
+### Limited `oh-my-pi` compatibility
+
+From v0.15.0, FrostPi provides limited compatibility with `oh-my-pi`. You can switch to omp as follows:
+
+Set `FrostPi: Pi Runtime Compatibility` to `oh-my-pi` in the VS Code settings, or configure it in `settings.json`:
+
+```json
+{
+  "frostpi.pi.runtimeCompatibility": "oh-my-pi"
+}
+```
+
+Effects after selecting it:
+
+- Uses `omp` instead of `pi` by default.
+
+  If `omp` is not on `PATH`, configure `frostpi.pi.executable` with the path to its executable.
+- Reads session history from `.omp/sessions` instead of `.pi` by default.
+
+  If you use a custom session directory or model scope, pass `--session-dir` through `frostpi.pi.arguments`.
+
+**Limitations**:
+
+We only provide a minimal compatibility layer. It only guarantees that FrostPi can launch `omp --mode rpc` under OMP's basic compatibility contract, covering basic conversation, tool calls, model switching, and discovering and resuming sessions in OMP's default or explicitly configured session directories.
+
+However, you may not get the complete omp experience in FrostPi — because omp's RPC format is incompatible in some respects. Advanced features such as tree, fork, and slash-command are also disabled in an omp session, pending future integration.
+
 ### Privacy, Repository, and License
 
 FrostPi contains no telemetry or remote service of its own. Prompts and images are sent to the locally launched Pi process.
@@ -226,3 +264,44 @@ For comparisons, architecture, development instructions, and protocol documentat
 FrostPi is licensed under **AGPL-3.0-only**.
 
 FrostPi is an independent client and is not an official Pi distribution.
+
+## FAQ
+
+### Why does FrostPi provide a `question` tool if it is non-intrusive?
+
+We try not to touch the internals of the user's Pi runtime. However:
+
+- Question/Ask tools are important for agentic coding.
+- Common Question/Ask tools depend on a complex TUI and cannot work properly in a GUI.
+
+For that reason, FrostPi provides this as one of the few optional exceptions. If you enable it, we recommend disabling other local question tools to avoid conflicts.
+
+### What impact does FrostPi have on the Pi runtime?
+
+The impact is limited, apart from the optional `question` tool, which is disabled by default.
+
+If you configure a proxy, FrostPi sets the proxy environment variables when the process starts.
+
+FrostPi also injects a `session-tree-adapter` extension to provide Pi's tree functionality in the GUI. This extension is process-local: it does not write to Pi's home directory or interfere with the Agent's runtime context.
+
+### Why are `fd` and `rg` recommended?
+
+They are not mandatory, and not having them does not prevent FrostPi from working.
+
+FrostPi's `@` workspace completion uses `fd` internally, while session resume uses `rg` to accelerate session-file parsing. Installing both improves the experience.
+
+### Will FrostPi provide Pi extension tools integrated with VS Code?
+
+Not currently. We may integrate tools that read VS Code workspace state in the future. Any such extension features will be introduced cautiously and disabled by default.
+
+### Why does the Write tool show only `+<lines>` instead of file additions and removals like Edit?
+
+See GitHub issue [#6](https://github.com/frostime/pi-vscode-ui/issues/6).
+
+**TL;DR:** Pi's built-in Write tool returns only the changed result, not a diff, so FrostPi cannot obtain the actual file changes.
+
+However, FrostPi treats any tool details that include a `diff` as an Edit-like tool. You can implement an extension yourself. For example, you can send the following prompt to your Agent:
+
+> Implement an extension in Pi's home directory that overrides Pi's built-in Write tool and returns a `diff: string` field in its details, similar to the Edit tool. It is acceptable to construct the value by concatenating `-oldcontent` and `+newcontent`; only the changed line counts need to be accurate, not the hunk positions.
+
+FrostPi will not implement this extension for you. We try to avoid conflicting with user extensions and will not silently change Pi's execution behavior.

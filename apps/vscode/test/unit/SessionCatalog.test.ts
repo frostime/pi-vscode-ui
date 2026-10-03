@@ -1,5 +1,5 @@
 import { appendFile, mkdir, mkdtemp, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, normalize, resolve } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -104,6 +104,7 @@ describe("session discovery across worktrees", () => {
     const sessions = await discoverPiSessions(
       directories,
       [],
+      "pi",
       () => Promise.resolve([dir]),
       () => completeScan(path, dir, { name: "Fast title" }),
     );
@@ -123,6 +124,7 @@ describe("session discovery across worktrees", () => {
     const sessions = await discoverPiSessions(
       [workingDirectory(dir)],
       [],
+      "pi",
       () => Promise.resolve([dir]),
       () => completeScan(path, dir),
     );
@@ -142,6 +144,7 @@ describe("session discovery across worktrees", () => {
     const sessions = await discoverPiSessions(
       [workingDirectory(dir)],
       [],
+      "pi",
       () => Promise.resolve([dir]),
       () => Promise.reject(new Error("scanner failed")),
     );
@@ -161,6 +164,7 @@ describe("session discovery across worktrees", () => {
     const sessions = await discoverPiSessions(
       [workingDirectory(dir)],
       [],
+      "pi",
       () => Promise.resolve([dir]),
       () => completeScan(path, dir, { name: undefined }),
     );
@@ -181,6 +185,7 @@ describe("session discovery across worktrees", () => {
     const sessions = await discoverPiSessions(
       [workingDirectory(dir)],
       [],
+      "pi",
       () => Promise.resolve([dir]),
       async () => {
         await appendFile(path, `\n${JSON.stringify({ type: "session_info", name: "Appended title" })}`);
@@ -243,6 +248,7 @@ describe("session discovery across worktrees", () => {
     const sessions = await discoverPiSessions(
       directories,
       [],
+      "pi",
       (cwd) => Promise.resolve([join(cwd, ".pi", "sessions")]),
     );
     const quickPickItems = buildSessionQuickPickItems(sessions, directories);
@@ -338,6 +344,29 @@ describe("session root resolution", () => {
     const cwd = await mkdtemp(join(tmpdir(), "frostpi-roots-"));
     const roots = await resolveSessionRoots(cwd, ["--session-dir", "custom-sessions"]);
     expect(roots).toContain(normalize(resolve(cwd, "custom-sessions")));
+  });
+
+  it("uses the OMP root without reading Pi settings or Pi environment roots", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "frostpi-omp-roots-"));
+    await mkdir(join(cwd, ".pi"), { recursive: true });
+    await writeFile(join(cwd, ".pi", "settings.json"), JSON.stringify({ sessionDir: "project-sessions" }));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    const previousSessionDir = process.env.PI_CODING_AGENT_SESSION_DIR;
+    try {
+      process.env.PI_CODING_AGENT_DIR = join(cwd, "pi-agent");
+      process.env.PI_CODING_AGENT_SESSION_DIR = join(cwd, "pi-env-sessions");
+      const roots = await resolveSessionRoots(cwd, [], "oh-my-pi");
+      expect(roots).toEqual([normalize(resolve(homedir(), ".omp", "agent", "sessions"))]);
+      expect(roots.some((root) => root.includes(".pi"))).toBe(false);
+      expect(roots).not.toContain(normalize(resolve(cwd, "project-sessions")));
+      expect(await resolveSessionRoots(cwd, ["--session-dir", "chosen-sessions"], "oh-my-pi"))
+        .toEqual([normalize(resolve(cwd, "chosen-sessions"))]);
+    } finally {
+      if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      if (previousSessionDir === undefined) delete process.env.PI_CODING_AGENT_SESSION_DIR;
+      else process.env.PI_CODING_AGENT_SESSION_DIR = previousSessionDir;
+    }
   });
 
   it("uses PI_CODING_AGENT_DIR for global settings and the default session root", async () => {

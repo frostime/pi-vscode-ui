@@ -10,7 +10,13 @@ updated: 2026-08-09
 
 ## Boundary
 
-`@frostime/pi-rpc` owns the subprocess and JSONL transport only. Product policy—session lists, UI state, retries, prompts, permissions, persistence, and presentation—belongs to the VS Code extension.
+`@frostime/pi-rpc` owns the subprocess, JSONL transport, and the selected runtime's RPC dialect. Product policy—session lists, UI state, retries, prompts, permissions, persistence, and presentation—belongs to the VS Code extension.
+
+Transport framing is runtime-independent. A dialect may require a startup handshake, negotiate a transport capability, and normalize an isomorphic runtime event into the Pi-shaped contract. A dialect must not implement product policy or silently emulate a non-isomorphic feature.
+
+Protocol v2 chunk reassembly is a transport mechanism and is available through the connection when the selected dialect enables it. The OMP dialect waits for `ready` and negotiates v2 before the initial `get_state` whenever the frame advertises v2, regardless of the peer's numeric ceilings. Those advertised ceilings configure the connection's chunk decoder; they are not a compatibility gate or a new product limit. Otherwise it continues using v1 without negotiation. A failed v2 negotiation fails startup rather than silently falling back to v1. In v1, oversized responses remain visible command errors; they do not terminate the connection. Both versions normalize `session_settled` to `agent_settled`. The Pi dialect preserves the existing one-line behavior and does not wait for an OMP handshake.
+
+Product capabilities such as slash commands, session tree, fork, and the FrostPi Question tool are selected by the VS Code runtime contract. The Question tool uses extension `input` UI. OMP's built-in `ask` tool is not registered in the ordinary `--mode rpc` launch; FrostPi does not represent that separate UI path as a runtime capability.
 
 Assistant `message_update` records are forwarded unchanged whether they contain a cumulative `message` or only an indexed `assistantMessageEvent`. This package must not assemble deltas or synthesize legacy events.
 
@@ -21,6 +27,7 @@ Assistant `message_update` records are forwarded unchanged whether they contain 
 - Unicode `U+2028` and `U+2029` are ordinary JSON string content.
 - a final non-empty record without a trailing LF is processed when stdout ends.
 - malformed JSON or a non-object/non-typed RPC record is fatal. The process is terminated and all pending requests fail.
+- v2 reassembly uses the physical and logical byte ceilings advertised by the runtime for this connection. Missing declarations use the baseline OMP v2 defaults (1 MiB / 64 MiB); invalid declarations fail visibly. FrostPi does not impose a separate 256 KiB chunk-payload or 256-chunk limit. Smaller multi-chunk logical frames are valid; sequence, non-empty payload, declared-length, Base64, UTF-8, and object-frame validation remain mandatory. The current OMP v2 format requires at least two chunks.
 
 Do not replace `/src/protocol/JsonlDecoder.ts` with `node:readline`; it does not preserve these semantics.
 
@@ -38,7 +45,7 @@ Do not replace `/src/protocol/JsonlDecoder.ts` with `node:readline`; it does not
 
 - `start()` is successful only after `get_state` completes.
 - startup failure stops the child and includes bounded stderr diagnostics.
-- `stop()` rejects pending requests immediately, sends `SIGTERM`, then escalates to `SIGKILL` after the grace period.
+- `stop()` rejects pending requests and any startup `ready` wait immediately with a connection-stopped error, sends `SIGTERM`, then escalates to `SIGKILL` after the grace period. Cancelling startup must not wait for the startup deadline or report a ready-frame timeout.
 - caller-requested stop is not reported as an unexpected failure.
 - process, stdin, protocol, and unexpected exit failures reject all pending requests once and emit one failure notification.
 

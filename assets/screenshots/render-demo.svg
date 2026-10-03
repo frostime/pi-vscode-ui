@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="280" viewBox="0 0 480 280" role="img" aria-label="FrostPi rendering demo badge">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c2b4a"/>
+      <stop offset="1" stop-color="#0d1526"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7ec8f7"/>
+      <stop offset="1" stop-color="#b48ef7"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="464" height="264" rx="18" fill="url(#bg)" stroke="#3a4f78" stroke-width="2"/>
+  <g transform="translate(240,108)" stroke="url(#accent)" stroke-width="6" stroke-linecap="round">
+    <line x1="0" y1="-58" x2="0" y2="58"/>
+    <line x1="-58" y1="0" x2="58" y2="0"/>
+    <line x1="-41" y1="-41" x2="41" y2="41"/>
+    <line x1="-41" y1="41" x2="41" y2="-41"/>
+    <g fill="none">
+      <circle cx="0" cy="-38" r="11"/>
+      <circle cx="38" cy="0" r="11"/>
+      <circle cx="0" cy="38" r="11"/>
+      <circle cx="-38" cy="0" r="11"/>
+    </g>
+  </g>
+  <text x="240" y="212" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="34" font-weight="700" fill="#eaf2ff">FrostPi</text>
+  <text x="240" y="242" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="16" fill="#8fa8cc">Mermaid · KaTeX · Diff · Images</text>
+</svg>

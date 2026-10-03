@@ -8,6 +8,14 @@ const sessionFile = process.argv.includes("--no-session")
   ? undefined
   : `${process.cwd().replaceAll("\\", "/")}/.frostpi-e2e-session.jsonl`;
 
+process.stdout.write(JSON.stringify({
+  type: "ready",
+  protocolVersion: 1,
+  supportedProtocolVersions: [1, 2],
+  maxFrameBytes: 1048576,
+  maxReassembledFrameBytes: 67108864,
+}) + "\n");
+
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => {
   buffer += chunk;
@@ -25,6 +33,7 @@ function handle(command) {
   if (command.type === "extension_ui_response") return;
   const id = command.id;
   switch (command.type) {
+    case "negotiate_protocol": respond(id, { protocolVersion: 2 }); break;
     case "get_state":
       respond(id, {
         model: { provider: "e2e", id: "model", name: "E2E Model", supportsImages: true, reasoning: true },

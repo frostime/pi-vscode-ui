@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-03
+
+### Fixed
+
+- Render Mermaid node and edge labels again: sanitization stripped every HTML label inside `foreignObject`, leaving diagrams as boxes and arrows without text; label subtrees are now sanitized separately and spliced back, keeping scripts and event handlers removed.
+
+### Added
+
+- Show how long a long-running tool call takes: cards for `bash`, `powershell`, and `codemode` replace the breathing status dot with a ticking elapsed readout while the call runs, and keep the final wall-clock duration beside the status icon or change size once it ends — including failed calls; interrupted calls without a final result show no duration, and tools outside that list keep their existing quiet presentation.
+- Add a limited Oh My Pi compatibility profile through `frostpi.pi.runtimeCompatibility`. Selecting `oh-my-pi` uses the OMP executable and session-directory defaults for RPC conversations, model switching, and session discovery/resume; explicit executable, `--session-dir`, and `--models` overrides remain supported. The profile does not read Pi settings or map OMP configuration and runtime-specific features into FrostPi. Running sessions retain their launched compatibility profile for model projection until restart.
+
 ## [0.14.5] - 2026-09-28
 
 ### Added

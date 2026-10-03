@@ -1,9 +1,11 @@
 import type { StreamingBehavior } from "@frostime/pi-rpc";
 
 import type { ProxyConfiguration } from "../network/proxyConfiguration.js";
+import type { RuntimeCompatibility } from "./runtimeCompatibility.js";
 
 export interface FrostPiConfiguration {
   piExecutable?: string;
+  runtimeCompatibility: RuntimeCompatibility;
   piArguments: string[];
   startSessionOnOpen: boolean;
   streamingBehavior: StreamingBehavior;

@@ -2,12 +2,15 @@ import * as vscode from "vscode";
 
 import { DEFAULT_NO_PROXY, type ProxyMode } from "../network/proxyConfiguration.js";
 import type { FrostPiConfiguration } from "./configurationTypes.js";
+import { isRuntimeCompatibility } from "./runtimeCompatibility.js";
 
 export function readConfiguration(scope?: vscode.Uri): FrostPiConfiguration {
   const config = vscode.workspace.getConfiguration("frostpi", scope);
   const executable = config.get<string>("pi.executable", "").trim();
+  const runtimeCompatibility = config.get<unknown>("pi.runtimeCompatibility", "pi");
   return {
     ...(executable ? { piExecutable: executable } : {}),
+    runtimeCompatibility: isRuntimeCompatibility(runtimeCompatibility) ? runtimeCompatibility : "pi",
     piArguments: config.get<string[]>("pi.arguments", []),
     startSessionOnOpen: config.get<boolean>("session.startOnOpen", true),
     streamingBehavior: config.get<"steer" | "followUp">("composer.streamingBehavior", "followUp"),

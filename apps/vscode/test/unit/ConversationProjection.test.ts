@@ -1,5 +1,5 @@
 import type { RpcModel, RpcSessionEntry } from "@frostime/pi-rpc";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ConversationProjection } from "../../src/extension/conversation/ConversationProjection.js";
 import type { AgentTurnView, SessionNoticeView } from "../../src/shared/model/conversationModel.js";
@@ -612,6 +612,50 @@ describe("ConversationProjection", () => {
     if (tool?.tool.state !== "bound") throw new Error("Expected a bound tool");
     expect(tool.tool.output).toBeUndefined();
     expect(tool.tool.endedAt).toBeUndefined();
+  });
+
+  it("measures live tools from execution events and preserves the value through settle reconciliation", () => {
+    vi.useFakeTimers();
+    try {
+      const projection = new ConversationProjection();
+      projection.appendUserPrompt("Run tools", [], 1);
+      projection.applyEvent({ type: "agent_start" });
+      projection.applyEvent({ type: "message_start", message: { role: "user", content: "Run tools", timestamp: 1 } });
+      const firstTool = { type: "toolCall", id: "t1", name: "read", arguments: { path: "a.ts" } };
+      const secondTool = { type: "toolCall", id: "t2", name: "read", arguments: { path: "b.ts" } };
+      projection.applyEvent({
+        type: "message_end",
+        message: {
+          id: "assistant-1",
+          role: "assistant",
+          content: [firstTool, secondTool],
+          stopReason: "toolUse",
+          timestamp: 100,
+        },
+      });
+
+      vi.setSystemTime(1_000);
+      projection.applyEvent({ type: "tool_execution_start", toolCallId: "t1", toolName: "read", args: firstTool.arguments });
+      vi.setSystemTime(2_000);
+      projection.applyEvent({ type: "tool_execution_start", toolCallId: "t2", toolName: "read", args: secondTool.arguments });
+      vi.setSystemTime(2_500);
+      projection.applyEvent({ type: "tool_execution_end", toolCallId: "t1", toolName: "read", result: "first", isError: false });
+      vi.setSystemTime(3_500);
+      projection.applyEvent({ type: "tool_execution_end", toolCallId: "t2", toolName: "read", result: "second", isError: false });
+
+      expect(projectedTool(projection, "t1")).toMatchObject({ startedAt: 1_000, endedAt: 2_500 });
+      expect(projectedTool(projection, "t2")).toMatchObject({ startedAt: 2_000, endedAt: 3_500 });
+
+      projection.applyEvent({ type: "agent_settled" });
+      expect(projection.reconcileEntries([
+        userEntry("u1", null, "Run tools", 1),
+        assistantEntry("a1", "u1", [firstTool, secondTool], "toolUse", 100, "assistant-1"),
+      ], [])).toBe("applied");
+      expect(projectedTool(projection, "t1")).toMatchObject({ startedAt: 1_000, endedAt: 2_500 });
+      expect(projectedTool(projection, "t2")).toMatchObject({ startedAt: 2_000, endedAt: 3_500 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("preserves settled tool state through assistant takeover and accepts a later authoritative result", () => {
