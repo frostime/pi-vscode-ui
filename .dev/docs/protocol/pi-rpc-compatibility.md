@@ -9,7 +9,7 @@ updated: 2026-10-03
 
 # Pi RPC Compatibility
 
-FrostPi targets the current documented Pi-compatible RPC mode and launches the selected runtime with `--mode rpc`. The selected RPC dialect owns runtime-specific handshake and isomorphic event vocabulary; the VS Code runtime contract owns product capability declarations. FrostPi does not bundle or pin Pi, does not target a generic backend or ACP compatibility layer, and does not claim complete support for runtime-specific features of an alternate executable.
+FrostPi targets the current documented Pi-compatible RPC mode and launches the selected runtime with `--mode rpc`. The selected RPC dialect owns runtime-specific handshake, request/response vocabulary, and isomorphic events, plus the explicitly bounded OMP command-discovery projection; the VS Code runtime contract owns product capability declarations and stateful compatibility. FrostPi does not bundle or pin Pi, require a patched runtime, target a generic backend or ACP compatibility layer, or claim complete support for runtime-specific features of an alternate executable.
 
 ## Required surface
 
@@ -26,7 +26,7 @@ Private adapters for capability gaps such as session-tree navigation, fork, and 
 
 Configured arguments follow `--mode rpc`, and restored sessions add `--session <path>`. Configured `.js`, `.mjs`, and `.cjs` entry points run with environment `node`; native executables run directly. `apps/vscode/src/extension/configuration/configuredPiInvocation.ts` owns invocation shape, while `packages/pi-rpc/src/process/resolvePiExecutable.ts` owns PATH/common-global resolution.
 
-The selected child runtime remains authoritative for session JSONL, model/session state, migration, and extension lifecycle. The `oh-my-pi` compatibility profile is limited to FrostPi's launch, RPC, session discovery, and resume surface; its runtime-specific settings and features remain outside this contract. After model or thinking changes, the next `get_state` result wins if the child runtime clamps the selection.
+The selected child runtime remains authoritative for session JSONL, model/session state, migration, and extension lifecycle. The `oh-my-pi` profile also supports discovered Markdown commands and skills, but not the full OMP command surface or separate `prompts/` templates. OMP runtime settings remain runtime-owned. Skill presentation normalization never rewrites persisted custom entries. After model or thinking changes, the next `get_state` result wins if the child runtime clamps the selection.
 
 The selected `get_entries` parent chain and reported leaf are transcript authority, including pre-compaction entries. `get_messages` is current LLM context and must not hydrate conversation history.
 

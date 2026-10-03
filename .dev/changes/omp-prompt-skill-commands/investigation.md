@@ -1,57 +1,59 @@
-# Bounded OMP prompt and skill commands
+# Bounded OMP Markdown commands and skills
 
-Status: technical spike completed in part; production implementation blocked on complete prompt-template discovery.
+Status: implementation and runtime verification complete; no runtime patch or release/version change.
 
-## Agreed scope
+## Confirmed scope
 
-Support text-expanding Markdown commands, `prompts/` templates, and `/skill:<name>` without exposing OMP builtin, extension, TypeScript custom, or MCP commands. Preserve OMP-owned loading/expansion and session files. Support normal submission and Steer/Queue with consistent live and restored history. Host-local commands remain separate. No version or release change is authorized by this work.
+Support discovered Markdown file commands (`source: file`) and `/skill:<name>`, including ordinary submission and Steer/Queue. OMP retains ownership of discovery, parameter parsing, expansion, and persistence. Do not expose builtin, extension, TypeScript custom, or MCP runtime commands. Host-local actions remain separate.
+
+OMP's separate `prompts/` templates are executable but absent from current RPC discovery. Following discussion, they are deferred, not a blocker for Markdown commands and skills. An earlier recommendation to change upstream or maintain patched OMP was rejected as incompatible with FrostPi's positioning and is withdrawn.
+
+Live bubbles retain the submitted invocation without an expanded-content preview. Restored skill messages use their recorded invocation. Ordinary Markdown command history follows existing Pi behavior: the runtime's persisted user text can already be expanded.
 
 ## Runtime evidence
 
-Tested installed `@oh-my-pi/pi-coding-agent` 18.4.9 through `omp.exe --mode rpc`, with generated fixtures, a separate agent directory, no extensions, and no persisted session. Execution requests used a generated provider override pointing to a loopback HTTP server. The probe checked the active model URL before dispatch. The server captured requests and returned an intentional HTTP 400; no external model was called.
+Tested unmodified `@oh-my-pi/pi-coding-agent` 18.4.9 through `omp.exe --mode rpc`, with generated fixtures and separate agent/session directories. A generated model override pointed to a loopback HTTP provider. The execution probes checked the active model URL before submission; no external model was called.
 
-The fixture workspace was under the repository's ignored `tmp/` directory, so ancestor discovery was not fully isolated. OMP also submitted auxiliary skill-description compression requests to the loopback server. The final probe distinguished those requests from the actual turn requests by their fixture content; auxiliary requests are not execution evidence.
+The fixture workspace was under ignored repository `tmp/`, so ancestor resource discovery was not fully isolated. OMP also issued auxiliary skill-description compression requests. The probes distinguished those from actual turn requests by their fixture content; they are not execution evidence.
 
-| Case | Observed discovery | Execution and persistence |
-| --- | --- | --- |
-| `commands/spike-file.md` | `spike-file`, source `file` | `/spike-file hello` became `File hello` in a provider request and a persisted user message. |
-| Agent `prompts/spike-template.md` | Absent from `get_available_commands` | `/spike-template hello` became `Template hello` in a provider request and a persisted user message. |
-| `skills/spike-skill/SKILL.md` | `skill:spike-skill`, source `skill` | Expanded skill body reached the provider. Live start/end events used role `custom`, customType `skill-prompt`, attribution `user`, and details.prompt containing the submitted invocation. Persistence used `custom_message`. |
-| Skill with a PNG attachment | Same skill discovery | The resulting provider request contained no image block. |
+Initial direct RPC probes established:
 
-All three execution cases emitted an error `prompt_result` with `agentInvoked: true` and `sessionSettled: true`, matching the intentional provider rejection. The probe stopped collecting each turn at its terminal result; it does not establish the absence or ordering of later settlement frames.
+- Discovery includes a Markdown command as `file` and a skill as `skill`, but omits an agent `prompts/` template.
+- Markdown commands and `prompts/` templates both expand parameters into persisted user messages and provider requests.
+- A skill emits live `custom/skill-prompt` messages with user attribution and `details.prompt`, and persists a `custom_message` entry.
+- An attached image is absent from the skill provider request.
+- Intentional provider HTTP 400 errors produce correlated terminal `prompt_result` frames.
 
-Spike scripts and fixture results remain in ignored `tmp/omp-prompt-skill-spike/`. Commands: `python tmp/omp-prompt-skill-spike/discovery.py` and `python tmp/omp-prompt-skill-spike/execution.py`. They are disposable, machine-specific probes, not production tests.
+A subsequent real Extension Host smoke probe used a loopback provider returning successful Anthropic SSE frames. It verified:
 
-A separate direct-source Bun import probe did not run: the installed source graph failed with a missing `createRatchetPrelude` export. That is an experiment setup failure, not evidence against runtime execution. The real CLI probes above reached the target boundary.
+- Filtered discovery, unsupported-command rejection, and unchanged outbound invocation text.
+- Successful Markdown and skill turns, stable persisted user identities, and no expanded skill preview or duplicate custom item.
+- Skill Steer-before-Queue delivery during a held provider response, queue removal, and final settlement.
+- Reopening the runtime-created fixture session and restoring all five turns, including three original skill invocations.
 
-## Source findings
+The smoke probe exercised `SessionRuntime` and the actual OMP child; it did not launch the VS Code Webview or inspect visuals.
 
-Paths below are relative to the tested OMP package's `src/`; they identify the version tested, not a required installation path.
+Machine-specific disposable probes/results remain in ignored `tmp/omp-prompt-skill-spike/`. Commands:
 
-- `slash-commands/available-commands.ts:33–109`: RPC discovery enumerates builtins, skills, extensions, custom/MCP commands, and file commands; it does not read session prompt templates.
-- `extensibility/extensions/get-commands-handler.ts:31–69`: public extension `getCommands()` also omits prompt templates. Its `prompt` source actually includes executable custom commands, so it is not a safe text-only classification.
-- `config/prompt-templates.ts:168–183`: templates load from the agent prompts directory and project `.omp/prompts/` directory.
-- `session/agent-session.ts:6982–7008`: extension/custom execution precedes file expansion, which precedes prompt-template expansion.
-- `modes/rpc/rpc-mode.ts:235–319,1474–1487`: skill dispatch builds a custom user-attributed message; the RPC skill branch does not forward images.
-- `slash-commands/helpers/parse.ts:21–34`: builtin parsing splits on whitespace or colon. File names with builtin/alias prefixes require scrutiny; an advertised `file` source alone is not proof of text-only dispatch. This collision is source evidence, not a Windows fixture observation.
+- `python tmp/omp-prompt-skill-spike/discovery.py`
+- `python tmp/omp-prompt-skill-spike/execution.py`
+- `pnpm --dir apps/vscode exec vitest run --config ../../tmp/omp-prompt-skill-spike/vitest.config.mts`
 
-## Integration implications
+A direct-source Bun import experiment failed on a missing `createRatchetPrelude` export in the installed source graph. That setup failure is not runtime evidence; the real CLI probes reached the target boundary.
 
-- Keep OMP slash capability closed until discovery, submission admission, completion, and projection contracts are implemented together. Filtering completion alone is insufficient.
-- Adapt lossless discovery message differences at the RPC boundary. Keep supported-category policy and runtime-specific lifecycle interpretation in the product compatibility layer.
-- Handle user-attributed `skill-prompt` messages specifically; do not reinterpret every custom message as a user message. Current live/persisted user reconciliation only recognizes ordinary user messages, and persisted custom messages render independently.
-- Reject skill/image combinations explicitly unless the runtime gains support. Do not silently lose attachments.
-- Preserve raw terminal result facts. Do not equate every `prompt_result` with Pi `agent_settled` without checking queued/concurrent prompt and session-settlement semantics.
+## Ownership and constraints
 
-## Blocking decision
+- RPC dialect: discovery request/response vocabulary, bounded supported descriptors, collision filtering, and command-update events. Supported descriptors retain additive metadata and their original `runtimeSource`.
+- `OmpPromptCompatibility`: Host submission admission, correlated prompt outcomes, and skill presentation normalization. Common conversation projection does not inspect runtime identity.
+- Original custom entries remain in `SessionEntryState`; only presentation inputs are normalized. No runtime session files are rewritten by FrostPi.
+- A terminal prompt result is not unconditionally a session settlement. Only an explicit `sessionSettled: true` closes the common lifecycle; failed pre-agent submissions affect only their own local turn/queue item. A pre-dispatch drop can report `agentInvoked: true` with `status: aborted`; it must not be marked completed.
+- Leading slash admission uses fresh discovery, but is not an atomic lock against extension registration changes or a security sandbox.
+- Images on leading skill commands are rejected before dispatch.
 
-The complete agreed scope includes `prompts/` templates, but neither tested public discovery interface exposes them. A thin extension using `getCommands()` cannot fill this gap.
+## Automated regression coverage
 
-Recommended: pursue an OMP-side discovery contract that reports loaded templates and enough command precedence information to identify executable text-template invocations. Do not patch the user's installed runtime silently. Upstream changes or a maintained patched runtime are a separate dependency decision.
+New package tests cover bounded categories, additive fields, builtin/alias/colon collisions, namespaced skill names, actual wire discovery, metadata updates, and correlation before acknowledgement. New Host tests cover admission, skill history/live reconciliation, ordinary custom-message preservation, queue priority, individual queued rejection, and pre-agent failure. Existing Pi transport, runtime, and projection regressions remain part of verification.
 
-Alternative requiring explicit scope adjustment: initially support discoverable Markdown file commands and skills only, with `prompts/` template discovery deferred. Host-side template scanning is not recommended: it duplicates runtime loading/precedence knowledge and cannot reliably establish the currently loaded session state.
+Final verification: `pnpm check` passed lint, type checks, all 43 RPC tests and 505 VS Code tests, build, and bundle budgets. Svelte reported one accessibility warning in the unchanged `ExtensionUiRequestCard.svelte`. The real OMP Host smoke probe also passed after the final code changes. Visual Webview testing and VSIX packaging were not performed.
 
-## Still unverified
-
-Successful streamed turns; Steer/Queue ordering and reconciliation; cancellation and pre-admission failures; skill file disappearance; collisions and metadata refresh races; Extension Host integration; UI and session reopening. No production code or capability gates have changed. These checks remain required after the discovery decision.
+Durable contracts live in package/product SPECs and the OMP compatibility architecture guide. This document records the change's investigation and evidence rather than adding a new contract.

@@ -969,6 +969,7 @@ process.stdin.on("data", chunk => {
     if (command.type === "negotiate_protocol") response.data = { protocolVersion: 2 };
     else if (command.type === "get_state") response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionId: "omp-settle" };
     else if (command.type === "get_available_models") response.data = { models: [] };
+    else if (command.type === "get_available_commands") response.data = { commands: [] };
     else if (command.type === "get_commands") { response.success = false; response.error = "Unknown command: get_commands"; }
     else if (command.type === "get_entries") response.data = { entries: [], leafId: null };
     else if (command.type === "get_session_stats") response.data = { sessionId: "omp-settle", userMessages: 1, assistantMessages: 1, toolCalls: 0, toolResults: 0, totalMessages: 2, tokens: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, total: 15 }, cost: 0 };

@@ -281,7 +281,9 @@ Effects after selecting it:
 
 We only provide a minimal compatibility layer. It only guarantees that FrostPi can launch `omp --mode rpc` under OMP's basic compatibility contract, covering basic conversation, tool calls, model switching, and discovering and resuming sessions in OMP's default or explicitly configured session directories.
 
-However, you may not get the complete omp experience in FrostPi — because omp's RPC format is incompatible in some respects. Advanced features such as tree, fork, and slash-command are also disabled in an omp session, pending future integration.
+OMP slash completion and submission support discovered Markdown file commands (such as `.omp/commands/*.md`) and `/skill:<name>` invocations. OMP performs loading and expansion; FrostPi does not modify your runtime. Live bubbles retain your invocation, and restored skill messages show the recorded invocation rather than expanded instructions. Leading `/skill:<name>` submissions with image attachments are rejected because OMP's RPC skill path does not pass the images through.
+
+Tree and fork remain disabled. OMP builtin, extension, TypeScript custom, and MCP runtime commands are not exposed; FrostPi-local actions remain separate. OMP's separate `prompts/` templates are not included in RPC discovery and are outside this bounded command support.
 
 ### Development
 
