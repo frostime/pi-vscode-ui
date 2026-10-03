@@ -1,6 +1,6 @@
 ---
 title: OMP Compatibility Architecture
-description: Why FrostPi supports OMP through a Pi-centered contract, how the two compatibility layers divide work, and how future support is developed and preserved.
+description: Why FrostPi supports OMP through a Pi-centered contract, how the two compatibility layers divide work, and how future support is developed.
 scope:
   - /packages/pi-rpc/**
   - /apps/vscode/src/extension/**
@@ -71,9 +71,3 @@ Future agents should move from a requested user operation to the layer that owns
 4. **Keep unsupported behavior closed until its contract is met.** Add a capability and gate at the product entry point while the behavior is incomplete. Discovery of a command is not proof it is safe to expose or that FrostPi can complete its lifecycle. For tree or fork work, verify identity, commit, abort, and history-reload behavior before enabling the UI.
 5. **Test the user-visible contract.** Keep Pi regression tests. Add OMP fake-process tests for handshake, message shape, ordering, failure, and stateful sequences as relevant. Then test with the real OMP runtime. For resume, copy the session JSONL and its same-named artifact directory; never disrupt or edit an online session. RPC-level success alone does not prove the full Extension Host and UI flow.
 6. **Update durable contracts with the implementation.** Update `packages/pi-rpc/SPEC.md` for transport or dialect behavior and every affected product SPEC for session/UI behavior. Update this architecture document only when the compatibility model, ownership boundary, supported surface, or maintenance workflow changes. Keep local algorithm details in code comments and tests.
-
-## Preserve the model when changes are archived
-
-`.dev/changes/` plans, handovers, and test SOPs are temporary execution records, not the long-term explanation of OMP support. Before archiving a completed change, move durable compatibility decisions here, module behavior into its SPEC, repeatable test or release procedures into the appropriate guide, and unfinished work into `.dev/backlog/`. Preserve which checks actually ran and any remaining limitation; archiving a change must not turn an unverified claim into a guarantee.
-
-The maintenance entry point is the [Engineering Guide](../index.md). A future agent should be able to understand why OMP is supported, how a new difference is assigned, and how to validate it from this document and the current code contracts alone—without recovering a past chat or opening an archived change.
