@@ -715,11 +715,21 @@ export class SessionRuntime {
       this.#viewState.setHistoryStatus("loading");
       this.#historyEventBuffer = [];
       this.#notifyChange();
-      const entryData = await api.getEntries();
+      let entryData = await api.getEntries();
+      let snapshotEventCount = 0;
+      // Custom events have no shared persisted ID. If any arrived during the
+      // snapshot, capture again after their delivery instead of guessing which
+      // were already included. A quiet capture covers all buffered customs.
+      while (this.#historyEventBuffer?.slice(snapshotEventCount).some(isCustomMessageEnd)) {
+        snapshotEventCount = this.#historyEventBuffer.length;
+        entryData = await api.getEntries();
+      }
       const bufferedEvents = this.#takeHistoryEvents();
       if (this.#disposed || api !== this.#api) return;
       this.#replacePersistedEntries(entryData.entries, entryData.leafId);
-      for (const event of bufferedEvents) this.#applyConnectionEvent(event);
+      for (const event of bufferedEvents) {
+        if (!isCustomMessageEnd(event)) this.#applyConnectionEvent(event);
+      }
       this.#notifyChange();
     } catch (error) {
       const bufferedEvents = this.#takeHistoryEvents();
@@ -989,6 +999,10 @@ const LIVE_STATS_REFRESH_INTERVAL_MS = 3_000;
 /** Short multi-delay idle checks after extension commands (aligned with pi-acp). */
 const EXTENSION_COMMAND_IDLE_CHECK_DELAYS_MS = [0, 25, 75] as const;
 const IMMEDIATE_EXTENSION_UI_METHODS = new Set(["select", "confirm", "input", "editor"]);
+
+function isCustomMessageEnd(event: RpcEvent): boolean {
+  return event.type === "message_end" && isRecord(event.message) && event.message.role === "custom";
+}
 
 function shouldBufferDuringHistoryLoad(event: RpcEvent): boolean {
   return !isExtensionUiRequest(event) || !IMMEDIATE_EXTENSION_UI_METHODS.has(event.method);

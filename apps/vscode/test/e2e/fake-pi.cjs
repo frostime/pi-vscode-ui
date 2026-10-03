@@ -114,6 +114,11 @@ function handle(command) {
         break;
       }
 
+      if (command.message === "custom-mail") {
+        customMail({ timestamp, parentId, userId, userMessage });
+        break;
+      }
+
       if (command.message === "retry") {
         const failedId = `assistant-failed-${entrySequence}`;
         const successId = `assistant-success-${entrySequence}`;
@@ -225,6 +230,48 @@ function stream084({ timestamp, parentId, userId, userMessage }) {
     event({ type: "agent_end", messages: [], willRetry: false });
     event({ type: "agent_settled" });
   }, 240);
+}
+
+function customMail({ timestamp, parentId, userId, userMessage }) {
+  const assistantId = `assistant-${entrySequence}`;
+  const toolResultId = `tool-result-${entrySequence}`;
+  const mailId = `custom-mail-${entrySequence}`;
+  const replyId = `reply-${entrySequence}`;
+  const tool = { type: "toolCall", id: `tool-${entrySequence}`, name: "read", arguments: { path: "mail.ts" } };
+  const assistant = { role: "assistant", timestamp: timestamp + 1, stopReason: "toolUse", content: [tool] };
+  const result = { role: "toolResult", toolCallId: tool.id, toolName: tool.name, content: [{ type: "text", text: "file body" }], timestamp: timestamp + 2 };
+  const mail = {
+    role: "custom",
+    customType: "pi-mail",
+    display: true,
+    content: "<pi_mail>Live peer mail</pi_mail>",
+    details: { messageId: "peer-message", threadId: "peer-thread", recipientKind: "to" },
+    timestamp: timestamp + 3,
+  };
+  event({ type: "message_start", message: assistant });
+  event({ type: "message_end", message: assistant });
+  event({ type: "tool_execution_start", toolCallId: tool.id, toolName: tool.name, args: tool.arguments });
+  event({ type: "tool_execution_end", toolCallId: tool.id, toolName: tool.name, result: result.content, isError: false });
+  event({ type: "message_start", message: mail });
+  event({ type: "message_end", message: mail });
+  event({ type: "message_start", message: { role: "assistant", timestamp: timestamp + 5, content: [] } });
+  event({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
+  event({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "Reading the mail" } });
+  entries = [
+    ...entries,
+    { type: "message", id: userId, parentId, timestamp, message: userMessage },
+    { type: "message", id: assistantId, parentId: userId, timestamp: timestamp + 1, message: assistant },
+    { type: "message", id: toolResultId, parentId: assistantId, timestamp: timestamp + 2, message: result },
+    // Pi records custom entry timestamps at delivery, not queue creation.
+    { type: "custom_message", id: mailId, parentId: toolResultId, timestamp: new Date(timestamp + 4).toISOString(), customType: mail.customType, content: mail.content, display: mail.display, details: mail.details },
+  ];
+  setTimeout(() => {
+    const reply = { role: "assistant", timestamp: timestamp + 5, stopReason: "stop", content: [{ type: "text", text: "Mail handled" }] };
+    event({ type: "message_end", message: reply });
+    entries.push({ type: "message", id: replyId, parentId: mailId, timestamp: timestamp + 5, message: reply });
+    event({ type: "agent_end", messages: [], willRetry: false });
+    event({ type: "agent_settled" });
+  }, 250);
 }
 
 function respond(id, data) {

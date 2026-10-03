@@ -4,7 +4,7 @@ description: Cross-module policy for Pi native RPC surface, authority, failures,
 scope:
   - /packages/pi-rpc/**
   - /apps/vscode/src/extension/**
-updated: 2026-10-03
+updated: 2026-10-04
 ---
 
 # Pi RPC Compatibility
@@ -17,6 +17,7 @@ FrostPi targets the current documented Pi-compatible RPC mode and launches the s
 - The OMP dialect supports RPC v1 and v2: `ready` advertising v2 triggers negotiation before `get_state`; the declared physical and logical ceilings configure that connection's chunk decoder rather than gating negotiation. Otherwise startup proceeds in v1. Failed negotiation is a visible startup failure. V1 retains OMP's one-line response limit, so large history loads may fail with the runtime's transport-limit error; v2 reassembles chunked responses.
 - Runtime projection consumes documented agent, message, tool, compaction, and extension UI events. Unknown additive events or fields are accepted unless a required invariant becomes impossible.
 - Cache-miss projection derives Pi TUI-compatible notices from documented assistant `provider`, `model`, `timestamp`, and `usage` fields on `message_end` and session entries, plus full Model cost data from `get_available_models`. RPC does not carry Pi TUI's rendered warning text. Missing or malformed diagnostic fields are ignored locally without weakening generic event forwarding.
+- Pi custom messages arrive as `message_start`/`message_end` with `message.role: "custom"`, not as `custom_message` events. The conversation projection displays them at `message_end`; persisted `custom_message` entries remain authoritative. A custom event timestamp is not the persisted entry timestamp.
 - Pi 0.83 cumulative `message_update.message` and Pi 0.84 delta-only `message_update.assistantMessageEvent` are both supported by shape. Delta assembly is extension conversation policy; the transport forwards either form unchanged.
 - Malformed JSONL, invalid envelopes, stdin/stdout failure, startup timeout, and unexpected process exit remain visible connection failures. Malformed assistant content deltas are ignored locally and do not weaken transport failures.
 
