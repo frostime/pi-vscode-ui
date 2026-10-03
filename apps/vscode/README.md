@@ -228,7 +228,7 @@ When a Chat font remains `default`, FrostPi falls back to VS Code's normal inter
 
 ### Limited `oh-my-pi` compatibility
 
-FrostPi provides limited compatibility with `oh-my-pi`. You can switch to omp as follows:
+From v0.15.0, FrostPi provides limited compatibility with `oh-my-pi`. You can switch to omp as follows:
 
 Set `FrostPi: Pi Runtime Compatibility` to `oh-my-pi` in the VS Code settings, or configure it in `settings.json`:
 
@@ -251,7 +251,7 @@ Effects after selecting it:
 
 We only provide a minimal compatibility layer. It only guarantees that FrostPi can launch `omp --mode rpc` under OMP's basic compatibility contract, covering basic conversation, tool calls, model switching, and discovering and resuming sessions in OMP's default or explicitly configured session directories.
 
-However, you may not get the complete omp experience in FrostPi — because omp's RPC format is incompatible in places, you may hit odd bugs in practice.
+However, you may not get the complete omp experience in FrostPi — because omp's RPC format is incompatible in some respects. Advanced features such as tree, fork, and slash-command are also disabled in an omp session, pending future integration.
 
 ### Privacy, Repository, and License
 

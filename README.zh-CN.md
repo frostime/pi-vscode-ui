@@ -255,7 +255,7 @@ FrostPi 还提供上下文指标、诊断导出、严格的 LF 分隔 JSONL 传�
 
 ### 对 `oh-my-pi` 的有限兼容
 
-FrostPi 对 `oh-my-pi` 做了有限的兼容。用户可以通过如下做法来切换使用 omp
+从 v0.15.0 起，FrostPi 对 `oh-my-pi` 做了有限的兼容。用户可以通过如下做法来切换使用 omp
 
 在 VS Code 设置中将 `FrostPi: Pi Runtime Compatibility` 设置为 `oh-my-pi`；可在 `settings.json` 中配置：
 
@@ -278,7 +278,7 @@ FrostPi 对 `oh-my-pi` 做了有限的兼容。用户可以通过如下做法来
 
 我们只做了最小兼容。此兼容只能确保: FrostPi 能够按照 OMP 的基础兼容约定启动 `omp --mode rpc`，进行基本的对话、工具调用、模型切换，以及在 OMP 默认或显式指定的会话目录中发现和恢复会话。
 
-但在 FrostPi 中可能无法获得 omp 的完整体验 —— 由于 omp rpc 格式存在不兼容，实际使用中可能存在奇奇怪怪的 bug。
+但在 FrostPi 中可能无法获得 omp 的完整体验 —— 由于 omp RPC 格式在某些方面并不兼容，树、Fork 和斜杠命令等高级功能在 omp 会话中同样被禁用，待后续集成。
 
 ### 开发
 
