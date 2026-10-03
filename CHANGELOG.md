@@ -6,12 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-03
+
 ### Fixed
 
-- Keep Oh My Pi RPC v2 negotiation enabled when advertised frame limits differ from the baseline, and use those limits when reassembling history instead of rejecting valid responses based on fixed chunk sizes or counts.
-- Resume large Oh My Pi sessions through RPC v2 negotiation and chunk reassembly when supported. OMP runtimes without v2 remain usable in v1, including its one-line response limit. Runtime-specific event normalization now happens at the RPC dialect boundary; tree, fork, and runtime slash commands remain unavailable in the initial OMP integration. FrostPi's Question tool remains enabled through extension UI input.
 - Render Mermaid node and edge labels again: sanitization stripped every HTML label inside `foreignObject`, leaving diagrams as boxes and arrows without text; label subtrees are now sanitized separately and spliced back, keeping scripts and event handlers removed.
-- Return the Composer to its idle state after an Oh My Pi turn: the `oh-my-pi` profile now names OMP's `session_settled` as its settle event and FrostPi projects that event onto Pi's `agent_settled`, so the stop button no longer stays active after a finished turn and post-settle reconciliation runs again.
 
 ### Added
 
