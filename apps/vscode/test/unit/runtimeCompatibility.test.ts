@@ -10,6 +10,12 @@ describe("runtime compatibility profiles", () => {
   it("keeps Pi defaults and settings projections", () => {
     const profile = runtimeCompatibilityProfile("pi");
     expect(profile.usesPiSettings).toBe(true);
+    expect(profile.capabilities).toEqual({
+      sessionTree: true,
+      fork: true,
+      slashCommands: true,
+      questionTool: true,
+    });
     expect(profile.defaultSessionRoot()).toBe(join(homedir(), ".pi", "agent", "sessions"));
     expect(configuredPiInvocation(undefined, "pi")).toEqual({});
   });
@@ -20,6 +26,12 @@ describe("runtime compatibility profiles", () => {
       id: "oh-my-pi",
       executableFallback: expectedCommand,
       usesPiSettings: false,
+      capabilities: {
+        sessionTree: false,
+        fork: false,
+        slashCommands: false,
+        questionTool: true,
+      },
     });
     expect(configuredPiInvocation(undefined, "oh-my-pi")).toEqual({ command: expectedCommand });
     expect(configuredPiInvocation("custom-omp", "oh-my-pi")).toEqual({ command: "custom-omp" });

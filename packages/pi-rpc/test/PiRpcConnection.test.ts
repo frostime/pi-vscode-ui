@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { PiRpcConnection } from "../src/PiRpcConnection.js";
+import { ohMyPiRpcDialect } from "../src/dialects/ohMyPi/ohMyPiRpcDialect.js";
 
 let fixtureDir = "";
 let fixturePath = "";
@@ -17,14 +18,60 @@ beforeAll(async () => {
     fixturePath,
     `
 let buffer = "";
+const isOmp = process.argv.includes("--fake-omp");
+const v1Only = process.argv.includes("--v1-only") || process.argv.includes("--no-v2-advertisement");
+const negotiationFails = process.argv.includes("--fail-negotiation");
+const smallerFrames = process.argv.includes("--smaller-frames");
+const largerLimits = process.argv.includes("--larger-limits");
+let negotiated = false;
+if (isOmp && !process.argv.includes("--no-ready")) {
+  send({
+    type: "ready",
+    protocolVersion: 1,
+    ...(process.argv.includes("--no-v2-advertisement") ? {} : { supportedProtocolVersions: v1Only ? [1] : [1, 2] }),
+    maxFrameBytes: smallerFrames ? 524288 : largerLimits ? 2097152 : 1048576,
+    ...(v1Only ? {} : { maxReassembledFrameBytes: largerLimits ? 134217728 : 67108864 }),
+  });
+}
 function send(value, split = false) {
   const line = JSON.stringify(value) + "\\n";
   if (!split) return void process.stdout.write(line);
   process.stdout.write(line.slice(0, 7));
   setTimeout(() => process.stdout.write(line.slice(7)), 1);
 }
+function sendChunked(value) {
+  const bytes = Buffer.from(JSON.stringify(value));
+  const chunkBytes = smallerFrames ? 128 * 1024 : largerLimits ? 512 * 1024 : 256 * 1024;
+  const count = Math.ceil(bytes.byteLength / chunkBytes);
+  let encoded = "";
+  for (let index = 0; index < count; index += 1) {
+    encoded += JSON.stringify({
+      type: "rpc_chunk",
+      chunkId: "rpc-test",
+      index,
+      count,
+      byteLength: bytes.byteLength,
+      data: bytes.subarray(index * chunkBytes, (index + 1) * chunkBytes).toString("base64"),
+    }) + "\\n";
+  }
+  process.stdout.write(encoded.slice(0, 7));
+  setTimeout(() => process.stdout.write(encoded.slice(7)), 1);
+}
 function handle(command) {
+  if (command.type === "negotiate_protocol") {
+    if (v1Only || negotiationFails) {
+      send({ type: "response", id: command.id, command: command.type, success: false, error: "Protocol negotiation unavailable" });
+      return;
+    }
+    negotiated = true;
+    send({ type: "response", id: command.id, command: command.type, success: true, data: { protocolVersion: 2 } });
+    return;
+  }
   if (command.type === "get_state") {
+    if (isOmp && !v1Only && !negotiated) {
+      send({ type: "response", id: command.id, command: command.type, success: false, error: "protocol v2 required before get_state" });
+      return;
+    }
     send({ type: "response", id: command.id, success: true, data: {
       model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false,
       steeringMode: "one-at-a-time", followUpMode: "one-at-a-time",
@@ -33,11 +80,28 @@ function handle(command) {
     }}, true);
     return;
   }
+  if (command.type === "get_entries") {
+    send({ type: "response", id: command.id, success: true, data: { entries: [], leafId: null } });
+    return;
+  }
+  if (command.type === "chunked") {
+    if (!negotiated) {
+      send({ type: "response", id: command.id, success: false, error: "RPC response exceeded the transport limit" });
+      return;
+    }
+    const textBytes = smallerFrames ? 614400 : largerLimits ? 3145728 : 1048576;
+    sendChunked({ type: "response", id: command.id, command: command.type, success: true, data: { text: "x".repeat(textBytes) } });
+    return;
+  }
+  if (command.type === "oversized_chunk") {
+    send({ type: "rpc_chunk", chunkId: "over-advertised-limit", index: 0, count: 2, byteLength: 134217729, data: "eA==" });
+    return;
+  }
   if (command.type === "prompt") {
     send({ type: "response", id: command.id, success: true });
     send({ type: "agent_start" });
     send({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "hello" }});
-    send({ type: "agent_settled" });
+    send(isOmp ? { type: "session_settled" } : { type: "agent_settled" });
     return;
   }
   if (command.type === "never") return;
@@ -85,6 +149,98 @@ describe("PiRpcConnection", () => {
       await connection.request({ type: "prompt", message: "hello" });
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(events).toEqual(["agent_start", "message_update", "agent_settled"]);
+    } finally {
+      await connection.stop();
+    }
+  });
+
+  it.each([
+    { flag: "--baseline-limits", expectedBytes: 1_048_576 },
+    { flag: "--smaller-frames", expectedBytes: 600 * 1024 },
+    { flag: "--larger-limits", expectedBytes: 3 * 1024 * 1024 },
+  ])("negotiates OMP v2 and reassembles responses independently of advertised limits ($flag)", async ({ flag, expectedBytes }) => {
+    const connection = new PiRpcConnection({
+      cwd: fixtureDir,
+      command: process.execPath,
+      commandArgs: [fixturePath, "--fake-omp", flag],
+      dialect: ohMyPiRpcDialect,
+      startupTimeoutMs: 2_000,
+      stopTimeoutMs: 100,
+    });
+    const events: string[] = [];
+    connection.onEvent((event) => events.push(event.type));
+
+    try {
+      await connection.start();
+      const chunked = await connection.request<{ text: string }>({ type: "chunked" });
+      expect(chunked.text).toHaveLength(expectedBytes);
+      await connection.request({ type: "prompt", message: "hello" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(events).toEqual(["agent_start", "message_update", "agent_settled"]);
+    } finally {
+      await connection.stop();
+    }
+  });
+  it.each(["--v1-only", "--no-v2-advertisement"])("keeps OMP v1 usable without v2 negotiation (%s)", async (flag) => {
+    const connection = new PiRpcConnection({
+      cwd: fixtureDir,
+      command: process.execPath,
+      commandArgs: [fixturePath, "--fake-omp", flag],
+      dialect: ohMyPiRpcDialect,
+      startupTimeoutMs: 2_000,
+      stopTimeoutMs: 100,
+    });
+    const events: string[] = [];
+    connection.onEvent((event) => events.push(event.type));
+
+    try {
+      const state = await connection.start();
+      expect(state.sessionName).toBe("a\u2028b");
+      expect(await connection.request({ type: "get_entries" })).toEqual({ entries: [], leafId: null });
+      await expect(connection.request({ type: "chunked" })).rejects.toThrow("RPC response exceeded the transport limit");
+      await connection.request({ type: "prompt", message: "hello" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(events).toEqual(["agent_start", "message_update", "agent_settled"]);
+    } finally {
+      await connection.stop();
+    }
+  });
+
+  it("reports a protocol failure when v2 frames violate the peer's advertised reassembly limit", async () => {
+    const connection = new PiRpcConnection({
+      cwd: fixtureDir,
+      command: process.execPath,
+      commandArgs: [fixturePath, "--fake-omp", "--larger-limits"],
+      dialect: ohMyPiRpcDialect,
+      startupTimeoutMs: 2_000,
+      stopTimeoutMs: 100,
+    });
+    const failures: Error[] = [];
+    connection.onFailure((error) => failures.push(error));
+
+    try {
+      await connection.start();
+      await expect(connection.request({ type: "oversized_chunk" })).rejects.toThrow("RPC chunk logical frame exceeds the advertised reassembly limit");
+      expect(failures).toHaveLength(1);
+      expect(failures[0]?.name).toBe("PiRpcProtocolError");
+    } finally {
+      await connection.stop();
+    }
+  });
+
+  it("fails startup when advertised v2 negotiation fails rather than falling back to v1", async () => {
+    const connection = new PiRpcConnection({
+      cwd: fixtureDir,
+      command: process.execPath,
+      commandArgs: [fixturePath, "--fake-omp", "--fail-negotiation"],
+      dialect: ohMyPiRpcDialect,
+      startupTimeoutMs: 2_000,
+      stopTimeoutMs: 100,
+    });
+
+    try {
+      await expect(connection.start()).rejects.toThrow("Protocol negotiation unavailable");
+      expect(connection.started).toBe(false);
     } finally {
       await connection.stop();
     }
@@ -148,6 +304,49 @@ describe("PiRpcConnection", () => {
       await connection.stop();
     }
   });
+
+  it("cancels startup when stopped before the runtime sends ready", async () => {
+    let signalSpawned!: () => void;
+    const spawned = new Promise<void>((resolve) => { signalSpawned = resolve; });
+    const connection = new PiRpcConnection({
+      cwd: fixtureDir,
+      command: process.execPath,
+      commandArgs: [fixturePath, "--fake-omp", "--no-ready"],
+      dialect: ohMyPiRpcDialect,
+      startupTimeoutMs: 5_000,
+      stopTimeoutMs: 100,
+      launcher(spec) {
+        const child = spawn(spec.command, [...spec.args], { cwd: spec.cwd, env: spec.env, stdio: ["pipe", "pipe", "pipe"] });
+        child.once("spawn", signalSpawned);
+        return child;
+      },
+    });
+    const failures: Error[] = [];
+    connection.onFailure((error) => failures.push(error));
+    const startupResult = connection.start().then(
+      () => "started",
+      (error: Error) => error.message,
+    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      await spawned;
+      await connection.stop();
+      const result = await Promise.race([
+        startupResult,
+        new Promise<string>((resolve) => {
+          timer = setTimeout(() => resolve("startup still pending after stop"), 1_000);
+        }),
+      ]);
+      expect(result).toBe("Pi RPC connection stopped");
+      expect(connection.started).toBe(false);
+      expect(failures).toEqual([]);
+    } finally {
+      if (timer) clearTimeout(timer);
+      await connection.stop();
+      await startupResult;
+    }
+  }, 10_000);
 
   it("does not emit a failure for caller-requested shutdown", async () => {
     const connection = createConnection();

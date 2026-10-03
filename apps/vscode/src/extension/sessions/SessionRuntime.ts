@@ -4,6 +4,7 @@ import {
   PiRpcApi,
   PiRpcCommandError,
   PiRpcConnection,
+  createRpcDialect,
   isExtensionUiRequest,
   type RpcEvent,
   type RpcExtensionUiRequest,
@@ -197,6 +198,9 @@ export class SessionRuntime {
     // Normalize so composer/completion/paste whitespace cannot turn "/cmd args" into a model prompt.
     const message = normalizePiSlashPrompt(text);
     if (!message && normalizedImages.length === 0) return;
+    if (message.startsWith("/") && !this.#runtimeCapabilities().slashCommands) {
+      throw new Error("Slash commands are not supported by the selected runtime.");
+    }
 
     const extensionCommand = await this.#resolveImmediateExtensionCommand(message);
     // Park while streaming or while an earlier prompt still awaits promotion; otherwise an idle-gap
@@ -268,6 +272,7 @@ export class SessionRuntime {
   }
 
   async listBranchEnds(branchPointId: string | null): Promise<BranchEndChoiceProjection[]> {
+    if (!this.#runtimeCapabilities().sessionTree) throw new Error("Session tree navigation is not supported by the selected runtime.");
     if (!this.#sessionTreeBridge?.available) throw new Error("Session tree navigation is unavailable in this Pi process. Update Pi, restart the session, and check FrostPi diagnostics.");
     if (this.view.historyStatus !== "loaded") throw new Error("Load conversation history before switching branches.");
     const entryData = await this.#requireApi().getEntries();
@@ -275,6 +280,7 @@ export class SessionRuntime {
   }
 
   async navigateTree(targetId: string, summary: SessionTreeSummaryOptions): Promise<{ cancelled: boolean; seed?: ComposerSeedView }> {
+    if (!this.#runtimeCapabilities().sessionTree) throw new Error("Session tree navigation is not supported by the selected runtime.");
     if (!this.#sessionTreeBridge?.available) throw new Error("Session tree navigation is unavailable in this Pi process. Update Pi, restart the session, and check FrostPi diagnostics.");
     if (this.view.status !== "ready" || this.view.isStreaming || this.view.isCompacting) throw new Error("Wait for the current Pi operation to finish before switching branches.");
     if (this.view.historyStatus !== "loaded") throw new Error("Load conversation history before switching branches.");
@@ -320,6 +326,7 @@ export class SessionRuntime {
   }
 
   async executeFork(entryId: string): Promise<ForkExecutionResult> {
+    if (!this.#runtimeCapabilities().fork) throw new Error("Fork is not supported by the selected runtime.");
     if (this.view.status !== "ready" || this.view.isStreaming || this.view.isCompacting) {
       throw new Error("Wait for the current Pi operation to finish before forking.");
     }
@@ -428,12 +435,23 @@ export class SessionRuntime {
   }
 
   async refreshCommands(): Promise<void> {
+    if (!this.#runtimeCapabilities().slashCommands) {
+      this.#viewState.setCommands([]);
+      this.#notifyChange();
+      return;
+    }
     const commands = await this.#requireApi().getCommands();
     this.#viewState.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
     this.#notifyChange();
   }
 
   async probePiIntegration(): Promise<{ available: boolean; commandName: string | null }> {
+    if (!this.#runtimeCapabilities().slashCommands) {
+      this.#viewState.setCommands([]);
+      this.#viewState.setSessionTreeAvailable(false);
+      this.#notifyChange();
+      return { available: false, commandName: null };
+    }
     const commands = await this.#requireApi().getCommands();
     this.#viewState.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
     this.#viewState.setSessionTreeAvailable(this.#sessionTreeBridge?.available ?? false);
@@ -549,13 +567,13 @@ export class SessionRuntime {
     const configuration = this.#configurationProvider();
     const compatibilityProfile = runtimeCompatibilityProfile(configuration.runtimeCompatibility);
     const invocation = configuredPiInvocation(configuration.piExecutable, compatibilityProfile.id);
-    await this.#sessionTreeBridge?.prepare();
-    if (configuration.questionToolEnabled) await this.#questionToolBridge?.prepare();
+    if (compatibilityProfile.capabilities.sessionTree) await this.#sessionTreeBridge?.prepare();
+    if (configuration.questionToolEnabled && compatibilityProfile.capabilities.questionTool) await this.#questionToolBridge?.prepare();
     const args = [
       ...configuration.piArguments,
       ...(this.isEphemeral ? ["--no-session"] : sessionFile ? ["--session", sessionFile] : []),
-      ...(this.#sessionTreeBridge?.launchArguments() ?? []),
-      ...(configuration.questionToolEnabled ? this.#questionToolBridge?.launchArguments() ?? [] : []),
+      ...(compatibilityProfile.capabilities.sessionTree ? this.#sessionTreeBridge?.launchArguments() ?? [] : []),
+      ...(configuration.questionToolEnabled && compatibilityProfile.capabilities.questionTool ? this.#questionToolBridge?.launchArguments() ?? [] : []),
       // Verbatim by contract — never validate or reorder here (session-lifecycle.SPEC.md).
       ...this.customLaunchArguments,
     ];
@@ -577,13 +595,14 @@ export class SessionRuntime {
         PI_INSIDE_FROSTPI: "1",
         PI_INSIDE_FROSTPI_VERSION: frostpiVersion,
         ...proxyEnvironment.env,
-        ...(this.#sessionTreeBridge?.launchEnvironment() ?? {}),
-        ...(configuration.questionToolEnabled ? this.#questionToolBridge?.launchEnvironment() ?? {} : {}),
+        ...(compatibilityProfile.capabilities.sessionTree ? this.#sessionTreeBridge?.launchEnvironment() ?? {} : {}),
+        ...(configuration.questionToolEnabled && compatibilityProfile.capabilities.questionTool ? this.#questionToolBridge?.launchEnvironment() ?? {} : {}),
       },
       ...invocation,
       requestTimeoutMs: 30_000,
       startupTimeoutMs: 45_000,
       stopTimeoutMs: 1_500,
+      dialect: createRpcDialect(compatibilityProfile.id),
     });
     const api = new PiRpcApi(connection);
     this.#connection = connection;
@@ -653,10 +672,12 @@ export class SessionRuntime {
         this.#logger.error("Failed to load Pi models", error);
         return [];
       }),
-      api.getCommands().catch((error) => {
-        this.#logger.error("Failed to load Pi commands", error);
-        return [];
-      }),
+      this.#runtimeCapabilities().slashCommands
+        ? api.getCommands().catch((error) => {
+            this.#logger.error("Failed to load Pi commands", error);
+            return [];
+          })
+        : Promise.resolve([]),
       api.getSessionStats().catch(() => undefined),
     ]);
     if (this.#disposed || api !== this.#api) return;
@@ -666,9 +687,9 @@ export class SessionRuntime {
     if (this.#disposed || api !== this.#api) return;
     this.#viewState.setModels(models);
     this.#viewState.setScopedModelIds(scopedModelIds);
-    this.#viewState.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
+    this.#viewState.setCommands(this.#runtimeCapabilities().slashCommands ? this.#sessionTreeBridge?.discover(commands) ?? commands : []);
     if (stats) this.#viewState.updateStats(stats);
-    this.#viewState.setSessionTreeAvailable(this.#sessionTreeBridge?.available ?? false);
+    this.#viewState.setSessionTreeAvailable(this.#runtimeCapabilities().sessionTree && (this.#sessionTreeBridge?.available ?? false));
     if (this.#entries.initialized) {
       await this.#refreshPersistedEntries(api).catch((error) => {
         this.#logger.error("Failed to initialize Pi session entries", error);
@@ -809,7 +830,7 @@ export class SessionRuntime {
     const [state, stats, commands] = await Promise.all([
       api.getState().catch(() => undefined),
       api.getSessionStats().catch(() => undefined),
-      api.getCommands().catch(() => undefined),
+      this.#runtimeCapabilities().slashCommands ? api.getCommands().catch(() => undefined) : Promise.resolve(undefined),
     ]);
     if (state) this.#viewState.applyState(state);
     if (stats) this.#viewState.updateStats(stats);
@@ -848,10 +869,11 @@ export class SessionRuntime {
     this.#conversation.replaceEntries(replacement.activePath, projectActiveBranchEdges(replacement.index));
     this.#viewState.setCacheHitPercent(latestAssistantCacheHit(replacement.activePath).percent);
     this.#viewState.setHistoryStatus("loaded");
-    this.#viewState.setSessionTreeAvailable(this.#sessionTreeBridge?.available ?? false);
+    this.#viewState.setSessionTreeAvailable(this.#runtimeCapabilities().sessionTree && (this.#sessionTreeBridge?.available ?? false));
   }
 
   async #resolveImmediateExtensionCommand(message: string): Promise<string | undefined> {
+    if (!this.#runtimeCapabilities().slashCommands) return undefined;
     const name = commandName(message);
     if (!name) return undefined;
 
@@ -934,6 +956,10 @@ export class SessionRuntime {
     return conversationTurns(this.view).some((turn) => turn.id === turnId && turn.status === "running");
   }
 
+  #runtimeCapabilities() {
+    return runtimeCompatibilityProfile(this.#appliedRuntimeCompatibility).capabilities;
+  }
+
   #requireApi(): PiRpcApi {
     if (!this.#api || !this.#connection?.started) throw new Error("Pi session is not running");
     return this.#api;
@@ -967,6 +993,10 @@ const IMMEDIATE_EXTENSION_UI_METHODS = new Set(["select", "confirm", "input", "e
 function shouldBufferDuringHistoryLoad(event: RpcEvent): boolean {
   return !isExtensionUiRequest(event) || !IMMEDIATE_EXTENSION_UI_METHODS.has(event.method);
 }
+
+  /**
+   * Event vocabulary is normalized by the selected RPC dialect before this runtime sees it.
+   */
 
 function latestAssistantCacheHit(entries: readonly RpcSessionEntry[]): { found: boolean; percent?: number } {
   for (let index = entries.length - 1; index >= 0; index -= 1) {

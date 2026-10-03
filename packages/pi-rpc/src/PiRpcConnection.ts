@@ -2,9 +2,12 @@ import { type ChildProcess, type ChildProcessWithoutNullStreams, spawn } from "n
 
 import { JsonlDecoder } from "./protocol/JsonlDecoder.js";
 import { PiRpcCommandError, PiRpcProcessError, PiRpcProtocolError } from "./protocol/protocolErrors.js";
+import { isRpcChunkFrame, RpcChunkAssembler } from "./protocol/RpcChunkAssembler.js";
 import { isRpcMessage, isRpcResponse, type RpcCommand, type RpcEvent, type RpcResponse, type RpcSessionState } from "./protocol/rpcTypes.js";
 import { BoundedTextBuffer } from "./process/processDiagnostics.js";
 import { resolvePiExecutable } from "./process/resolvePiExecutable.js";
+import { piRpcDialect } from "./dialects/pi/piRpcDialect.js";
+import type { RpcDialect } from "./dialects/RpcDialect.js";
 
 export interface PiRpcLaunchSpec {
   command: string;
@@ -26,6 +29,7 @@ export interface PiRpcConnectionOptions {
   requestTimeoutMs?: number;
   stopTimeoutMs?: number;
   stderrLimit?: number;
+  dialect?: RpcDialect;
 }
 
 type EventListener = (event: RpcEvent) => void;
@@ -50,16 +54,23 @@ export class PiRpcConnection {
   readonly #exitListeners = new Set<ExitListener>();
   readonly #pendingRequests = new Map<string, PendingRequest>();
   readonly #stderr: BoundedTextBuffer;
+  readonly #dialect: RpcDialect;
+  #chunkAssembler = new RpcChunkAssembler();
 
   #child: ChildProcess | null = null;
   #decoder: JsonlDecoder | null = null;
   #requestId = 0;
   #failure: Error | null = null;
   #stopping = false;
+  #chunkFramesEnabled = false;
+  #startupReadyPromise: Promise<Record<string, unknown> | undefined> = Promise.resolve(undefined);
+  #resolveStartupReady: ((frame: Record<string, unknown>) => void) | null = null;
+  #rejectStartupReady: ((error: Error) => void) | null = null;
 
   constructor(options: PiRpcConnectionOptions) {
     this.#options = options;
     this.#stderr = new BoundedTextBuffer(options.stderrLimit ?? DEFAULT_STDERR_LIMIT);
+    this.#dialect = options.dialect ?? piRpcDialect;
   }
 
   get started(): boolean {
@@ -80,6 +91,14 @@ export class PiRpcConnection {
     this.#failure = null;
     this.#stopping = false;
     this.#stderr.clear();
+    this.#chunkFramesEnabled = false;
+    this.#chunkAssembler = new RpcChunkAssembler();
+    this.#startupReadyPromise = this.#dialect.requiresStartupReady
+      ? new Promise<Record<string, unknown>>((resolve, reject) => {
+          this.#resolveStartupReady = resolve;
+          this.#rejectStartupReady = reject;
+        })
+      : Promise.resolve(undefined);
     this.#decoder = new JsonlDecoder((record) => this.#handleRecord(record));
 
     const invocation = resolvePiExecutable({
@@ -110,6 +129,14 @@ export class PiRpcConnection {
     child.once("close", (code, signal) => this.#handleClose(child, code, signal));
 
     try {
+      const startupFrame = await this.#waitForStartupReady(this.#options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS);
+      const negotiation = startupFrame ? this.#dialect.getStartupNegotiation?.(startupFrame) : undefined;
+      if (negotiation) {
+        this.#chunkAssembler = new RpcChunkAssembler(negotiation.chunkLimits);
+        this.#chunkFramesEnabled = true;
+        const negotiationData = await this.request(negotiation.command, this.#options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS);
+        this.#dialect.validateNegotiationResponse?.(negotiationData);
+      }
       return await this.request<RpcSessionState>(
         { type: "get_state" },
         this.#options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS,
@@ -125,7 +152,11 @@ export class PiRpcConnection {
     if (!child) return;
 
     this.#stopping = true;
-    this.#rejectPending(new PiRpcProcessError("Pi RPC connection stopped"));
+    const error = new PiRpcProcessError("Pi RPC connection stopped");
+    this.#rejectStartupReady?.(error);
+    this.#resolveStartupReady = null;
+    this.#rejectStartupReady = null;
+    this.#rejectPending(error);
     if (child.exitCode !== null) return;
 
     child.kill("SIGTERM");
@@ -203,13 +234,21 @@ export class PiRpcConnection {
     let value: unknown;
     try {
       value = JSON.parse(record);
+      if (isRpcChunkFrame(value) && !this.#chunkFramesEnabled) {
+        throw new Error("RPC chunk received before protocol negotiation");
+      }
+      const frameBytes = isRpcChunkFrame(value) ? Buffer.byteLength(record, "utf8") + 1 : undefined;
+      value = this.#chunkAssembler.push(value, frameBytes);
+      if (value === undefined) return;
+      if (!isRpcMessage(value)) throw new Error("Invalid RPC message from Pi");
+      if (this.#dialect.acceptStartupFrame(value)) {
+        this.#resolveStartupReady?.(value);
+        this.#resolveStartupReady = null;
+        this.#rejectStartupReady = null;
+        return;
+      }
     } catch (error) {
-      this.#fatalProtocolError(`Invalid JSONL from Pi: ${asError(error).message}`);
-      return;
-    }
-
-    if (!isRpcMessage(value)) {
-      this.#fatalProtocolError("Invalid RPC message from Pi");
+      this.#fatalProtocolError(`Invalid RPC frame from Pi: ${asError(error).message}`);
       return;
     }
 
@@ -222,9 +261,10 @@ export class PiRpcConnection {
       return;
     }
 
+    const event = this.#dialect.normalizeEvent(value);
     for (const listener of this.#eventListeners) {
       try {
-        listener(value);
+        listener(event);
       } catch {
         // A consumer cannot interrupt protocol processing for other consumers.
       }
@@ -245,13 +285,34 @@ export class PiRpcConnection {
     if (!this.#stopping) this.#fail(new PiRpcProcessError(`Pi RPC process exited (code=${code} signal=${signal})`));
   }
 
+  async #waitForStartupReady(timeoutMs: number): Promise<Record<string, unknown> | undefined> {
+    if (!this.#dialect.requiresStartupReady) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        this.#startupReadyPromise,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new PiRpcProtocolError("Timed out waiting for RPC ready frame")), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   #fatalProtocolError(message: string): void {
     const error = this.#withStderr(new PiRpcProtocolError(message));
+    this.#rejectStartupReady?.(error);
+    this.#resolveStartupReady = null;
+    this.#rejectStartupReady = null;
     this.#fail(error);
     this.#child?.kill("SIGTERM");
   }
 
   #fail(error: Error): void {
+    this.#rejectStartupReady?.(error);
+    this.#resolveStartupReady = null;
+    this.#rejectStartupReady = null;
     const isFirstFailure = this.#failure === null;
     if (!this.#failure) this.#failure = error;
     this.#rejectPending(this.#failure);
