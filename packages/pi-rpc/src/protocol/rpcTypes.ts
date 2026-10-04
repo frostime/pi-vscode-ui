@@ -65,6 +65,8 @@ export interface RpcCommandDescriptor {
   name: string;
   description?: string;
   source: string;
+  /** Original OMP category when discovery adapts a supported command. */
+  runtimeSource?: "file" | "skill";
   sourceInfo?: RpcSourceInfo;
   location?: string;
   path?: string;

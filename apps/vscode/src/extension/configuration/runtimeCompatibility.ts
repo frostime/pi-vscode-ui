@@ -40,7 +40,7 @@ const OH_MY_PI_PROFILE: RuntimeCompatibilityProfile = {
   capabilities: {
     sessionTree: false,
     fork: false,
-    slashCommands: false,
+    slashCommands: true,
     questionTool: true,
   },
   defaultSessionRoot: () => join(homedir(), ".omp", "agent", "sessions"),

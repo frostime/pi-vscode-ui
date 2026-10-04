@@ -25,7 +25,7 @@ The Host emits one ordered `conversationItems` collection. A visual turn has its
 - A tool result updates the activity identified by `toolCallId`; it is not a second visible activity. Assistant takeover relocates all reasoning, response, and embedded tool-call parts as one ownership unit, including the tool location.
 - `compaction`, `branch_summary`, and `custom_message` are independent items at their active-path positions.
 - Compaction never removes or hides earlier active-path items. Nested `retainedTail` values are LLM-context metadata and are not expanded into transcript items.
-- Every `custom_message` with `display: true` renders generic text and image blocks. `display: false` messages and plain `custom` state entries are omitted.
+- Every `custom_message` with `display: true` renders generic text and image blocks. `display: false` messages and plain `custom` state entries are omitted. Before projection, the Host's OMP compatibility module may present a user-attributed `skill-prompt` as a user message with the original invocation from `details.prompt` (or the recorded name/arguments for older entries). The persisted entry id and parent chain remain unchanged, and raw session entries remain authoritative. Generic custom messages and agent-attributed skill content are not reinterpreted.
 - Persisted image content is validated against the same MIME, Base64, count, and size limits as prompt images before it enters the shared ViewModel.
 
 A branch control represents an active parent-child tree edge. Its identity is derived from that edge, and its position is immediately before the active child entry. A true branch summary is never attached to, moved with, or inferred from a control.

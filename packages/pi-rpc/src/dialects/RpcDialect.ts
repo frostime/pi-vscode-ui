@@ -15,6 +15,10 @@ export interface RpcDialect {
   validateNegotiationResponse?(data: unknown): void;
   /** Consume a dialect-specific startup frame. Returns true when the frame is complete. */
   acceptStartupFrame(value: Record<string, unknown>): boolean;
+  /** Translate a Pi-shaped request to the runtime's wire vocabulary. */
+  normalizeCommand?(command: RpcCommand): RpcCommand;
+  /** Adapt successful response data using the original Pi-shaped request. */
+  normalizeResponseData?(command: RpcCommand, data: unknown): unknown;
   /** Translate a runtime event into the Pi-shaped event contract. */
   normalizeEvent(event: RpcEvent): RpcEvent;
 }
