@@ -8,7 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Support slash completion and submission for OMP's discovered Markdown commands and `/skill:<name>`, including Steer/Queue delivery. Skill messages retain their original invocation in live and restored conversations rather than displaying expanded instructions. Unsupported runtime commands and leading skill submissions with images are rejected explicitly; OMP's separate `prompts/` templates remain outside this limited support.
+- Support slash completion and submission for Oh My Pi's discovered Markdown commands and `/skill:<name>`, including Steer/Queue delivery. Skill invocations remain visible in live and restored conversations instead of expanded instructions. Unsupported runtime commands and skill submissions with images are rejected; separate `prompts/` templates remain unsupported.
+
+### Fixed
+
+- Show custom extension messages, including pi-mail, when Pi delivers them during a running turn instead of waiting for completion-time history refresh. Prevent duplicate messages during history loading and reconciliation, and keep branch controls before their custom-message child.
 
 ## [0.15.0] - 2026-10-03
 
@@ -474,7 +478,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.5...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.5...v0.15.0
 [0.14.5]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.2...v0.14.3
