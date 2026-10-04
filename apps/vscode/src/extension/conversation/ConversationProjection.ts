@@ -136,7 +136,10 @@ export class ConversationProjection {
     const ownershipConflict = this.#store.preflightPersistedOwnership({
       assistantSources: newEntries.flatMap((entry) => persistedAssistantSource(entry) ?? []),
       compactionSources: newEntries.flatMap((entry) => persistedCompactionSource(entry) ?? []),
-      customTypes: newEntries.filter((entry) => entry.type === "custom_message").map((entry) => stringValue(entry.customType, "custom")),
+      customSources: newEntries.filter((entry) => entry.type === "custom_message").map((entry) => ({
+        entryId: entry.id,
+        customType: stringValue(entry.customType, "custom"),
+      })),
     });
     if (ownershipConflict) return "reload";
 
@@ -285,6 +288,23 @@ export class ConversationProjection {
         if (placement) this.#analyzeAssistantMessage(placement, event.message);
         break;
       }
+      case "entry_appended": {
+        const entry = event.entry;
+        if (
+          isRecord(entry)
+          && entry.type === "custom_message"
+          && typeof entry.id === "string"
+          && (entry.parentId === null || typeof entry.parentId === "string")
+          && !this.#persistedEntryIds.has(entry.id)
+        ) {
+          this.#placeCustomMessageEntry(
+            { ...entry, type: entry.type, id: entry.id, parentId: entry.parentId },
+            "entry-appended",
+            this.#activeTurnId ?? undefined,
+          );
+        }
+        break;
+      }
       case "tool_execution_start":
         this.#applyToolStart(event);
         break;
@@ -347,19 +367,7 @@ export class ConversationProjection {
         this.#applyCacheResetBoundary(`branch-summary-${entry.id}`);
         break;
       case "custom_message":
-        this.#store.placeCustomMessage({
-          kind: "persisted",
-          turnId: this.#persistedTurn?.turnId,
-          customType: stringValue(entry.customType, "custom"),
-          fallbackViewId: entry.id,
-          ...(entry.display === true ? {
-            buildItem: (viewId: string) => customMessageView(
-              entry,
-              this.#validatedBlocks(entry.content, undefined, viewId),
-              viewId,
-            ),
-          } : {}),
-        });
+        this.#placeCustomMessageEntry(entry, "persisted", this.#persistedTurn?.turnId);
         break;
       default:
         break;
@@ -526,6 +534,22 @@ export class ConversationProjection {
     this.#assistantMessageAdapter.reset();
   }
 
+  #placeCustomMessageEntry(entry: RpcSessionEntry, kind: "entry-appended" | "persisted", turnId?: string): void {
+    this.#store.placeCustomMessage({
+      source: { kind, entryId: entry.id },
+      turnId,
+      customType: stringValue(entry.customType, "custom"),
+      fallbackViewId: entry.id,
+      ...(entry.display === true ? {
+        buildItem: (viewId: string) => customMessageView(
+          entry,
+          this.#validatedBlocks(entry.content, undefined, viewId),
+          viewId,
+        ),
+      } : {}),
+    });
+  }
+
   #applyCustomMessageEvent(event: RpcEvent): boolean {
     const message = event.message;
     if (!isRecord(message) || message.role !== "custom") return false;
@@ -537,7 +561,7 @@ export class ConversationProjection {
     const customType = message.customType;
     const timestamp = numericValue(message.timestamp) ?? Date.now();
     this.#store.placeCustomMessage({
-      kind: "live",
+      source: { kind: "live" },
       turnId: this.#activeTurnId ?? undefined,
       customType,
       fallbackViewId: `custom-live-${timestamp}-${++this.#sequence}`,
@@ -818,8 +842,10 @@ export class ConversationProjection {
   #completePersistedTurn(force: boolean, endedAt = Date.now()): void {
     if (!this.#persistedTurn) return;
     const turn = this.#findTurn(this.#persistedTurn.turnId);
-    // Intermediate refreshes keep the cursor while the live turn can still
-    // continue. A forced boundary or a live-finalized error closes it.
+    // An unfinished snapshot is not a turn boundary. Keep the persisted cursor
+    // while live work continues, even when the current assistant ended toolUse.
+    if (!force && this.#activeTurn()?.status === "running") return;
+    // A pending error without a live-finalized failure may still continue.
     if (
       this.#persistedTurn.phase === "error-awaiting-continuation"
       && !force

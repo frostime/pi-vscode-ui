@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Show custom extension messages, including pi-mail, when Pi delivers them during a running turn instead of waiting for completion-time history refresh. Prevent duplicate messages during history loading and reconciliation, and keep branch controls before their custom-message child.
+- Show custom extension messages, including pi-mail, when Pi delivers them during a running turn instead of waiting for completion-time history refresh. Keep boundary-generated messages and ordinary deliveries distinct during history loading and reconciliation, preventing duplicates, disappearing live messages, and misplaced branch controls.
+- Keep the first tool-assisted reply in its original user turn when startup history refresh finishes while the agent is still running.
 
 ## [0.15.0] - 2026-10-03
 

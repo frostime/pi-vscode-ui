@@ -22,7 +22,7 @@ OMP `get_commands` is sent as `get_available_commands`. Discovery returns only M
 
 Discovery does not authorize execution: the Host validates leading slash submissions against fresh discovery. OMP skill messages, persisted custom entries, and `prompt_result` facts remain unchanged on the wire; their presentation, correlation, and completion interpretation belong to the Host.
 
-Assistant `message_update` records are forwarded unchanged whether they contain a cumulative `message` or only an indexed `assistantMessageEvent`. This package must not assemble deltas or synthesize legacy events. Custom `message_start`/`message_end` records with `message.role: "custom"` are likewise forwarded unchanged, including `customType`, `content`, `display`, `details`, and the event timestamp; transcript display and persisted-entry adoption belong to the conversation projection.
+Assistant `message_update` records are forwarded unchanged whether they contain a cumulative `message` or only an indexed `assistantMessageEvent`. This package must not assemble deltas or synthesize legacy events. Custom `message_start`/`message_end` records with `message.role: "custom"` are likewise forwarded unchanged, including `customType`, `content`, `display`, `details`, and the event timestamp; transcript display and persisted-entry adoption belong to the conversation projection. Boundary `entry_appended` events are also forwarded unchanged, including their complete entry and entry ID; they are not synthesized into custom delivery events.
 
 ## Framing invariants
 

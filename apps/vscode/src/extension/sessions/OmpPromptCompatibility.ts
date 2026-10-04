@@ -57,6 +57,14 @@ export class OmpPromptCompatibility {
   }
 
   projectEvent(event: RpcEvent): RpcEvent {
+    if (event.type === "entry_appended" && isRecord(event.entry) && event.entry.type === "custom_message") {
+      const invocation = skillInvocation(event.entry);
+      if (invocation === undefined) return event;
+      return {
+        ...event,
+        entry: { ...event.entry, type: "message", message: { role: "user", content: [{ type: "text", text: invocation }] } },
+      };
+    }
     if (event.type !== "message_start" && event.type !== "message_end") return event;
     const message = event.message;
     if (!isRecord(message) || message.role !== "custom") return event;

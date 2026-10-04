@@ -28,7 +28,9 @@ describe("OMP prompt product compatibility", () => {
     const turnId = projection.appendUserPrompt(invocation, [], 1);
     projection.applyEvent(compatibility.projectEvent({ type: "message_start", message: skillMessage(invocation) }));
     const persisted = skillEntry("s1", null, invocation);
+    projection.applyEvent(compatibility.projectEvent({ type: "entry_appended", entry: persisted }));
     expect(projection.reconcileEntries(compatibility.projectEntries([persisted]), [])).toBe("applied");
+    expect(turns(projection)[0]?.items).toEqual([]);
     expect(turns(projection)).toHaveLength(1);
     expect(turns(projection)[0]).toMatchObject({ id: turnId, userMessage: { sourceEntryId: "s1", blocks: [{ type: "text", text: invocation }] } });
 

@@ -39,6 +39,32 @@ describe("live custom messages", () => {
     expect(customMessages({ read: () => before })).toEqual([]);
   });
 
+  it.each([
+    { display: false, customType: "pi-mail" },
+    { display: true, customType: "boundary-note" },
+  ])("adopts entry_appended messages by entry ID without consuming live delivery slots ($customType, display=$display)", ({ display, customType }) => {
+    const projection = new ConversationProjection();
+    const boundary = customEntry("boundary-A", null, customType, "Boundary message", display);
+    projection.applyEvent({ type: "entry_appended", entry: boundary });
+    deliverCustom(projection, "pi-mail", "Live mail");
+    const liveId = customMessages(projection).at(-1)?.id;
+    const authoritativeBoundary = { ...boundary, content: "Persisted boundary" };
+
+    expect(projection.reconcileEntries([authoritativeBoundary], [])).toBe("applied");
+    expect(customMessages(projection).at(-1)).toMatchObject({ id: liveId, blocks: [{ type: "text", text: "Live mail" }] });
+    // A delayed/repeated append event cannot overwrite the adopted entry or
+    // create another provisional slot after history owns that entry ID.
+    projection.applyEvent({ type: "entry_appended", entry: boundary });
+    expect(projection.reconcileEntries([
+      authoritativeBoundary,
+      customEntry("delivery-B", "boundary-A", "pi-mail", "Persisted mail"),
+    ], [])).toBe("applied");
+    expect(customMessages(projection).map(({ id, blocks }) => ({ id, blocks }))).toEqual([
+      ...(display ? [{ id: "boundary-A", blocks: [{ type: "text", text: "Persisted boundary" }] }] : []),
+      { id: liveId, blocks: [{ type: "text", text: "Persisted mail" }] },
+    ]);
+  });
+
   it("adopts custom messages FIFO, including hidden slots, despite different persisted timestamps and repeated content", () => {
     const projection = new ConversationProjection();
     const turnId = projection.appendUserPrompt("Work", [], 1);
@@ -101,11 +127,12 @@ describe("live custom messages", () => {
     expect(customMessages(projection).map((item) => item.id)).toEqual(["c1", newLiveId]);
   });
 
-  it("rebuilds a new branch edge so its control precedes an adopted custom child", () => {
+  it.each(["message_end", "entry_appended"])("rebuilds a new branch edge before a custom child received through %s", (eventType) => {
     const projection = new ConversationProjection();
-    deliverCustom(projection, "pi-mail", "New branch");
-    const before = projection.read();
     const entries = [customEntry("c1", null, "pi-mail", "New branch")];
+    if (eventType === "entry_appended") projection.applyEvent({ type: eventType, entry: entries[0] });
+    else deliverCustom(projection, "pi-mail", "New branch");
+    const before = projection.read();
     const edges = [{ branchPointId: null, activeChildEntryId: "c1", pathCount: 2 }];
 
     expect(projection.reconcileEntries(entries, edges)).toBe("reload");
@@ -114,9 +141,14 @@ describe("live custom messages", () => {
     expect(projection.read().items.map((item) => item.type)).toEqual(["branchControl", "customMessage"]);
   });
 
-  it("applies Host image limits before a live custom message enters the conversation", () => {
+  it.each(["message_end", "entry_appended"])("applies Host image limits to custom messages received through %s", (eventType) => {
     const projection = new ConversationProjection(1, 12);
-    expect(() => deliverCustom(projection, "pi-mail", [{ ...image, data: "AAAA" }])).toThrow("image limit");
+    const content = [{ ...image, data: "AAAA" }];
+    expect(() => {
+      if (eventType === "entry_appended") {
+        projection.applyEvent({ type: eventType, entry: entry("custom_message", "c1", null, { customType: "pi-mail", display: true, content }) });
+      } else deliverCustom(projection, "pi-mail", content);
+    }).toThrow("image limit");
     expect(projection.read().items).toEqual([]);
   });
 });

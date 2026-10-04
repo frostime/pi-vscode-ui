@@ -41,7 +41,7 @@ export type CompactionSource =
 export interface PersistedOwnershipPreflight {
   assistantSources: readonly Extract<AssistantMessageSource, { kind: "persisted" }>[];
   compactionSources: readonly Extract<CompactionSource, { kind: "persisted" }>[];
-  customTypes: readonly string[];
+  customSources: readonly { entryId: string; customType: string }[];
 }
 
 export type PlacementConflict = {
@@ -76,7 +76,9 @@ export interface CompactionPlacement {
 
 export interface CustomMessagePlacement {
   turnId?: string | undefined;
-  kind: "live" | "persisted";
+  source:
+    | { kind: "live" }
+    | { kind: "entry-appended" | "persisted"; entryId: string };
   customType: string;
   fallbackViewId: string;
   buildItem?: (viewId: string) => CustomMessageView;
@@ -144,6 +146,7 @@ export class ConversationItemStore {
   readonly #persistedCompactions = new Map<string, CompactionOwner>();
   readonly #persistedCompactionKeys = new Map<string, Set<string>>();
   readonly #liveCustomMessages: LiveCustomMessage[] = [];
+  readonly #entryAppendedCustomMessages = new Map<string, LiveCustomMessage>();
 
   read(): readonly ConversationItemView[] {
     return this.#items;
@@ -159,6 +162,7 @@ export class ConversationItemStore {
     this.#persistedCompactions.clear();
     this.#persistedCompactionKeys.clear();
     this.#liveCustomMessages.length = 0;
+    this.#entryAppendedCustomMessages.clear();
   }
 
   hasPersistedAssistantOwnership(correlationKey: MessageCorrelationKey): boolean {
@@ -166,7 +170,7 @@ export class ConversationItemStore {
   }
 
   hasLiveCustomMessages(): boolean {
-    return this.#liveCustomMessages.length > 0;
+    return this.#liveCustomMessages.length > 0 || this.#entryAppendedCustomMessages.size > 0;
   }
 
   hasTool(toolCallId: string): boolean {
@@ -205,9 +209,11 @@ export class ConversationItemStore {
         return { kind: "conflict", reason: "compaction-correlation-ambiguous" };
       }
     }
-    for (const [index, customType] of input.customTypes.entries()) {
-      const live = this.#liveCustomMessages[index];
-      if (live && live.customType !== customType) {
+    let customDeliveryIndex = 0;
+    for (const source of input.customSources) {
+      if (this.#entryAppendedCustomMessages.has(source.entryId)) continue;
+      const live = this.#liveCustomMessages[customDeliveryIndex++];
+      if (live && live.customType !== source.customType) {
         return { kind: "conflict", reason: "custom-message-order-mismatch" };
       }
     }
@@ -347,16 +353,24 @@ export class ConversationItemStore {
   }
 
   placeCustomMessage(input: CustomMessagePlacement): void {
-    // Pi creates the persisted timestamp at delivery, not at sendMessage. Pair
-    // custom entries with received message_end events in protocol FIFO order.
-    // Hidden messages reserve a slot too, so they cannot steal a visible owner.
-    const live = input.kind === "persisted" ? this.#liveCustomMessages[0] : undefined;
-    const item = input.buildItem?.(live?.location?.itemId ?? input.fallbackViewId);
-    const owner: LiveCustomMessage = live ?? { customType: input.customType };
-    if (input.kind === "persisted") this.#liveCustomMessages.shift();
+    // Boundary drafts emit entry_appended with an entry ID, not message_end.
+    // Adopt those by entry ID; only ordinary deliveries participate in FIFO.
+    // Pi's persisted timestamp differs from sendMessage time, and hidden
+    // deliveries still reserve a slot so they cannot steal a visible owner.
+    const source = input.source;
+    const entryOwner = source.kind === "live" ? undefined : this.#entryAppendedCustomMessages.get(source.entryId);
+    const liveOwner = source.kind === "persisted" && !entryOwner ? this.#liveCustomMessages[0] : undefined;
+    const owner: LiveCustomMessage = entryOwner ?? liveOwner ?? { customType: input.customType };
+    const item = input.buildItem?.(owner.location?.itemId ?? input.fallbackViewId);
+    if (source.kind === "persisted") {
+      if (entryOwner) this.#entryAppendedCustomMessages.delete(source.entryId);
+      else this.#liveCustomMessages.shift();
+    } else if (source.kind === "entry-appended") {
+      this.#entryAppendedCustomMessages.set(source.entryId, owner);
+    }
     if (item) this.#publishOwnedAnnotation(owner, input.turnId, item);
     else if (owner.location) this.#removeAt(owner.location);
-    if (input.kind === "live") this.#liveCustomMessages.push(owner);
+    if (source.kind === "live") this.#liveCustomMessages.push(owner);
   }
 
   appendItem(item: ConversationItemView): void {

@@ -63,21 +63,24 @@ describe("Pi session startup and conversation history", () => {
     expect(conversationText(runtime.view)).toEqual(expect.arrayContaining(["Checked the file", "Streaming response"]));
   });
 
-  it("publishes pi-mail through the child-process path while running and reconciles it without duplication", async () => {
+  it("keeps live pi-mail and its reply in one turn when startup history refresh happens mid-run", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-live-mail-"));
+    const releaseFile = join(dir, "release-mail-reply");
+    const configuration = runtimeConfiguration(join(process.cwd(), "test", "e2e", "fake-pi.cjs"), "pi");
+    configuration.piArguments.push("--startup-mail-race", releaseFile);
     const liveMailSnapshots: CustomMessageView[][] = [];
     let startupInformationPublished = false;
     const runtime = new SessionRuntime(
       "live-mail",
       dir,
       "Live mail",
-      () => runtimeConfiguration(join(process.cwd(), "test", "e2e", "fake-pi.cjs"), "pi"),
+      () => configuration,
       new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
       { error: vi.fn(), info: vi.fn() } as never,
       {
         onChange: (runtime) => {
           const view = runtime.view;
-          if (view.status === "ready" && view.commands.some((command) => command.name === "echo")) startupInformationPublished = true;
+          if (view.commands.some((command) => command.name === "echo")) startupInformationPublished = true;
           const mail = view.conversationItems.flatMap((item) => item.type === "turn" ? item.items : [item])
             .filter((item): item is CustomMessageView => item.type === "customMessage");
           if (view.status === "running" && mail.length > 0) liveMailSnapshots.push(mail);
@@ -88,9 +91,12 @@ describe("Pi session startup and conversation history", () => {
     runtimes.push(runtime);
 
     await runtime.start();
-    await waitFor(() => startupInformationPublished);
     await runtime.sendPrompt("custom-mail", []);
-    await waitFor(() => runtime.view.status === "ready" && conversationTurns(runtime.view)[0]?.userMessage?.sourceEntryId !== undefined);
+    await waitFor(() => startupInformationPublished);
+    expect(conversationTurns(runtime.view)).toHaveLength(1);
+    expect(conversationTurns(runtime.view)[0]).toMatchObject({ status: "running", userMessage: { sourceEntryId: "user-1" } });
+    await writeFile(releaseFile, "release");
+    await waitFor(() => runtime.view.status === "ready" && conversationText(runtime.view).includes("Mail handled"));
 
     expect(liveMailSnapshots[0]).toEqual([
       expect.objectContaining({ customType: "pi-mail", blocks: [{ type: "text", text: "<pi_mail>Live peer mail</pi_mail>" }] }),

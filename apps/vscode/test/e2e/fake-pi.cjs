@@ -4,6 +4,9 @@ let buffer = "";
 let sessionName = "E2E session";
 let entries = [];
 let entrySequence = 0;
+const startupMailRaceIndex = process.argv.indexOf("--startup-mail-race");
+const startupMailRaceRelease = startupMailRaceIndex >= 0 ? process.argv[startupMailRaceIndex + 1] : undefined;
+let pendingStartupModelsId = null;
 const sessionFile = process.argv.includes("--no-session")
   ? undefined
   : `${process.cwd().replaceAll("\\", "/")}/.frostpi-e2e-session.jsonl`;
@@ -55,7 +58,8 @@ function handle(command) {
       break;
     }
     case "get_available_models":
-      respond(id, { models: [{ provider: "e2e", id: "model", name: "E2E Model", supportsImages: true, reasoning: true }] });
+      if (startupMailRaceRelease && entries.length === 0) pendingStartupModelsId = id;
+      else respondModels(id);
       break;
     case "get_commands":
       respond(id, { commands: [{ name: "echo", description: "E2E extension command", source: "extension" }] });
@@ -248,10 +252,17 @@ function customMail({ timestamp, parentId, userId, userMessage }) {
     details: { messageId: "peer-message", threadId: "peer-thread", recipientKind: "to" },
     timestamp: timestamp + 3,
   };
+  const boundaryEntry = {
+    type: "custom_message", id: `custom-boundary-${entrySequence}`, parentId: toolResultId,
+    customType: mail.customType, display: false, content: "Boundary bookkeeping",
+    timestamp: new Date(timestamp + 3).toISOString(),
+  };
   event({ type: "message_start", message: assistant });
   event({ type: "message_end", message: assistant });
   event({ type: "tool_execution_start", toolCallId: tool.id, toolName: tool.name, args: tool.arguments });
   event({ type: "tool_execution_end", toolCallId: tool.id, toolName: tool.name, result: result.content, isError: false });
+  // Boundary drafts do not produce a custom message_start/message_end pair.
+  event({ type: "entry_appended", entry: boundaryEntry });
   event({ type: "message_start", message: mail });
   event({ type: "message_end", message: mail });
   event({ type: "message_start", message: { role: "assistant", timestamp: timestamp + 5, content: [] } });
@@ -262,16 +273,32 @@ function customMail({ timestamp, parentId, userId, userMessage }) {
     { type: "message", id: userId, parentId, timestamp, message: userMessage },
     { type: "message", id: assistantId, parentId: userId, timestamp: timestamp + 1, message: assistant },
     { type: "message", id: toolResultId, parentId: assistantId, timestamp: timestamp + 2, message: result },
+    boundaryEntry,
     // Pi records custom entry timestamps at delivery, not queue creation.
-    { type: "custom_message", id: mailId, parentId: toolResultId, timestamp: new Date(timestamp + 4).toISOString(), customType: mail.customType, content: mail.content, display: mail.display, details: mail.details },
+    { type: "custom_message", id: mailId, parentId: boundaryEntry.id, timestamp: new Date(timestamp + 4).toISOString(), customType: mail.customType, content: mail.content, display: mail.display, details: mail.details },
   ];
-  setTimeout(() => {
+  if (pendingStartupModelsId) {
+    respondModels(pendingStartupModelsId);
+    pendingStartupModelsId = null;
+  }
+  const finish = () => {
     const reply = { role: "assistant", timestamp: timestamp + 5, stopReason: "stop", content: [{ type: "text", text: "Mail handled" }] };
     event({ type: "message_end", message: reply });
     entries.push({ type: "message", id: replyId, parentId: mailId, timestamp: timestamp + 5, message: reply });
     event({ type: "agent_end", messages: [], willRetry: false });
     event({ type: "agent_settled" });
-  }, 250);
+  };
+  if (startupMailRaceRelease) {
+    const timer = setInterval(() => {
+      if (!require("node:fs").existsSync(startupMailRaceRelease)) return;
+      clearInterval(timer);
+      finish();
+    }, 10);
+  } else setTimeout(finish, 250);
+}
+
+function respondModels(id) {
+  respond(id, { models: [{ provider: "e2e", id: "model", name: "E2E Model", supportsImages: true, reasoning: true }] });
 }
 
 function respond(id, data) {
