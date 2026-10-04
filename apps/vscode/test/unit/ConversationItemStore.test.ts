@@ -131,6 +131,7 @@ describe("ConversationItemStore", () => {
     expect(store.preflightPersistedOwnership({
       assistantSources: [persistedSource("entry-a", "a"), persistedSource("entry-b", "b")],
       compactionSources: [],
+      customTypes: [],
     })).toEqual({ kind: "conflict", reason: "assistant-correlation-ambiguous" });
     expect(store.read()).toBe(before);
 
@@ -141,6 +142,7 @@ describe("ConversationItemStore", () => {
         { kind: "persisted", entryId: "compaction-a", firstKeptEntryId: "kept", fallbackViewId: "a" },
         { kind: "persisted", entryId: "compaction-b", firstKeptEntryId: "kept", fallbackViewId: "b" },
       ],
+      customTypes: [],
     })).toBeUndefined();
 
     const replacement = storeWithTurns("persisted");

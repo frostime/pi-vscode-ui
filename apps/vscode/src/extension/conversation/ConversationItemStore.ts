@@ -4,6 +4,7 @@ import type {
   AgentTurnStatus,
   AgentTurnView,
   ConversationItemView,
+  CustomMessageView,
 } from "../../shared/model/conversationModel.js";
 import type { ToolCallView } from "../../shared/model/toolCallModel.js";
 import { createToolView } from "./messageAssembler.js";
@@ -40,13 +41,15 @@ export type CompactionSource =
 export interface PersistedOwnershipPreflight {
   assistantSources: readonly Extract<AssistantMessageSource, { kind: "persisted" }>[];
   compactionSources: readonly Extract<CompactionSource, { kind: "persisted" }>[];
+  customTypes: readonly string[];
 }
 
 export type PlacementConflict = {
   kind: "conflict";
   reason:
     | "assistant-correlation-ambiguous"
-    | "compaction-correlation-ambiguous";
+    | "compaction-correlation-ambiguous"
+    | "custom-message-order-mismatch";
 };
 
 export type AssistantPlacementResult =
@@ -69,6 +72,14 @@ export interface CompactionPlacement {
   turnId?: string | undefined;
   source: CompactionSource;
   buildItem(viewId: string): Extract<AgentTurnItemView | ConversationItemView, { type: "compaction" }>;
+}
+
+export interface CustomMessagePlacement {
+  turnId?: string | undefined;
+  kind: "live" | "persisted";
+  customType: string;
+  fallbackViewId: string;
+  buildItem?: (viewId: string) => CustomMessageView;
 }
 
 export interface ToolPlacementUpdate {
@@ -114,6 +125,11 @@ interface CompactionOwner {
   persistedEntryId?: string;
 }
 
+interface LiveCustomMessage {
+  customType: string;
+  location?: ItemLocation;
+}
+
 /**
  * Owns the single ordered conversation result and every message/tool location.
  * ConversationProjection decides lifecycle and visual-turn grouping.
@@ -127,6 +143,7 @@ export class ConversationItemStore {
   readonly #liveCompactions = new Map<string, CompactionOwner>();
   readonly #persistedCompactions = new Map<string, CompactionOwner>();
   readonly #persistedCompactionKeys = new Map<string, Set<string>>();
+  readonly #liveCustomMessages: LiveCustomMessage[] = [];
 
   read(): readonly ConversationItemView[] {
     return this.#items;
@@ -141,10 +158,15 @@ export class ConversationItemStore {
     this.#liveCompactions.clear();
     this.#persistedCompactions.clear();
     this.#persistedCompactionKeys.clear();
+    this.#liveCustomMessages.length = 0;
   }
 
   hasPersistedAssistantOwnership(correlationKey: MessageCorrelationKey): boolean {
     return (this.#persistedAssistantKeys.get(correlationKey)?.size ?? 0) > 0;
+  }
+
+  hasLiveCustomMessages(): boolean {
+    return this.#liveCustomMessages.length > 0;
   }
 
   hasTool(toolCallId: string): boolean {
@@ -181,6 +203,12 @@ export class ConversationItemStore {
       const liveOwner = this.#liveCompactions.get(key);
       if (count > 1 && liveOwner && liveOwner.persistedEntryId === undefined) {
         return { kind: "conflict", reason: "compaction-correlation-ambiguous" };
+      }
+    }
+    for (const [index, customType] of input.customTypes.entries()) {
+      const live = this.#liveCustomMessages[index];
+      if (live && live.customType !== customType) {
+        return { kind: "conflict", reason: "custom-message-order-mismatch" };
       }
     }
     return undefined;
@@ -296,13 +324,13 @@ export class ConversationItemStore {
       }
       const owner = this.#liveCompactions.get(source.firstKeptEntryId) ?? { viewId: source.fallbackViewId };
       this.#liveCompactions.set(source.firstKeptEntryId, owner);
-      this.#publishCompaction(owner, input.turnId, input.buildItem(owner.viewId));
+      this.#publishOwnedAnnotation(owner, input.turnId, input.buildItem(owner.viewId));
       return { kind: "placed", viewId: owner.viewId };
     }
 
     const existing = this.#persistedCompactions.get(source.entryId);
     if (existing) {
-      this.#publishCompaction(existing, input.turnId, input.buildItem(existing.viewId));
+      this.#publishOwnedAnnotation(existing, input.turnId, input.buildItem(existing.viewId));
       return { kind: "placed", viewId: existing.viewId };
     }
     const correlatedPersistedIds = this.#persistedCompactionKeys.get(source.firstKeptEntryId);
@@ -314,8 +342,21 @@ export class ConversationItemStore {
     this.#persistedCompactions.set(source.entryId, owner);
     addSetValue(this.#persistedCompactionKeys, source.firstKeptEntryId, source.entryId);
     if (liveOwner) this.#liveCompactions.set(source.firstKeptEntryId, owner);
-    this.#publishCompaction(owner, input.turnId, input.buildItem(owner.viewId));
+    this.#publishOwnedAnnotation(owner, input.turnId, input.buildItem(owner.viewId));
     return { kind: "placed", viewId: owner.viewId };
+  }
+
+  placeCustomMessage(input: CustomMessagePlacement): void {
+    // Pi creates the persisted timestamp at delivery, not at sendMessage. Pair
+    // custom entries with received message_end events in protocol FIFO order.
+    // Hidden messages reserve a slot too, so they cannot steal a visible owner.
+    const live = input.kind === "persisted" ? this.#liveCustomMessages[0] : undefined;
+    const item = input.buildItem?.(live?.location?.itemId ?? input.fallbackViewId);
+    const owner: LiveCustomMessage = live ?? { customType: input.customType };
+    if (input.kind === "persisted") this.#liveCustomMessages.shift();
+    if (item) this.#publishOwnedAnnotation(owner, input.turnId, item);
+    else if (owner.location) this.#removeAt(owner.location);
+    if (input.kind === "live") this.#liveCustomMessages.push(owner);
   }
 
   appendItem(item: ConversationItemView): void {
@@ -449,10 +490,10 @@ export class ConversationItemStore {
     }
   }
 
-  #publishCompaction(
-    owner: CompactionOwner,
+  #publishOwnedAnnotation(
+    owner: { location?: ItemLocation },
     turnId: string | undefined,
-    item: Extract<AgentTurnItemView | ConversationItemView, { type: "compaction" }>,
+    item: Extract<AgentTurnItemView | ConversationItemView, { type: "compaction" | "customMessage" }>,
   ): void {
     const existingIndex = owner.location?.turnId === turnId
       ? turnId

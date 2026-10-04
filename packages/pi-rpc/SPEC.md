@@ -3,7 +3,7 @@ title: Pi RPC Transport Contract
 description: Stable process, framing, request-correlation, and failure semantics for the Pi subprocess client.
 scope:
   - /packages/pi-rpc/**
-updated: 2026-08-09
+updated: 2026-10-04
 ---
 
 # Pi RPC Transport Contract
@@ -18,7 +18,7 @@ Protocol v2 chunk reassembly is a transport mechanism and is available through t
 
 Product capabilities such as slash commands, session tree, fork, and the FrostPi Question tool are selected by the VS Code runtime contract. The Question tool uses extension `input` UI. OMP's built-in `ask` tool is not registered in the ordinary `--mode rpc` launch; FrostPi does not represent that separate UI path as a runtime capability.
 
-Assistant `message_update` records are forwarded unchanged whether they contain a cumulative `message` or only an indexed `assistantMessageEvent`. This package must not assemble deltas or synthesize legacy events.
+Assistant `message_update` records are forwarded unchanged whether they contain a cumulative `message` or only an indexed `assistantMessageEvent`. This package must not assemble deltas or synthesize legacy events. Custom `message_start`/`message_end` records with `message.role: "custom"` are likewise forwarded unchanged, including `customType`, `content`, `display`, `details`, and the event timestamp; transcript display and persisted-entry adoption belong to the conversation projection.
 
 ## Framing invariants
 

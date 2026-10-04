@@ -136,15 +136,19 @@ export class ConversationProjection {
     const ownershipConflict = this.#store.preflightPersistedOwnership({
       assistantSources: newEntries.flatMap((entry) => persistedAssistantSource(entry) ?? []),
       compactionSources: newEntries.flatMap((entry) => persistedCompactionSource(entry) ?? []),
+      customTypes: newEntries.filter((entry) => entry.type === "custom_message").map((entry) => stringValue(entry.customType, "custom")),
     });
     if (ownershipConflict) return "reload";
 
     const appendedEntryIds = new Set(entries.map((entry) => entry.id));
+    const appendedCustomIds = new Set(newEntries.filter((entry) => entry.type === "custom_message").map((entry) => entry.id));
     const existingControlIds = new Set(this.#conversationItems().filter(isBranchControl).map((control) => control.id));
     for (const edge of branchEdges) {
-      if (!existingControlIds.has(branchControlId(edge)) && !appendedEntryIds.has(edge.activeChildEntryId)) {
-        return "reload";
-      }
+      if (existingControlIds.has(branchControlId(edge))) continue;
+      if (!appendedEntryIds.has(edge.activeChildEntryId)) return "reload";
+      // A new control must precede its custom child. Same-location live adoption
+      // preserves the child's provisional index, so rebuild this branch edge.
+      if (this.#store.hasLiveCustomMessages() && appendedCustomIds.has(edge.activeChildEntryId)) return "reload";
     }
 
     this.#refreshBranchControls(branchEdges);
@@ -264,7 +268,8 @@ export class ConversationProjection {
         break;
       case "message_start":
         if (
-          !this.#alignActiveTurnAwaitingUserMessage(event)
+          !this.#applyCustomMessageEvent(event)
+          && !this.#alignActiveTurnAwaitingUserMessage(event)
           && !this.#tryPromoteQueuedUserMessage(event)
           && !this.#alignActiveUserMessage(event)
         ) {
@@ -272,9 +277,10 @@ export class ConversationProjection {
         }
         break;
       case "message_update":
-        this.#applyAssistantMessageEvent(event);
+        if (!this.#applyCustomMessageEvent(event)) this.#applyAssistantMessageEvent(event);
         break;
       case "message_end": {
+        if (this.#applyCustomMessageEvent(event)) break;
         const placement = this.#applyAssistantMessageEvent(event);
         if (placement) this.#analyzeAssistantMessage(placement, event.message);
         break;
@@ -341,12 +347,19 @@ export class ConversationProjection {
         this.#applyCacheResetBoundary(`branch-summary-${entry.id}`);
         break;
       case "custom_message":
-        if (entry.display === true) {
-          this.#appendPersistedItem(customMessageView(
-            entry,
-            this.#validatedBlocks(entry.content, undefined, entry.id),
-          ));
-        }
+        this.#store.placeCustomMessage({
+          kind: "persisted",
+          turnId: this.#persistedTurn?.turnId,
+          customType: stringValue(entry.customType, "custom"),
+          fallbackViewId: entry.id,
+          ...(entry.display === true ? {
+            buildItem: (viewId: string) => customMessageView(
+              entry,
+              this.#validatedBlocks(entry.content, undefined, viewId),
+              viewId,
+            ),
+          } : {}),
+        });
         break;
       default:
         break;
@@ -511,6 +524,34 @@ export class ConversationProjection {
 
   #resetStreamingAssistant(): void {
     this.#assistantMessageAdapter.reset();
+  }
+
+  #applyCustomMessageEvent(event: RpcEvent): boolean {
+    const message = event.message;
+    if (!isRecord(message) || message.role !== "custom") return false;
+    // Custom messages are complete at message_end and must never enter or reset
+    // the assistant delta assembler, including when they are hidden.
+    if (event.type !== "message_end") return true;
+    if (typeof message.customType !== "string" || (typeof message.content !== "string" && !Array.isArray(message.content))) return true;
+
+    const customType = message.customType;
+    const timestamp = numericValue(message.timestamp) ?? Date.now();
+    this.#store.placeCustomMessage({
+      kind: "live",
+      turnId: this.#activeTurnId ?? undefined,
+      customType,
+      fallbackViewId: `custom-live-${timestamp}-${++this.#sequence}`,
+      ...(message.display === true ? {
+        buildItem: (viewId: string): CustomMessageView => ({
+          id: viewId,
+          type: "customMessage",
+          customType,
+          blocks: this.#validatedBlocks(message.content, undefined, viewId),
+          timestamp,
+        }),
+      } : {}),
+    });
+    return true;
   }
 
   #applyAssistantMessageEvent(event: RpcEvent): AssistantPlacement | undefined {
@@ -1038,9 +1079,9 @@ function branchSummaryView(entry: RpcSessionEntry): BranchSummaryView {
   };
 }
 
-function customMessageView(entry: RpcSessionEntry, blocks: MessageBlockView[]): CustomMessageView {
+function customMessageView(entry: RpcSessionEntry, blocks: MessageBlockView[], viewId = entry.id): CustomMessageView {
   return {
-    id: entry.id,
+    id: viewId,
     type: "customMessage",
     customType: stringValue(entry.customType, "custom"),
     blocks,

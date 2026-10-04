@@ -5,7 +5,7 @@ scope:
   - /apps/vscode/src/extension/sessions/**
   - /apps/vscode/src/extension/conversation/**
   - /apps/vscode/src/extension/extension-ui/**
-updated: 2026-08-09
+updated: 2026-10-04
 ---
 
 # Pi Session Lifecycle
@@ -76,7 +76,7 @@ Composer normalizes slash input. Host-local `/compact`, `/resume`, and `/editor`
 
 ## History and extension UI
 
-A resumed process may reach ready before history finishes. Automatic loading disables/rejects submission; events arriving during load are replayed after replacement. Files over 8 MiB defer full history until explicit load, and tree actions remain unavailable. Failed history/projection is retryable and does not fail the live process. Incremental/complete-entry authority belongs to the conversation projection SPEC.
+A resumed process may reach ready before history finishes. Automatic loading disables/rejects submission; events arriving during load are replayed after replacement. Custom message delivery events have no shared persisted ID: if they arrive during a history snapshot capture, Runtime captures entries again until no new custom deliveries occur during capture. The final snapshot therefore covers every buffered custom `message_end`, which is not replayed; all other buffered events retain their normal replay behavior. Files over 8 MiB defer full history until explicit load, and tree actions remain unavailable. Failed history/projection is retryable and does not fail the live process. Incremental/complete-entry authority belongs to the conversation projection SPEC.
 
 Blocking extension UI is session-owned and never auto-confirmed. It remains pending until response, Pi timeout, or explicit session cancellation; stop/close/restart cancels pending requests. Background owners are marked as requiring input. Detailed standard/Question behavior belongs to `apps/vscode/src/extension/extension-ui/extension-ui.SPEC.md`.
 
