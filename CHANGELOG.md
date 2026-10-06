@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-10-06
+
 ### Added
 
 - Support slash completion and submission for Oh My Pi's discovered Markdown commands and `/skill:<name>`, including Steer/Queue delivery. Skill invocations remain visible in live and restored conversations instead of expanded instructions. Unsupported runtime commands and skill submissions with images are rejected; separate `prompts/` templates remain unsupported.
