@@ -108,6 +108,14 @@ const ALLOWED_FILE_EXTENSIONS = new Set([
   "yaml",
   "yml",
   "zsh",
+
+  // Binary Files
+  "png",
+  "jpg",
+  "jpeg",
+  "svg",
+  "webp",
+  "pdf"
 ]);
 
 /**
