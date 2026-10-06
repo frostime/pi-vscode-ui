@@ -184,6 +184,18 @@ describe("renderMarkdownHtml", () => {
     expect(link?.hasAttribute("data-file-path")).toBe(false);
   });
 
+  it("turns inline code with image and pdf extensions into a file link", () => {
+    const html = renderMarkdownHtml("see `photo.jpg` and `report.pdf:3`");
+    const root = document.createElement("div");
+    root.innerHTML = html;
+    const links = root.querySelectorAll("a.file-link");
+
+    expect(links).toHaveLength(2);
+    expect(links[0]?.getAttribute("data-file-path")).toBe("photo.jpg");
+    expect(links[1]?.getAttribute("data-file-path")).toBe("report.pdf");
+    expect(links[1]?.getAttribute("data-file-line")).toBe("3");
+  });
+
   it("does not turn inline code with an unknown extension into a file link", () => {
     const html = renderMarkdownHtml("`data.bin:42` and `archive.zip`");
     const root = document.createElement("div");
@@ -234,6 +246,12 @@ describe("parseFileReference", () => {
     ["LICENSE", { path: "LICENSE" }],
     [".env.local", { path: ".env.local" }],
     ["paper.bib", { path: "paper.bib" }],
+    ["photo.jpg", { path: "photo.jpg" }],
+    ["scan.jpeg", { path: "scan.jpeg" }],
+    ["diagram.png", { path: "diagram.png" }],
+    ["logo.svg", { path: "logo.svg" }],
+    ["preview.webp", { path: "preview.webp" }],
+    ["report.pdf:3", { path: "report.pdf", line: 3 }],
   ])("parses %s", (source, expected) => {
     expect(parseFileReference(source)).toEqual(expected);
   });
@@ -250,7 +268,6 @@ describe("parseFileReference", () => {
     "file.ts#L10-L5",
     "data.bin",
     "archive.zip",
-    "photo.jpg",
     "src/file.unknown",
     "/etc/hosts",
   ])(

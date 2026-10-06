@@ -8,7 +8,7 @@ export interface FileReference {
 export interface ParseFileReferenceOptions {
   /**
    * When true (default), only recognize paths whose final segment has a known
-   * text-file extension or matches a common filename such as `Makefile` or
+   * file extension or matches a common filename such as `Makefile` or
    * `LICENSE`. This avoids turning arbitrary dotted tokens like `v1.2.3` into
    * file links. Markdown links are parsed with this disabled because an explicit
    * `[text](href)` already signals user intent.
@@ -26,8 +26,8 @@ const EXPLICIT_RELATIVE_PATH = /^\.{1,2}[\\/]/;
 const FILE_NAME = /(?:^|[\\/])(?:\.[^\s./\\]+|[^\s/\\]+\.[a-z][a-z\d._-]*)$/i;
 
 /**
- * Known text-file extensions. Keeps the whitelist small and avoids matching
- * binaries, archives, or media files that happen to contain a dot.
+ * Known text-file and document/media extensions. Keeps the whitelist small and
+ * avoids matching archives or unknown binaries that happen to contain a dot.
  */
 const ALLOWED_FILE_EXTENSIONS = new Set([
   "awk",
