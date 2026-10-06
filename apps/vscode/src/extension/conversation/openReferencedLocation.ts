@@ -83,8 +83,20 @@ async function pathExists(uri: vscode.Uri): Promise<boolean> {
   }
 }
 
+const BINARY_FILE_ERROR = /\bbinary\b/i;
+
 async function openInEditor(uri: vscode.Uri, reference: ReferencedLocation): Promise<void> {
-  const document = await vscode.workspace.openTextDocument(uri);
+  let document: vscode.TextDocument;
+  try {
+    document = await vscode.workspace.openTextDocument(uri);
+  } catch (error) {
+    // Images, PDFs, and other binary content cannot open as a text document.
+    // Hand them to the default viewer instead; line/column targeting is
+    // text-only, so there is nothing to apply afterwards. Other failures
+    // (e.g. nonexistent file) surface unchanged.
+    if (!BINARY_FILE_ERROR.test(String((error as Error)?.message))) throw error;
+    return vscode.commands.executeCommand("vscode.open", uri, { preview: true });
+  }
   const editor = await vscode.window.showTextDocument(document, { preview: true });
   if (reference.line === undefined) return;
 

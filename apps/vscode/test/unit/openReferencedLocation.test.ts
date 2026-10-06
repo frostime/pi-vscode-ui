@@ -43,6 +43,9 @@ const vscodeMock = vi.hoisted(() => {
     window: {
       showTextDocument: vi.fn(() => Promise.resolve(editor)),
     },
+    commands: {
+      executeCommand: vi.fn(() => Promise.resolve()),
+    },
     TextEditorRevealType: {
       InCenterIfOutsideViewport: 1,
     },
@@ -60,6 +63,7 @@ vi.mock("vscode", () => ({
   Uri: vscodeMock.Uri,
   workspace: vscodeMock.workspace,
   window: vscodeMock.window,
+  commands: vscodeMock.commands,
   TextEditorRevealType: vscodeMock.TextEditorRevealType,
 }));
 
@@ -79,6 +83,7 @@ describe("openReferencedLocation", () => {
     vscodeMock.workspace.fs.stat.mockClear();
     vscodeMock.workspace.openTextDocument.mockClear();
     vscodeMock.window.showTextDocument.mockClear();
+    vscodeMock.commands.executeCommand.mockClear();
     vscodeMock.document.validatePosition.mockClear();
     vscodeMock.document.lineAt.mockClear();
     vscodeMock.editor.revealRange.mockClear();
@@ -92,6 +97,21 @@ describe("openReferencedLocation", () => {
     await openReferencedLocation({ path: "src/file.ts" }, sessionCwd);
 
     expect(vscodeMock.Uri.file).toHaveBeenCalledWith(resolve(sessionCwd, "src/file.ts"));
+  });
+
+  it("falls back to the default viewer for binary files like png/pdf", async () => {
+    vscodeMock.workspace.openTextDocument.mockRejectedValueOnce(
+      new Error("File seems to be binary and cannot be opened as text"),
+    );
+
+    await openReferencedLocation({ path: "assets/diagram.png", line: 1 }, resolve("workspace"));
+
+    expect(vscodeMock.commands.executeCommand).toHaveBeenCalledWith(
+      "vscode.open",
+      expect.objectContaining({ fsPath: resolve("workspace", "assets/diagram.png") }),
+      { preview: true },
+    );
+    expect(vscodeMock.window.showTextDocument).not.toHaveBeenCalled();
   });
 
   it("positions the editor at the one-based line and column", async () => {
