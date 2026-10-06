@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { AgentTurnView, SessionNoticeView } from "../../src/shared/model/conversationModel.js";
+import type { AgentTurnView, CustomMessageView, SessionNoticeView } from "../../src/shared/model/conversationModel.js";
 import type { SessionViewModel } from "../../src/shared/model/sessionViewModel.js";
 import type { FrostPiConfiguration } from "../../src/extension/configuration/configurationTypes.js";
 import type { RuntimeCompatibility } from "../../src/extension/configuration/runtimeCompatibility.js";
@@ -61,6 +61,53 @@ describe("Pi session startup and conversation history", () => {
       tool: { state: "bound", status: "complete", output: "file body" },
     });
     expect(conversationText(runtime.view)).toEqual(expect.arrayContaining(["Checked the file", "Streaming response"]));
+  });
+
+  it("keeps live pi-mail and its reply in one turn when startup history refresh happens mid-run", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-live-mail-"));
+    const releaseFile = join(dir, "release-mail-reply");
+    const configuration = runtimeConfiguration(join(process.cwd(), "test", "e2e", "fake-pi.cjs"), "pi");
+    configuration.piArguments.push("--startup-mail-race", releaseFile);
+    const liveMailSnapshots: CustomMessageView[][] = [];
+    let startupInformationPublished = false;
+    const runtime = new SessionRuntime(
+      "live-mail",
+      dir,
+      "Live mail",
+      () => configuration,
+      new ProxySecretStore({ get: () => Promise.resolve(undefined) } as never),
+      { error: vi.fn(), info: vi.fn() } as never,
+      {
+        onChange: (runtime) => {
+          const view = runtime.view;
+          if (view.commands.some((command) => command.name === "echo")) startupInformationPublished = true;
+          const mail = view.conversationItems.flatMap((item) => item.type === "turn" ? item.items : [item])
+            .filter((item): item is CustomMessageView => item.type === "customMessage");
+          if (view.status === "running" && mail.length > 0) liveMailSnapshots.push(mail);
+        },
+        onEditorText: vi.fn(),
+      },
+    );
+    runtimes.push(runtime);
+
+    await runtime.start();
+    await runtime.sendPrompt("custom-mail", []);
+    await waitFor(() => startupInformationPublished);
+    expect(conversationTurns(runtime.view)).toHaveLength(1);
+    expect(conversationTurns(runtime.view)[0]).toMatchObject({ status: "running", userMessage: { sourceEntryId: "user-1" } });
+    await writeFile(releaseFile, "release");
+    await waitFor(() => runtime.view.status === "ready" && conversationText(runtime.view).includes("Mail handled"));
+
+    expect(liveMailSnapshots[0]).toEqual([
+      expect.objectContaining({ customType: "pi-mail", blocks: [{ type: "text", text: "<pi_mail>Live peer mail</pi_mail>" }] }),
+    ]);
+    const finalTurns = conversationTurns(runtime.view);
+    expect(finalTurns).toHaveLength(1);
+    expect(finalTurns[0]?.items.map((item) => item.type)).toEqual(["tool", "customMessage", "response"]);
+    expect(finalTurns[0]?.items.filter((item) => item.type === "customMessage")).toEqual([
+      expect.objectContaining({ id: liveMailSnapshots[0]?.[0]?.id, timestamp: 14 }),
+    ]);
+    expect(conversationText(runtime.view)).toContain("Mail handled");
   });
 
   it("honors Pi settings and projects a cache miss before the agent settles", async () => {
@@ -211,6 +258,8 @@ describe("Pi session startup and conversation history", () => {
 const sessionIndex = process.argv.indexOf("--session");
 const sessionFile = sessionIndex >= 0 ? process.argv[sessionIndex + 1] : undefined;
 let input = "";
+let historyEntries = [];
+let historyEventsSent = false;
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", chunk => {
   input += chunk;
@@ -225,25 +274,43 @@ process.stdin.on("data", chunk => {
       process.stdout.write(JSON.stringify({ type: "agent_start" }) + "\n");
       continue;
     }
-    else if (command.type === "get_entries" && !command.since) {
+    else if (command.type === "get_entries" && !historyEventsSent) {
+      historyEventsSent = true;
       process.stdout.write(JSON.stringify({ type: "extension_ui_request", id: "notice-during-history", method: "notify", message: "Notice during history load" }) + "\n");
       process.stdout.write(JSON.stringify({ type: "message_start", message: { id: "live-assistant", role: "assistant", timestamp: 2, content: [{ type: "text", text: "Live response" }] } }) + "\n");
       process.stdout.write(JSON.stringify({ type: "message_end", message: { id: "live-assistant", role: "assistant", timestamp: 2, stopReason: "stop", content: [{ type: "text", text: "Live response" }] } }) + "\n");
       process.stdout.write(JSON.stringify({ type: "compaction_end", result: { summary: "History compact", tokensBefore: 100, firstKeptEntryId: "kept-history" } }) + "\n");
       setTimeout(() => {
-        base.data = {
-          entries: [
-            { type: "message", id: "history-user-entry", parentId: null, message: { role: "user", content: "Earlier request", timestamp: 1 } },
-            { type: "message", id: "history-assistant-entry", parentId: "history-user-entry", message: { id: "live-assistant", role: "assistant", timestamp: 2, stopReason: "stop", content: [{ type: "text", text: "Live response" }], usage: { input: 100, output: 20, cacheRead: 300, cacheWrite: 100 } } },
-            { type: "compaction", id: "history-compaction-entry", parentId: "history-assistant-entry", summary: "History compact", tokensBefore: 100, firstKeptEntryId: "kept-history", timestamp: 3 },
-          ],
-          leafId: "history-compaction-entry",
-        };
-        process.stdout.write(JSON.stringify(base) + "\n");
+        const hidden = { role: "custom", customType: "pi-mail", display: false, content: "Repeated mail", timestamp: 4 };
+        const mail = { ...hidden, display: true, timestamp: 5 };
+        historyEntries = [
+          { type: "message", id: "history-user-entry", parentId: null, message: { role: "user", content: "Earlier request", timestamp: 1 } },
+          { type: "message", id: "history-assistant-entry", parentId: "history-user-entry", message: { id: "live-assistant", role: "assistant", timestamp: 2, stopReason: "stop", content: [{ type: "text", text: "Live response" }], usage: { input: 100, output: 20, cacheRead: 300, cacheWrite: 100 } } },
+          { type: "compaction", id: "history-compaction-entry", parentId: "history-assistant-entry", summary: "History compact", tokensBefore: 100, firstKeptEntryId: "kept-history", timestamp: 3 },
+          { type: "custom_message", id: "hidden-mail", parentId: "history-compaction-entry", customType: hidden.customType, display: false, content: hidden.content, timestamp: 100 },
+          { type: "custom_message", id: "first-mail", parentId: "hidden-mail", customType: mail.customType, display: true, content: mail.content, timestamp: 101 },
+        ];
+        base.data = { entries: historyEntries, leafId: "first-mail" };
+        const records = [
+          { type: "message_start", message: hidden },
+          { type: "message_end", message: hidden },
+          { type: "message_start", message: mail },
+          { type: "message_end", message: mail },
+          base,
+          // A second identical mail is delivered AFTER the captured snapshot.
+          { type: "message_start", message: { ...mail, timestamp: 6 } },
+          { type: "message_end", message: { ...mail, timestamp: 6 } },
+        ];
+        const output = records.map(value => JSON.stringify(value)).join("\n") + "\n";
+        historyEntries.push({ type: "custom_message", id: "second-mail", parentId: "first-mail", customType: mail.customType, display: true, content: mail.content, timestamp: 102 });
+        process.stdout.write(output);
       }, 25);
       continue;
     }
-    else if (command.type === "get_entries") base.data = { entries: [], leafId: "history-compaction-entry" };
+    else if (command.type === "get_entries") {
+      const cursor = historyEntries.findIndex(entry => entry.id === command.since);
+      base.data = { entries: cursor >= 0 ? historyEntries.slice(cursor + 1) : historyEntries, leafId: historyEntries.at(-1)?.id ?? null };
+    }
     else if (command.type === "get_available_models") base.data = { models: [] };
     else if (command.type === "get_commands") base.data = { commands: [] };
     else if (command.type === "get_session_stats") base.data = { sessionFile, sessionId: "history-test", userMessages: 1, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 1, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 };
@@ -281,6 +348,10 @@ process.on("SIGTERM", () => process.exit(0));
     ]);
     expect(runtime.view.conversationItems.filter((item) => item.type === "compaction")).toHaveLength(1);
     expect(runtime.view.cacheHitPercent).toBe(60);
+    expect(runtime.view.conversationItems.filter((item) => item.type === "customMessage")).toEqual([
+      expect.objectContaining({ id: "first-mail", blocks: [{ type: "text", text: "Repeated mail" }] }),
+      expect.objectContaining({ id: "second-mail", blocks: [{ type: "text", text: "Repeated mail" }] }),
+    ]);
     expect(conversationNotices(runtime.view)).toEqual([
       expect.objectContaining({ text: "Notice during history load" }),
     ]);
@@ -969,6 +1040,7 @@ process.stdin.on("data", chunk => {
     if (command.type === "negotiate_protocol") response.data = { protocolVersion: 2 };
     else if (command.type === "get_state") response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionId: "omp-settle" };
     else if (command.type === "get_available_models") response.data = { models: [] };
+    else if (command.type === "get_available_commands") response.data = { commands: [] };
     else if (command.type === "get_commands") { response.success = false; response.error = "Unknown command: get_commands"; }
     else if (command.type === "get_entries") response.data = { entries: [], leafId: null };
     else if (command.type === "get_session_stats") response.data = { sessionId: "omp-settle", userMessages: 1, assistantMessages: 1, toolCalls: 0, toolResults: 0, totalMessages: 2, tokens: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, total: 15 }, cost: 0 };

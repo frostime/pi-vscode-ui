@@ -4,12 +4,12 @@ description: Cross-module policy for Pi native RPC surface, authority, failures,
 scope:
   - /packages/pi-rpc/**
   - /apps/vscode/src/extension/**
-updated: 2026-10-03
+updated: 2026-10-04
 ---
 
 # Pi RPC Compatibility
 
-FrostPi targets the current documented Pi-compatible RPC mode and launches the selected runtime with `--mode rpc`. The selected RPC dialect owns runtime-specific handshake and isomorphic event vocabulary; the VS Code runtime contract owns product capability declarations. FrostPi does not bundle or pin Pi, does not target a generic backend or ACP compatibility layer, and does not claim complete support for runtime-specific features of an alternate executable.
+FrostPi targets the current documented Pi-compatible RPC mode and launches the selected runtime with `--mode rpc`. The selected RPC dialect owns runtime-specific handshake, request/response vocabulary, and isomorphic events, plus the explicitly bounded OMP command-discovery projection; the VS Code runtime contract owns product capability declarations and stateful compatibility. FrostPi does not bundle or pin Pi, require a patched runtime, target a generic backend or ACP compatibility layer, or claim complete support for runtime-specific features of an alternate executable.
 
 ## Required surface
 
@@ -17,6 +17,7 @@ FrostPi targets the current documented Pi-compatible RPC mode and launches the s
 - The OMP dialect supports RPC v1 and v2: `ready` advertising v2 triggers negotiation before `get_state`; the declared physical and logical ceilings configure that connection's chunk decoder rather than gating negotiation. Otherwise startup proceeds in v1. Failed negotiation is a visible startup failure. V1 retains OMP's one-line response limit, so large history loads may fail with the runtime's transport-limit error; v2 reassembles chunked responses.
 - Runtime projection consumes documented agent, message, tool, compaction, and extension UI events. Unknown additive events or fields are accepted unless a required invariant becomes impossible.
 - Cache-miss projection derives Pi TUI-compatible notices from documented assistant `provider`, `model`, `timestamp`, and `usage` fields on `message_end` and session entries, plus full Model cost data from `get_available_models`. RPC does not carry Pi TUI's rendered warning text. Missing or malformed diagnostic fields are ignored locally without weakening generic event forwarding.
+- Pi custom deliveries arrive as `message_start`/`message_end` with `message.role: "custom"`, not as `custom_message` events. Boundary-created custom entries instead arrive as `entry_appended` with the complete entry and its ID, without a matching `message_end`. Conversation projection displays both sources and adopts boundary entries by entry ID separately from ordinary delivery FIFO; persisted `custom_message` entries remain authoritative. A custom delivery timestamp is not the persisted entry timestamp.
 - Pi 0.83 cumulative `message_update.message` and Pi 0.84 delta-only `message_update.assistantMessageEvent` are both supported by shape. Delta assembly is extension conversation policy; the transport forwards either form unchanged.
 - Malformed JSONL, invalid envelopes, stdin/stdout failure, startup timeout, and unexpected process exit remain visible connection failures. Malformed assistant content deltas are ignored locally and do not weaken transport failures.
 
@@ -26,7 +27,7 @@ Private adapters for capability gaps such as session-tree navigation, fork, and 
 
 Configured arguments follow `--mode rpc`, and restored sessions add `--session <path>`. Configured `.js`, `.mjs`, and `.cjs` entry points run with environment `node`; native executables run directly. `apps/vscode/src/extension/configuration/configuredPiInvocation.ts` owns invocation shape, while `packages/pi-rpc/src/process/resolvePiExecutable.ts` owns PATH/common-global resolution.
 
-The selected child runtime remains authoritative for session JSONL, model/session state, migration, and extension lifecycle. The `oh-my-pi` compatibility profile is limited to FrostPi's launch, RPC, session discovery, and resume surface; its runtime-specific settings and features remain outside this contract. After model or thinking changes, the next `get_state` result wins if the child runtime clamps the selection.
+The selected child runtime remains authoritative for session JSONL, model/session state, migration, and extension lifecycle. The `oh-my-pi` profile also supports discovered Markdown commands and skills, but not the full OMP command surface or separate `prompts/` templates. OMP runtime settings remain runtime-owned. Skill presentation normalization never rewrites persisted custom entries. After model or thinking changes, the next `get_state` result wins if the child runtime clamps the selection.
 
 The selected `get_entries` parent chain and reported leaf are transcript authority, including pre-compaction entries. `get_messages` is current LLM context and must not hydrate conversation history.
 

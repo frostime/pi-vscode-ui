@@ -15,18 +15,23 @@ import type {
 export interface PromptOptions {
   images?: RpcImageContent[];
   streamingBehavior?: StreamingBehavior;
+  /** Host-side correlation hook; never serialized into the prompt request. */
+  onRequestId?: (id: string) => void;
 }
 
 export class PiRpcApi {
   constructor(readonly connection: PiRpcConnection) {}
 
   prompt(message: string, options: PromptOptions = {}): Promise<void> {
-    return this.connection.request({
+    const command = {
       type: "prompt",
       message,
       ...(options.images?.length ? { images: options.images } : {}),
       ...(options.streamingBehavior ? { streamingBehavior: options.streamingBehavior } : {}),
-    });
+    };
+    return options.onRequestId
+      ? this.connection.request(command, undefined, options.onRequestId)
+      : this.connection.request(command);
   }
 
   executeExtensionCommand(commandName: string, encodedRequest: string): Promise<void> {

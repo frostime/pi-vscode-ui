@@ -4,6 +4,7 @@ import type {
   AgentTurnStatus,
   AgentTurnView,
   ConversationItemView,
+  CustomMessageView,
 } from "../../shared/model/conversationModel.js";
 import type { ToolCallView } from "../../shared/model/toolCallModel.js";
 import { createToolView } from "./messageAssembler.js";
@@ -40,13 +41,15 @@ export type CompactionSource =
 export interface PersistedOwnershipPreflight {
   assistantSources: readonly Extract<AssistantMessageSource, { kind: "persisted" }>[];
   compactionSources: readonly Extract<CompactionSource, { kind: "persisted" }>[];
+  customSources: readonly { entryId: string; customType: string }[];
 }
 
 export type PlacementConflict = {
   kind: "conflict";
   reason:
     | "assistant-correlation-ambiguous"
-    | "compaction-correlation-ambiguous";
+    | "compaction-correlation-ambiguous"
+    | "custom-message-order-mismatch";
 };
 
 export type AssistantPlacementResult =
@@ -69,6 +72,16 @@ export interface CompactionPlacement {
   turnId?: string | undefined;
   source: CompactionSource;
   buildItem(viewId: string): Extract<AgentTurnItemView | ConversationItemView, { type: "compaction" }>;
+}
+
+export interface CustomMessagePlacement {
+  turnId?: string | undefined;
+  source:
+    | { kind: "live" }
+    | { kind: "entry-appended" | "persisted"; entryId: string };
+  customType: string;
+  fallbackViewId: string;
+  buildItem?: (viewId: string) => CustomMessageView;
 }
 
 export interface ToolPlacementUpdate {
@@ -114,6 +127,11 @@ interface CompactionOwner {
   persistedEntryId?: string;
 }
 
+interface LiveCustomMessage {
+  customType: string;
+  location?: ItemLocation;
+}
+
 /**
  * Owns the single ordered conversation result and every message/tool location.
  * ConversationProjection decides lifecycle and visual-turn grouping.
@@ -127,6 +145,8 @@ export class ConversationItemStore {
   readonly #liveCompactions = new Map<string, CompactionOwner>();
   readonly #persistedCompactions = new Map<string, CompactionOwner>();
   readonly #persistedCompactionKeys = new Map<string, Set<string>>();
+  readonly #liveCustomMessages: LiveCustomMessage[] = [];
+  readonly #entryAppendedCustomMessages = new Map<string, LiveCustomMessage>();
 
   read(): readonly ConversationItemView[] {
     return this.#items;
@@ -141,10 +161,16 @@ export class ConversationItemStore {
     this.#liveCompactions.clear();
     this.#persistedCompactions.clear();
     this.#persistedCompactionKeys.clear();
+    this.#liveCustomMessages.length = 0;
+    this.#entryAppendedCustomMessages.clear();
   }
 
   hasPersistedAssistantOwnership(correlationKey: MessageCorrelationKey): boolean {
     return (this.#persistedAssistantKeys.get(correlationKey)?.size ?? 0) > 0;
+  }
+
+  hasLiveCustomMessages(): boolean {
+    return this.#liveCustomMessages.length > 0 || this.#entryAppendedCustomMessages.size > 0;
   }
 
   hasTool(toolCallId: string): boolean {
@@ -181,6 +207,14 @@ export class ConversationItemStore {
       const liveOwner = this.#liveCompactions.get(key);
       if (count > 1 && liveOwner && liveOwner.persistedEntryId === undefined) {
         return { kind: "conflict", reason: "compaction-correlation-ambiguous" };
+      }
+    }
+    let customDeliveryIndex = 0;
+    for (const source of input.customSources) {
+      if (this.#entryAppendedCustomMessages.has(source.entryId)) continue;
+      const live = this.#liveCustomMessages[customDeliveryIndex++];
+      if (live && live.customType !== source.customType) {
+        return { kind: "conflict", reason: "custom-message-order-mismatch" };
       }
     }
     return undefined;
@@ -296,13 +330,13 @@ export class ConversationItemStore {
       }
       const owner = this.#liveCompactions.get(source.firstKeptEntryId) ?? { viewId: source.fallbackViewId };
       this.#liveCompactions.set(source.firstKeptEntryId, owner);
-      this.#publishCompaction(owner, input.turnId, input.buildItem(owner.viewId));
+      this.#publishOwnedAnnotation(owner, input.turnId, input.buildItem(owner.viewId));
       return { kind: "placed", viewId: owner.viewId };
     }
 
     const existing = this.#persistedCompactions.get(source.entryId);
     if (existing) {
-      this.#publishCompaction(existing, input.turnId, input.buildItem(existing.viewId));
+      this.#publishOwnedAnnotation(existing, input.turnId, input.buildItem(existing.viewId));
       return { kind: "placed", viewId: existing.viewId };
     }
     const correlatedPersistedIds = this.#persistedCompactionKeys.get(source.firstKeptEntryId);
@@ -314,8 +348,29 @@ export class ConversationItemStore {
     this.#persistedCompactions.set(source.entryId, owner);
     addSetValue(this.#persistedCompactionKeys, source.firstKeptEntryId, source.entryId);
     if (liveOwner) this.#liveCompactions.set(source.firstKeptEntryId, owner);
-    this.#publishCompaction(owner, input.turnId, input.buildItem(owner.viewId));
+    this.#publishOwnedAnnotation(owner, input.turnId, input.buildItem(owner.viewId));
     return { kind: "placed", viewId: owner.viewId };
+  }
+
+  placeCustomMessage(input: CustomMessagePlacement): void {
+    // Boundary drafts emit entry_appended with an entry ID, not message_end.
+    // Adopt those by entry ID; only ordinary deliveries participate in FIFO.
+    // Pi's persisted timestamp differs from sendMessage time, and hidden
+    // deliveries still reserve a slot so they cannot steal a visible owner.
+    const source = input.source;
+    const entryOwner = source.kind === "live" ? undefined : this.#entryAppendedCustomMessages.get(source.entryId);
+    const liveOwner = source.kind === "persisted" && !entryOwner ? this.#liveCustomMessages[0] : undefined;
+    const owner: LiveCustomMessage = entryOwner ?? liveOwner ?? { customType: input.customType };
+    const item = input.buildItem?.(owner.location?.itemId ?? input.fallbackViewId);
+    if (source.kind === "persisted") {
+      if (entryOwner) this.#entryAppendedCustomMessages.delete(source.entryId);
+      else this.#liveCustomMessages.shift();
+    } else if (source.kind === "entry-appended") {
+      this.#entryAppendedCustomMessages.set(source.entryId, owner);
+    }
+    if (item) this.#publishOwnedAnnotation(owner, input.turnId, item);
+    else if (owner.location) this.#removeAt(owner.location);
+    if (source.kind === "live") this.#liveCustomMessages.push(owner);
   }
 
   appendItem(item: ConversationItemView): void {
@@ -449,10 +504,10 @@ export class ConversationItemStore {
     }
   }
 
-  #publishCompaction(
-    owner: CompactionOwner,
+  #publishOwnedAnnotation(
+    owner: { location?: ItemLocation },
     turnId: string | undefined,
-    item: Extract<AgentTurnItemView | ConversationItemView, { type: "compaction" }>,
+    item: Extract<AgentTurnItemView | ConversationItemView, { type: "compaction" | "customMessage" }>,
   ): void {
     const existingIndex = owner.location?.turnId === turnId
       ? turnId

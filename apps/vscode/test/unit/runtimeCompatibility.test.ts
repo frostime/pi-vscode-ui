@@ -29,7 +29,7 @@ describe("runtime compatibility profiles", () => {
       capabilities: {
         sessionTree: false,
         fork: false,
-        slashCommands: false,
+        slashCommands: true,
         questionTool: true,
       },
     });

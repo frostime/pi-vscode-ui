@@ -1,6 +1,7 @@
 import type { RpcDialect, RpcStartupNegotiation } from "../RpcDialect.js";
 import type { RpcEvent } from "../../protocol/rpcTypes.js";
 import { RPC_MAX_FRAME_BYTES, RPC_MAX_REASSEMBLED_BYTES } from "../../protocol/RpcChunkAssembler.js";
+import { ompCommandDescriptors } from "./ompCommands.js";
 
 export const ohMyPiRpcDialect: RpcDialect = {
   requiresStartupReady: true,
@@ -27,9 +28,20 @@ export const ohMyPiRpcDialect: RpcDialect = {
   acceptStartupFrame(value: Record<string, unknown>): boolean {
     return value.type === "ready";
   },
+  normalizeCommand(command) {
+    return command.type === "get_commands" ? { ...command, type: "get_available_commands" } : command;
+  },
+  normalizeResponseData(command, data) {
+    if (command.type !== "get_commands") return data;
+    const response = typeof data === "object" && data !== null ? data as Record<string, unknown> : {};
+    return { ...response, commands: ompCommandDescriptors(response.commands) };
+  },
   normalizeEvent(event: RpcEvent): RpcEvent {
-    if (event.type !== "session_settled") return event;
-    return { ...event, type: "agent_settled" };
+    if (event.type === "session_settled") return { ...event, type: "agent_settled" };
+    if (event.type === "available_commands_update") {
+      return { ...event, type: "commands_changed", commands: Array.isArray(event.commands) ? ompCommandDescriptors(event.commands) : [] };
+    }
+    return event;
   },
 };
 

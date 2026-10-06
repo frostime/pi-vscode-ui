@@ -6,6 +6,7 @@ import {
   PiRpcConnection,
   createRpcDialect,
   isExtensionUiRequest,
+  type RpcCommandDescriptor,
   type RpcEvent,
   type RpcExtensionUiRequest,
   type RpcExtensionUiResponse,
@@ -45,6 +46,7 @@ import {
 import { SessionEntryState } from "./SessionEntryState.js";
 import { resolvePiModelScope } from "../models/resolvePiModelScope.js";
 import { SessionViewState } from "./SessionViewState.js";
+import { OmpPromptCompatibility } from "./OmpPromptCompatibility.js";
 
 export interface SessionRuntimeHooks {
   onChange(runtime: SessionRuntime): void;
@@ -69,6 +71,7 @@ export class SessionRuntime {
   #id: string;
   #connection: PiRpcConnection | null = null;
   #api: PiRpcApi | null = null;
+  #ompPrompts: OmpPromptCompatibility | null = null;
   #extensionUi: ExtensionUiCoordinator | null = null;
   #starting: Promise<void> | null = null;
   #historyLoading: Promise<void> | null = null;
@@ -171,6 +174,7 @@ export class SessionRuntime {
     ]);
     this.#connection = null;
     this.#api = null;
+    this.#ompPrompts = null;
     this.#extensionUi = null;
     this.#historyEventBuffer = null;
     this.#entries.reset();
@@ -202,6 +206,17 @@ export class SessionRuntime {
       throw new Error("Slash commands are not supported by the selected runtime.");
     }
 
+    const ompPrompts = this.#ompPrompts;
+    if (ompPrompts && message.startsWith("/")) {
+      // Refresh before admission, not just on completion selection: manually typed
+      // commands and changed registrations must obey the same bounded surface.
+      const commands = await api.getCommands();
+      if (api !== this.#api || this.#disposed) throw new Error("The session process changed before submission.");
+      this.#viewState.setCommands(commands);
+      this.#notifyChange();
+      ompPrompts.assertSupported(message, normalizedImages.length, commands);
+    }
+    let requestId: string | undefined;
     const extensionCommand = await this.#resolveImmediateExtensionCommand(message);
     // Park while streaming or while an earlier prompt still awaits promotion; otherwise an idle-gap
     // appendUserPrompt can steal the next agent_start and leave queue bubbles stuck.
@@ -218,8 +233,13 @@ export class SessionRuntime {
         await api.prompt(message, {
           ...(normalizedImages.length ? { images: normalizedImages } : {}),
           streamingBehavior,
+          ...(ompPrompts ? { onRequestId: (id: string) => {
+            requestId = id;
+            ompPrompts.track(id, { queuedId });
+          } } : {}),
         });
       } catch (error) {
+        if (requestId) ompPrompts?.forget(requestId);
         this.#conversation.removeQueuedPrompt(queuedId);
         this.#conversation.appendNotice(errorMessage(error), "error");
         this.#notifyChange();
@@ -234,9 +254,14 @@ export class SessionRuntime {
     try {
       await api.prompt(message, {
         ...(normalizedImages.length ? { images: normalizedImages } : {}),
+        ...(ompPrompts ? { onRequestId: (id: string) => {
+          requestId = id;
+          ompPrompts.track(id, { turnId });
+        } } : {}),
       });
       if (extensionCommand) await this.#finishImmediateExtensionCommand(turnId);
     } catch (error) {
+      if (requestId) ompPrompts?.forget(requestId);
       if (extensionCommand && isExtensionCommandCompletionUnconfirmed(error)) {
         const warning = extensionCommandCompletionUnconfirmedMessage(extensionCommand);
         this.#conversation.appendNotice(warning, "warning");
@@ -605,6 +630,7 @@ export class SessionRuntime {
       dialect: createRpcDialect(compatibilityProfile.id),
     });
     const api = new PiRpcApi(connection);
+    this.#ompPrompts = compatibilityProfile.id === "oh-my-pi" ? new OmpPromptCompatibility() : null;
     this.#connection = connection;
     this.#api = api;
     this.#extensionUi = new ExtensionUiCoordinator(api, {
@@ -633,6 +659,7 @@ export class SessionRuntime {
       this.#stopLiveStatsRefresh();
       this.#conversation.finalizeLiveState();
       this.#conversation.clearQueuedPrompts();
+      this.#ompPrompts?.clearSubmissions();
       this.#viewState.setStatus("failed", errorMessage(error));
       this.#notifyChange();
     });
@@ -715,11 +742,21 @@ export class SessionRuntime {
       this.#viewState.setHistoryStatus("loading");
       this.#historyEventBuffer = [];
       this.#notifyChange();
-      const entryData = await api.getEntries();
+      let entryData = await api.getEntries();
+      let snapshotEventCount = 0;
+      // Custom events have no shared persisted ID. If any arrived during the
+      // snapshot, capture again after their delivery instead of guessing which
+      // were already included. A quiet capture covers all buffered customs.
+      while (this.#historyEventBuffer?.slice(snapshotEventCount).some(isCustomMessageEnd)) {
+        snapshotEventCount = this.#historyEventBuffer.length;
+        entryData = await api.getEntries();
+      }
       const bufferedEvents = this.#takeHistoryEvents();
       if (this.#disposed || api !== this.#api) return;
       this.#replacePersistedEntries(entryData.entries, entryData.leafId);
-      for (const event of bufferedEvents) this.#applyConnectionEvent(event);
+      for (const event of bufferedEvents) {
+        if (!isCustomMessageEnd(event)) this.#applyConnectionEvent(event);
+      }
       this.#notifyChange();
     } catch (error) {
       const bufferedEvents = this.#takeHistoryEvents();
@@ -740,6 +777,22 @@ export class SessionRuntime {
   }
 
   #applyConnectionEvent(event: RpcEvent): void {
+    const result = this.#ompPrompts?.takeResult(event);
+    if (result) {
+      if (!result.agentInvoked || result.status !== "completed") {
+        if ("queuedId" in result.target) this.#conversation.removeQueuedPrompt(result.target.queuedId);
+        else this.#conversation.completeTurn(result.target.turnId, result.status);
+        if (!result.agentInvoked && result.error) this.#conversation.appendNotice(result.error, "error");
+      }
+      // A prompt ending is not necessarily a session ending. Only OMP's explicit
+      // quiescence flag closes the common lifecycle; other queued work may remain.
+      if (result.sessionSettled) this.#applyConnectionEvent({ type: "agent_settled" });
+      return;
+    }
+    if (event.type === "commands_changed" && Array.isArray(event.commands)) {
+      this.#viewState.setCommands(event.commands as RpcCommandDescriptor[]);
+      return;
+    }
     const latestTurn = event.type === "agent_settled" ? conversationTurns(this.view).at(-1) : undefined;
     const settlingTurnId = this.view.isStreaming ? latestTurn?.id : undefined;
     const abortRequested = this.#abortRequested;
@@ -748,7 +801,7 @@ export class SessionRuntime {
       else this.#extensionUi?.handle(event);
     } else {
       this.#viewState.applyEvent(event);
-      this.#conversation.applyEvent(event);
+      this.#conversation.applyEvent(this.#ompPrompts?.projectEvent(event) ?? event);
       if (event.type === "compaction_end" && typeof event.errorMessage === "string") {
         this.#conversation.appendNotice(event.errorMessage, "error");
       }
@@ -849,7 +902,7 @@ export class SessionRuntime {
     const update = this.#entries.applyIncrement(incremental.entries, incremental.leafId);
     if (update.kind === "append") {
       const edges = projectActiveBranchEdges(update.index);
-      if (this.#conversation.reconcileEntries(update.activePathAppend, edges) === "applied") {
+      if (this.#conversation.reconcileEntries(this.#ompPrompts?.projectEntries(update.activePathAppend) ?? update.activePathAppend, edges) === "applied") {
         const cacheHit = latestAssistantCacheHit(update.activePathAppend);
         if (cacheHit.found) this.#viewState.setCacheHitPercent(cacheHit.percent);
         return;
@@ -866,7 +919,7 @@ export class SessionRuntime {
     leafId: string | null,
   ): void {
     const replacement = this.#entries.replace(entries, leafId);
-    this.#conversation.replaceEntries(replacement.activePath, projectActiveBranchEdges(replacement.index));
+    this.#conversation.replaceEntries(this.#ompPrompts?.projectEntries(replacement.activePath) ?? replacement.activePath, projectActiveBranchEdges(replacement.index));
     this.#viewState.setCacheHitPercent(latestAssistantCacheHit(replacement.activePath).percent);
     this.#viewState.setHistoryStatus("loaded");
     this.#viewState.setSessionTreeAvailable(this.#runtimeCapabilities().sessionTree && (this.#sessionTreeBridge?.available ?? false));
@@ -989,6 +1042,10 @@ const LIVE_STATS_REFRESH_INTERVAL_MS = 3_000;
 /** Short multi-delay idle checks after extension commands (aligned with pi-acp). */
 const EXTENSION_COMMAND_IDLE_CHECK_DELAYS_MS = [0, 25, 75] as const;
 const IMMEDIATE_EXTENSION_UI_METHODS = new Set(["select", "confirm", "input", "editor"]);
+
+function isCustomMessageEnd(event: RpcEvent): boolean {
+  return event.type === "message_end" && isRecord(event.message) && event.message.role === "custom";
+}
 
 function shouldBufferDuringHistoryLoad(event: RpcEvent): boolean {
   return !isExtensionUiRequest(event) || !IMMEDIATE_EXTENSION_UI_METHODS.has(event.method);

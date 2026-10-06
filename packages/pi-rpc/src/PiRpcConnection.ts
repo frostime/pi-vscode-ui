@@ -180,7 +180,7 @@ export class PiRpcConnection {
     return () => this.#exitListeners.delete(listener);
   }
 
-  async request<T = unknown>(command: RpcCommand, timeoutMs?: number | null): Promise<T> {
+  async request<T = unknown>(command: RpcCommand, timeoutMs?: number | null, onRequestId?: (id: string) => void): Promise<T> {
     const child = this.#child;
     const stdin = child?.stdin;
     if (!child || !stdin) throw new PiRpcProcessError("Pi RPC connection is not started");
@@ -190,6 +190,8 @@ export class PiRpcConnection {
     }
 
     const id = `req_${++this.#requestId}`;
+    // Observe correlation before writing: terminal events may precede the acknowledgement.
+    onRequestId?.(id);
     const deadline = timeoutMs === null ? null : timeoutMs ?? this.#options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     const response = await new Promise<RpcResponse>((resolve, reject) => {
       const timer = deadline === null ? null : setTimeout(() => {
@@ -209,7 +211,9 @@ export class PiRpcConnection {
     if (!response.success) {
       throw this.#withStderr(new PiRpcCommandError(response.error ?? `${command.type} failed`, command.type));
     }
-    return response.data as T;
+    return (this.#dialect.normalizeResponseData
+      ? this.#dialect.normalizeResponseData(command, response.data)
+      : response.data) as T;
   }
 
   sendNotification(command: RpcCommand): Promise<void> {
@@ -220,7 +224,8 @@ export class PiRpcConnection {
 
     return new Promise((resolve, reject) => {
       try {
-        stdin.write(`${JSON.stringify(command)}\n`, (error) => {
+        const wireCommand = this.#dialect.normalizeCommand?.(command) ?? command;
+        stdin.write(`${JSON.stringify(wireCommand)}\n`, (error) => {
           if (error) reject(error);
           else resolve();
         });
