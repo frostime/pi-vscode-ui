@@ -1,4 +1,6 @@
-import { access, readFile, realpath } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
+
+import { canonicalPath } from "../canonicalPath.js";
 import { constants } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -182,15 +184,6 @@ async function fileExists(path: string): Promise<boolean> {
     return true;
   } catch {
     return false;
-  }
-}
-
-async function canonicalPath(path: string): Promise<string> {
-  const absolute = resolve(path);
-  try {
-    return await realpath(absolute);
-  } catch {
-    return absolute;
   }
 }
 

@@ -139,4 +139,28 @@ describe("Session working-directory discovery", () => {
     });
     expect(findSessionWorkingDirectory(result.directories, resolve("/worktrees/feature"))).toBeUndefined();
   });
+
+  it("canonicalizes the workspace cwd to the on-disk spelling through the platform", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "frostpi-cwd-"));
+    const lowercased = parent.slice(0, 1).toLowerCase() + parent.slice(1);
+    expect(lowercased).not.toEqual(parent); // only meaningful on case-varying filesystems
+
+    const result = await discoverSessionWorkingDirectories(lowercased, {
+      listWorktrees: () => Promise.reject(new Error("git unavailable")),
+      isDirectory: () => Promise.resolve(true),
+    });
+
+    expect(result.directories[0]?.cwd).toBe(await realpath(parent));
+  });
+
+  it("falls back to the lexically resolved path when the target does not exist", async () => {
+    const missing = resolve(tmpdir(), "frostpi-cwd-missing", "deep");
+
+    const result = await discoverSessionWorkingDirectories(missing, {
+      listWorktrees: () => Promise.reject(new Error("git unavailable")),
+      isDirectory: () => Promise.resolve(true),
+    });
+
+    expect(result.directories[0]?.cwd).toBe(missing);
+  });
 });

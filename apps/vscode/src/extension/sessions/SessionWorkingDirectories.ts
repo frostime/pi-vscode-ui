@@ -3,6 +3,8 @@ import { stat } from "node:fs/promises";
 import { promisify } from "node:util";
 import { basename, isAbsolute, normalize, relative, resolve, sep } from "node:path";
 
+import { canonicalPath } from "../_shared/canonicalPath.js";
+
 const execFileAsync = promisify(execFile);
 
 export interface GitWorktree {
@@ -40,7 +42,7 @@ export async function discoverSessionWorkingDirectories(
   workspaceCwd: string,
   dependencies: Partial<DiscoveryDependencies> = {},
 ): Promise<SessionWorkingDirectoryDiscovery> {
-  const cwd = resolve(workspaceCwd);
+  const cwd = await canonicalPath(workspaceCwd);
   const fallback = workspaceOnly(cwd);
   const listWorktrees = dependencies.listWorktrees ?? listGitWorktrees;
   const isDirectory = dependencies.isDirectory ?? pathIsDirectory;
