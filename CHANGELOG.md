@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.3] - 2026-10-10
+
 ### Fixed
 
 - Normalize Windows working-directory casing before starting Pi so FrostPi-created sessions remain discoverable in Pi's resume picker. Keep FrostPi's session discovery and resume working through symbolic-link and junction paths while preserving workspace-scoped configuration.
@@ -491,7 +493,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.2...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.3...HEAD
+[0.15.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.2...v0.15.3
 [0.15.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.14.5...v0.15.0
