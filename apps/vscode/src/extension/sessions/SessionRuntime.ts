@@ -21,6 +21,7 @@ import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
 import type { QuestionDraftSubmission } from "../../shared/question-tool/questionToolProtocol.js";
 import type { AgentTurnView, ImageAttachmentView } from "../../shared/model/conversationModel.js";
 import type { ComposerSeedView, SessionViewModel } from "../../shared/model/sessionViewModel.js";
+import { canonicalPath } from "../_shared/canonicalPath.js";
 import { loadPiSettings, showCacheMissNoticesEnabled } from "../_shared/pi-settings/loadPiSettings.js";
 import { normalizeImageAttachments, validateProjectedImageAttachments } from "../attachments/normalizeImageAttachment.js";
 import type { FrostPiConfiguration } from "../configuration/configurationTypes.js";
@@ -613,8 +614,13 @@ export class SessionRuntime {
     const proxyEnvironment = buildPiProcessEnvironment(configuration.proxy, credentials, vscodeProxy);
     const frostpiExtension = vscode.extensions.getExtension("frostime.frostpi");
     const frostpiVersion = (frostpiExtension?.packageJSON as { version?: string } | undefined)?.version ?? "unknown";
+    // Spawn only with the platform-normalized cwd: VS Code Uri.fsPath hands back
+    // lowercase Windows drive letters, and Pi writes the spawn cwd verbatim into
+    // the session header, where case-sensitive comparisons then misbehave.
+    const spawnCwd = await canonicalPath(this.cwd);
+    if (this.#disposed || lifecycleVersion !== this.#lifecycleVersion) return;
     const connection = new PiRpcConnection({
-      cwd: this.cwd,
+      cwd: spawnCwd,
       args,
       env: {
         PI_INSIDE_FROSTPI: "1",

@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, realpath, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, normalize, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -110,9 +110,13 @@ describe("Session working-directory discovery", () => {
     await execFileAsync("git", ["-c", "user.name=FrostPi Tests", "-c", "user.email=frostpi@example.invalid", "commit", "-m", "fixture"], { cwd: main });
     await execFileAsync("git", ["worktree", "add", "--detach", linked], { cwd: main });
 
-    const result = await discoverSessionWorkingDirectories(main);
+    const alias = join(parent, "main-alias");
+    await symlink(main, alias, process.platform === "win32" ? "junction" : "dir");
+    const result = await discoverSessionWorkingDirectories(alias);
 
     expect(result.authoritative).toBe(true);
+    expect(result.directories.every((directory) => directory.workspaceFolderCwd === alias)).toBe(true);
+    expect(findSessionWorkingDirectory(result.directories, alias)?.cwd).toBe(main);
     expect(findSessionWorkingDirectory(result.directories, linked)).toMatchObject({
       cwd: resolve(linked),
       worktreeRoot: resolve(linked),
@@ -138,5 +142,50 @@ describe("Session working-directory discovery", () => {
       }],
     });
     expect(findSessionWorkingDirectory(result.directories, resolve("/worktrees/feature"))).toBeUndefined();
+  });
+
+  it.skipIf(process.platform !== "win32")("canonicalizes Windows drive and directory casing", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "frostpi-cwd-"));
+    const directory = join(parent, "MixedCase");
+    await mkdir(directory);
+    const lowercased = directory.toLowerCase();
+
+    const result = await discoverSessionWorkingDirectories(lowercased, {
+      listWorktrees: () => Promise.reject(new Error("git unavailable")),
+    });
+
+    expect(result.directories[0]).toMatchObject({
+      cwd: await realpath(directory),
+      workspaceFolderCwd: resolve(lowercased),
+    });
+  });
+
+  it("preserves the workspace alias and matches both cwd spellings when Git is unavailable", async () => {
+    const parent = await realpath(await mkdtemp(join(tmpdir(), "frostpi-cwd-alias-")));
+    const target = join(parent, "target");
+    const alias = join(parent, "alias");
+    await mkdir(target);
+    await symlink(target, alias, process.platform === "win32" ? "junction" : "dir");
+
+    const result = await discoverSessionWorkingDirectories(alias, {
+      listWorktrees: () => Promise.reject(new Error("git unavailable")),
+    });
+
+    expect(result.authoritative).toBe(false);
+    expect(result.directories[0]).toMatchObject({ cwd: target, workspaceFolderCwd: alias });
+    expect(findSessionWorkingDirectory(result.directories, alias)).toBe(result.directories[0]);
+    expect(findSessionWorkingDirectory(result.directories, target)).toBe(result.directories[0]);
+    expect(findSessionWorkingDirectory(result.directories, parent)).toBeUndefined();
+  });
+
+  it("falls back to the lexically resolved path when the target does not exist", async () => {
+    const missing = resolve(tmpdir(), "frostpi-cwd-missing", "deep");
+
+    const result = await discoverSessionWorkingDirectories(missing, {
+      listWorktrees: () => Promise.reject(new Error("git unavailable")),
+      isDirectory: () => Promise.resolve(true),
+    });
+
+    expect(result.directories[0]?.cwd).toBe(missing);
   });
 });

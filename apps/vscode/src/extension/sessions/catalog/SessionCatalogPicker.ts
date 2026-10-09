@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 
+import { sameCanonicalPath } from "../../_shared/canonicalPath.js";
 import { workspaceUriForPath } from "../../configuration/workspaceScope.js";
 import type { RuntimeCompatibility } from "../../configuration/runtimeCompatibility.js";
 import {
@@ -9,7 +10,6 @@ import {
 import {
   discoverPiSessions,
   readPiSessionMetadata,
-  samePath,
   type PiSessionCatalogEntry,
 } from "./SessionCatalog.js";
 
@@ -73,7 +73,7 @@ export function buildSessionQuickPickItems(
   const groups = directories
     .map((directory) => {
       const group = sessions
-        .filter((entry) => samePath(entry.cwd, directory.cwd))
+        .filter((entry) => sameCanonicalPath(entry.cwd, directory.cwd))
         .slice()
         .sort((a, b) => b.updatedAt - a.updatedAt);
       return { directory, group, latest: group[0]?.updatedAt ?? 0 };

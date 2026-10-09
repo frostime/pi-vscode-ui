@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -247,6 +247,33 @@ process.on("SIGTERM", () => process.exit(0));
     expect(new Set(testEnvironment.configurationScopes)).toEqual(new Set([main]));
   });
 
+  it("keeps the alias workspace configuration when creating and restarting a non-Git session", async () => {
+    const parent = await realpath(await mkdtemp(join(tmpdir(), "frostpi-registry-alias-")));
+    const target = join(parent, "target");
+    const alias = join(parent, "alias");
+    await mkdir(target);
+    await symlink(target, alias, process.platform === "win32" ? "junction" : "dir");
+    await writeFile(join(target, ".frostpi-e2e-session.jsonl"),
+      JSON.stringify({ type: "session", version: 3, id: "alias", cwd: target }) + "\n");
+    testEnvironment.cwd = alias;
+    testEnvironment.piExecutable = resolve("test/e2e/fake-pi.cjs");
+    const actual = await vi.importActual<typeof SessionWorkingDirectoriesModule>(
+      "../../src/extension/sessions/SessionWorkingDirectories.js",
+    );
+    const registry = new SessionRegistry(
+      createContext() as never,
+      { error: vi.fn(), info: vi.fn() } as never,
+      actual.discoverSessionWorkingDirectories,
+    );
+    registries.push(registry);
+
+    const id = (await registry.createSession())!;
+    await registry.retrySession(id);
+
+    expect(registry.snapshot().activeSession).toMatchObject({ id, cwd: target, status: "ready" });
+    expect(new Set(testEnvironment.configurationScopes)).toEqual(new Set([alias]));
+  });
+
   it("removes persisted sessions only after Git confirms their worktree is gone", async () => {
     const main = await mkdtemp(join(tmpdir(), "frostpi-registry-main-"));
     const removed = resolve(main, "../removed-worktree");
@@ -307,18 +334,20 @@ process.on("SIGTERM", () => process.exit(0));
     expect(registry.snapshot().sessions).toEqual([expect.objectContaining({ id: "uncertain", cwd: external })]);
   });
 
-  it("uses the anchor workspace setting when deciding whether to start a restored worktree session", async () => {
+  it("uses the anchor workspace setting for an alias-spelled restored worktree session", async () => {
     const main = await mkdtemp(join(tmpdir(), "frostpi-registry-main-"));
     const linked = await mkdtemp(join(tmpdir(), "frostpi-registry-linked-"));
+    const linkedAlias = join(main, "linked-alias");
+    await symlink(linked, linkedAlias, process.platform === "win32" ? "junction" : "dir");
     testEnvironment.cwd = main;
     testEnvironment.piExecutable = resolve("test/e2e/fake-pi.cjs");
     testEnvironment.startSessionOnOpenByCwd.set(main, false);
-    testEnvironment.startSessionOnOpenByCwd.set(linked, true);
+    testEnvironment.startSessionOnOpenByCwd.set(linkedAlias, true);
     const context = createContext();
     context.workspaceState.get = () => ({
       version: 1,
       activeSessionId: "linked",
-      sessions: [{ id: "linked", title: "Linked task", cwd: linked, updatedAt: 1 }],
+      sessions: [{ id: "linked", title: "Linked task", cwd: linkedAlias, updatedAt: 1 }],
     });
     const registry = new SessionRegistry(
       context as never,
@@ -332,10 +361,12 @@ process.on("SIGTERM", () => process.exit(0));
       }),
     );
     registries.push(registry);
+    testEnvironment.configurationScopes = [];
 
     await registry.ensureInitialSession();
 
-    expect(registry.snapshot().activeSession).toMatchObject({ cwd: linked, status: "stopped" });
+    expect(registry.snapshot().activeSession).toMatchObject({ cwd: linkedAlias, status: "stopped" });
+    expect(new Set(testEnvironment.configurationScopes)).toEqual(new Set([main]));
   });
 
   it("rejects prompts while a resumed conversation history is loading", async () => {

@@ -5,7 +5,7 @@ scope:
   - /apps/vscode/src/extension/sessions/**
   - /apps/vscode/src/extension/conversation/**
   - /apps/vscode/src/extension/extension-ui/**
-updated: 2026-10-04
+updated: 2026-10-07
 ---
 
 # Pi Session Lifecycle
@@ -15,6 +15,8 @@ updated: 2026-10-04
 One `SessionRuntime` owns exactly one live `pi --mode rpc` or selected compatibility-runtime `--mode rpc` process. The RPC package normalizes runtime-specific isomorphic event vocabulary before the runtime ingress; the session lifecycle consumes only the Pi-shaped contract. `SessionRegistry` owns runtimes, sidebar selection (`activeSessionId`), metadata persistence, and arbitrary per-Session views; the child runtime owns session JSONL and conversation persistence. The `oh-my-pi` compatibility profile is limited to FrostPi's launch, RPC, session discovery, and resume surface; it does not claim complete OMP support. Sidebar and editor-tab Webviews are disposable presentations and never control Runtime lifetime.
 
 New/Resume anchor to the active editor's workspace folder, otherwise the first folder. The anchor and existing non-bare, non-prunable worktrees of the same repository are allowed; a workspace opened below a worktree root maps that relative subdirectory into linked worktrees only when it exists. The Webview cannot provide a cwd.
+
+Discovery and process starts canonicalize cwds through `realpath`, with a lexical fallback when resolution fails. This normalizes Windows casing before Pi records the cwd. Discovery keeps the original workspace-folder path separately for resource-scoped configuration. Working-directory authorization, resume matching, and workspace-URI lookup recognize both alias and real paths; persisted records keep their stored spelling. No session JSONL is rewritten.
 
 Multi-root New/Resume does not aggregate repositories, but persisted records are validated against every open root. External worktree sessions inherit resource-scoped configuration from their anchor. Git authorization is refreshed on New, Resume, restoration, and before starting/restarting a stopped external session. Confirmed worktree removal drops FrostPi metadata without deleting JSONL; failed discovery neither drops uncertain records nor authorizes process start.
 
