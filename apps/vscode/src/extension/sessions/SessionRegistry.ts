@@ -8,6 +8,7 @@ import * as vscode from "vscode";
 import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
 import type { QuestionDraftSubmission } from "../../shared/question-tool/questionToolProtocol.js";
 import type { SessionRuntimeStatus, SessionSummaryView, SessionViewModel, WorkspaceViewModel } from "../../shared/model/sessionViewModel.js";
+import { sameCanonicalPath } from "../_shared/canonicalPath.js";
 import { readConfiguration } from "../configuration/readConfiguration.js";
 import { workspaceUriForPath } from "../configuration/workspaceScope.js";
 import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
@@ -224,7 +225,7 @@ export class SessionRegistry implements vscode.Disposable {
     this.#assertNoForkOperation();
     const existing = [...this.#records.values()].find((record) => record.sessionFile && samePath(record.sessionFile, entry.path));
     if (existing) {
-      if (workingDirectory) this.#rememberWorkingDirectory(workingDirectory);
+      if (workingDirectory) this.#rememberWorkingDirectory(workingDirectory, existing.cwd);
       if (existing.id !== this.#activeSessionId) await this.#discardActiveTemporarySession();
       await this.activateSession(existing.id);
       return existing.id;
@@ -240,7 +241,7 @@ export class SessionRegistry implements vscode.Disposable {
       updatedAt: entry.updatedAt,
     };
     this.#records.set(id, record);
-    if (workingDirectory) this.#rememberWorkingDirectory(workingDirectory);
+    if (workingDirectory) this.#rememberWorkingDirectory(workingDirectory, record.cwd);
     const runtime = this.#createRuntime(record);
     this.#runtimes.set(id, runtime);
     this.#activeSessionId = id;
@@ -593,7 +594,7 @@ export class SessionRegistry implements vscode.Disposable {
         stale.push(record);
         continue;
       }
-      this.#rememberWorkingDirectory(directory);
+      this.#rememberWorkingDirectory(directory, record.cwd);
       this.#runtimes.get(record.id)?.refreshConfigurationState();
     }
     if (!stale.length) return;
@@ -617,7 +618,7 @@ export class SessionRegistry implements vscode.Disposable {
     const allowed = discoveries.flatMap((discovery) => discovery.directories);
     const directory = findSessionWorkingDirectory(allowed, runtime.cwd);
     if (directory) {
-      this.#rememberWorkingDirectory(directory);
+      this.#rememberWorkingDirectory(directory, runtime.cwd);
       runtime.refreshConfigurationState();
       return true;
     }
@@ -938,8 +939,9 @@ export class SessionRegistry implements vscode.Disposable {
     this.#treeInteractionSessions.delete(sessionId);
   }
 
-  #rememberWorkingDirectory(directory: SessionWorkingDirectory): void {
+  #rememberWorkingDirectory(directory: SessionWorkingDirectory, sessionCwd = directory.cwd): void {
     this.#workingDirectoriesByCwd.set(normalizedPath(directory.cwd), directory);
+    this.#workingDirectoriesByCwd.set(normalizedPath(sessionCwd), directory);
   }
 
   #configurationScopeCwd(cwd: string): string {
@@ -998,7 +1000,7 @@ async function pickSessionWorkingDirectory(
 }
 
 function isOpenWorkspaceFolder(cwd: string): boolean {
-  return Boolean(vscode.workspace.workspaceFolders?.some((folder) => samePath(folder.uri.fsPath, cwd)));
+  return Boolean(vscode.workspace.workspaceFolders?.some((folder) => sameCanonicalPath(folder.uri.fsPath, cwd)));
 }
 
 function forkSessionName(title: string): string {

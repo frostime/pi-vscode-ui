@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Normalize Windows working-directory casing before starting Pi so FrostPi-created sessions remain discoverable in Pi's resume picker. Keep FrostPi's session discovery and resume working through symbolic-link and junction paths while preserving workspace-scoped configuration.
+
 ## [0.15.2] - 2026-10-06
 
 ### Fixed

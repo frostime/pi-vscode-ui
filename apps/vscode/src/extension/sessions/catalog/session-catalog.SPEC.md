@@ -3,7 +3,7 @@ title: Existing-session discovery and resume
 description: Session roots, bounded discovery, metadata recovery, worktree ownership, and browse constraints.
 scope:
   - /apps/vscode/src/extension/sessions/catalog/**
-updated: 2026-07-28
+updated: 2026-10-07
 ---
 
 # Existing-session discovery and resume
@@ -14,7 +14,7 @@ The catalog provides Pi `/resume`-equivalent discovery for the active workspace 
 
 For the default `pi` compatibility profile, root precedence is: `--session-dir` in `frostpi.pi.arguments`, `PI_CODING_AGENT_SESSION_DIR`, project `.pi/settings.json` `sessionDir`, user `<PI_CODING_AGENT_DIR>/settings.json` `sessionDir`, then Pi's default `<PI_CODING_AGENT_DIR>/sessions` (`~/.pi/agent` when the environment override is absent). The `oh-my-pi` profile uses `~/.omp/agent/sessions` and does not read Pi settings or Pi session-directory environment overrides; an explicit `--session-dir` is the only root override in that profile.
 
-Relative `sessionDir` values expand `~` and resolve from the relevant workspace/worktree directory used as Pi cwd, never from the settings file. Roots are resolved per allowed working directory, deduplicated, and all remain candidates so sessions survive configuration changes. A candidate JSONL header `cwd` must match an allowed directory.
+Relative `sessionDir` values expand `~` and resolve from the relevant workspace/worktree directory used as Pi cwd, never from the settings file. Roots are resolved per allowed working directory, deduplicated, and all remain candidates so sessions survive configuration changes. A candidate JSONL header `cwd` must match an allowed directory, including a symbolic-link/junction alias of the same directory. Catalog filtering, browse validation, and picker grouping use the same path-equivalence rule without rewriting the header.
 
 Runtime extension hooks that rewrite storage are not discoverable; **Browse for a session file…** is the recovery path.
 

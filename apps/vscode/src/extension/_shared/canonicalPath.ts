@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { realpath } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -15,4 +16,27 @@ export async function canonicalPath(path: string): Promise<string> {
   } catch {
     return absolute;
   }
+}
+
+/** Compare aliases without changing their spelling. The lexical fast path avoids
+ * filesystem access for ordinary matches; the synchronous fallback also works
+ * at VS Code's synchronous configuration-scope boundary.
+ */
+export function sameCanonicalPath(left: string, right: string): boolean {
+  const a = resolve(left);
+  const b = resolve(right);
+  if (pathKey(a) === pathKey(b)) return true;
+  return pathKey(realPathOrAbsolute(a)) === pathKey(realPathOrAbsolute(b));
+}
+
+function realPathOrAbsolute(absolute: string): string {
+  try {
+    return realpathSync.native(absolute);
+  } catch {
+    return absolute;
+  }
+}
+
+function pathKey(path: string): string {
+  return process.platform === "win32" ? path.toLowerCase() : path;
 }

@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises";
 import { promisify } from "node:util";
 import { basename, isAbsolute, normalize, relative, resolve, sep } from "node:path";
 
-import { canonicalPath } from "../_shared/canonicalPath.js";
+import { canonicalPath, sameCanonicalPath } from "../_shared/canonicalPath.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -42,8 +42,9 @@ export async function discoverSessionWorkingDirectories(
   workspaceCwd: string,
   dependencies: Partial<DiscoveryDependencies> = {},
 ): Promise<SessionWorkingDirectoryDiscovery> {
-  const cwd = await canonicalPath(workspaceCwd);
-  const fallback = workspaceOnly(cwd);
+  const workspaceFolderCwd = resolve(workspaceCwd);
+  const cwd = await canonicalPath(workspaceFolderCwd);
+  const fallback = workspaceOnly(cwd, workspaceFolderCwd);
   const listWorktrees = dependencies.listWorktrees ?? listGitWorktrees;
   const isDirectory = dependencies.isDirectory ?? pathIsDirectory;
 
@@ -62,7 +63,7 @@ export async function discoverSessionWorkingDirectories(
   const relativeDirectory = relative(current.path, cwd);
   const directories: SessionWorkingDirectory[] = [{
     cwd,
-    workspaceFolderCwd: cwd,
+    workspaceFolderCwd,
     worktreeRoot: current.path,
     directoryName: basename(current.path),
     ...(current.branch ? { branch: current.branch } : {}),
@@ -76,7 +77,7 @@ export async function discoverSessionWorkingDirectories(
     if (!await isDirectory(targetCwd)) continue;
     directories.push({
       cwd: targetCwd,
-      workspaceFolderCwd: cwd,
+      workspaceFolderCwd,
       worktreeRoot: worktree.path,
       directoryName: basename(worktree.path),
       ...(worktree.branch ? { branch: worktree.branch } : {}),
@@ -136,15 +137,16 @@ export function findSessionWorkingDirectory(
   directories: readonly SessionWorkingDirectory[],
   cwd: string,
 ): SessionWorkingDirectory | undefined {
-  return directories.find((directory) => samePath(directory.cwd, cwd));
+  return directories.find((directory) => samePath(directory.cwd, cwd))
+    ?? directories.find((directory) => sameCanonicalPath(directory.cwd, cwd));
 }
 
-function workspaceOnly(cwd: string): SessionWorkingDirectoryDiscovery {
+function workspaceOnly(cwd: string, workspaceFolderCwd: string): SessionWorkingDirectoryDiscovery {
   return {
     authoritative: false,
     directories: [{
       cwd,
-      workspaceFolderCwd: cwd,
+      workspaceFolderCwd,
       directoryName: basename(cwd),
       isCurrent: true,
     }],

@@ -1,9 +1,9 @@
 import { access, readFile } from "node:fs/promises";
-
-import { canonicalPath } from "../canonicalPath.js";
 import { constants } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+
+import { canonicalPath } from "../canonicalPath.js";
 
 const TRUST_REQUIRING_PROJECT_ENTRIES = [
   "settings.json",

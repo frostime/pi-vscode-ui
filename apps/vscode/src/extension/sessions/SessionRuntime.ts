@@ -618,6 +618,7 @@ export class SessionRuntime {
     // lowercase Windows drive letters, and Pi writes the spawn cwd verbatim into
     // the session header, where case-sensitive comparisons then misbehave.
     const spawnCwd = await canonicalPath(this.cwd);
+    if (this.#disposed || lifecycleVersion !== this.#lifecycleVersion) return;
     const connection = new PiRpcConnection({
       cwd: spawnCwd,
       args,

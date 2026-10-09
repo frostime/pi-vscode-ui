@@ -1,4 +1,4 @@
-import { appendFile, mkdir, mkdtemp, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, realpath, stat, symlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, normalize, resolve } from "node:path";
 
@@ -91,6 +91,33 @@ describe("Pi session metadata", () => {
 });
 
 describe("session discovery across worktrees", () => {
+  it.each(["bounded reader", "fast scan"])("keeps and groups alias-spelled sessions from the %s", async (source) => {
+    const parent = await realpath(await mkdtemp(join(tmpdir(), "frostpi-session-alias-")));
+    const target = join(parent, "target");
+    const alias = join(parent, "alias");
+    await mkdir(target);
+    await symlink(target, alias, process.platform === "win32" ? "junction" : "dir");
+    const path = join(target, "session.jsonl");
+    await writeFile(path, [
+      JSON.stringify({ type: "session", version: 3, id: "alias", cwd: alias }),
+      JSON.stringify({ type: "session_info", name: "Alias session" }),
+    ].join("\n"));
+    const directories = [workingDirectory(target)];
+
+    const sessions = await discoverPiSessions(
+      directories,
+      [],
+      "pi",
+      () => Promise.resolve([target]),
+      () => source === "fast scan"
+        ? completeScan(path, alias, { name: "Alias session" })
+        : Promise.resolve({ complete: false }),
+    );
+
+    expect(sessions).toMatchObject([{ path, cwd: alias, title: "Alias session" }]);
+    expect(buildSessionQuickPickItems(sessions, directories).map((item) => item.entry).filter(Boolean)).toEqual(sessions);
+  });
+
   it("uses a complete fast scan without reading transcript previews", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-fast-session-"));
     const path = join(dir, "middle-title.jsonl");
