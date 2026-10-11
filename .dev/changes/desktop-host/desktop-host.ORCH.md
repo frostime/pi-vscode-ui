@@ -1,6 +1,6 @@
 # Desktop 宿主：顶层计划
 
-这是本 change 的唯一推进入口。先读 [目标与边界](desktop-host.DEV-SPEC.md)，按需查阅 [Issues](desktop-host.ISSUES.md) 和 [首步边界调研说明](research/host-boundary.RESEARCH.md)。不要把本计划当作已生效的模块契约。
+这是本 change 的唯一推进入口。先读 [目标与边界](desktop-host.DEV-SPEC.md)，按需查阅 [Issues](desktop-host.ISSUES.md)、[首步边界调研说明](research/host-boundary.RESEARCH.md) 和 [调研报告](research/host-boundary.REPORT.md)。不要把本计划当作已生效的模块契约。
 
 ## 目标与成功判断
 
@@ -12,38 +12,38 @@
 
 ## 当前证据
 
-初步源码审计已完成，支持“基础可行性高、需要局部共享化重构”的判断。已检查直接及部分间接依赖、关键状态语义和构建入口，具体证据保存在调研说明中。
+边界专项调研已形成 [报告](research/host-boundary.REPORT.md)。除源码和契约复核外，临时 Runtime 实验在无 vscode mock 的 Node 中跑通受控 Pi 对话；临时包子入口实验编译了现有 App.svelte、共享样式与字体，并检查 Node/浏览器依赖图隔离。现有相关基线测试共 86 项通过。
 
-尚未运行 Desktop、构建候选共享包或执行重构后的验证。当前不能报告两端迁移已成功，也不能据此给出完整工期。最小窗口不是主要成本；Registry、展示/草稿策略及跨宿主构建是主要待验证部分。
+尚未实施生产重构，未验证正式 workspace 包接线、迁移后类型检查/插件打包、真实 Pi 或 Desktop。当前不能报告两端迁移成功或给出完整工期。报告建议首步限于 Runtime 解耦与 core/shared 提取；Registry 全量拆分、展示/草稿策略和真实 GUI 环境仍需后续证据。
 
 ## 分支与变更归属
 
 | 分支 | 用途 | 接续方式 |
 |---|---|---|
-| `feat/desktop-host` | 顶层集成分支；本轮只提交规划工件 | 从 `main@8c88f21` 切出，当前检出此分支 |
-| `docs/desktop-host-boundary-research` | 首步重构的独立调研子分支 | 从顶层规划提交切出；本轮预创建，不开展调研 |
+| `feat/desktop-host` | 顶层集成分支 | 从 `main@8c88f21` 切出；主工作区保持此分支 |
+| `docs/desktop-host-boundary-research` | 首步重构的独立调研子分支 | 从规划提交 `05c1de6` 切出；在独立 worktree 交付报告和计划状态修订 |
 | `refactor/desktop-host-boundary` | 边界确认后的首步重构 | 尚未创建；报告确认并整合后再从顶层切出 |
 
 Git 没有自动的父子分支关系，这里的“子分支”指从顶层指定提交切出，并将结果整合回顶层。调研结论只以文档结果回流；不能把实验或未经确认的生产改动顺带合入。
 
-本轮授权是建立目录、顶层规划和分支，不是实施 Desktop 或重构。后续在顶层审阅结果后再展开下一步。合并、推送及进入 main 另行确认；不在本轮执行。
+专项调研已获用户启动授权，授权限于研究、临时实验和报告，不包含生产重构或 Desktop 实现。后续在顶层审阅结果后再展开下一步。合并、推送及进入 main 另行确认；本轮不执行。
 
-如后续需要多 Agent 并行写入，用仓库约定的 `.worktrees/` 隔离分支；现在不创建 worktree 或安装 Desktop 依赖。长重构需要 checkpoint 时，从对应重构分支另开 `wip/*`，按既有 Git 规范整合。
+研究 worktree 为 `.worktrees/261011_desktop-host-boundary-research`；不安装 Desktop 依赖。后续多 Agent 并行写入继续用 `.worktrees/` 隔离。长重构需要 checkpoint 时，从对应重构分支另开 `wip/*`，按既有 Git 规范整合。
 
 ## 推进路径
 
 ### 近期：先决定第一步重构
 
-[启动边界专项调研] << CURRENT
-#WAITING: 本轮只建立规划与预创建研究分支；待用户确认启动专项调研。
+[启动边界专项调研]
+#DONE: 已完成源码/契约复核、两个临时实验和局部基线测试，交付 [调研报告](research/host-boundary.REPORT.md)。生产源码未改。
 
-输入是现有源码、模块契约和上述共识。按 [调研说明](research/host-boundary.RESEARCH.md) 在独立分支形成报告，回答候选边界、包入口、构建路径和最小迁移范围。已知源码事实不重复全仓泛查，只复核会改变决定的路径。
+报告建议原位置先做薄宿主输入，再提取一个客户端包的 core/shared。Registry 只调整创建接线，不在首步改变侧边栏/标签页、草稿或生命周期策略。包入口实验提供可行性证据，正式 workspace 与迁移后检查仍是重构验收内容。
 
-OPEN 第一条共享链路的接口、代码归属与导出/构建方式。
-    这决定实际重构范围。调研比较薄接口和物理包组织，不能以预想的目录树替代运行和依赖证据。
+[确认首步重构边界] << CURRENT
+#WAITING: 待用户审阅报告，确认是否接受 Runtime 解耦与 core/shared 提取的首步范围；尚未批准重构。
 
-[确认首步重构边界]
-#TODO
+OPEN 首步范围与入口组织的正式确认。
+    若用户希望同时共享 UI/Bridge，需要另列协议、能力和草稿策略的改动说明，不能顺带扩大纯依赖清理。
 
 REQUIRES [启动边界专项调研]: 可审阅的调研报告与必要实验结果。
 
