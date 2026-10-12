@@ -7,7 +7,7 @@ branch: feat/provider-usage
 
 Follow [the SHAPE](provider-usage.SHAPE.md) for ownership, file placement and integration boundaries. This plan sequences delivery and verification; it does not replace the SHAPE's predicted diff.
 
-Current state: branch created; design/planning only. No package or application code implemented. Start with Phase 1 only after approval; do not infer authorization to run real-credential checks from this plan.
+Current state: Phase 1 implemented on `feat/provider-usage` by the reusable worker and reviewed by the main agent plus an independent code reviewer. Main-agent package typecheck/lint/build and 62 synthetic tests pass. No provider HTTP requests, real-credential inspection or application integration has been performed. The user's implementation request authorizes proceeding with the package phases; it does not authorize real-credential checks.
 
 ## Outcome and sequence
 
@@ -160,4 +160,4 @@ Near-term Phase 1 needs confirmation of command-value exclusion and provider-lev
 
 Before Phase 2, settle the copied-source versus shared-library ownership and exact Host proxy support. Before optional live checks, obtain explicit permission for the exact configuration/environment scope and provider requests.
 
-The request to create a plan and branch does not itself authorize implementation, live credential inspection or authenticated network traffic. Current next step: review/approve Phase 1 scope and begin credential core implementation when requested.
+The subsequent implementation request authorized package implementation. Phase 1 uses the recommended no-command/provider-level-source scope. Review corrected silent-source fallback, missing-provider visibility, an unnecessary OAuth-expiry gate, Copilot endpoint rules and CLI test-environment isolation. Optional real inspection was not performed. Current next step: implement and verify Phase 2 against the supplied extension source; do not start application/UI integration or live authenticated requests under this package-only assignment.
