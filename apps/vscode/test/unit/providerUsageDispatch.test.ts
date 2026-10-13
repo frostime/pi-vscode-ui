@@ -1,11 +1,28 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { QueryUsageOptions } from "@frostime/provider-usage";
 import type { HostToWebviewPayload } from "../../src/shared/bridge/hostToWebview.js";
 import { BRIDGE_VERSION } from "../../src/shared/bridge/bridgeVersion.js";
 import { webviewToHostSchema } from "../../src/shared/bridge/webviewToHost.js";
 
 const usage = vi.hoisted(() => ({ listProviders: vi.fn(), queryUsage: vi.fn() }));
 vi.mock("@frostime/provider-usage", () => usage);
-vi.mock("vscode", () => ({ workspace: {}, commands: {}, env: {}, window: {} }));
+const settings = vi.hoisted(() => ({
+  mode: "inherit", endpoint: "", vscodeProxy: "", getProxyCredentials: vi.fn(),
+}));
+vi.mock("vscode", () => ({
+  Uri: { file: (fsPath: string) => ({ fsPath }) },
+  workspace: {
+    getConfiguration: (section: string) => ({
+      get: (key: string, fallback: unknown) => {
+        if (section === "http" && key === "proxy") return settings.vscodeProxy;
+        if (key === "network.proxy.mode") return settings.mode;
+        if (key === "network.proxy.endpoint") return settings.endpoint;
+        return fallback;
+      },
+    }),
+  },
+  commands: {}, env: {}, window: {},
+}));
 const { WebviewActionDispatcher } = await import("../../src/extension/webview-host/WebviewActionDispatcher.js");
 
 const providers = [{ providerId: "deepseek", displayName: "DeepSeek", availability: "ready", source: "auth.json", reason: "" }];
@@ -27,6 +44,7 @@ function setup(kind: "sidebar" | "panel" = "sidebar") {
   };
   const dispatcher = new WebviewActionDispatcher({
     registry: { snapshot: () => ({ workspacePath: "C:/workspace" }) } as never,
+    getProxyCredentials: settings.getProxyCredentials,
     logger: {} as never, drafts: {} as never, openPanel: vi.fn(), revealPanel: vi.fn(), openComposerEditor: vi.fn(),
   });
   return { dispatcher, connection, posted };
@@ -34,9 +52,18 @@ function setup(kind: "sidebar" | "panel" = "sidebar") {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  settings.mode = "inherit";
+  settings.endpoint = "";
+  settings.vscodeProxy = "";
+  settings.getProxyCredentials.mockResolvedValue(undefined);
+  for (const key of ["HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy"]) {
+    vi.stubEnv(key, "");
+  }
   usage.listProviders.mockResolvedValue(providers);
   usage.queryUsage.mockResolvedValue(results);
 });
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe("provider usage Host boundary", () => {
   it("validates bounded requests and rejects credentials/paths supplied by the browser", () => {
@@ -56,6 +83,41 @@ describe("provider usage Host boundary", () => {
       { type: "usageProvidersResult", requestId: "list", providers },
       { type: "providerUsageResult", requestId: "query", results },
     ]);
+  });
+
+  it("passes current configured proxy and stored credentials to each new query without exposing them", async () => {
+    const credentials = { username: "synthetic-user", password: "synthetic-password" };
+    settings.getProxyCredentials.mockResolvedValue(credentials);
+    settings.mode = "custom";
+    settings.endpoint = "127.0.0.1:7890";
+    const { dispatcher, connection, posted } = setup();
+    const query = () => dispatcher.dispatch({ type: "queryProviderUsage", requestId: "query", scope: "deepseek", bridgeVersion: BRIDGE_VERSION }, connection);
+    await query();
+    const firstInput = usage.queryUsage.mock.calls[0]?.[1] as QueryUsageOptions;
+    const url = new URL(firstInput.environment!.HTTPS_PROXY!);
+    expect(url.hostname === "127.0.0.1" && url.port === "7890"
+      && url.username === credentials.username && url.password === credentials.password).toBe(true);
+    settings.mode = "vscode";
+    settings.vscodeProxy = "http://127.0.0.1:9000";
+    await query();
+    const secondInput = usage.queryUsage.mock.calls[1]?.[1] as QueryUsageOptions;
+    expect(new URL(secondInput.environment!.HTTPS_PROXY!).port === "9000").toBe(true);
+    expect(JSON.stringify(posted).includes(credentials.password)).toBe(false);
+  });
+
+  it("does not start a query cancelled while proxy credentials are being read", async () => {
+    let complete!: (value: undefined) => void;
+    settings.mode = "custom";
+    settings.endpoint = "127.0.0.1:7890";
+    settings.getProxyCredentials.mockImplementation(() => new Promise((resolve) => complete = resolve));
+    const { dispatcher, connection, posted } = setup();
+    const pending = dispatcher.dispatch({ type: "queryProviderUsage", requestId: "old", scope: "deepseek", bridgeVersion: BRIDGE_VERSION }, connection);
+    await vi.waitFor(() => expect(settings.getProxyCredentials).toHaveBeenCalled());
+    await dispatcher.dispatch({ type: "cancelProviderUsage", requestId: "old", bridgeVersion: BRIDGE_VERSION }, connection);
+    complete(undefined);
+    await pending;
+    expect(usage.queryUsage).not.toHaveBeenCalled();
+    expect(posted).toEqual([]);
   });
 
   it("rejects panel requests and unconfigured provider IDs before querying", async () => {

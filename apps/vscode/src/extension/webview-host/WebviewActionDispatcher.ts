@@ -20,6 +20,8 @@ import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { openFileDiff } from "../file-changes/GitBaseContentProvider.js";
 import type { ComposerExternalEditorOpenResult } from "../composer/ComposerExternalEditor.js";
 import type { SessionRegistry } from "../sessions/SessionRegistry.js";
+import { buildProviderUsageEnvironment } from "../network/buildPiProcessEnvironment.js";
+import type { ProxyCredentials } from "../network/ProxySecretStore.js";
 import type { ComposerDraftCache } from "./ComposerDraftCache.js";
 import { resolveLocalMarkdownImage } from "./markdown-images/MarkdownImageResolver.js";
 import type { ConnectionContext } from "./webviewTypes.js";
@@ -35,6 +37,7 @@ export interface DispatchConnection extends ConnectionContext {
 
 export interface WebviewActionDispatcherDependencies {
   registry: SessionRegistry;
+  getProxyCredentials: () => Promise<ProxyCredentials | undefined>;
   logger: DiagnosticLogger;
   drafts: ComposerDraftCache;
   openPanel(sessionId: string, draft?: ComposerDraftView): void | Promise<void>;
@@ -78,6 +81,7 @@ const SIDEBAR_COLLECTION_TARGET_ACTIONS = new Set<WebviewToHostMessage["type"]>(
 
 export class WebviewActionDispatcher {
   readonly #registry: SessionRegistry;
+  readonly #getProxyCredentials: () => Promise<ProxyCredentials | undefined>;
   readonly #logger: DiagnosticLogger;
   readonly #drafts: ComposerDraftCache;
   readonly #openPanel: (sessionId: string, draft?: ComposerDraftView) => void | Promise<void>;
@@ -86,6 +90,7 @@ export class WebviewActionDispatcher {
 
   constructor(dependencies: WebviewActionDispatcherDependencies) {
     this.#registry = dependencies.registry;
+    this.#getProxyCredentials = dependencies.getProxyCredentials;
     this.#logger = dependencies.logger;
     this.#drafts = dependencies.drafts;
     this.#openPanel = (sessionId, draft) => draft
@@ -130,7 +135,19 @@ export class WebviewActionDispatcher {
             if (message.scope !== "all" && !providers.some((provider) => provider.providerId === message.scope)) {
               throw new Error("Unknown usage provider.");
             }
-            const results = await queryUsage(message.scope, input, signal);
+            // Use the current proxy setting
+            const scope = workspaceUriForPath(cwd);
+            const proxy = readConfiguration(scope).proxy;
+            const vscodeProxy = proxy.mode === "vscode"
+              ? vscode.workspace.getConfiguration("http", scope).get<string>("proxy", "").trim()
+              : undefined;
+            const credentials = proxy.mode === "custom" || proxy.mode === "vscode"
+              ? await this.#getProxyCredentials()
+              : undefined;
+            signal.throwIfAborted();
+            const queryEnvironment = buildProviderUsageEnvironment(environment, proxy, credentials, vscodeProxy);
+            // query the provider's usage, with proxy setting
+            const results = await queryUsage(message.scope, { ...input, environment: queryEnvironment }, signal);
             if (connection.finishProviderUsageRequest(message.requestId, signal)) {
               connection.post({ type: "providerUsageResult", requestId: message.requestId, results });
             }

@@ -116,8 +116,9 @@ predefined environment names are redacted before returning reports.
 - Each HTTP flow owns its dispatcher. Explicit environment HTTP(S) proxy variables
   and NO_PROXY are honored without global mutation or unintended process-env fallback.
   Unsupported proxy schemes and an unsupported all-protocol-only proxy fail before
-  requests; they never silently bypass the proxy. Pi-process custom proxy settings
-  and SOCKS are outside this package's network contract.
+  requests; they never silently bypass the proxy. FrostPi's Host translates its
+  current proxy settings into this environment input; the package does not read
+  VS Code settings or Pi-process state. SOCKS is outside its network contract.
 - Fireworks selects only a sole visible account. Multiple accounts return
   `selection-required`; no account is chosen or aggregated. No account yields failure.
 - Native OpenAI OAuth returns local grant status and a fixed usage-page link, not numeric

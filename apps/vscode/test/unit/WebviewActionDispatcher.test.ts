@@ -33,6 +33,7 @@ describe("Session Tab Host authorization", () => {
     };
     const dispatcher = new WebviewActionDispatcher({
       registry: registry as never,
+      getProxyCredentials: () => Promise.resolve(undefined),
       logger: logger as never,
       drafts: drafts as never,
       openPanel,
