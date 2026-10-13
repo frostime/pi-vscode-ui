@@ -1,5 +1,11 @@
 # Provider usage implementation handover
 
+## Latest state — Host/UI integration implemented
+
+The package-only status below is historical. On `feat/provider-usage`, production UI now uses the existing bridge to call `listProviders`/`queryUsage` in the Host; mock fixtures are test-only. Usage is left of Context, active supported provider auto-fetches, successful snapshots cache by provider across reopening, and manual Refresh fetches anew. No Session/directory cache or new Webview subsystem was introduced. Host chooses the stable workspace-root Pi configuration and environment; secrets stay in Host/package code. Connection-owned cancellation suppresses old/closed work.
+
+Targeted tests (33), all App tests (550), root build/bundle budget and VSIX package/verification pass. Production Host minification was needed for bundled undici; debug builds remain unminified. Upstream/HTTP-client notices ship in the VSIX. Final full-check outcome and checkpoints are in PLAN and Git. No real credentials, live API checks, actual Node-20 execution or clean local/remote VS Code smoke have been performed. Before continuing, inspect Git/status and PLAN; do not repeat package or bridge work.
+
 ## Read this when returning to the earlier Pi branch
 
 The user is returning to the conversation point:

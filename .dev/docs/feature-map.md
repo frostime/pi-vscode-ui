@@ -79,8 +79,8 @@ Use this map when the feature is known but its owner is not. Paths name owners a
 ## Diagnostics, notifications, usage, and status bar
 
 - Owners: `apps/vscode/src/extension/diagnostics/`, `apps/vscode/src/extension/notifications/`, `apps/vscode/src/extension/status-bar/`, and `apps/vscode/src/webview/features/usage/`.
-- Provider-account usage: `packages/provider-usage/` owns discovery/authentication/queries; `apps/vscode/src/webview/features/provider-usage/` owns the sidebar surface. Contracts: package `SPEC.md` and UI `provider-usage.SPEC.md`. The current UI-first stage uses a clearly labelled temporary mock source; Host integration is pending.
-- Standalone provider-account usage queries: `packages/provider-usage/`; its `src/index.ts` exposes discovery/query operations. Contract: `packages/provider-usage/SPEC.md`. This package does not yet have a FrostPi UI integration.
+- Provider-account usage: `packages/provider-usage/` owns discovery/authentication/queries; `apps/vscode/src/webview/features/provider-usage/` owns the sidebar surface. Contracts: package `SPEC.md` and UI `provider-usage.SPEC.md`. `WebviewActionDispatcher.ts` invokes the package; `WebviewConnection.ts` owns request cancellation; the feature-local bridge source feeds the cached metrics popover. Synthetic data exists only in tests.
+- Standalone provider-account usage API: `packages/provider-usage/src/index.ts`; see `packages/provider-usage/SPEC.md` for source/configuration/network boundaries.
 - Pi-configured cache-miss notices are detected and projected by `apps/vscode/src/extension/conversation/cacheMissDetection.ts` and `ConversationProjection.ts`; effective Pi settings come from `apps/vscode/src/extension/_shared/pi-settings/`.
 - Cross-module sensitivity boundary: `.dev/docs/architecture/overview.md`; lifecycle-trigger semantics remain in the lifecycle and extension UI SPECs.
 

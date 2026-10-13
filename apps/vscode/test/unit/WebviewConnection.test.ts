@@ -11,6 +11,21 @@ const { BRIDGE_VERSION } = await import("../../src/shared/bridge/bridgeVersion.j
 const { WebviewConnection } = await import("../../src/extension/webview-host/WebviewConnection.js");
 
 describe("per-presentation Webview synchronization", () => {
+  it("aborts usage on replacement/disposal and matches cancellation to the correct request", () => {
+    const endpoint = fakeEndpoint("sidebar", "sidebar");
+    const connection = new WebviewConnection({} as never, endpoint.endpoint as never, {} as never, {} as never, {} as never, () => false, () => false);
+    const first = connection.beginProviderUsageRequest("first");
+    const second = connection.beginProviderUsageRequest("second");
+    expect(first.aborted).toBe(true);
+    connection.cancelProviderUsageRequest("first");
+    expect(second.aborted).toBe(false);
+    expect(connection.finishProviderUsageRequest("first", first)).toBe(false);
+    expect(connection.finishProviderUsageRequest("second", second)).toBe(true);
+    const last = connection.beginProviderUsageRequest("last");
+    connection.dispose();
+    expect(last.aborted).toBe(true);
+    expect(connection.finishProviderUsageRequest("last", last)).toBe(false);
+  });
   it("isolates pinned Session deltas and resynchronizes a hidden panel with a snapshot", async () => {
     const views = new Map([
       ["a", sessionView("a", ["a-1"])],

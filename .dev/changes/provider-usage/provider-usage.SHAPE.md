@@ -1,5 +1,5 @@
 ---
-status: draft
+status: completed
 ---
 
 # Provider usage: package, sidebar component, thin dispatch
@@ -12,7 +12,7 @@ The purpose of `packages/provider-usage` is to hide the entire query feature beh
 
 Likely changes should be local: adding a provider or changing a credential rule affects the package; changing presentation affects the component. The existing bridge requires a few typed message additions, not a new protocol implementation or feature coordination subsystem.
 
-This replaces the earlier dedicated-tab design. It is a draft for review; no production code or anchors are authorized by the document alone. Follow [the PLAN](provider-usage.PLAN.md) for phased delivery. Package Phases 1/2 are complete; the user requested UI-first staging with real package result types and a temporary mock source before Host dispatch. The final bridge direction below remains unchanged.
+This replaces the earlier dedicated-tab design. The user's subsequent implementation instructions authorized the final package/sidebar/bridge direction. Implementation and automated diff/verification comparison are complete; remaining manual/live checks are explicitly listed in the PLAN. Follow [the PLAN](provider-usage.PLAN.md) for phased delivery. Package Phases 1/2, UI-first staging and Host integration are implemented. Production uses the bridge source; mock fixtures exist only in tests. Implementation comparison: the source adapter and ~67 Host dispatch/connection lines fit the intended ownership. Production Host minification and VSIX license checks were additionally required to bundle the chosen HTTP client within the existing budget; this does not add feature owners or runtime machinery.
 
 UI staging adds a small `ProviderUsageSource` interface, synthetic mock implementation, a report-rendering child and pure presentation functions inside the same feature directory. They are local presentation support, not new application services/stores. Replace mock wiring after UI review and Host integration; do not ship mock data as live provider usage.
 
@@ -65,7 +65,7 @@ Credential tests and optional local inspection must not print complete environme
 
 Accepted scope: read `auth.json`, `models.json`, and environment variables; predefined provider-specific usage rules; display quotas, balances, credits and read-only reset availability. No OAuth refresh, login, credential writes, quota redemption, polling, automatic retries or history database. No RPC authentication retrieval or dedicated Pi extension.
 
-Host context: reuse `resolvePiAgentDirectory()` from the existing settings loader. Use the workspace folder owning the sidebar's displayed cwd, or the first workspace folder if none can be identified. Resolve relative `PI_CODING_AGENT_DIR` against that workspace cwd, not against a Pi process. Remote workspaces use the remote Extension Host's files and environment. The Host constructs this context for each list/query; the browser cannot choose paths or environment values. Only Pi's file format is supported initially; do not infer an OMP credential format from its executable/profile.
+Host context: reuse `resolvePiAgentDirectory()` from the existing settings loader. Use the Host registry workspace root (Host home when absent), independent of Session cwd. Resolve relative `PI_CODING_AGENT_DIR` against that stable workspace root. This locates configuration only; caches remain keyed by provider, never by directory or Session. Remote workspaces use the remote Extension Host's files and environment. The Host constructs this context for each list/query; the browser cannot choose paths or environment values. Only Pi's file format is supported initially; do not infer an OMP credential format from its executable/profile.
 
 This is configured-account usage, not a promise to reproduce active-session authentication. The view must explain that user-extension/runtime overrides are not included.
 
@@ -81,12 +81,12 @@ Credential rules stay together inside the package: saved entries before provider
 
 Known custom/proxy endpoints must not cause credentials to be sent to unrelated official usage APIs. Forward only headers required by the adapter, not arbitrary configured headers. Read files anew when the user requests refresh; no file watchers, live-auth matching subsystem, fingerprint cache or attempt to follow credentials injected into a running session. A result represents the credentials used for that request, with its source and capture time.
 
-### Remaining decisions carried forward
+### Implemented scope
 
-These are not settled by choosing the simpler architecture:
+The subsequent package/integration authorization implemented these recommended boundaries. The historical alternatives below explain the limited contract; they are not open blockers:
 
-1. Recommended: literals/environment references supported, leading `!` shell-command values reported unavailable, never executed. Awaiting confirmation.
-2. Recommended initial `models.json` scope: provider-level keys, headers, authHeader and endpoints; not individual `models`/`modelOverrides` authentication. Explain this explicitly. Full model-specific account discovery would change the package descriptors/UI selection and needs confirmation rather than silently claiming full runtime equivalence.
+1. Literals/environment references supported; leading `!` shell-command values unavailable, never executed.
+2. Implemented `models.json` scope: provider-level keys, headers, authHeader and endpoints; not individual `models`/`modelOverrides` authentication. Explain this explicitly. Full model-specific account discovery would change the package descriptors/UI selection and needs confirmation rather than silently claiming full runtime equivalence.
 3. Recommended reuse: adapt the existing MIT provider rules/normalizers/tests from `D:/Arsenal/PlayCode/pi-provider-usage` with provenance; leave that repository unchanged. This is a maintained snapshot. A shared published library across both repositories requires separate scope agreement.
 4. Recommended networking boundary: Host-environment HTTP(S) proxies/NO_PROXY, not Pi-only custom proxy settings or SOCKS. Validate a maintained Node-20-compatible HTTP client/dispatcher before implementing requests. Existing Pi-process proxy rules do not automatically apply to Host HTTP.
 
@@ -99,7 +99,7 @@ These are not settled by choosing the simpler architecture:
 5. `WebviewConnection` owns one pending usage request's ID and AbortController, beside its existing connection-owned resources. Small replace/cancel/current-request methods are available to the dispatcher. Replacement/disposal aborts; an old request's cleanup cannot cancel a newer request. This is connection lifecycle handling, not a usage service or global lock.
 6. Closing/unmounting the component sends cancellation for its pending request. Re-query replaces it. Cancel only the matching ID; late or unknown results have no effect. No session-target fields, snapshots, deltas, model replies or conversation changes.
 
-Opening automatically queries the active provider if configured and ready; selecting another ready provider or explicit `all` queries that scope without switching the Pi model. Successful reports cache per provider for the source/metrics lifetime; reopening retains capture time and does not repeat the provider request. Manual Refresh invalidates that scope and fetches anew. Failures/cancelled requests are not cached. No TTL, background polling or persisted account data. Host integration must scope/reset the cache with its configuration context; source-category/availability changes already invalidate entries.
+Opening automatically queries the active provider if configured and ready; selecting another ready provider or explicit `all` queries that scope without switching the Pi model. Successful reports cache per provider for the source/metrics lifetime; reopening retains capture time and does not repeat the provider request. Manual Refresh invalidates that scope and fetches anew. Failures/cancelled requests are not cached. No TTL, background polling or persisted account data. Cache keys remain provider IDs; no directory/Session invalidation mechanism is introduced. Manual Refresh re-reads credentials; source-category/availability changes invalidate entries.
 
 Reports display capture time, the provider's quota windows/groups, separately labelled currencies/balances, credits and read-only reset count. Native OpenAI's limited connection/link result is not fabricated numeric usage. Use the existing validated `openExternal` action for fixed usage-page links. Failed refresh must not present an old snapshot as current; do not show zero instead of an error. Results stay in the source's in-memory cache across popover openings; they are never persisted.
 
@@ -147,7 +147,9 @@ apps/vscode/
 ├── src/webview/features/provider-usage/providerUsageSource.ts
 │   create +45–65          safe data interface and local successful-snapshot cache
 ├── src/webview/features/provider-usage/mockProviderUsage.ts
-│   create temporary       synthetic review data; remove after replacing source with bridge calls
+│   moved to tests         synthetic fixtures are not imported by production code
+├── src/webview/features/provider-usage/bridgeProviderUsageSource.ts
+│   create +45–65          implement existing UI source with correlated bridge requests/cancellation
 ├── src/webview/features/provider-usage/provider-usage.SPEC.md
 │   create +25–40          source/report/request contracts, scoped presentation responsibilities
 ├── src/webview/shell/SessionMetrics.svelte
@@ -170,6 +172,10 @@ apps/vscode/
 └── test/
     create/modify +350–600 focused component, bridge authorization, dispatch and lifecycle tests
 
+apps/vscode/esbuild.config.mjs
+    modify one line        production Host minification; debug builds stay unminified
+scripts/verify-vsix.mjs
+    modify +5–8/-0        verify bundled upstream/provider HTTP-client license notices
 scripts/build.mjs, scripts/quality.mjs
     modify +2–8/-0        build/check package before app
 package.json

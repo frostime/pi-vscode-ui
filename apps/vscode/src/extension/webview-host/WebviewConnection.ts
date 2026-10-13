@@ -30,6 +30,7 @@ export class WebviewConnection implements vscode.Disposable {
   readonly #disposables: vscode.Disposable[] = [];
   readonly fileSearch: WorkspaceFileSearch;
 
+  #usageRequest: { id: string; controller: AbortController } | undefined;
   #ready = false;
   #dirty = true;
   #pendingFocus = false;
@@ -127,9 +128,31 @@ export class WebviewConnection implements vscode.Disposable {
     });
   }
 
+  beginProviderUsageRequest(id: string): AbortSignal {
+    this.#usageRequest?.controller.abort();
+    const controller = new AbortController();
+    if (this.#disposed) controller.abort();
+    this.#usageRequest = { id, controller };
+    return controller.signal;
+  }
+
+  cancelProviderUsageRequest(id: string): void {
+    if (this.#usageRequest?.id !== id) return;
+    this.#usageRequest.controller.abort();
+    this.#usageRequest = undefined;
+  }
+
+  finishProviderUsageRequest(id: string, signal: AbortSignal): boolean {
+    if (signal.aborted || this.#usageRequest?.id !== id || this.#usageRequest.controller.signal !== signal) return false;
+    this.#usageRequest = undefined;
+    return true;
+  }
+
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#usageRequest?.controller.abort();
+    this.#usageRequest = undefined;
     for (const disposable of this.#disposables) disposable.dispose();
     this.fileSearch.dispose();
   }
@@ -160,6 +183,9 @@ export class WebviewConnection implements vscode.Disposable {
         surface: this.surface,
         sessionId: this.sessionId,
         fileSearch: this.fileSearch,
+        beginProviderUsageRequest: (id) => this.beginProviderUsageRequest(id),
+        cancelProviderUsageRequest: (id) => this.cancelProviderUsageRequest(id),
+        finishProviderUsageRequest: (id, signal) => this.finishProviderUsageRequest(id, signal),
         post: (message) => this.post(message),
         insertPromptText: (text) => this.insertPromptText(text),
       };

@@ -14,6 +14,7 @@ await Promise.all([
     format: "cjs",
     target: "node20",
     outfile: "dist/extension/extension.cjs",
+    minify: !sourcemap,
     external: ["vscode"],
     sourcemap,
     sourcesContent: sourcemap,

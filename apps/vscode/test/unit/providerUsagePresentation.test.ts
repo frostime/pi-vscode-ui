@@ -4,7 +4,7 @@ import type { ProviderUsageResult, UsageReport } from "@frostime/provider-usage"
 
 import ProviderUsageReport from "../../src/webview/features/provider-usage/ProviderUsageReport.svelte";
 import { bucketProgress, formatUsageValue } from "../../src/webview/features/provider-usage/providerUsagePresentation";
-import { mockProviderUsageSource } from "../../src/webview/features/provider-usage/mockProviderUsage";
+import { mockProviderUsageSource } from "./providerUsageFixtures";
 import SessionMetrics from "../../src/webview/shell/SessionMetrics.svelte";
 
 async function mockReports(): Promise<readonly ProviderUsageResult[]> {

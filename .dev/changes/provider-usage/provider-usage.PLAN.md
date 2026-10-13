@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 branch: feat/provider-usage
 ---
 
@@ -7,7 +7,7 @@ branch: feat/provider-usage
 
 Follow [the SHAPE](provider-usage.SHAPE.md) for ownership, file placement and integration boundaries. This plan sequences delivery and verification; it does not replace the SHAPE's predicted diff.
 
-Current state: Phases 1 and 2 implemented on `feat/provider-usage` (`4bd417b`, `542cb8e`). At the user's request, Phase 4's UI is now implemented first against the package's real safe result types and a clearly labelled temporary mock source. Host/bridge Phase 3 remains unimplemented. No real-credential inspection or live provider requests have been performed. Implementation authorization does not authorize real-credential checks.
+Current state: Package, compact cached UI and Host/bridge integration are implemented on `feat/provider-usage`. The UI now calls the completed package through the existing bridge; mock fixtures exist only under tests. Provider caches remain keyed by provider, independent of Session/cwd. No real-credential inspection or live provider requests have been performed; implementation authorization does not authorize those checks.
 
 ## Outcome and sequence
 
@@ -139,7 +139,7 @@ The panel owns selection/loading/cancellation. A small child renders reports, an
 ### Work
 
 - Add the Usage trigger left of Context and local open flag in SessionMetrics; enable it only for the sidebar.
-- Auto-query the supported active provider and selected scopes. Cache successful per-provider snapshots across openings; retain original timestamps, fetch anew on explicit Refresh, never cache failures/cancelled work. Reset cache on future Host configuration-context changes.
+- Auto-query the supported active provider and selected scopes. Cache successful per-provider snapshots across openings; retain original timestamps, fetch anew on explicit Refresh, never cache failures/cancelled work. Preserve per-provider cache across Session switches; no directory-based cache or invalidation mechanism.
 - Implement one component with local selection/loading/results/errors and the existing message subscription helpers. Check request identity/version, cancel pending work on close and unsubscribe on destruction.
 - Show eligible/unavailable providers, explicit query/refresh/all scope, snapshot time and provider-specific usage meaning. Reset counts are plain read-only metrics.
 - Keep the source limitation visible. Do not claim these credentials necessarily match the active Pi session.
@@ -168,7 +168,16 @@ The panel owns selection/loading/cancellation. A small child renders reports, an
 - An isolated Edge browser harness mounts the actual SessionMetrics row and exercises automatic active-provider fetch, retained snapshot on reopen, explicit refresh, mixed results, cancellation, outside-dismiss/focus, stale results, Escape and draft preservation. Compact upward placement and overflow checks pass at 280px; dark/light/high-contrast screenshots inspected. Harness/snapshots remain temporary under `tmp/provider-usage-review/`.
 - The browser bundle contains no provider credential/query/proxy engine runtime. No Host code, bridge schema/version, Pi process policy or Session state changed.
 - Full VS Code Extension Development Host interaction, workspace-wide tests and VSIX packaging were not run in this UI-first stage. No real files/credentials were inspected or authenticated usage requests made.
-- Next: user review of the mock UI, then Phase 3 and replacement of the temporary source. Phase 4 is not marked fully complete until the real bridge source is connected.
+- UI-first stage completed before Host integration. Mock fixtures are now test-only; the existing safe source interface is implemented by bridge requests. Independent tests cover version/request matching and cancellation cleanup.
+
+## Host integration verification record
+
+- Added correlated list/query/cancel messages in bridge 3.2, thin sidebar-only dispatch and one connection-owned cancellation resource. No new usage service/coordinator, Pi RPC, Session state or directory-based cache. Host input uses the stable workspace root/environment to locate Pi configuration, independently of Session cwd.
+- Production mock source/flag removed; fixtures moved to tests. Existing compact UI, automatic active-provider query and per-provider cache behavior remain.
+- 33 targeted integration/presentation/cache/lifecycle tests pass; all 550 App tests pass. Browser review exercised actual bridge-backed UI with a fake Host (no credentials/network), including automatic fetch, snapshot reuse/refresh, cancellation and late responses at 280px across themes.
+- Independent read-only review found no concrete bridge/lifecycle bug. It flagged bundle-size verification and a stale doc sentence; both addressed. Host production bundle is now minified (debug/source-map builds remain unminified), bringing bundled undici within the unchanged 1.2 MB budget.
+- Root build/bundle-budget and VSIX package/verification pass (2.64 MB). MIT attribution and HTTP-client license notices are embedded and checked in VSIX verification. Product version remains 0.15.3.
+- Final `pnpm check` passed: workspace lint/typechecks, 43 RPC tests, 160 package tests, 550 App tests, root build and bundle budgets. Clean VS Code local/remote smoke and real provider checks remain unperformed, as does actual Node-20 runtime execution. No live secret files or environment values were inspected.
 
 ## Phase 2 verification record
 
@@ -182,4 +191,4 @@ Near-term Phase 1 needs confirmation of command-value exclusion and provider-lev
 
 Before Phase 2, settle the copied-source versus shared-library ownership and exact Host proxy support. Before optional live checks, obtain explicit permission for the exact configuration/environment scope and provider requests.
 
-The subsequent implementation request authorized package implementation. Phase 1 uses the no-command/provider-level-source scope; review corrected silent-source fallback, missing-provider visibility, an unnecessary expiry gate, Copilot endpoint rules and CLI environment isolation. Phase 2 adds source-backed queries/normalizers, independent failures, deadlines/cancellation and explicit undici HTTP(S) proxy/NO_PROXY handling verified locally. Further source checking also tightened Copilot API-key rejection and subscription override-account matching. The external source repository is unchanged. The package-only assignment is complete. The user's subsequent request authorizes the UI-first mock stage; Phase 3 Host integration remains pending. No live authenticated requests are authorized. Packaging must preserve the imported MIT license when the app starts bundling this package.
+The subsequent implementation request authorized package implementation. Phase 1 uses the no-command/provider-level-source scope; review corrected silent-source fallback, missing-provider visibility, an unnecessary expiry gate, Copilot endpoint rules and CLI environment isolation. Phase 2 adds source-backed queries/normalizers, independent failures, deadlines/cancellation and explicit undici HTTP(S) proxy/NO_PROXY handling verified locally. Further source checking also tightened Copilot API-key rejection and subscription override-account matching. The external source repository is unchanged. The package-only assignment is complete. The UI-first stage and the user's subsequent instruction authorize this Host/bridge integration. It is implemented without live authenticated checks. Bundled MIT notices are now retained and verified.

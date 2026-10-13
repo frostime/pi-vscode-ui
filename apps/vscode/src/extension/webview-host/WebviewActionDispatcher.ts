@@ -1,4 +1,7 @@
 import * as vscode from "vscode";
+import { homedir } from "node:os";
+import { listProviders, queryUsage } from "@frostime/provider-usage";
+import { resolvePiAgentDirectory } from "../_shared/pi-settings/loadPiSettings.js";
 
 import type { HostToWebviewPayload } from "../../shared/bridge/hostToWebview.js";
 import type { WebviewToHostMessage } from "../../shared/bridge/webviewToHost.js";
@@ -23,6 +26,9 @@ import type { ConnectionContext } from "./webviewTypes.js";
 
 export interface DispatchConnection extends ConnectionContext {
   readonly fileSearch: WorkspaceFileSearch;
+  beginProviderUsageRequest(id: string): AbortSignal;
+  cancelProviderUsageRequest(id: string): void;
+  finishProviderUsageRequest(id: string, signal: AbortSignal): boolean;
   post(message: HostToWebviewPayload): void;
   insertPromptText(text: string): void;
 }
@@ -37,6 +43,9 @@ export interface WebviewActionDispatcherDependencies {
 }
 
 const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
+  "listUsageProviders",
+  "queryProviderUsage",
+  "cancelProviderUsage",
   "openFolder",
   "createSession",
   "createSessionWithArguments",
@@ -101,6 +110,38 @@ export class WebviewActionDispatcher {
     switch (message.type) {
       case "ready":
         return;
+      case "cancelProviderUsage":
+        connection.cancelProviderUsageRequest(message.requestId);
+        return;
+      case "listUsageProviders":
+      case "queryProviderUsage": {
+        const signal = connection.beginProviderUsageRequest(message.requestId);
+        try {
+          const environment = { ...process.env };
+          const cwd = this.#registry.snapshot().workspacePath || homedir();
+          const input = { agentDirectory: resolvePiAgentDirectory(cwd, environment), environment };
+          const providers = await listProviders(input);
+          signal.throwIfAborted();
+          if (message.type === "listUsageProviders") {
+            if (connection.finishProviderUsageRequest(message.requestId, signal)) {
+              connection.post({ type: "usageProvidersResult", requestId: message.requestId, providers });
+            }
+          } else {
+            if (message.scope !== "all" && !providers.some((provider) => provider.providerId === message.scope)) {
+              throw new Error("Unknown usage provider.");
+            }
+            const results = await queryUsage(message.scope, input, signal);
+            if (connection.finishProviderUsageRequest(message.requestId, signal)) {
+              connection.post({ type: "providerUsageResult", requestId: message.requestId, results });
+            }
+          }
+        } catch {
+          if (connection.finishProviderUsageRequest(message.requestId, signal)) {
+            connection.post({ type: "providerUsageError", requestId: message.requestId, message: "Could not retrieve provider usage. Try again." });
+          }
+        }
+        return;
+      }
       case "openFolder":
         await vscode.commands.executeCommand("vscode.openFolder");
         return;

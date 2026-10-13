@@ -35,6 +35,10 @@ const forbidden = entries.filter((entry) =>
   || entry.endsWith(".map"),
 );
 if (forbidden.length) throw new Error(`VSIX contains forbidden files:\n${forbidden.join("\n")}`);
+const notices = zip.readAsText(entries.find((entry) => entry.toLowerCase() === "extension/third_party_notices.md"));
+if (!notices.includes("Copyright (c) 2026 narumiruna") || !notices.includes("Permission is hereby granted") || !notices.includes("Matteo Collina and Undici contributors")) {
+  throw new Error("VSIX is missing bundled provider usage / HTTP client license notices.");
+}
 const webviewCss = zip.readAsText("extension/dist/webview/webview.css");
 if (/url\(\s*["\']?\/assets\//.test(webviewCss)) {
   throw new Error("Webview CSS contains a root-relative asset URL; packaged fonts will not resolve in VS Code.");

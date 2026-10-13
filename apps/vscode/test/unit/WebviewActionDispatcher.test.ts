@@ -44,6 +44,9 @@ describe("Session Tab Host authorization", () => {
       surface: { kind: "panel" as const, sessionId: "source" },
       sessionId: "source",
       fileSearch: {} as never,
+      beginProviderUsageRequest: vi.fn(() => new AbortController().signal),
+      cancelProviderUsageRequest: vi.fn(),
+      finishProviderUsageRequest: vi.fn(() => true),
       post: (message: unknown) => posted.push(message),
       insertPromptText: vi.fn(),
     };

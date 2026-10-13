@@ -3,14 +3,14 @@
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
   import ContextUsagePopover from "../features/usage/ContextUsagePopover.svelte";
   import ProviderUsagePanel from "../features/provider-usage/ProviderUsagePanel.svelte";
-  import { mockProviderUsageSource } from "../features/provider-usage/mockProviderUsage";
+  import { bridgeProviderUsageSource } from "../features/provider-usage/bridgeProviderUsageSource";
   import { cacheProviderUsage } from "../features/provider-usage/providerUsageSource";
 
   let { session, providerUsageAvailable = false }: {
     session: SessionViewModel;
     providerUsageAvailable?: boolean;
   } = $props();
-  const usageSource = cacheProviderUsage(mockProviderUsageSource);
+  const usageSource = cacheProviderUsage(bridgeProviderUsageSource);
   let usageOpen = $state(false);
   let usageTrigger = $state<HTMLButtonElement>();
 
@@ -34,7 +34,7 @@
           <button bind:this={usageTrigger} class="usage-trigger" type="button" aria-label="Provider usage" aria-expanded={usageOpen} onclick={() => usageOpen ? void closeUsage() : usageOpen = true}>Usage</button>
           {#if usageOpen}
             {#key session.model?.provider}
-              <ProviderUsagePanel source={usageSource} currentProviderId={session.model?.provider} anchor={usageTrigger} mockData onclose={(restoreFocus) => void closeUsage(restoreFocus)} />
+              <ProviderUsagePanel source={usageSource} currentProviderId={session.model?.provider} anchor={usageTrigger} onclose={(restoreFocus) => void closeUsage(restoreFocus)} />
             {/key}
           {/if}
         {/if}

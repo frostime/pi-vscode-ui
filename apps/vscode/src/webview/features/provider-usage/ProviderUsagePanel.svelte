@@ -5,12 +5,11 @@
   import ProviderUsageReport from "./ProviderUsageReport.svelte";
   import type { ProviderUsageSource } from "./providerUsageSource";
 
-  let { source, onclose, currentProviderId, anchor, mockData = false }: {
+  let { source, onclose, currentProviderId, anchor }: {
     source: ProviderUsageSource;
     onclose: (restoreFocus?: boolean) => void;
     currentProviderId?: string | undefined;
     anchor?: HTMLElement | undefined;
-    mockData?: boolean;
   } = $props();
 
   let providers = $state<readonly ProviderUsageDescriptor[]>([]);
@@ -116,7 +115,6 @@
 <dialog bind:this={panel} open class="provider-usage-panel" aria-label="Provider usage" aria-modal="false">
   <header>
     <h2>Provider usage</h2>
-    {#if mockData}<span class="mock-notice" title="Synthetic preview only. No account requests.">Mock data</span>{/if}
     <button bind:this={closeButton} class="close" type="button" aria-label="Close provider usage" onclick={() => close()}>×</button>
   </header>
   <div class="query-controls">
@@ -173,7 +171,6 @@
   button:hover:not(:disabled) { background: var(--frost-secondary-hover); }
   button:disabled { opacity: .55; cursor: default; }
   .close { flex: none; width: 22px; height: 22px; padding: 0; font-size: 16px; border: 0; background: transparent; }
-  .mock-notice { color: var(--frost-muted); font-size: 10px; }
   .query-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
   select { width: 100%; min-width: 0; border: 1px solid var(--frost-input-border); border-radius: 3px; background: var(--frost-input-bg); padding: 4px; }
   .query { min-width: 27px; background: transparent; }
