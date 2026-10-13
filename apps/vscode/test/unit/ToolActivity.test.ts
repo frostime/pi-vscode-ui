@@ -113,6 +113,45 @@ describe("ToolActivity sections", () => {
     expect(card).toContain("codicon-error");
   });
 
+  it("reads the duration Pi measured instead of the span between timestamps", () => {
+    const startedAt = Date.now() - 90_000;
+    const card = renderCard(bound({
+      name: "bash",
+      args: { command: "pnpm build" },
+      startedAt,
+      endedAt: startedAt + 12_000,
+      durationMs: 11_000,
+    }));
+
+    expect(card).toContain("11s");
+    expect(card).not.toContain("12s");
+  });
+
+  it("shows a recorded duration even when no usable start timestamp survived", () => {
+    const card = renderCard(bound({
+      name: "bash",
+      args: { command: "pnpm build" },
+      startedAt: 0,
+      durationMs: 7_000,
+    }));
+
+    expect(card).toContain("tool-duration");
+    expect(card).toContain("7s");
+  });
+
+  it("keeps the timestamp estimate when Pi recorded no duration", () => {
+    const startedAt = Date.now() - 10_000;
+    const card = renderCard(bound({
+      name: "bash",
+      args: { command: "pnpm build" },
+      startedAt,
+      endedAt: startedAt + 10_000,
+    }));
+
+    expect(card).toContain("tool-duration");
+    expect(card).toContain("10s");
+  });
+
   it("shows no duration for an interrupted call without an end time", () => {
     const card = renderCard(bound({
       name: "bash",
@@ -279,6 +318,7 @@ function bound(options: {
   location?: { path: string; line?: number };
   startedAt?: number;
   endedAt?: number;
+  durationMs?: number;
 }): BoundToolCallView {
   const recognized = options.diff !== undefined || options.location !== undefined
     ? {
@@ -298,5 +338,6 @@ function bound(options: {
     isError: options.status === "error",
     startedAt: options.startedAt ?? 0,
     ...(options.endedAt !== undefined ? { endedAt: options.endedAt } : {}),
+    ...(options.durationMs !== undefined ? { durationMs: options.durationMs } : {}),
   };
 }

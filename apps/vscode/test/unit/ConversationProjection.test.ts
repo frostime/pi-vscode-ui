@@ -658,6 +658,65 @@ describe("ConversationProjection", () => {
     }
   });
 
+  it("gives each tool of a multi-call assistant message its own recorded duration", () => {
+    const projection = new ConversationProjection();
+    projection.replaceEntries([
+      userEntry("u1", null, "Run two commands", 1),
+      assistantEntry("a1", "u1", [
+        { type: "toolCall", id: "t1", name: "bash", arguments: { command: "first" } },
+        { type: "toolCall", id: "t2", name: "bash", arguments: { command: "second" } },
+      ], "toolUse", 100),
+      toolResultEntry("r1", "a1", "t1", "first done", 1_200, false, undefined, 200),
+      toolResultEntry("r2", "a1", "t2", "second done", 2_400, false, undefined, 1_200),
+    ], []);
+
+    // Both calls share one assistant timestamp, so only Pi's per-call duration separates them.
+    expect(projectedTool(projection, "t1")).toMatchObject({ status: "complete", durationMs: 200 });
+    expect(projectedTool(projection, "t2")).toMatchObject({ status: "complete", durationMs: 1_200 });
+  });
+
+  it("takes the live tool duration from Pi's execution event and keeps it through a legacy result", () => {
+    vi.useFakeTimers();
+    try {
+      const projection = new ConversationProjection();
+      projection.appendUserPrompt("Run", [], 1);
+      projection.applyEvent({ type: "agent_start" });
+      const tool = { type: "toolCall", id: "t1", name: "bash", arguments: { command: "make" } };
+      projection.applyEvent({
+        type: "message_end",
+        message: { id: "assistant-1", role: "assistant", content: [tool], stopReason: "toolUse", timestamp: 100 },
+      });
+      vi.setSystemTime(1_000);
+      projection.applyEvent({ type: "tool_execution_start", toolCallId: "t1", toolName: "bash", args: tool.arguments });
+      vi.setSystemTime(3_000);
+      projection.applyEvent({ type: "tool_execution_end", toolCallId: "t1", toolName: "bash", result: "built", isError: false, durationMs: 1_900 });
+      expect(projectedTool(projection, "t1")).toMatchObject({ durationMs: 1_900 });
+
+      projection.applyEvent({ type: "agent_settled" });
+      // A result recorded before Pi reported durations must not erase the live measurement.
+      expect(projection.reconcileEntries([
+        userEntry("u1", null, "Run", 1),
+        assistantEntry("a1", "u1", [tool], "toolUse", 100, "assistant-1"),
+        toolResultEntry("r1", "a1", "t1", "built", 3_000),
+      ], [])).toBe("applied");
+      expect(projectedTool(projection, "t1")).toMatchObject({ status: "complete", durationMs: 1_900 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves a legacy session without a recorded duration to the timestamp estimate", () => {
+    const projection = new ConversationProjection();
+    projection.replaceEntries([
+      userEntry("u1", null, "Inspect", 1),
+      assistantEntry("a1", "u1", [{ type: "toolCall", id: "t1", name: "read", arguments: {} }], "toolUse", 2),
+      toolResultEntry("r1", "a1", "t1", "body", 3),
+    ], []);
+
+    expect(projectedTool(projection, "t1")).toMatchObject({ status: "complete", startedAt: 2, endedAt: 3 });
+    expect(projectedTool(projection, "t1")?.durationMs).toBeUndefined();
+  });
+
   it("preserves settled tool state through assistant takeover and accepts a later authoritative result", () => {
     const projection = new ConversationProjection();
     projection.appendUserPrompt("Inspect", [], 1);
@@ -1270,6 +1329,7 @@ function toolResultEntry(
   timestamp: number,
   isError = false,
   details?: Record<string, unknown>,
+  durationMs?: number,
 ): RpcSessionEntry {
   return {
     type: "message",
@@ -1284,6 +1344,7 @@ function toolResultEntry(
       ...(details ? { details } : {}),
       isError,
       timestamp,
+      ...(durationMs === undefined ? {} : { durationMs }),
     },
   };
 }

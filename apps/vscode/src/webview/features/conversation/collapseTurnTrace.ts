@@ -95,9 +95,12 @@ export function formatTraceSummaryLabel(summary: TurnTraceSummary): string {
   return parts.join(" · ");
 }
 
-export function formatTurnDuration(startedAt: number, endedAt?: number): string | null {
-  if (endedAt === undefined || endedAt < startedAt) return null;
-  const totalSeconds = Math.round((endedAt - startedAt) / 1000);
+/**
+ * Duration label shared by turn traces and tool cards. Coarse on purpose — this reading reassures
+ * the reader that work is progressing, it is not a stopwatch.
+ */
+export function formatDurationMs(durationMs: number): string {
+  const totalSeconds = Math.round(Math.max(0, durationMs) / 1000);
   if (totalSeconds < 1) return "<1s";
   if (totalSeconds < 60) return `${totalSeconds}s`;
   const hours = Math.floor(totalSeconds / 3600);
@@ -107,6 +110,12 @@ export function formatTurnDuration(startedAt: number, endedAt?: number): string 
     return seconds > 0 ? `${hours}h ${minutes}m ${seconds}s` : minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
   }
   return seconds > 0 ? `${minutes}m ${String(seconds).padStart(2, "0")}s` : `${minutes}m`;
+}
+
+/** Timestamp-span form, used where no measured duration exists. `null` when the span is unknown. */
+export function formatTurnDuration(startedAt: number, endedAt?: number): string | null {
+  if (endedAt === undefined || endedAt < startedAt) return null;
+  return formatDurationMs(endedAt - startedAt);
 }
 
 function isAgentActivity(item: AgentTurnView["items"][number]): item is AgentActivityView {

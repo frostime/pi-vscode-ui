@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentTurnItemView, AgentTurnView } from "../../src/shared/model/conversationModel.js";
 import {
   formatTraceSummaryLabel,
+  formatDurationMs,
   formatTurnDuration,
   planTurnItems,
   turnStateLabel,
@@ -86,6 +87,15 @@ describe("trace labels", () => {
     expect(formatTurnDuration(0, 65_000)).toBe("1m 05s");
     expect(formatTurnDuration(0, 3_600_000)).toBe("1h");
     expect(formatTurnDuration(0)).toBeNull();
+    expect(formatTurnDuration(1_000, 500)).toBeNull();
+  });
+
+  it("labels a measured duration with the same whole-second rounding", () => {
+    expect(formatDurationMs(0)).toBe("<1s");
+    expect(formatDurationMs(400)).toBe("<1s");
+    expect(formatDurationMs(526)).toBe("1s");
+    expect(formatDurationMs(11_000)).toBe("11s");
+    expect(formatDurationMs(65_000)).toBe("1m 05s");
   });
 });
 
