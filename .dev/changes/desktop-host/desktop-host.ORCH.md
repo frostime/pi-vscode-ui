@@ -21,14 +21,14 @@ R1 已在独立候选分支 `efa9c78` 完成 Runtime 解耦与 core/shared 提�
 | 分支 | 用途 | 接续方式 |
 |---|---|---|
 | `feat/desktop-host` | 顶层集成分支 | 从 `main@8c88f21` 切出；主工作区保持此分支 |
-| `docs/desktop-host-boundary-research` | 首步重构的独立调研子分支 | 从规划提交 `05c1de6` 切出；在独立 worktree 交付报告和计划状态修订 |
+| `docs/desktop-host-boundary-research` | 已完成的调研分支 | `7413c47` 已整合到顶层；用户同意移除研究 worktree，分支与提交保留 |
 | `refactor/desktop-host-boundary` | R1 首步重构与自动验证 | 从 R1 规划提交切出，独立 worktree `.worktrees/261011_desktop-host-boundary` |
 
 Git 没有自动的父子分支关系，这里的“子分支”指从顶层指定提交切出，并将结果整合回顶层。调研结论只以文档结果回流；不能把实验或未经确认的生产改动顺带合入。
 
 用户已同意首步实现到一个可实测的重构检查点：自动验证后由用户运行插件，确认行为正常才继续。研究结果已整合到顶层；生产代码在独立重构分支交付，不立即进入顶层或 main。推送、发布及进一步功能工作不在本次范围。
 
-S243 已表示可接续，但其独立 Session 需要用户直接确认实施委托；peer mail 仅传递上下文。S528 负责主计划、独立审阅及用户检查点。研究 worktree 保留实验；实施使用独立 worktree，不安装 Desktop 依赖。长重构需要 checkpoint 时遵守既有 Git 规范。
+S243 已在其独立 Session 获得用户直接授权并完成候选交付；peer mail 仅传递上下文。S528 负责主计划、独立审阅及用户检查点。用户已同意清理完成调研的 worktree 和临时实验材料；先安全移除目录链接，再用 Git 移除研究 worktree。报告及复核方法仍保存在顶层和研究提交中。实施 worktree 与 `efa9c78` 候选保留，等待用户实测；不安装 Desktop 依赖。
 
 ## 推进路径
 

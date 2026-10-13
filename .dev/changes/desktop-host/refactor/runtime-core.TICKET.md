@@ -19,7 +19,7 @@ R1 是 M1 之前的重构检查点，不是 Desktop 交付。自动检查不能�
 - 顶层：`feat/desktop-host`，只整合已审阅成果与维护主计划。
 - 实施：`refactor/desktop-host-boundary`，从本 Ticket 的规划提交切出。
 - 实施 worktree：`.worktrees/261011_desktop-host-boundary`。
-- 调研 worktree 保留实验材料，不在其中继续编码。
+- 调研 worktree 已在成果整合后经用户同意清理，研究分支和报告保留；实验临时材料不再作为本地可用输入。候选实现及验证材料仍在实施 worktree。
 
 保持提交检查点，优先将“原位置解耦”和“包提取/构建接线”分开；需要额外 wip 分支时遵守仓库 Git 规范。不得修改主工作区的生产文件、直接进入 main、推送或改写已整合历史。
 
