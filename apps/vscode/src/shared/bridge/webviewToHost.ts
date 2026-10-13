@@ -50,11 +50,15 @@ const openFileSchema = z.object({
   }
 });
 
-const payloadSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("ready") }),
+const usageActionSchemas = [
   z.object({ type: z.literal("listUsageProviders"), requestId: z.string().min(1).max(128) }),
   z.object({ type: z.literal("queryProviderUsage"), requestId: z.string().min(1).max(128), scope: z.string().min(1).max(128) }),
   z.object({ type: z.literal("cancelProviderUsage"), requestId: z.string().min(1).max(128) }),
+] as const;
+
+const payloadSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("ready") }),
+  ...usageActionSchemas,
   z.object({ type: z.literal("openFolder") }),
   z.object({ type: z.literal("createSession"), ephemeral: z.boolean().optional() }),
   z.object({ type: z.literal("createSessionWithArguments") }),
@@ -168,15 +172,13 @@ const payloadSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("retryStart"), sessionId: z.string().min(1).max(128).optional() }),
 ]);
 
-const usageActionKeys: Readonly<Record<string, readonly string[]>> = {
-  listUsageProviders: ["type", "bridgeVersion", "requestId"],
-  queryProviderUsage: ["type", "bridgeVersion", "requestId", "scope"],
-  cancelProviderUsage: ["type", "bridgeVersion", "requestId"],
-};
+const usageActionKeys = new Map<string, readonly string[]>(
+  usageActionSchemas.map((schema) => [schema.shape.type.value, ["bridgeVersion", ...Object.keys(schema.shape)]]),
+);
 
 export const webviewToHostSchema = z.preprocess((raw, context) => {
   if (typeof raw === "object" && raw !== null && "type" in raw && typeof raw.type === "string") {
-    const allowed = Object.hasOwn(usageActionKeys, raw.type) ? usageActionKeys[raw.type] : undefined;
+    const allowed = usageActionKeys.get(raw.type);
     if (allowed && Object.keys(raw).some((key) => !allowed.includes(key))) {
       context.addIssue({ code: "custom", message: "Unexpected provider usage request fields." });
     }

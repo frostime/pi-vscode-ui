@@ -4,7 +4,7 @@
 
 This feature renders only safe `ProviderUsageDescriptor` and `ProviderUsageResult` values from `@frostime/provider-usage`. Its data-source interface accepts a provider scope and cancellation signal, never credentials, file paths, environment maps or transport hooks. Provider discovery, credential interpretation and request rules remain outside the browser.
 
-The sidebar's metrics row places Usage immediately left of Context. Clicking opens a compact non-modal popover above the row without unmounting conversation or Composer. Closing/Escape restores the Usage trigger's focus. Outside pointer actions dismiss without stealing focus from their target. Temporary preview data is visibly marked as mock.
+The sidebar's metrics row places Usage immediately left of Context. Clicking opens a compact non-modal popover above the row without unmounting conversation or Composer. Closing/Escape restores the Usage trigger's focus. Outside pointer actions dismiss without stealing focus from their target.
 
 ## Requests
 
@@ -17,6 +17,7 @@ Replacement, selection change, close and destruction cancel pending work. Even i
 ## Report meaning
 
 - Preserve provider labels, quota groups, window durations, reset timestamps and account/plan notes. Capture time is milliseconds; quota reset timestamps are seconds.
+- Official-page navigation comes from optional descriptor `links` populated by the package’s predefined Provider metadata. Render labels and send URLs through the existing `openExternal` action. Do not infer links from notes or Provider IDs. A selected Provider’s links remain accessible without a successful query; `all` displays links with each result.
 - Show only reported counters. Missing usage does not mean zero; draw a bar only with reported usage and an applicable scale. Clamp the visual bar, not the reported value.
 - Keep currencies and balances separate. Do not derive subscription quota from spend or Session tokens.
 - Reset availability is a plain metric, never a redemption control. Native ChatGPT's limited status/link result is not numerical quota.

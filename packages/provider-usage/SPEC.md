@@ -25,7 +25,12 @@ environment map. It does not discover agent directories itself and has no
   (`ReadyProviderCredential` with the real bearer token, or an explicit
   `UnavailableProviderCredential`). Never hand this result to browser code.
 - `listProviders(input)` — safe descriptors (provider ID, display name,
-  availability, source category, safe reason). No credential values, no
+  availability, source category, safe reason, optional official-page `links`). Links
+  contain a label and URL from maintained predefined metadata, never a provider
+  response or user credential configuration. OpenAI and Codex expose the established
+  ChatGPT usage page; OpenCode Go exposes `https://opencode.ai/console`.
+  Providers without verified pages omit links. Navigation is
+  available even when credentials are unavailable. No credential values, no
   environment variable names, no file content.
 - `queryUsage(scope, input, signal?)` — safe per-provider results for one supported
   provider ID or `all`. It reloads configuration, preserves configured-but-unavailable

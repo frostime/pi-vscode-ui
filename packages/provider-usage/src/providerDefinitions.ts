@@ -14,6 +14,8 @@
  * into safe descriptors or reasons.
  */
 
+import type { ProviderUsageLink } from "./types.js";
+
 /** How a stored OAuth credential (auth.json) is interpreted for usage requests. */
 export type StoredOAuthInterpretation =
   /** No stored-OAuth usage path for this provider. */
@@ -39,6 +41,8 @@ export type StoredOAuthInterpretation =
 export interface ProviderUsageDefinition {
   id: string;
   displayName: string;
+  /** Maintained official pages for read-only navigation. */
+  links?: readonly ProviderUsageLink[];
   /** Predefined ambient environment keys in Pi resolution order. Internal; never rendered. */
   envVarNames: readonly string[];
   /** Interpretation of a stored OAuth credential for usage requests. */
@@ -86,6 +90,7 @@ export const PROVIDER_USAGE_DEFINITIONS: readonly ProviderUsageDefinition[] = [
   {
     id: "openai",
     displayName: "OpenAI",
+    links: [{ label: "View usage on ChatGPT", url: "https://chatgpt.com/settings/usage" }],
     envVarNames: ["OPENAI_API_KEY"],
     storedOAuth: "native-chatgpt",
     supportsStoredApiKey: true,
@@ -100,6 +105,7 @@ export const PROVIDER_USAGE_DEFINITIONS: readonly ProviderUsageDefinition[] = [
   {
     id: "openai-codex",
     displayName: "OpenAI Codex",
+    links: [{ label: "View usage on ChatGPT", url: "https://chatgpt.com/settings/usage" }],
     envVarNames: [],
     storedOAuth: "bearer-access",
     // Pi composes API-key auth only for providers whose base definition has one.
@@ -180,6 +186,7 @@ export const PROVIDER_USAGE_DEFINITIONS: readonly ProviderUsageDefinition[] = [
   {
     id: "opencode-go",
     displayName: "OpenCode Go",
+    links: [{ label: "Open OpenCode console", url: "https://opencode.ai/console" }],
     envVarNames: ["OPENCODE_API_KEY"],
     storedOAuth: "unsupported",
     supportsStoredApiKey: true,

@@ -43,6 +43,27 @@ describe("credential resolution — precedence and configuration", () => {
     expect(leaksValue(value, JSON.stringify(outcome))).toBe(false);
   }
 
+  it("lists maintained official links independently of query availability, without inventing links for other providers", async () => {
+    const key = "synthetic-link-test-key";
+    fixture.writeAuthJson(JSON.stringify({
+      openai: { type: "api_key", key },
+      "openai-codex": { type: "api_key", key },
+      "opencode-go": { type: "api_key", key },
+      deepseek: { type: "api_key", key },
+    }));
+    const descriptors = await listProviders({ ...configInput(), environment: fakeEnv({}) });
+    for (const id of ["openai", "openai-codex"]) {
+      const descriptor = descriptors.find((item) => item.providerId === id);
+      expect(descriptor?.availability).toBe("unavailable");
+      expect(descriptor?.links).toEqual([{ label: "View usage on ChatGPT", url: "https://chatgpt.com/settings/usage" }]);
+    }
+    expect(descriptors.find((item) => item.providerId === "opencode-go")?.links).toEqual([
+      { label: "Open OpenCode console", url: "https://opencode.ai/console" },
+    ]);
+    expect(descriptors.find((item) => item.providerId === "deepseek")?.links).toBeUndefined();
+    valueNeverDisplayed(key, descriptors);
+  });
+
   it("prefers a stored auth.json credential over models.json and ambient variables", async () => {
     const stored = "stored-secret-value-A";
     fixture.writeAuthJson(JSON.stringify({ deepseek: { type: "api_key", key: stored } }));

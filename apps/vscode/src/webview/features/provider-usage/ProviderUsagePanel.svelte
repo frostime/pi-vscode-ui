@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import type { ProviderUsageDescriptor, ProviderUsageResult } from "@frostime/provider-usage";
 
+  import { postToHost } from "../../bridge/vscodeBridge";
   import ProviderUsageReport from "./ProviderUsageReport.svelte";
   import type { ProviderUsageSource } from "./providerUsageSource";
 
@@ -112,6 +113,16 @@
   close();
 }} />
 
+{#snippet providerLinks(provider: ProviderUsageDescriptor | undefined)}
+  {#if provider?.links?.length}
+    <nav class="provider-links" aria-label={`${provider.displayName} official pages`}>
+      {#each provider.links as link (link.url)}
+        <button class="usage-link" type="button" onclick={() => postToHost({ type: "openExternal", url: link.url })}>{link.label} ↗</button>
+      {/each}
+    </nav>
+  {/if}
+{/snippet}
+
 <dialog bind:this={panel} open class="provider-usage-panel" aria-label="Provider usage" aria-modal="false">
   <header>
     <h2>Provider usage</h2>
@@ -145,9 +156,11 @@
           <p class="result-state">{result.status === "selection-required" ? "Account selection required" : result.status === "unavailable" ? "Usage unavailable" : "Query failed"}</p>
           <p class="failure">{result.reason}</p>
         {/if}
+        {#if scope === "all"}{@render providerLinks(providers.find((provider) => provider.providerId === result.providerId))}{/if}
       </section>
     {/each}
   </div>
+  {#if scope !== "all"}{@render providerLinks(selected)}{/if}
   <details class="about-data">
     <summary>About this data</summary>
     <p>Pi files and the VS Code Host environment. Model-specific and extension-injected authentication are not included.</p>
@@ -179,6 +192,8 @@
   .failure { color: var(--frost-warning); margin: 4px 0; overflow-wrap: anywhere; }
   .provider-result + .provider-result { border-top: 1px solid var(--frost-border); margin-top: 10px; padding-top: 10px; }
   .result-state { color: var(--frost-muted); margin-top: 3px; }
+  .provider-links { display: flex; flex-direction: column; gap: 4px; }
+  .usage-link { padding: 0; border: 0; background: transparent; color: var(--frost-link); text-decoration: underline; text-align: left; }
   .about-data { color: var(--frost-muted); font-size: 10px; border-top: 1px solid var(--frost-border-soft); padding-top: 6px; }
   .about-data summary { cursor: pointer; }
   .about-data p { margin-top: 5px; }

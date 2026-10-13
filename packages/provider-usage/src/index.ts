@@ -10,7 +10,7 @@ export { listProviders } from "./listProviders.js";
 export { queryUsage } from "./query.js";
 export type { QueryUsageOptions, ProviderUsageResult } from "./types.js";
 export type { UsageReport, UsageBucket, UsageMetric, UsageSemantics } from "./providerTypes.js";
-export type { ProviderUsageDescriptor } from "./types.js";
+export type { ProviderUsageDescriptor, ProviderUsageLink } from "./types.js";
 export {
   resolveProviderCredentials,
   type ResolutionInput,

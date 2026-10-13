@@ -12,11 +12,18 @@ import type { UsageReport } from "./providerTypes.js";
 /** Safe category of the configured credential source. Never contains variable names. */
 export type ProviderSourceCategory = "auth.json" | "models.json" | "environment" | "not-configured";
 
+/** Fixed official navigation metadata, never extracted from provider responses. */
+export interface ProviderUsageLink {
+  label: string;
+  url: string;
+}
+
 /** A safe, browser-facing description of one supported configured provider. */
 export interface ProviderUsageDescriptor {
   providerId: string;
   displayName: string;
   availability: "ready" | "unavailable";
+  links?: readonly ProviderUsageLink[];
   source: ProviderSourceCategory;
   /** Safe reason; sanitized, never file content, always present for unavailable results. */
   reason: string;

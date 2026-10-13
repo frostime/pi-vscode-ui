@@ -1,11 +1,9 @@
 <script lang="ts">
   import type { UsageBucket, UsageReport } from "@frostime/provider-usage";
-  import { postToHost } from "../../bridge/vscodeBridge";
   import { bucketProgress, formatUsageValue } from "./providerUsagePresentation";
 
   let { report, showProviderName = true }: { report: UsageReport; showProviderName?: boolean } = $props();
   const groups = $derived(groupBuckets(report.buckets));
-  const usagePage = "https://chatgpt.com/settings/usage";
 
   function groupBuckets(buckets: readonly UsageBucket[]): { id: string; label: string; buckets: UsageBucket[] }[] {
     const groups = new Map<string, { id: string; label: string; buckets: UsageBucket[] }>();
@@ -69,9 +67,7 @@
     </dl>
   {/if}
   {#each report.notes ?? [] as note, index (index)}
-    {#if note === `Manage usage: ${usagePage}`}
-      <button class="usage-link" type="button" onclick={() => postToHost({ type: "openExternal", url: usagePage })}>View usage on ChatGPT ↗</button>
-    {:else}<p class="note">{note}</p>{/if}
+    <p class="note">{note}</p>
   {/each}
 </article>
 
@@ -97,5 +93,4 @@
   dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   .metrics { border-top: 1px solid var(--frost-border-soft); padding-top: 5px; }
   .note { margin-top: 5px; }
-  .usage-link { padding: 0; margin-top: 6px; background: transparent; color: var(--frost-link); text-decoration: underline; cursor: pointer; text-align: left; }
 </style>

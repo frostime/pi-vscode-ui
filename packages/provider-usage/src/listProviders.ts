@@ -14,13 +14,15 @@ import { type ProviderResolutionInput, type ProviderUsageDescriptor } from "./ty
 
 export async function listProviders(input: ProviderResolutionInput): Promise<readonly ProviderUsageDescriptor[]> {
   const outcomes = await resolveProviderCredentials(input);
-  const names = new Map(PROVIDER_USAGE_DEFINITIONS.map((definition) => [definition.id, definition.displayName]));
+  const definitions = new Map(PROVIDER_USAGE_DEFINITIONS.map((definition) => [definition.id, definition]));
   return outcomes
     .filter((outcome) => outcome.source !== "not-configured")
     .map((outcome) => {
+      const definition = definitions.get(outcome.providerId);
       const descriptor: ProviderUsageDescriptor = {
         providerId: outcome.providerId,
-        displayName: names.get(outcome.providerId) ?? outcome.providerId,
+        displayName: definition?.displayName ?? outcome.providerId,
+        ...(definition?.links ? { links: definition.links } : {}),
         availability: outcome.status === "ready" ? "ready" : "unavailable",
         source: outcome.source,
         reason: outcome.status === "unavailable" ? outcome.reason : "",

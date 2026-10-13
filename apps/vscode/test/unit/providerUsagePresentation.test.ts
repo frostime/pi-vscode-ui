@@ -81,7 +81,7 @@ describe("provider usage presentation", () => {
 
     expect(body).toContain("Connected (native OAuth)");
     expect(body).toContain("Numerical usage and reset times are unavailable");
-    expect(body).toContain("View usage on ChatGPT");
+    expect(body).not.toContain("<button");
     expect(body).not.toContain("class=\"usage-bar");
   });
 

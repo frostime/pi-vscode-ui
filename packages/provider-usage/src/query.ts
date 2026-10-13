@@ -168,7 +168,7 @@ function nativeChatGPTReport(): UsageReport {
     providerId: "openai", providerName: "OpenAI", capturedAt: Date.now(), source: "openai-chatgpt-auth",
     semantics: { kind: "consumer-subscription", label: "ChatGPT plan authentication status" },
     buckets: [], metrics: [{ id: "plan-auth", label: "ChatGPT plan authentication", value: "Connected (native OAuth)" }],
-    notes: ["Numerical usage and reset times are unavailable for native OpenAI OAuth.", "Manage usage: https://chatgpt.com/settings/usage"],
+    notes: ["Numerical usage and reset times are unavailable for native OpenAI OAuth."],
   };
 }
 
