@@ -53,6 +53,9 @@ importers:
       '@frostime/pi-rpc':
         specifier: workspace:*
         version: link:../../packages/pi-rpc
+      '@frostime/provider-usage':
+        specifier: workspace:*
+        version: link:../../packages/provider-usage
       '@vscode/codicons':
         specifier: ^0.0.44
         version: 0.0.44

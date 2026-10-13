@@ -12,7 +12,9 @@ The purpose of `packages/provider-usage` is to hide the entire query feature beh
 
 Likely changes should be local: adding a provider or changing a credential rule affects the package; changing presentation affects the component. The existing bridge requires a few typed message additions, not a new protocol implementation or feature coordination subsystem.
 
-This replaces the earlier dedicated-tab design. It is a draft for review; no production code or anchors are authorized by the document alone. Follow [the PLAN](provider-usage.PLAN.md) for phased delivery: credential resolution first, then provider queries, Host dispatch, UI and integrated verification.
+This replaces the earlier dedicated-tab design. It is a draft for review; no production code or anchors are authorized by the document alone. Follow [the PLAN](provider-usage.PLAN.md) for phased delivery. Package Phases 1/2 are complete; the user requested UI-first staging with real package result types and a temporary mock source before Host dispatch. The final bridge direction below remains unchanged.
+
+UI staging adds a small `ProviderUsageSource` interface, synthetic mock implementation, a report-rendering child and pure presentation functions inside the same feature directory. They are local presentation support, not new application services/stores. Replace mock wiring after UI review and Host integration; do not ship mock data as live provider usage.
 
 ## Responsibility and dependency direction
 
@@ -45,7 +47,7 @@ No extra application coordinator, service, response client, global store, usage 
 The application calls only two operations, schematically:
 
 ```text
-listProviders({ agentDirectory, environment }, signal)
+listProviders({ agentDirectory, environment })
 queryUsage(providerId | all, { agentDirectory, environment }, signal)
 ```
 
@@ -136,8 +138,18 @@ apps/vscode/
 ├── package.json
 │   modify +1–3/-0        workspace dependency only; no new commands, UI build or version change
 ├── src/webview/features/provider-usage/ProviderUsagePanel.svelte
-│   create +260–360        one component, local state/subscription, selector/results/errors;
+│   create +170–250        panel-owned request state/cancellation and selector/results/errors;
 │                         scoped styles, close/focus/keyboard behavior and 280px layout
+├── src/webview/features/provider-usage/ProviderUsageReport.svelte
+│   create +90–120         render one real-format report; preserve groups, units and timestamps
+├── src/webview/features/provider-usage/providerUsagePresentation.ts
+│   create +20–35          pure unit/bar formatting; unknown values never become zero
+├── src/webview/features/provider-usage/providerUsageSource.ts
+│   create +7–12           narrow safe data interface for mock and future existing-bridge source
+├── src/webview/features/provider-usage/mockProviderUsage.ts
+│   create temporary       synthetic review data; remove after replacing source with bridge calls
+├── src/webview/features/provider-usage/provider-usage.SPEC.md
+│   create +25–40          source/report/request contracts, scoped presentation responsibilities
 ├── src/webview/features/sessions/SessionHeader.svelte
 │   modify +6–12/-0       local menu action via callback; preserve existing Session actions
 ├── src/webview/shell/SidebarShell.svelte

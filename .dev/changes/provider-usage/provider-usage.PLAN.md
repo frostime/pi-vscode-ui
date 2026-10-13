@@ -7,7 +7,7 @@ branch: feat/provider-usage
 
 Follow [the SHAPE](provider-usage.SHAPE.md) for ownership, file placement and integration boundaries. This plan sequences delivery and verification; it does not replace the SHAPE's predicted diff.
 
-Current state: Phases 1 and 2 implemented on `feat/provider-usage`. Phase 1 was worker-implemented and reviewed/checkpointed as `4bd417b`; the main agent implemented Phase 2 after the continuation was aborted. Package typecheck/lint/build and 160 synthetic/source-fixture/local HTTP tests pass. All 17 provider IDs have source-backed query behavior, including native OpenAI's limited local result. No real-credential inspection, live provider requests or application integration has been performed. Implementation authorization does not authorize real-credential checks.
+Current state: Phases 1 and 2 implemented on `feat/provider-usage` (`4bd417b`, `542cb8e`). At the user's request, Phase 4's UI is now implemented first against the package's real safe result types and a clearly labelled temporary mock source. Host/bridge Phase 3 remains unimplemented. No real-credential inspection or live provider requests have been performed. Implementation authorization does not authorize real-credential checks.
 
 ## Outcome and sequence
 
@@ -16,10 +16,12 @@ Current state: Phases 1 and 2 implemented on `feat/provider-usage`. Phase 1 was 
    -> inspect masked results and review source-selection behavior
 2. Complete the independent provider-usage package
    -> verify provider requests and normalized reports without application changes
+4a. Implement the sidebar UI with real result types and a temporary mock source
+    -> review UI/state behavior before connecting the two completed sides
 3. Add thin Host dispatch through the existing bridge
    -> verify safe responses, origin authorization and cancellation
-4. Add the one sidebar component and menu entry
-   -> review UI and state preservation
+4b. Replace the mock source with existing-bridge requests
+    -> preserve the reviewed UI/data interface; remove temporary mock wiring
 5. Integrated verification and packaging
 ```
 
@@ -126,9 +128,13 @@ openrouter    unavailable  reason=required environment value missing
 - Targeted extension/bridge tests and application typecheck pass.
 - Checkpoint: `✨ feat(provider-usage): dispatch usage requests through existing bridge`.
 
-## Phase 4 — One component in the existing sidebar
+## Phase 4 — Sidebar UI first, then connection
 
 **Deliverable:** existing menu opens the dismissible usage component in the existing Webview. No editor tab, new Webview, additional build entry, global store or chat replacement.
+
+The user revised the order: implement and inspect this UI before Phase 3. Its narrow `ProviderUsageSource` uses the package's actual safe descriptors/results and cancellation signals; the source is temporarily synthetic. Keep it visibly marked as mock, with no file/environment access or authenticated requests. After UI review and Phase 3, replace the source with bridge-backed operations and remove the mock module/flag/wiring. This interface is the replaceable data boundary, not a new application service/store.
+
+The panel owns selection/loading/cancellation. A small child renders reports, and pure presentation functions handle units/bars; neither interprets credentials or provider request rules.
 
 ### Work
 
@@ -154,6 +160,15 @@ openrouter    unavailable  reason=required environment value missing
 - Report verified and unverified cases separately, including any optional real-provider checks not performed. Do not change product version without a separate request.
 - Final documentation/checkpoint commit; mark the plan completed only after all applicable gates and diff comparison pass. Update SHAPE status according to its acceptance/completion rules, not merely because a plan exists.
 
+## UI-first mock-stage verification record
+
+- Existing sidebar Session actions menu opens the non-modal surface; conversation/Composer stay mounted. Data-source/result types match the completed package, with no credential/configuration inputs in the browser.
+- Six focused presentation/mock tests plus the existing Session shell test pass (7 tests). Application typecheck, targeted lint, frozen-lockfile installation and application build pass. The existing unrelated ExtensionUiRequestCard accessibility warning remains; the build reports its bundle-size warning.
+- An isolated Edge browser harness exercised mixed results, read-only reset metrics, refresh freshness, unavailable providers, cancellation, stale results from a source ignoring abort, close/Escape/focus, and surrounding draft preservation. It passed narrow-layout checks at 280px; dark/light/high-contrast screenshots were inspected. The harness/snapshots are temporary under `tmp/provider-usage-review/`, not production UI/build entries.
+- The browser bundle contains no provider credential/query/proxy engine runtime. No Host code, bridge schema/version, Pi process policy or Session state changed.
+- Full VS Code Extension Development Host interaction, workspace-wide tests and VSIX packaging were not run in this UI-first stage. No real files/credentials were inspected or authenticated usage requests made.
+- Next: user review of the mock UI, then Phase 3 and replacement of the temporary source. Phase 4 is not marked fully complete until the real bridge source is connected.
+
 ## Phase 2 verification record
 
 - Package typecheck/lint/build and all 160 tests passed; frozen-lockfile installation and root build passed.
@@ -166,4 +181,4 @@ Near-term Phase 1 needs confirmation of command-value exclusion and provider-lev
 
 Before Phase 2, settle the copied-source versus shared-library ownership and exact Host proxy support. Before optional live checks, obtain explicit permission for the exact configuration/environment scope and provider requests.
 
-The subsequent implementation request authorized package implementation. Phase 1 uses the no-command/provider-level-source scope; review corrected silent-source fallback, missing-provider visibility, an unnecessary expiry gate, Copilot endpoint rules and CLI environment isolation. Phase 2 adds source-backed queries/normalizers, independent failures, deadlines/cancellation and explicit undici HTTP(S) proxy/NO_PROXY handling verified locally. Further source checking also tightened Copilot API-key rejection and subscription override-account matching. The external source repository is unchanged. Next step: Phase 3 Host integration when requested; no application/UI changes or live authenticated requests are part of the package-only assignment. Packaging must preserve the imported MIT license when the app starts bundling this package.
+The subsequent implementation request authorized package implementation. Phase 1 uses the no-command/provider-level-source scope; review corrected silent-source fallback, missing-provider visibility, an unnecessary expiry gate, Copilot endpoint rules and CLI environment isolation. Phase 2 adds source-backed queries/normalizers, independent failures, deadlines/cancellation and explicit undici HTTP(S) proxy/NO_PROXY handling verified locally. Further source checking also tightened Copilot API-key rejection and subscription override-account matching. The external source repository is unchanged. The package-only assignment is complete. The user's subsequent request authorizes the UI-first mock stage; Phase 3 Host integration remains pending. No live authenticated requests are authorized. Packaging must preserve the imported MIT license when the app starts bundling this package.

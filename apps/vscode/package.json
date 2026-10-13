@@ -319,6 +319,7 @@
     "@codemirror/state": "^6.7.1",
     "@codemirror/view": "^6.43.6",
     "@frostime/pi-rpc": "workspace:*",
+    "@frostime/provider-usage": "workspace:*",
     "@vscode/codicons": "^0.0.44",
     "bits-ui": "^2.18.1",
     "dompurify": "^3.4.12",
