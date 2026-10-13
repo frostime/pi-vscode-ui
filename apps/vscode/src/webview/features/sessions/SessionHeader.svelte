@@ -8,11 +8,7 @@
   import StatusDot from "./StatusDot.svelte";
   import SessionList from "./SessionList.svelte";
 
-  let { sessions, active, onopenProviderUsage }: {
-    sessions: SessionSummaryView[];
-    active: SessionViewModel;
-    onopenProviderUsage?: (returnFocus: HTMLButtonElement | null) => void;
-  } = $props();
+  let { sessions, active }: { sessions: SessionSummaryView[]; active: SessionViewModel } = $props();
   let editing = $state(false);
   let titleDraft = $state("");
   let menuOpen = $state(false);
@@ -252,13 +248,6 @@
                 <span class="codicon codicon-copy"></span>
                 <span><strong>Session file</strong><small class="session-file-path">{active.sessionFile}</small></span>
               </button>
-            {/if}
-            {#if onopenProviderUsage}
-              <button type="button" onclick={() => {
-                const returnFocus = root?.querySelector<HTMLButtonElement>('button[aria-label="Session actions"]') ?? null;
-                closeMenus();
-                onopenProviderUsage?.(returnFocus);
-              }}><span class="codicon codicon-dashboard" aria-hidden="true"></span> Provider usage…</button>
             {/if}
             <button type="button" onclick={() => { closeMenus(); postToHost({ type: "openProxySettings" }); }}>
               <span class="codicon codicon-globe"></span>

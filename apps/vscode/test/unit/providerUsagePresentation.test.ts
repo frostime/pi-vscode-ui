@@ -5,6 +5,7 @@ import type { ProviderUsageResult, UsageReport } from "@frostime/provider-usage"
 import ProviderUsageReport from "../../src/webview/features/provider-usage/ProviderUsageReport.svelte";
 import { bucketProgress, formatUsageValue } from "../../src/webview/features/provider-usage/providerUsagePresentation";
 import { mockProviderUsageSource } from "../../src/webview/features/provider-usage/mockProviderUsage";
+import SessionMetrics from "../../src/webview/shell/SessionMetrics.svelte";
 
 async function mockReports(): Promise<readonly ProviderUsageResult[]> {
   vi.useFakeTimers();
@@ -22,6 +23,17 @@ function readyReport(results: readonly ProviderUsageResult[], id: string): Usage
 afterEach(() => vi.useRealTimers());
 
 describe("provider usage presentation", () => {
+  it("places Usage beside Context in the sidebar metrics without adding it to restricted panels", () => {
+    const session = {
+      stats: { cost: 0.084 }, extensionStatuses: [],
+    } as never;
+    const sidebar = render(SessionMetrics, { props: { session, providerUsageAvailable: true } }).body;
+    const panel = render(SessionMetrics, { props: { session } }).body;
+    expect(sidebar).toContain('aria-label="Provider usage"');
+    expect(sidebar.indexOf(">Usage</button>")).toBeLessThan(sidebar.indexOf("Context"));
+    expect(panel).not.toContain('aria-label="Provider usage"');
+  });
+
   it("preserves quota groups, reset timestamps in seconds, and read-only reset availability", async () => {
     const report = readyReport(await mockReports(), "openai-codex");
     const { body } = render(ProviderUsageReport, { props: { report } });
@@ -42,7 +54,7 @@ describe("provider usage presentation", () => {
     expect(body).toContain("CNY 128.40");
     expect(body).toContain("USD 4.20");
     expect(body).not.toContain("class=\"usage-bar");
-    expect(body).not.toContain("Remaining");
+    expect(body).not.toContain("remaining");
   });
 
   it("does not turn a missing counter into zero and clamps only the visual bar", () => {
@@ -58,8 +70,8 @@ describe("provider usage presentation", () => {
       buckets: [{ id: "remaining", label: "Allowance", unit: "count", remaining: 40 }], metrics: [],
     };
     const { body } = render(ProviderUsageReport, { props: { report } });
-    expect(body).toContain("Remaining");
-    expect(body).not.toContain("<dt>Used</dt>");
+    expect(body).toContain("40 remaining");
+    expect(body).not.toContain(" used</strong>");
     expect(body).not.toContain("class=\"usage-bar");
   });
 

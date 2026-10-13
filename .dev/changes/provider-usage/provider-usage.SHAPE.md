@@ -6,7 +6,7 @@ status: draft
 
 ## Change and design pressure
 
-Add a read-only provider-usage surface inside the existing FrostPi sidebar Webview. An entry in its existing menu opens one dismissible component. It does not open a VS Code editor tab, replace the conversation, or create a second Webview.
+Add a read-only provider-usage surface inside the existing FrostPi sidebar Webview. Usage immediately left of Context opens a compact upward popover. It does not open a VS Code editor tab, replace the conversation, or create a second Webview.
 
 The purpose of `packages/provider-usage` is to hide the entire query feature behind two operations. The application must not know credential precedence, provider URLs, accepted authentication, response formats, timeout rules or provider-query scheduling. It renders safe results and carries requests between the component and the package.
 
@@ -19,7 +19,7 @@ UI staging adds a small `ProviderUsageSource` interface, synthetic mock implemen
 ## Responsibility and dependency direction
 
 ```text
-Existing sidebar menu
+Usage beside Context in the sidebar metrics
         | opens
 ProviderUsagePanel.svelte (existing Webview)
         | existing postToHost / onHostMessage
@@ -40,7 +40,7 @@ Only three owners are required:
 | Existing Host dispatch/connection | Validate and authorize browser actions, supply configuration context, call package, deliver to origin, cancel closed/replaced requests |
 | One component | Selection, visibility-related cleanup, loading/errors, request identity, report rendering, keyboard interaction |
 
-No extra application coordinator, service, response client, global store, usage snapshots, Session subscriptions or separate build entry.
+No extra application coordinator, service, response client, global store, Session subscriptions or separate build entry. A local source wrapper owns successful per-provider snapshots across popover openings; it has no persisted or global application state.
 
 ### Public package surface
 
@@ -92,16 +92,16 @@ These are not settled by choosing the simpler architecture:
 
 ## Application request flow and state
 
-1. `SessionHeader.svelte` gets an ordinary callback from `SidebarShell.svelte`. Its existing menu invokes the callback to open the usage component. This is feature-global placement, not a Session command or per-message action.
-2. `SidebarShell.svelte` owns one local `usageOpen` boolean and conditionally mounts the component as a bounded dismissible surface over the sidebar. Conversation and Composer remain mounted; their drafts, scroll and disclosure are untouched.
+1. `SessionInteraction.svelte` enables provider usage only on the sidebar. `SessionHeader.svelte` and `SidebarShell.svelte` no longer have feature-specific changes.
+2. `SessionMetrics.svelte` owns the Usage trigger immediately left of Context, a local open flag and cached data source. It mounts the compact popover above the metrics row. Conversation and Composer remain mounted. Close/Escape restores trigger focus; outside clicks dismiss without taking focus from their target.
 3. The component uses existing `postToHost` and `onHostMessage`. It subscribes on mount, checks bridge version and request identity, and unsubscribes on destruction. It holds its own selected provider, loading/error/results and current request ID. No new application store or delivery helper. The existing `applyHostMessage` does not need new cases because the mounted component consumes these responses directly; its existing switch ignores unrelated response kinds.
 4. Existing `webviewToHost` validation admits bounded list/query/cancel actions. The existing dispatcher marks them sidebar-only, resolves Host context, calls the package and posts safe responses to the same connection. Browser inputs contain IDs/scope only, never credentials, paths, arbitrary URLs or headers.
 5. `WebviewConnection` owns one pending usage request's ID and AbortController, beside its existing connection-owned resources. Small replace/cancel/current-request methods are available to the dispatcher. Replacement/disposal aborts; an old request's cleanup cannot cancel a newer request. This is connection lifecycle handling, not a usage service or global lock.
 6. Closing/unmounting the component sends cancellation for its pending request. Re-query replaces it. Cancel only the matching ID; late or unknown results have no effect. No session-target fields, snapshots, deltas, model replies or conversation changes.
 
-The first version uses a provider selector and explicit Query/Refresh. Opening lists candidates; it does not query all accounts automatically. Selecting a provider does not switch the Pi model. `All configured providers` is an explicit scope. Current-provider preselection can be a display convenience if passed from existing UI data, but adds no new model discovery or session state dependency and is not proof of matching credentials.
+Opening automatically queries the active provider if configured and ready; selecting another ready provider or explicit `all` queries that scope without switching the Pi model. Successful reports cache per provider for the source/metrics lifetime; reopening retains capture time and does not repeat the provider request. Manual Refresh invalidates that scope and fetches anew. Failures/cancelled requests are not cached. No TTL, background polling or persisted account data. Host integration must scope/reset the cache with its configuration context; source-category/availability changes already invalidate entries.
 
-Reports display capture time, the provider's quota windows/groups, separately labelled currencies/balances, credits and read-only reset count. Native OpenAI's limited connection/link result is not fabricated numeric usage. Use the existing validated `openExternal` action for fixed usage-page links. Failed refresh must not present an old snapshot as current; do not show zero instead of an error. Results remain local to the mounted component and are never persisted.
+Reports display capture time, the provider's quota windows/groups, separately labelled currencies/balances, credits and read-only reset count. Native OpenAI's limited connection/link result is not fabricated numeric usage. Use the existing validated `openExternal` action for fixed usage-page links. Failed refresh must not present an old snapshot as current; do not show zero instead of an error. Results stay in the source's in-memory cache across popover openings; they are never persisted.
 
 ## Predicted diff
 
@@ -145,15 +145,15 @@ apps/vscode/
 ├── src/webview/features/provider-usage/providerUsagePresentation.ts
 │   create +20–35          pure unit/bar formatting; unknown values never become zero
 ├── src/webview/features/provider-usage/providerUsageSource.ts
-│   create +7–12           narrow safe data interface for mock and future existing-bridge source
+│   create +45–65          safe data interface and local successful-snapshot cache
 ├── src/webview/features/provider-usage/mockProviderUsage.ts
 │   create temporary       synthetic review data; remove after replacing source with bridge calls
 ├── src/webview/features/provider-usage/provider-usage.SPEC.md
 │   create +25–40          source/report/request contracts, scoped presentation responsibilities
-├── src/webview/features/sessions/SessionHeader.svelte
-│   modify +6–12/-0       local menu action via callback; preserve existing Session actions
-├── src/webview/shell/SidebarShell.svelte
-│   modify +10–20/-0      open boolean and conditional component; keep conversation mounted
+├── src/webview/shell/SessionMetrics.svelte
+│   modify +30–50/-0      trigger left of Context, local open flag/cache and upward popover
+├── src/webview/shell/SessionInteraction.svelte
+│   modify one line       enable usage only on sidebar metrics; restricted panels unchanged
 ├── src/shared/bridge/webviewToHost.ts
 │   modify +15–25/-0      bounded list/query/cancel messages in existing validation
 ├── src/shared/bridge/hostToWebview.ts
@@ -187,7 +187,7 @@ pnpm-lock.yaml
     modify +2–5/-0        new package scripts/ownership
 ```
 
-App production estimate: one new component (~260–360 lines), ~110–205 small additions to existing menu/shell/bridge/dispatch/connection files, and a workspace dependency. No new application feature subsystem. Multiple existing files change because browser/Host/contracts are already separated, not because the feature introduces more owners.
+App production estimate: one new component (~260–360 lines), ~110–205 small additions to existing metrics/interaction/bridge/dispatch/connection files, and a workspace dependency. No new application feature subsystem. Multiple existing files change because browser/Host/contracts are already separated, not because the feature introduces more owners.
 
 The package remains the substantial part: provider normalization is roughly 2,000–2,300 lines before requests/configuration/tests. Carry the existing supported provider set unless a smaller set is explicitly agreed; do not silently shrink it to make estimates smaller.
 

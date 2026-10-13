@@ -3,6 +3,10 @@
   import { postToHost } from "../../bridge/vscodeBridge";
   import { bucketProgress, formatUsageValue } from "./providerUsagePresentation";
 
+  let { report, showProviderName = true }: { report: UsageReport; showProviderName?: boolean } = $props();
+  const groups = $derived(groupBuckets(report.buckets));
+  const usagePage = "https://chatgpt.com/settings/usage";
+
   function groupBuckets(buckets: readonly UsageBucket[]): { id: string; label: string; buckets: UsageBucket[] }[] {
     const groups = new Map<string, { id: string; label: string; buckets: UsageBucket[] }>();
     for (const bucket of buckets) {
@@ -14,43 +18,46 @@
     return [...groups.values()];
   }
 
-  function windowLabel(bucket: UsageBucket): string | undefined {
+  function windowLabel(bucket: UsageBucket): string {
     if (bucket.period) return bucket.period;
-    if (bucket.windowMinutes === undefined) return undefined;
+    if (bucket.windowMinutes === undefined) return bucket.label;
     const minutes = bucket.windowMinutes;
     if (minutes % 1_440 === 0) return `${minutes / 1_440}-day window`;
     if (minutes % 60 === 0) return `${minutes / 60}-hour window`;
     return `${minutes}-minute window`;
   }
 
-  let { report }: { report: UsageReport } = $props();
-  const groups = $derived(groupBuckets(report.buckets));
-  const usagePage = "https://chatgpt.com/settings/usage";
+  function resetLabel(seconds: number): string {
+    return new Date(seconds * 1_000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
 </script>
 
 <article class="usage-report">
-  <h3>{report.providerName}</h3>
-  <p class="semantics">{report.semantics.label}</p>
+  {#if showProviderName}<h3>{report.providerName}</h3>{/if}
+  <div class="report-meta">
+    <span class="semantics">{report.semantics.label}</span>
+    <time class="snapshot" datetime={new Date(report.capturedAt).toISOString()} title={`Snapshot: ${new Date(report.capturedAt).toLocaleString()}`}>Updated {new Date(report.capturedAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</time>
+  </div>
   {#if report.accountLabel}<p class="account">{report.accountLabel}</p>{/if}
-  <p class="snapshot">Snapshot: <time datetime={new Date(report.capturedAt).toISOString()}>{new Date(report.capturedAt).toLocaleString()}</time></p>
 
   {#each groups as group (group.id)}
     <section class="bucket-group" aria-label={group.label || "Usage limits"}>
       {#if group.label}<h4>{group.label}</h4>{/if}
       {#each group.buckets as bucket (bucket.id)}
         {@const progress = bucketProgress(bucket)}
-        {@const window = windowLabel(bucket)}
         <div class="bucket">
-          <div class="bucket-heading"><strong>{bucket.label}</strong>{#if window}<span>{window}</span>{/if}</div>
+          <div class="bucket-heading">
+            <span title={bucket.label}>{windowLabel(bucket)}</span>
+            {#if bucket.used !== undefined}<strong>{formatUsageValue(bucket.used, bucket.unit)} used</strong>{/if}
+          </div>
           {#if progress !== undefined}<div class="usage-bar" aria-hidden="true"><span style:width={`${progress}%`}></span></div>{/if}
-          <dl class="bucket-values">
-            {#if bucket.used !== undefined}<div><dt>Used</dt><dd>{formatUsageValue(bucket.used, bucket.unit)}</dd></div>{/if}
-            {#if bucket.remaining !== undefined}<div><dt>Remaining</dt><dd>{formatUsageValue(bucket.remaining, bucket.unit)}</dd></div>{/if}
-            {#if bucket.limit !== undefined && bucket.unit !== "percent"}<div><dt>Limit</dt><dd>{formatUsageValue(bucket.limit, bucket.unit)}</dd></div>{/if}
-          </dl>
-          {#if bucket.resetsAt !== undefined}
-            <p class="reset-time">Resets <time datetime={new Date(bucket.resetsAt * 1_000).toISOString()}>{new Date(bucket.resetsAt * 1_000).toLocaleString()}</time></p>
-          {/if}
+          <div class="bucket-footer">
+            {#if bucket.resetsAt !== undefined}
+              <time datetime={new Date(bucket.resetsAt * 1_000).toISOString()} title={new Date(bucket.resetsAt * 1_000).toLocaleString()}>Resets {resetLabel(bucket.resetsAt)}</time>
+            {/if}
+            {#if bucket.remaining !== undefined}<span>{formatUsageValue(bucket.remaining, bucket.unit)} remaining</span>{/if}
+            {#if bucket.limit !== undefined && bucket.unit !== "percent"}<span>Limit {formatUsageValue(bucket.limit, bucket.unit)}</span>{/if}
+          </div>
         </div>
       {/each}
     </section>
@@ -70,22 +77,25 @@
 
 <style>
   .usage-report { min-width: 0; }
-  h3 { margin: 0; font-size: 1em; }
-  h4 { margin: 12px 0 6px; font-size: .92em; color: var(--frost-text); }
+  h3 { margin: 0 0 3px; font-size: 11px; }
+  h4 { margin: 8px 0 4px; font-size: 10px; color: var(--frost-muted); font-weight: 600; }
   p { margin: 3px 0; }
-  .semantics, .snapshot, .account, .note, .reset-time { color: var(--frost-muted); font-size: .88em; overflow-wrap: anywhere; }
-  .snapshot { margin-top: 6px; }
-  .bucket { padding: 9px 0; }
-  .bucket + .bucket { border-top: 1px solid var(--frost-border-soft); }
-  .bucket-heading { display: flex; flex-wrap: wrap; gap: 3px 8px; justify-content: space-between; font-size: .92em; }
-  .bucket-heading span { color: var(--frost-muted); }
-  .usage-bar { height: 5px; background: var(--frost-border); margin: 8px 0; overflow: hidden; }
+  .report-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; color: var(--frost-muted); font-size: 10px; }
+  .semantics { overflow-wrap: anywhere; }
+  .snapshot { white-space: nowrap; }
+  .account, .note { color: var(--frost-muted); font-size: 10px; overflow-wrap: anywhere; }
+  .bucket { padding: 5px 0; }
+  .bucket-heading { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; }
+  .bucket-heading span { overflow-wrap: anywhere; }
+  .bucket-heading strong { flex: none; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .usage-bar { height: 4px; background: var(--frost-border); margin: 5px 0; overflow: hidden; }
   .usage-bar span { display: block; height: 100%; background: var(--frost-link); }
-  dl { margin: 6px 0 0; font-size: .92em; }
-  dl > div { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0; }
+  .bucket-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; color: var(--frost-muted); font-size: 10px; }
+  dl { margin: 6px 0 0; font-size: 11px; }
+  dl > div { display: flex; justify-content: space-between; gap: 8px; margin: 3px 0; }
   dt { color: var(--frost-muted); overflow-wrap: anywhere; }
   dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-  .metrics { border-top: 1px solid var(--frost-border); margin-top: 10px; padding-top: 6px; }
-  .note { margin-top: 8px; }
-  .usage-link { padding: 0; margin-top: 8px; background: transparent; color: var(--frost-link); text-decoration: underline; cursor: pointer; text-align: left; }
+  .metrics { border-top: 1px solid var(--frost-border-soft); padding-top: 5px; }
+  .note { margin-top: 5px; }
+  .usage-link { padding: 0; margin-top: 6px; background: transparent; color: var(--frost-link); text-decoration: underline; cursor: pointer; text-align: left; }
 </style>

@@ -130,7 +130,7 @@ openrouter    unavailable  reason=required environment value missing
 
 ## Phase 4 — Sidebar UI first, then connection
 
-**Deliverable:** existing menu opens the dismissible usage component in the existing Webview. No editor tab, new Webview, additional build entry, global store or chat replacement.
+**Deliverable:** Usage immediately left of Context opens a compact upward popover in the existing sidebar Webview. No editor tab, new Webview, additional build entry, global store or chat replacement.
 
 The user revised the order: implement and inspect this UI before Phase 3. Its narrow `ProviderUsageSource` uses the package's actual safe descriptors/results and cancellation signals; the source is temporarily synthetic. Keep it visibly marked as mock, with no file/environment access or authenticated requests. After UI review and Phase 3, replace the source with bridge-backed operations and remove the mock module/flag/wiring. This interface is the replaceable data boundary, not a new application service/store.
 
@@ -138,7 +138,8 @@ The panel owns selection/loading/cancellation. A small child renders reports, an
 
 ### Work
 
-- Add the menu callback and local sidebar open flag.
+- Add the Usage trigger left of Context and local open flag in SessionMetrics; enable it only for the sidebar.
+- Auto-query the supported active provider and selected scopes. Cache successful per-provider snapshots across openings; retain original timestamps, fetch anew on explicit Refresh, never cache failures/cancelled work. Reset cache on future Host configuration-context changes.
 - Implement one component with local selection/loading/results/errors and the existing message subscription helpers. Check request identity/version, cancel pending work on close and unsubscribe on destruction.
 - Show eligible/unavailable providers, explicit query/refresh/all scope, snapshot time and provider-specific usage meaning. Reset counts are plain read-only metrics.
 - Keep the source limitation visible. Do not claim these credentials necessarily match the active Pi session.
@@ -162,9 +163,9 @@ The panel owns selection/loading/cancellation. A small child renders reports, an
 
 ## UI-first mock-stage verification record
 
-- Existing sidebar Session actions menu opens the non-modal surface; conversation/Composer stay mounted. Data-source/result types match the completed package, with no credential/configuration inputs in the browser.
-- Six focused presentation/mock tests plus the existing Session shell test pass (7 tests). Application typecheck, targeted lint, frozen-lockfile installation and application build pass. The existing unrelated ExtensionUiRequestCard accessibility warning remains; the build reports its bundle-size warning.
-- An isolated Edge browser harness exercised mixed results, read-only reset metrics, refresh freshness, unavailable providers, cancellation, stale results from a source ignoring abort, close/Escape/focus, and surrounding draft preservation. It passed narrow-layout checks at 280px; dark/light/high-contrast screenshots were inspected. The harness/snapshots are temporary under `tmp/provider-usage-review/`, not production UI/build entries.
+- User review replaced the initial menu/dashboard layout with Usage left of Context and a compact upward popover. Quota rows combine used/window/reset/remaining information; technical metadata is collapsed. The supported active provider queries automatically, and a local source wrapper preserves successful snapshots across reopening until explicit refresh or source invalidation.
+- Eleven focused presentation/cache/mock tests plus the existing Session shell test pass (12 tests). Application typecheck and targeted lint pass. The existing unrelated ExtensionUiRequestCard accessibility warning remains; the build reports its bundle-size warning.
+- An isolated Edge browser harness mounts the actual SessionMetrics row and exercises automatic active-provider fetch, retained snapshot on reopen, explicit refresh, mixed results, cancellation, outside-dismiss/focus, stale results, Escape and draft preservation. Compact upward placement and overflow checks pass at 280px; dark/light/high-contrast screenshots inspected. Harness/snapshots remain temporary under `tmp/provider-usage-review/`.
 - The browser bundle contains no provider credential/query/proxy engine runtime. No Host code, bridge schema/version, Pi process policy or Session state changed.
 - Full VS Code Extension Development Host interaction, workspace-wide tests and VSIX packaging were not run in this UI-first stage. No real files/credentials were inspected or authenticated usage requests made.
 - Next: user review of the mock UI, then Phase 3 and replacement of the temporary source. Phase 4 is not marked fully complete until the real bridge source is connected.
