@@ -148,7 +148,8 @@ export const PROVIDER_USAGE_DEFINITIONS: readonly ProviderUsageDefinition[] = [
     usageEndpoint: "https://api.github.com/copilot_internal/user",
     requiresBearer: false,
     sharedAmbientVarProtected: false,
-    apiKeyUsageRejectReason: undefined,
+    // Source resolveGitHubCopilotUsageAuth requires a complete saved OAuth account.
+    apiKeyUsageRejectReason: "GitHub Copilot usage requires a saved OAuth account; API-key authentication is unsupported.",
   },
   {
     id: "openrouter",

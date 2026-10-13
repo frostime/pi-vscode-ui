@@ -1,5 +1,5 @@
 ---
-status: draft
+status: in-progress
 branch: feat/provider-usage
 ---
 
@@ -7,7 +7,7 @@ branch: feat/provider-usage
 
 Follow [the SHAPE](provider-usage.SHAPE.md) for ownership, file placement and integration boundaries. This plan sequences delivery and verification; it does not replace the SHAPE's predicted diff.
 
-Current state: Phase 1 implemented on `feat/provider-usage` by the reusable worker and reviewed by the main agent plus an independent code reviewer. Main-agent package typecheck/lint/build and 62 synthetic tests pass. No provider HTTP requests, real-credential inspection or application integration has been performed. The user's implementation request authorizes proceeding with the package phases; it does not authorize real-credential checks.
+Current state: Phases 1 and 2 implemented on `feat/provider-usage`. Phase 1 was worker-implemented and reviewed/checkpointed as `4bd417b`; the main agent implemented Phase 2 after the continuation was aborted. Package typecheck/lint/build and 160 synthetic/source-fixture/local HTTP tests pass. All 17 provider IDs have source-backed query behavior, including native OpenAI's limited local result. No real-credential inspection, live provider requests or application integration has been performed. Implementation authorization does not authorize real-credential checks.
 
 ## Outcome and sequence
 
@@ -154,10 +154,16 @@ openrouter    unavailable  reason=required environment value missing
 - Report verified and unverified cases separately, including any optional real-provider checks not performed. Do not change product version without a separate request.
 - Final documentation/checkpoint commit; mark the plan completed only after all applicable gates and diff comparison pass. Update SHAPE status according to its acceptance/completion rules, not merely because a plan exists.
 
+## Phase 2 verification record
+
+- Package typecheck/lint/build and all 160 tests passed; frozen-lockfile installation and root build passed.
+- Workspace lint/typecheck passed in the full `pnpm check` attempt. Its app test run had one failure in `SessionRuntime.test.ts` (partial tool arguments when stopping), with 530 other app tests passing. The same test passed on a focused rerun, and the full 18-test SessionRuntime file subsequently passed. The full workspace check is not claimed green; no app code was changed to conceal this failure.
+- No VSIX packaging or live-provider/real-credential checks were performed in this package-only phase. Runtime verification used the available Node 24; Node 20 compatibility follows the workspace target and undici's declared supported floor, not an actual Node-20 run.
+
 ## Decisions and authorization checkpoints
 
 Near-term Phase 1 needs confirmation of command-value exclusion and provider-level rather than per-model authentication. The plan currently follows the SHAPE's recommended defaults, not an implicit claim that those choices were accepted.
 
 Before Phase 2, settle the copied-source versus shared-library ownership and exact Host proxy support. Before optional live checks, obtain explicit permission for the exact configuration/environment scope and provider requests.
 
-The subsequent implementation request authorized package implementation. Phase 1 uses the recommended no-command/provider-level-source scope. Review corrected silent-source fallback, missing-provider visibility, an unnecessary OAuth-expiry gate, Copilot endpoint rules and CLI test-environment isolation. Optional real inspection was not performed. Current next step: implement and verify Phase 2 against the supplied extension source; do not start application/UI integration or live authenticated requests under this package-only assignment.
+The subsequent implementation request authorized package implementation. Phase 1 uses the no-command/provider-level-source scope; review corrected silent-source fallback, missing-provider visibility, an unnecessary expiry gate, Copilot endpoint rules and CLI environment isolation. Phase 2 adds source-backed queries/normalizers, independent failures, deadlines/cancellation and explicit undici HTTP(S) proxy/NO_PROXY handling verified locally. Further source checking also tightened Copilot API-key rejection and subscription override-account matching. The external source repository is unchanged. Next step: Phase 3 Host integration when requested; no application/UI changes or live authenticated requests are part of the package-only assignment. Packaging must preserve the imported MIT license when the app starts bundling this package.

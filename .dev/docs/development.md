@@ -12,7 +12,7 @@ Use Node 20.19+ and pnpm 10. A manually tested Pi executable may require a newer
 
 Run `pnpm install --frozen-lockfile` from the repository root, then use `pnpm check` and `pnpm build` as needed. The shared lockfile covers all workspaces; never install independently inside a package.
 
-Packages own local `build`, `clean`, `lint`, `typecheck`, and `test` scripts; root commands only orchestrate them. Add shared tools with `pnpm add -Dw <package>` and package dependencies with `pnpm --filter <workspace-name> add <package>`.
+Packages own local `build`, `clean`, `lint`, `typecheck`, and `test` scripts; root commands only orchestrate them. `packages/provider-usage` owns the independent credential/usage engine and synthetic/local HTTP tests; run its checks with `pnpm --filter @frostime/provider-usage <script>`. Add shared tools with `pnpm add -Dw <package>` and package dependencies with `pnpm --filter <workspace-name> add <package>`.
 
 Launch the Extension Development Host with `.vscode/launch.json`. esbuild bundles the extension and Vite builds the Webview; production source maps require `FROSTPI_SOURCEMAP=1`. The launch configuration runs the `build:debug` task, which sets that variable automatically, so TypeScript breakpoints bind in the Development Host without any manual step.
 

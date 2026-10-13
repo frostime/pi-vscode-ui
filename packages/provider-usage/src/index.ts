@@ -1,15 +1,15 @@
 /**
  * Public entrypoint of `@frostime/provider-usage`.
  *
- * Phase 1 exposes the credential-resolution core only:
- * - `resolveProviderCredentials` — trusted Node output with real credentials;
- * - `listProviders` — safe descriptors for application/UI surfaces.
- *
- * The HTTP/query surface and `queryUsage` arrive in Phase 2. There is no
- * provider HTTP access, OAuth refresh or command execution in this phase, and
- * the implementation never imports Pi SDK code or reads process-spy state.
+ * `listProviders` and `queryUsage` expose safe account usage results.
+ * `resolveProviderCredentials` is trusted Node-only output carrying credentials;
+ * it must never be sent to browser code. No OAuth refresh or credential commands.
+ * The implementation does not import Pi SDK or session code.
  */
 export { listProviders } from "./listProviders.js";
+export { queryUsage } from "./query.js";
+export type { QueryUsageOptions, ProviderUsageResult } from "./types.js";
+export type { UsageReport, UsageBucket, UsageMetric, UsageSemantics } from "./providerTypes.js";
 export type { ProviderUsageDescriptor } from "./types.js";
 export {
   resolveProviderCredentials,

@@ -1,0 +1,13 @@
+{
+  "data": {
+    "label": "Production key",
+    "limit": 100,
+    "limit_remaining": 74.5,
+    "limit_reset": "monthly",
+    "usage": 25.5,
+    "usage_daily": 1.25,
+    "usage_weekly": 8,
+    "usage_monthly": 25.5,
+    "is_free_tier": false
+  }
+}

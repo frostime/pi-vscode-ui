@@ -6,6 +6,9 @@
  * credential material for HTTP callers and must never reach browser code.
  */
 
+import type { UsageFetch } from "./http.js";
+import type { UsageReport } from "./providerTypes.js";
+
 /** Safe category of the configured credential source. Never contains variable names. */
 export type ProviderSourceCategory = "auth.json" | "models.json" | "environment" | "not-configured";
 
@@ -75,3 +78,12 @@ export interface UnavailableProviderCredential extends ResolvedProviderCredentia
 }
 
 export type ResolvedProviderCredential = ReadyProviderCredential | UnavailableProviderCredential;
+
+/** Optional trusted transport injection; browser requests cannot supply this. */
+export interface QueryUsageOptions extends ProviderResolutionInput {
+  fetch?: UsageFetch;
+}
+
+export type ProviderUsageResult =
+  | { providerId: string; status: "ready"; source: ProviderSourceCategory; report: UsageReport }
+  | { providerId: string; status: "unavailable" | "query-failed" | "selection-required"; source: ProviderSourceCategory; reason: string };

@@ -1,0 +1,15 @@
+{
+  "code": 200,
+  "success": true,
+  "data": [
+    {
+      "id": "169359",
+      "customerId": "71321768207710758",
+      "productName": "GLM Coding Max",
+      "status": "VALID",
+      "autoRenew": 1,
+      "billingCycle": "monthly",
+      "nextRenewTime": "2026-02-12"
+    }
+  ]
+}

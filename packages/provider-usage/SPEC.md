@@ -1,22 +1,23 @@
 ---
-title: Provider usage core contract
-description: Phase-1 credential-resolution contract for the FrostPi provider-usage package.
+title: Provider usage contract
+description: Read-only credential resolution and standalone provider quota/balance queries.
 scope:
   - /packages/provider-usage/**
 updated: 2026-10-13
 ---
 
-# Provider usage core contract
+# Provider usage contract
 
-`@frostime/provider-usage` is a private workspace package. Phase 1 owns only
-credential resolution from Pi configuration. There is no HTTP access, no OAuth
-refresh, no login, no command execution and no file writes. The package never
+`@frostime/provider-usage` is a private workspace package. It resolves Pi file/environment
+credentials and queries predefined provider usage APIs. Credential resolution itself
+makes no network requests. No operation refreshes OAuth, logs in, executes credential
+commands or writes configuration. The package never
 imports `vscode`, Pi SDK/TUI code, session state, RPC types or webview code.
 
 The engine operates on explicit input ([`ProviderResolutionInput`](src/types.ts)):
 `auth.json`/`models.json` paths (or a Pi agent directory) and an authoritative
 environment map. It does not discover agent directories itself and has no
-`ExtensionContext`/`modelRegistry` dependency in this phase.
+`ExtensionContext`/`modelRegistry` dependency.
 
 ## Public surface
 
@@ -26,6 +27,11 @@ environment map. It does not discover agent directories itself and has no
 - `listProviders(input)` — safe descriptors (provider ID, display name,
   availability, source category, safe reason). No credential values, no
   environment variable names, no file content.
+- `queryUsage(scope, input, signal?)` — safe per-provider results for one supported
+  provider ID or `all`. It reloads configuration, preserves configured-but-unavailable
+  entries, and returns independent successes/failures without credentials. Unknown
+  scope is rejected before reads/requests. Caller cancellation rejects with a safe
+  `AbortError`, rather than publishing partial or late results.
 - `maskSecret`, `maskEnvName`, `redactWithSecrets`, `sanitizeDisplayText` —
   mandatory masking before any human-readable output of resolution results.
 - Inspect CLI (`pnpm --filter @frostime/provider-usage inspect -- --agent-dir
@@ -37,7 +43,7 @@ environment map. It does not discover agent directories itself and has no
 
 ## Package policy (decisions of this package, not Pi runtime parity)
 
-The following are accepted Phase-1 decisions that intentionally differ from
+The following configuration policies intentionally differ from
 Pi's runtime resolution; they are recorded here so the package does not
 pretend that Pi's behavior is adopted wholesale:
 
@@ -50,8 +56,8 @@ pretend that Pi's behavior is adopted wholesale:
    variables are only consulted when no explicit source exists at all.
 2. **No expiry evaluation and no recovery responsibility.** The local clock is
    never compared with stored token expiry and stored OAuth credentials are
-   never refreshed or repaired; Phase-2 provider requests decide rejection.
-   Record-shape validation is the only stored-credential gate. The Copilot
+   never refreshed or repaired; provider requests decide rejection.
+   Record-shape and provider-required field validation remain; expiry is not a gate. The Copilot
    usage bearer is the saved long-lived `refresh`-field credential, so its
    short-lived `access` expiry is irrelevant to resolution.
 3. **Fail-closed on unreliable files.** A malformed or unreadable auth.json or
@@ -87,8 +93,47 @@ official-origin rules (`query.ts` `hasOfficialUrlOrigin`; for Copilot the
 `https://api.<region>.githubcopilot.com` pattern — github.com is only the
 public-account classification for stored `enterpriseUrl`, never a client
 endpoint). `[models].headers` and `authHeader` are validated all-or-nothing;
-only the final authorization value and provider-pinned extra headers (Copilot
-API version) reach future requests.
+duplicate case-insensitive authorization headers are unavailable, not arbitrarily
+selected. Only the final authorization value and provider-pinned extra headers (Copilot
+API version) reach usage requests. Copilot usage requires a saved OAuth account,
+not an API-key path. Copilot/xAI subscription authorization overrides must match the
+saved OAuth access field; they cannot silently change the chosen account.
+
+## Provider requests and results
+
+Provider endpoints, request sequences and normalization come from the pinned extension
+source; see [UPSTREAM.md](UPSTREAM.md). Credentials are a request snapshot, not live
+Pi authentication. No runtime matching, account switching or auth-change watcher is
+promised. Provider-supplied display text is sanitized and known credential values and
+predefined environment names are redacted before returning reports.
+
+- A provider's HTTP flow, including Fireworks account discovery and sequential xAI/
+  Z.AI requests, shares one 15-second deadline. `all` runs at most two provider flows
+  concurrently and preserves predefined result order. No automatic retries/polling.
+- Fixed official usage origins are checked before attaching credentials. Redirects
+  are rejected. Successful bodies are limited to 64 KiB; error bodies to 4 KiB. Error
+  bodies, parser excerpts, raw network errors and proxy URLs are never returned.
+- Each HTTP flow owns its dispatcher. Explicit environment HTTP(S) proxy variables
+  and NO_PROXY are honored without global mutation or unintended process-env fallback.
+  Unsupported proxy schemes and an unsupported all-protocol-only proxy fail before
+  requests; they never silently bypass the proxy. Pi-process custom proxy settings
+  and SOCKS are outside this package's network contract.
+- Fireworks selects only a sole visible account. Multiple accounts return
+  `selection-required`; no account is chosen or aggregated. No account yields failure.
+- Native OpenAI OAuth returns local grant status and a fixed usage-page link, not numeric
+  quota and not remote authentication verification. OpenAI API-key usage is unsupported.
+- MiniMax selects quota/balance from the actual source-defined credential prefix,
+  without probing alternative endpoints. Z.AI sends its monitor's raw authorization
+  key and treats non-cancellation plan-metadata failures as optional. xAI validates
+  its returned user ID before adding it only to the billing request.
+- Provider quotas, window/model groups, credits, currencies and balances retain their
+  native meanings; no cross-provider/currency totals or inferred subscription quota.
+  Codex reset availability is read-only. `capturedAt` uses epoch milliseconds;
+  bucket `resetsAt` uses epoch seconds, matching the source normalizers.
+
+The optional injected `fetch` is a trusted Node transport/testing hook, not browser
+input. Public bridge integration must expose only scope/request IDs, never transport,
+paths, environment, headers or credential objects.
 
 ## Output security
 
@@ -97,7 +142,7 @@ API version) reach future requests.
   one fixed mask word; CLI failure output is safe text too.
 - Unavailable reasons are fixed safe strings; they never embed file content,
   raw exceptions or complete environment names.
-- `ReadyProviderCredential.secrets` is the redaction pool for later error
+- `ReadyProviderCredential.secrets` is the internal redaction pool for report
   sanitization (internal only). `ambientVarName` is inspector-only and must
   always be masked before display.
 - Tests use synthetic temporary fixtures and explicit fake environment maps;

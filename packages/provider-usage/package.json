@@ -25,5 +25,8 @@
   "devDependencies": {
     "@types/node": "^24.1.0",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "undici": "^7.28.0"
   }
 }

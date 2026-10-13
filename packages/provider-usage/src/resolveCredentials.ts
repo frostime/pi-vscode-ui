@@ -341,6 +341,9 @@ function resolveHeaderOverrides(
   const resolvedHeaders: Record<string, string> = {};
   const rawHeaders = modelsConfig.headers;
   if (rawHeaders) {
+    if (Object.keys(rawHeaders).filter((name) => name.toLowerCase() === "authorization").length > 1) {
+      return { reason: "Multiple authorization headers are configured; the credential is ambiguous." };
+    }
     for (const [name, rawValue] of Object.entries(rawHeaders)) {
       if (parseConfigValue(rawValue).kind === "command") {
         return { reason: COMMAND_UNSUPPORTED_REASON };
@@ -396,11 +399,19 @@ function resolveStoredOAuth(
     // Shape validation passed; no runtime substitution and no expiry check.
     return { kind: "unavailable", source, reason: WRONG_STORED_KIND_REASON };
   }
+  if (!stored.access || (definition.id === "xai" && !stored.refresh)) {
+    return { kind: "unavailable", source, reason: "The saved OAuth credential is incomplete." };
+  }
   const headers = resolveStoredOAuthHeaders(definition, stored, snapshot);
   if ("reason" in headers) {
     return { kind: "unavailable", source, reason: headers.reason };
   }
   const secretPoolAll = headerPool(headers.resolvedHeaders);
+  // These subscription adapters require the chosen account to match its saved
+  // OAuth grant (source resolveXaiUsageAuth/resolveGitHubCopilotUsageAuth).
+  if (["xai", "github-copilot"].includes(definition.id) && headers.authorization !== undefined && headers.authorization !== `Bearer ${stored.access}`) {
+    return { kind: "unavailable", source, reason: "The configured authorization does not match the saved OAuth account." };
+  }
   switch (definition.storedOAuth) {
     case "bearer-access": {
       // Pi derives the usage bearer directly from the stored `access` token.

@@ -79,6 +79,7 @@ Use this map when the feature is known but its owner is not. Paths name owners a
 ## Diagnostics, notifications, usage, and status bar
 
 - Owners: `apps/vscode/src/extension/diagnostics/`, `apps/vscode/src/extension/notifications/`, `apps/vscode/src/extension/status-bar/`, and `apps/vscode/src/webview/features/usage/`.
+- Standalone provider-account usage queries: `packages/provider-usage/`; its `src/index.ts` exposes discovery/query operations. Contract: `packages/provider-usage/SPEC.md`. This package does not yet have a FrostPi UI integration.
 - Pi-configured cache-miss notices are detected and projected by `apps/vscode/src/extension/conversation/cacheMissDetection.ts` and `ConversationProjection.ts`; effective Pi settings come from `apps/vscode/src/extension/_shared/pi-settings/`.
 - Cross-module sensitivity boundary: `.dev/docs/architecture/overview.md`; lifecycle-trigger semantics remain in the lifecycle and extension UI SPECs.
 
