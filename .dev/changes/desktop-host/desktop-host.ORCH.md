@@ -14,7 +14,7 @@
 
 边界专项调研已形成 [报告](research/host-boundary.REPORT.md)。除源码和契约复核外，临时 Runtime 实验在无 vscode mock 的 Node 中跑通受控 Pi 对话；临时包子入口实验编译了现有 App.svelte、共享样式与字体，并检查 Node/浏览器依赖图隔离。现有相关基线测试共 86 项通过。
 
-尚未实施生产重构，未验证正式 workspace 包接线、迁移后类型检查/插件打包、真实 Pi 或 Desktop。当前不能报告两端迁移成功或给出完整工期。报告建议首步限于 Runtime 解耦与 core/shared 提取；Registry 全量拆分、展示/草稿策略和真实 GUI 环境仍需后续证据。
+R1 已在独立候选分支 `efa9c78` 完成 Runtime 解耦与 core/shared 提取、正式 workspace/类型检查、575 项全量检查、受控 E2E 与 VSIX 验证；小修有追加窄验证。顶层独立审阅通过，详见 [REVIEW](refactor/runtime-core.REVIEW.md)。候选代码未合入顶层/main，真实 Pi 与用户体验仍待用户运行确认，Desktop 未实施；不能将这些证据报告为 M1 完成。
 
 ## 分支与变更归属
 
@@ -46,8 +46,8 @@ REQUIRES [启动边界专项调研]: 已审阅的报告和决定性实验材料�
 
 研究结果提交 `7413c47` 已通过顶层审阅并整合。保留报告中的证据限度：Runtime/包实验不是正式类型隔离、重构回归或 M1 成功证明。
 
-[首步重构] << CURRENT
-# IN PROGRESS: S243 已报告收到用户在其 Session 的直接授权，核对实施 worktree/分支与 `370e30b` 基线后开工。按 R1 Ticket 实施，自动验证及结果交付后停止，等待独立审阅与用户实测。
+[首步重构]
+# DONE: S243 在实施 worktree 交付干净候选 `efa9c78` 与 RESULT；职责解耦、共享包提取、自动验证及两项审阅收尾完成。仅指代码与自动交付完成，R1 仍待用户实测。
 
 REQUIRES [确认首步重构边界]: 已接受的最小范围和验证方案。
 
@@ -56,14 +56,14 @@ S243 按 [R1 Ticket](refactor/runtime-core.TICKET.md) 完成原位置解耦、co
 出现状态、协议、作用域或其他实质范围变化时暂停并报告，不混入这次依赖清理。不要为未来功能预建无消费者的接口。
 
 [R1 独立审阅]
-# TODO
+# DONE: 核对两个实现 checkpoint、39 文件机械迁移、包/构建与测试/契约，未发现阻塞性生产问题。动态代理测试和根 clean 两项已补齐并增量复核；结论和证据见 [REVIEW](refactor/runtime-core.REVIEW.md)。
 
 REQUIRES [首步重构]: 干净的候选提交和 `runtime-core.RESULT.md` 的自动验证证据。
 
 S528 审阅职责改动、机械迁移、依赖方向和证据；发现问题返回实施者范围内修复。自动验收通过后提供候选 worktree 供用户运行，不启动下一阶段。
 
-[R1 用户运行确认]
-# TODO
+[R1 用户运行确认] << CURRENT
+# WAITING: 候选 `efa9c78` 可在 `.worktrees/261011_desktop-host-boundary` 用 F5 的 `Run FrostPi Extension` 运行。等待用户使用真实本机 Pi 的反馈；候选不合并，不继续后续阶段。
 
 REQUIRES [R1 独立审阅]: 可由用户运行的候选插件与确切启动步骤。
 
