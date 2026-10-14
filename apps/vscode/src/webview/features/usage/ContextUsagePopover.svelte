@@ -7,6 +7,8 @@
 
   const stats = $derived(session.stats);
   const context = $derived(stats?.contextUsage);
+  const contextPercent = $derived(context?.percent != null && Number.isFinite(context.percent) ? context.percent : null);
+  const contextLabel = $derived(contextPercent === null ? "Context usage unavailable" : `Context usage: ${Math.round(contextPercent)}%`);
   const modelLabel = $derived(session.model ? `${session.model.name ?? session.model.id}` : "—");
 
   function show(): void {
@@ -20,8 +22,14 @@
 </script>
 
 <div class="context-usage-wrap" role="presentation" onmouseenter={show} onmouseleave={scheduleClose}>
-  <button class="context-usage-trigger" type="button" aria-expanded={open} onfocus={show} onblur={scheduleClose}>
-    Context {context?.percent === null || context?.percent === undefined ? "—" : `${Math.round(context.percent)}%`}
+  <button class="context-usage-trigger" type="button" aria-label={contextLabel} title={contextLabel} aria-expanded={open} onfocus={show} onblur={scheduleClose}>
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <circle class="context-ring-track" cx="8" cy="8" r="5.3" stroke-dasharray={contextPercent === null ? "2 2" : undefined} />
+      {#if contextPercent !== null && contextPercent > 0}
+        <circle class="context-ring-progress" cx="8" cy="8" r="5.3" pathLength="100" stroke-dasharray={`${clamp(contextPercent)} 100`} transform="rotate(-90 8 8)" />
+      {/if}
+    </svg>
+    <span>Context</span>
   </button>
   {#if open && stats}
     <div class="context-usage-popover" role="dialog" tabindex="-1" aria-label="Context and session usage" onmouseenter={show} onmouseleave={scheduleClose}>
@@ -89,13 +97,13 @@
 <style>
 .context-usage-wrap { position: relative; }
 .context-usage-trigger {
-  padding: 1px 3px;
-  border-radius: 3px;
-  background: transparent;
-  color: inherit;
-  cursor: default;
-  font-size: inherit;
+  display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 4px;
+  border: 0; border-radius: 4px; background: transparent; color: var(--frost-muted);
+  cursor: pointer; font: inherit; white-space: nowrap;
 }
+.context-usage-trigger svg { width: 1.4em; height: 1.4em; fill: none; }
+.context-ring-track { stroke: currentColor; stroke-width: 1.2; opacity: .4; }
+.context-ring-progress { stroke: var(--frost-link); stroke-width: 1.5; stroke-linecap: round; }
 .context-usage-trigger:hover { color: var(--frost-text); background: var(--frost-hover); }
 .context-usage-trigger:focus-visible { color: var(--frost-text); background: var(--frost-hover); }
 .context-usage-popover {

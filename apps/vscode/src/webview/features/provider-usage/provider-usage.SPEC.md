@@ -4,7 +4,7 @@
 
 This feature renders only safe `ProviderUsageDescriptor` and `ProviderUsageResult` values from `@frostime/provider-usage`. Its data-source interface accepts a provider scope and cancellation signal, never credentials, file paths, environment maps or transport hooks. Provider discovery, credential interpretation and request rules remain outside the browser.
 
-The sidebar's metrics row places Usage immediately left of Context. Clicking opens a compact non-modal popover above the row without unmounting conversation or Composer. Closing/Escape restores the Usage trigger's focus. Outside pointer actions dismiss without stealing focus from their target.
+The sidebar's metrics row places the chart-icon Usage trigger immediately left of the ring-icon Context trigger, with matched compact transparent button styling. Context percentage and session cost are shown in the Context popover, not repeated in the metrics row. Clicking opens a compact non-modal popover above the row without unmounting conversation or Composer. Closing/Escape restores the Usage trigger's focus. Outside pointer actions dismiss without stealing focus from their target.
 
 ## Requests
 

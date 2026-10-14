@@ -30,7 +30,9 @@ describe("provider usage presentation", () => {
     const sidebar = render(SessionMetrics, { props: { session, providerUsageAvailable: true } }).body;
     const panel = render(SessionMetrics, { props: { session } }).body;
     expect(sidebar).toContain('aria-label="Provider usage"');
-    expect(sidebar.indexOf(">Usage</button>")).toBeLessThan(sidebar.indexOf("Context"));
+    expect(sidebar.indexOf('aria-label="Provider usage"')).toBeLessThan(sidebar.indexOf('aria-label="Context usage unavailable"'));
+    expect(sidebar).not.toContain("Estimated session cost");
+    expect(sidebar).not.toContain("$0.084");
     expect(panel).not.toContain('aria-label="Provider usage"');
   });
 
