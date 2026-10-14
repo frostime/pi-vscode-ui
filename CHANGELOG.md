@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.4] - 2026-10-13
+
 ### Added
 
 - Read each tool call's own duration from Pi's recorded execution measurement (Pi 1.1.0 or later): `bash`, `powershell`, and `codemode` cards now keep the same duration across a Session reopen, and calls sharing one assistant response each report their own time instead of a span that includes the earlier calls. The measured figure excludes queuing and hooks, so it can settle slightly below the last tick. Sessions and runtimes that record no duration keep the previous estimate unchanged.
