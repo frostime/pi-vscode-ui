@@ -125,7 +125,7 @@ export class WebviewActionDispatcher {
           const environment = { ...process.env };
           const cwd = this.#registry.snapshot().workspacePath || homedir();
           const input = { agentDirectory: resolvePiAgentDirectory(cwd, environment), environment };
-          const providers = await listProviders(input);
+          const providers = await listProviders(input, { includeUnconfigured: message.type === "listUsageProviders" });
           signal.throwIfAborted();
           if (message.type === "listUsageProviders") {
             if (connection.finishProviderUsageRequest(message.requestId, signal)) {

@@ -19,12 +19,16 @@
   let loading = $state<"providers" | "usage" | null>("providers");
   let error = $state("");
   let queried = $state(false);
+  let credentialDetailsOpen = $state(false);
   let closeButton: HTMLButtonElement;
   let panel: HTMLDialogElement;
   let pending: AbortController | undefined;
 
   const selected = $derived(providers.find((provider) => provider.providerId === scope));
-  const canQuery = $derived(loading !== "providers" && (scope === "all" ? providers.length > 0 : selected?.availability === "ready"));
+  const configuredProviders = $derived(providers.filter((provider) => provider.source !== "not-configured"));
+  const selectableProviders = $derived(providers.filter((provider) => provider.source !== "not-configured" || provider.providerId === currentProviderId));
+  const unsupported = $derived(Boolean(scope && scope !== "all" && !selected));
+  const canQuery = $derived(loading !== "providers" && (scope === "all" ? configuredProviders.length > 0 : selected?.availability === "ready"));
 
   onMount(() => {
     closeButton.focus();
@@ -48,13 +52,11 @@
       const listed = await source.listProviders(request.signal);
       if (request.signal.aborted) return;
       providers = listed;
-      const current = listed.find((provider) => provider.providerId === currentProviderId);
-      if (current) {
-        scope = current.providerId;
-        if (current.availability === "ready") {
-          loading = null;
-          await query();
-        }
+      scope = currentProviderId ?? "";
+      const current = listed.find((provider) => provider.providerId === scope);
+      if (current?.availability === "ready") {
+        loading = null;
+        await query();
       }
     } catch {
       if (!request.signal.aborted) error = "Could not list providers. Try again.";
@@ -98,6 +100,7 @@
     results = [];
     error = "";
     queried = false;
+    credentialDetailsOpen = false;
     if (canQuery) void query();
   }
 
@@ -131,8 +134,11 @@
   <div class="query-controls">
     <select id="usage-provider" aria-label="Provider" bind:value={scope} onchange={selectScope} disabled={loading === "providers"}>
       <option value="">Choose a provider…</option>
-      {#if providers.length}<option value="all">All configured providers</option>{/if}
-      {#each providers as provider (provider.providerId)}
+      {#if configuredProviders.length}<option value="all">All configured providers</option>{/if}
+      {#if currentProviderId && !providers.some((provider) => provider.providerId === currentProviderId)}
+        <option value={currentProviderId}>{currentProviderId} · unsupported</option>
+      {/if}
+      {#each selectableProviders as provider (provider.providerId)}
         <option value={provider.providerId}>{provider.displayName}{provider.availability === "unavailable" ? " · unavailable" : ""}</option>
       {/each}
     </select>
@@ -142,9 +148,26 @@
     <div role="status" aria-live="polite">
       {#if loading}<p class="status">{loading === "providers" ? "Listing providers…" : "Fetching usage…"}</p>{/if}
       {#if error}<p class="failure">{error}</p><button type="button" onclick={() => void (providers.length ? query() : loadProviders())}>Try again</button>{/if}
-      {#if !loading && !error && !providers.length}<p class="empty">No supported providers are configured.</p>{/if}
-      {#if !loading && !error && selected?.availability === "unavailable"}<p class="failure">{selected.reason}</p>{/if}
-      {#if !loading && !error && providers.length && !scope}<p class="empty">Choose a provider to view its quota or balance.</p>{/if}
+      {#if !loading && !error}
+        {#if unsupported}
+          <p class="empty">Usage queries are not supported for {scope}.</p>
+          {#if configuredProviders.length}<p class="empty">You can select another configured provider.</p>{/if}
+        {:else if selected?.availability === "unavailable"}
+          <p class="failure">
+            Could not obtain credentials for {selected.displayName}.
+            <button class="credential-details-toggle" type="button" aria-expanded={credentialDetailsOpen} aria-controls="usage-credential-details" onclick={() => credentialDetailsOpen = !credentialDetailsOpen}>Details</button>
+          </p>
+          {#if credentialDetailsOpen}
+            <div id="usage-credential-details" class="credential-details">
+              <p>{selected.reason}</p>
+              <p>FrostPi can read credentials from auth.json, provider-level models.json, and environment variables available to the Extension Host. Credentials injected dynamically by Pi extensions are not accessible.</p>
+              <p>(This feature uses credentials only for usage queries. It does not log them, send them to an LLM, or save additional copies.)</p>
+            </div>
+          {/if}
+        {:else if !scope}
+          <p class="empty">{configuredProviders.length ? "Choose a provider to view its quota or balance." : "No supported providers are configured."}</p>
+        {/if}
+      {/if}
       {#if queried && !results.length}<p class="empty">No provider results were returned.</p>{/if}
     </div>
     {#each results as result (result.providerId)}
@@ -161,11 +184,7 @@
     {/each}
   </div>
   {#if scope !== "all"}{@render providerLinks(selected)}{/if}
-  <details class="about-data">
-    <summary>About this data</summary>
-    <p>Pi files and the VS Code Host environment. Model-specific and extension-injected authentication are not included.</p>
-    {#if selected}<p>Credential source: {selected.source}</p>{/if}
-  </details>
+
 </dialog>
 
 <style>
@@ -194,7 +213,7 @@
   .result-state { color: var(--frost-muted); margin-top: 3px; }
   .provider-links { display: flex; flex-direction: column; gap: 4px; }
   .usage-link { padding: 0; border: 0; background: transparent; color: var(--frost-link); text-decoration: underline; text-align: left; }
-  .about-data { color: var(--frost-muted); font-size: 10px; border-top: 1px solid var(--frost-border-soft); padding-top: 6px; }
-  .about-data summary { cursor: pointer; }
-  .about-data p { margin-top: 5px; }
+  .credential-details-toggle { padding: 0 2px; border: 0; background: transparent; color: var(--frost-muted); font-size: 10px; text-decoration: underline; }
+  .credential-details { color: var(--frost-muted); font-size: 10px; overflow-wrap: anywhere; }
+  .credential-details p { margin: 5px 0; }
 </style>

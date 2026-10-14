@@ -8,7 +8,9 @@ The sidebar's metrics row places Usage immediately left of Context. Clicking ope
 
 ## Requests
 
-Opening selects and automatically queries the active provider when listed and ready. An unavailable current provider shows its reason; an unsupported provider leaves the selector unselected. Selecting another ready provider or `all` queries that scope without switching Pi models.
+The source lists the full supported catalog, including entries without configured credentials. Opening selects the active provider and automatically queries it when ready. If absent from the complete catalog, the current Provider remains selected with an explicit unsupported message and no usage query. If present but unavailable, show “Could not obtain credentials” rather than asserting the user configured no credentials. The selector offers configured Providers plus the current Provider; it does not list every unconfigured definition. `all` includes configured Providers only. Selecting another ready Provider or `all` queries that scope without switching Pi models.
+
+Unavailable credentials expose a subdued Details toggle containing the safe package reason, supported credential sources (auth.json, provider-level models.json and Host environment), and the limitation on dynamically injected extension credentials. The explanation states that this feature uses credentials only for usage queries, does not log them or send them to an LLM, and does not save additional copies. Do not show a general About this data disclosure or credential-source implementation details on successful reports.
 
 Successful reports are cached per provider for the metrics component/data-source lifetime, surviving popover close/reopen. The original snapshot timestamp is preserved; there is no expiry timer, background polling or disk/browser persistence. Source-category changes, disappearance or unavailability invalidate relevant snapshots. Same-source credential changes are not detectable from safe descriptors: use manual Refresh to re-query. Failed/cancelled requests are not cached. Manual Refresh invalidates the selected scope before requesting it, so a failed refresh cannot revive an old success. The Host uses the workspace-level Pi source; caches are keyed only by provider, not by Session or cwd.
 
@@ -21,6 +23,6 @@ Replacement, selection change, close and destruction cancel pending work. Even i
 - Show only reported counters. Missing usage does not mean zero; draw a bar only with reported usage and an applicable scale. Clamp the visual bar, not the reported value.
 - Keep currencies and balances separate. Do not derive subscription quota from spend or Session tokens.
 - Reset availability is a plain metric, never a redemption control. Native ChatGPT's limited status/link result is not numerical quota.
-- Quota rows show the window and used value once, with reset time and remaining value underneath. Full snapshot/reset timestamps remain available through time attributes/tooltips; technical source limitations live in collapsed About this data.
+- Quota rows show the window and used value once, with reset time and remaining value underneath. Full snapshot/reset timestamps remain available through time attributes/tooltips.
 
 All private chrome is component-scoped. Preserve keyboard reachability, close/Escape, independent result scrolling and usability at 280px in VS Code light/dark/high-contrast themes. See the cross-feature [UI specification](../../../../../../.dev/docs/design/ui-spec.md).
