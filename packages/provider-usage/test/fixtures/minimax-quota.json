@@ -1,0 +1,23 @@
+{
+  "base_resp": {
+    "status_code": 0,
+    "status_msg": "success"
+  },
+  "model_remains": [
+    {
+      "model_name": "MiniMax-M*",
+      "start_time": 1800000000000,
+      "end_time": 1800018000000,
+      "current_interval_total_count": 1500,
+      "current_interval_usage_count": 228,
+      "current_interval_status": 1,
+      "current_weekly_total_count": 1000,
+      "current_weekly_usage_count": 200,
+      "current_weekly_remaining_percent": 80,
+      "current_weekly_status": 1,
+      "weekly_start_time": 1799971200000,
+      "weekly_end_time": 1800576000000,
+      "weekly_boost_permille": 1500
+    }
+  ]
+}

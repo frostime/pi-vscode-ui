@@ -1,0 +1,40 @@
+{
+  "lineItems": [
+    {
+      "category": "Serverless",
+      "series": "SERVERLESS",
+      "totalCost": {
+        "currencyCode": "USD",
+        "units": "12",
+        "nanos": 345678901
+      }
+    },
+    {
+      "category": "Dedicated",
+      "series": "DEDICATED_DEPLOYMENT",
+      "totalCost": {
+        "currencyCode": "USD",
+        "units": "0",
+        "nanos": 750000000
+      }
+    },
+    {
+      "category": "Training",
+      "series": "TRAINING",
+      "totalCost": {
+        "currencyCode": "USD",
+        "units": "-1",
+        "nanos": -250000000
+      }
+    },
+    {
+      "category": "Audio",
+      "series": "SERVERLESS",
+      "totalCost": {
+        "currencyCode": "EUR",
+        "units": "0",
+        "nanos": 5
+      }
+    }
+  ]
+}

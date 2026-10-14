@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { root, run } from "./lib.mjs";
 
-for (const packageName of ["@frostime/pi-rpc", "frostpi"]) {
+for (const packageName of ["@frostime/pi-rpc", "@frostime/provider-usage", "frostpi"]) {
   run("pnpm", ["--filter", packageName, "build"]);
 }
 

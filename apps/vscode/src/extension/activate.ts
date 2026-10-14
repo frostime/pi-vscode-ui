@@ -7,6 +7,7 @@ import { GIT_BASE_SCHEME, GitBaseContentProvider } from "./file-changes/GitBaseC
 import { SessionStatusBar } from "./status-bar/SessionStatusBar.js";
 import { SessionRegistry } from "./sessions/SessionRegistry.js";
 import { PiViewProvider } from "./webview-host/PiViewProvider.js";
+import { ProxySecretStore } from "./network/ProxySecretStore.js";
 import { SessionWebviewCoordinator } from "./webview-host/SessionWebviewCoordinator.js";
 
 let registryForDeactivate: SessionRegistry | undefined;
@@ -14,7 +15,8 @@ let registryForDeactivate: SessionRegistry | undefined;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const logger = new DiagnosticLogger(readConfiguration().diagnosticsLevel);
   const registry = new SessionRegistry(context, logger);
-  const coordinator = new SessionWebviewCoordinator(registry, logger, context.extensionUri);
+  const proxySecrets = new ProxySecretStore(context.secrets);
+  const coordinator = new SessionWebviewCoordinator(registry, logger, context.extensionUri, () => proxySecrets.get());
   const viewProvider = new PiViewProvider(context.extensionUri, coordinator);
   const gitBaseProvider = new GitBaseContentProvider();
   const statusBar = new SessionStatusBar(registry);

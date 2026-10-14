@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- View supported providers' quotas, balances, credits and available usage-reset counts in a compact Usage popover beside Context.
+
 ## [0.15.4] - 2026-10-13
 
 ### Added

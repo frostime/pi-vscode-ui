@@ -1,0 +1,14 @@
+{
+  "login": "octocat",
+  "copilot_plan": "individual",
+  "quota_reset_date_utc": "2026-08-01T00:00:00Z",
+  "quota_snapshots": {
+    "premium_interactions": {
+      "entitlement": 300,
+      "remaining": 245,
+      "percent_remaining": 81.7,
+      "token_based_billing": false,
+      "unlimited": false
+    }
+  }
+}

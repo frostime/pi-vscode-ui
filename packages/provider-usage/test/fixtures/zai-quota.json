@@ -1,0 +1,41 @@
+{
+  "code": 200,
+  "msg": "Success",
+  "success": true,
+  "data": {
+    "limits": [
+      {
+        "type": "TIME_LIMIT",
+        "unit": 5,
+        "number": 1,
+        "usage": 4000,
+        "currentValue": 224,
+        "remaining": 3776,
+        "percentage": 5,
+        "nextResetTime": 1772615765983,
+        "usageDetails": [
+          {
+            "modelCode": "search-prime",
+            "usage": 67
+          }
+        ]
+      },
+      {
+        "type": "TOKENS_LIMIT",
+        "unit": 3,
+        "number": 5,
+        "percentage": 13,
+        "nextResetTime": 1771073738808
+      },
+      {
+        "type": "TOKENS_LIMIT",
+        "unit": 6,
+        "usage": 500000,
+        "currentValue": 120000,
+        "percentage": 24,
+        "nextResetTime": 1744137600000
+      }
+    ],
+    "level": "lite"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "plan_type": "pro",
+  "rate_limit": {
+    "primary_window": {
+      "used_percent": 30,
+      "limit_window_seconds": 18000,
+      "reset_at": 10000
+    },
+    "secondary_window": {
+      "used_percent": 80,
+      "limit_window_seconds": 604800,
+      "reset_at": 174700
+    }
+  },
+  "credits": {
+    "has_credits": true,
+    "unlimited": false,
+    "balance": "12"
+  },
+  "rate_limit_reset_credits": {
+    "available_count": 2
+  },
+  "additional_rate_limits": [
+    {
+      "limit_name": "GPT-5.3 Codex Spark",
+      "metered_feature": "gpt-5.3-codex-spark",
+      "rate_limit": {
+        "primary_window": {
+          "used_percent": 10,
+          "limit_window_seconds": 18000
+        }
+      }
+    }
+  ]
+}

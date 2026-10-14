@@ -1,0 +1,13 @@
+{
+  "base_resp": {
+    "status_code": 0,
+    "status_msg": "success"
+  },
+  "available_amount": "98.00001",
+  "cash_balance": "-2.50",
+  "voucher_balance": "100.50001",
+  "credit_balance": "0",
+  "owed_amount": "2.50",
+  "balance_alert_switch": true,
+  "balance_alert_threshold": "10"
+}

@@ -1,8 +1,24 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
   import ContextUsagePopover from "../features/usage/ContextUsagePopover.svelte";
+  import ProviderUsagePanel from "../features/provider-usage/ProviderUsagePanel.svelte";
+  import { bridgeProviderUsageSource } from "../features/provider-usage/bridgeProviderUsageSource";
+  import { cacheProviderUsage } from "../features/provider-usage/providerUsageSource";
 
-  let { session }: { session: SessionViewModel } = $props();
+  let { session, providerUsageAvailable = false }: {
+    session: SessionViewModel;
+    providerUsageAvailable?: boolean;
+  } = $props();
+  const usageSource = cacheProviderUsage(bridgeProviderUsageSource);
+  let usageOpen = $state(false);
+  let usageTrigger = $state<HTMLButtonElement>();
+
+  async function closeUsage(restoreFocus = true): Promise<void> {
+    usageOpen = false;
+    await tick();
+    if (restoreFocus) usageTrigger?.focus();
+  }
 </script>
 
 {#if session.stats || session.extensionStatuses.length}
@@ -14,6 +30,14 @@
     </div>
     {#if session.stats}
       <div class="metrics-right">
+        {#if providerUsageAvailable}
+          <button bind:this={usageTrigger} class="usage-trigger" type="button" aria-label="Provider usage" aria-expanded={usageOpen} onclick={() => usageOpen ? void closeUsage() : usageOpen = true}>Usage</button>
+          {#if usageOpen}
+            {#key session.model?.provider}
+              <ProviderUsagePanel source={usageSource} currentProviderId={session.model?.provider} anchor={usageTrigger} onclose={(restoreFocus) => void closeUsage(restoreFocus)} />
+            {/key}
+          {/if}
+        {/if}
         <ContextUsagePopover {session} />
         <span title="Estimated session cost">${session.stats.cost.toFixed(3)}</span>
       </div>
@@ -35,7 +59,9 @@
   font-size: 9px;
 }
 .extension-statuses { display: flex; align-items: center; gap: 8px; }
-.metrics-right { display: flex; align-items: center; gap: 8px; }
+.metrics-right { position: relative; display: flex; align-items: center; gap: 8px; }
+.usage-trigger { padding: 1px 3px; border-radius: 3px; background: transparent; color: inherit; cursor: pointer; font-size: inherit; }
+.usage-trigger:hover, .usage-trigger:focus-visible { color: var(--frost-text); background: var(--frost-hover); }
 .extension-statuses { overflow: hidden; }
 .extension-statuses :global(span) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status-mini-dot {
