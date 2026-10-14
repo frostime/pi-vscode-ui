@@ -93,6 +93,40 @@ describe("ConversationItemStore", () => {
     });
   });
 
+  it("keeps a recorded duration through a persisted assistant takeover", () => {
+    const store = storeWithTurns("live", "persisted");
+    store.placeAssistant({
+      turnId: "live",
+      source: liveSource("live-message"),
+      buildActivities: assistantParts,
+    });
+
+    store.upsertTool({
+      source: { kind: "live" },
+      fallbackTurnId: "live",
+      toolCallId: "call-1",
+      name: "bash",
+      args: {},
+      status: "complete",
+      output: "built",
+      isError: false,
+      startedAt: 10,
+      endedAt: 26,
+      durationMs: 1_900,
+      timestamp: 26,
+    });
+
+    // The assistant entry carries no duration, so republishing it must not drop the measured one.
+    store.placeAssistant({
+      turnId: "persisted",
+      source: persistedSource("entry-a", "persisted-message"),
+      buildActivities: assistantParts,
+    });
+    expect(store.turn("persisted").items.find((item) => item.type === "tool")).toMatchObject({
+      tool: { startedAt: 10, endedAt: 26, durationMs: 1_900 },
+    });
+  });
+
   it("moves every assistant part on persisted takeover and ignores a late live replay", () => {
     const store = storeWithTurns("live", "persisted");
     store.placeAssistant({

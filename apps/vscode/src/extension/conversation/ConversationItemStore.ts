@@ -96,6 +96,8 @@ export interface ToolPlacementUpdate {
   isError: boolean;
   startedAt?: number;
   endedAt?: number;
+  /** Pi's own measured execution time; see `ToolCallBase.durationMs`. */
+  durationMs?: number;
   timestamp: number;
 }
 
@@ -302,6 +304,7 @@ export class ConversationItemStore {
       ...(input.output !== undefined ? { output: input.output } : currentTool?.output !== undefined ? { output: currentTool.output } : {}),
       ...(Object.keys(recognized).length > 0 ? { recognized } : {}),
       ...(input.endedAt !== undefined ? { endedAt: input.endedAt } : currentTool?.endedAt !== undefined ? { endedAt: currentTool.endedAt } : {}),
+      ...(input.durationMs !== undefined ? { durationMs: input.durationMs } : currentTool?.durationMs !== undefined ? { durationMs: currentTool.durationMs } : {}),
     };
     const activity: AgentActivityView = {
       id: location?.itemId ?? `tool-${input.toolCallId}`,
@@ -442,6 +445,7 @@ export class ConversationItemStore {
           startedAt: current.tool.startedAt,
           ...(current.tool.output !== undefined ? { output: current.tool.output } : {}),
           ...(current.tool.endedAt !== undefined ? { endedAt: current.tool.endedAt } : {}),
+          ...(current.tool.durationMs !== undefined ? { durationMs: current.tool.durationMs } : {}),
         },
       };
     });

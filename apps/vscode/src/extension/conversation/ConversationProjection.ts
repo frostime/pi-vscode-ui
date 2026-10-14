@@ -434,6 +434,7 @@ export class ConversationProjection {
     if (message.role === "toolResult" && typeof message.toolCallId === "string") {
       const turn = this.#persistedTurnFor(entry.id, timestamp);
       const diff = extractToolDiff(message);
+      const durationMs = durationValue(message.durationMs);
       this.#store.upsertTool({
         source: { kind: "persisted", entryId: entry.id },
         fallbackTurnId: turn.id,
@@ -445,6 +446,7 @@ export class ConversationProjection {
         ...(diff ? { diff } : {}),
         isError: message.isError === true,
         endedAt: timestamp,
+        ...(durationMs === undefined ? {} : { durationMs }),
         timestamp,
       });
       return;
@@ -661,6 +663,7 @@ export class ConversationProjection {
     const turn = this.#liveToolTurnOrCreate(event.toolCallId);
     const isError = event.isError === true;
     const diff = extractToolDiff(event.result);
+    const durationMs = durationValue(event.durationMs);
     this.#store.upsertTool({
       source: { kind: "live" },
       fallbackTurnId: turn?.id,
@@ -672,6 +675,7 @@ export class ConversationProjection {
       ...(diff ? { diff } : {}),
       isError,
       endedAt,
+      ...(durationMs === undefined ? {} : { durationMs }),
       timestamp: endedAt,
     });
   }
@@ -1238,4 +1242,13 @@ function retryAttempt(value: unknown): string | number {
 
 function numericValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Pi's recorded execution duration for one tool call. A missing or malformed value means the
+ * session was written before Pi reported durations, so the caller keeps the timestamp estimate.
+ */
+function durationValue(value: unknown): number | undefined {
+  const ms = numericValue(value);
+  return ms !== undefined && ms >= 0 ? ms : undefined;
 }
