@@ -1,4 +1,6 @@
-import { EnvHttpProxyAgent, fetch as undiciFetch } from "undici";
+import type { ReadableStream } from "node:stream/web";
+
+import { EnvHttpProxyAgent, fetch as undiciFetch, type Response } from "undici";
 
 import { providerDefinition } from "./providerDefinitions.js";
 

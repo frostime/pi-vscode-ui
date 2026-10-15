@@ -22,6 +22,9 @@
       ],
       "@frostime/pi-rpc": [
         "../../packages/pi-rpc/src/index.ts"
+      ],
+      "@frostime/provider-usage": [
+        "../../packages/provider-usage/src/index.ts"
       ]
     }
   },
