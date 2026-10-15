@@ -17,6 +17,7 @@
   --line-height: 1.55;
   --header-height: 54px;
   --content-max-width: 820px;
+  --metrics-popover-width: 256px;
   --composer-editor-min-height: 72px;
   --composer-editor-max-height: 188px;
   --motion-fast: 120ms;

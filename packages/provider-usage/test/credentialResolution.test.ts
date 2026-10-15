@@ -43,6 +43,16 @@ describe("credential resolution — precedence and configuration", () => {
     expect(leaksValue(value, JSON.stringify(outcome))).toBe(false);
   }
 
+  it("optionally includes unconfigured supported providers so absence means unsupported", async () => {
+    const input = { ...configInput(), environment: fakeEnv({}) };
+    expect(await listProviders(input)).toEqual([]);
+    const catalog = await listProviders(input, { includeUnconfigured: true });
+    const codex = catalog.find((item) => item.providerId === "openai-codex");
+    expect(codex?.availability).toBe("unavailable");
+    expect(codex?.source).toBe("not-configured");
+    expect(catalog.some((item) => item.providerId === "unsupported-custom-provider")).toBe(false);
+  });
+
   it("lists maintained official links independently of query availability, without inventing links for other providers", async () => {
     const key = "synthetic-link-test-key";
     fixture.writeAuthJson(JSON.stringify({

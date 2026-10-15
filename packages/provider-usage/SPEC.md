@@ -24,14 +24,17 @@ environment map. It does not discover agent directories itself and has no
 - `resolveProviderCredentials(input)` — trusted Node output
   (`ReadyProviderCredential` with the real bearer token, or an explicit
   `UnavailableProviderCredential`). Never hand this result to browser code.
-- `listProviders(input)` — safe descriptors (provider ID, display name,
+- `listProviders(input, options?)` — safe descriptors (provider ID, display name,
   availability, source category, safe reason, optional official-page `links`). Links
   contain a label and URL from maintained predefined metadata, never a provider
   response or user credential configuration. OpenAI and Codex expose the established
   ChatGPT usage page; OpenCode Go exposes `https://opencode.ai/console`.
   Providers without verified pages omit links. Navigation is
   available even when credentials are unavailable. No credential values, no
-  environment variable names, no file content.
+  environment variable names, no file content. Default listing omits unconfigured
+  entries; `{ includeUnconfigured: true }` returns the complete supported catalog,
+  with `not-configured` entries explicitly unavailable. This lets callers distinguish
+  unsupported Providers from inaccessible credentials without network requests.
 - `queryUsage(scope, input, signal?)` — safe per-provider results for one supported
   provider ID or `all`. It reloads configuration, preserves configured-but-unavailable
   entries, and returns independent successes/failures without credentials. Unknown

@@ -2,6 +2,7 @@ import type { ProviderUsageDescriptor, ProviderUsageResult } from "@frostime/pro
 
 /** Safe UI operations. Configuration and credentials remain outside the browser. */
 export interface ProviderUsageSource {
+  /** Complete supported catalog, including entries with no configured credentials. */
   listProviders(signal: AbortSignal): Promise<readonly ProviderUsageDescriptor[]>;
   queryUsage(scope: string, signal: AbortSignal, options?: { refresh: boolean }): Promise<readonly ProviderUsageResult[]>;
 }
@@ -24,7 +25,9 @@ export function cacheProviderUsage(source: ProviderUsageSource): ProviderUsageSo
     },
     async queryUsage(scope, signal, options) {
       signal.throwIfAborted();
-      const ids = scope === "all" ? providers.map((provider) => provider.providerId) : [scope];
+      const ids = scope === "all"
+        ? providers.filter((provider) => provider.source !== "not-configured").map((provider) => provider.providerId)
+        : [scope];
       if (options?.refresh) {
         for (const id of ids) snapshots.delete(id);
       } else if (ids.length && ids.every((id) => snapshots.has(id))) {

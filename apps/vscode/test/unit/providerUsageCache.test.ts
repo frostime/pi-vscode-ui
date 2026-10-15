@@ -15,7 +15,9 @@ describe("provider usage snapshot cache", () => {
   it("reuses a successful snapshot across openings/scopes and refreshes only on request", async () => {
     let requests = 0;
     const source = cacheProviderUsage({
-      listProviders: () => Promise.resolve([provider]),
+      listProviders: () => Promise.resolve([provider, {
+        ...provider, providerId: "unconfigured", availability: "unavailable", source: "not-configured", reason: "No accessible credentials.",
+      }]),
       queryUsage: () => Promise.resolve([snapshot(++requests)]),
     });
     await source.listProviders(signal());
