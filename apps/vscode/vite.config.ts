@@ -30,6 +30,7 @@ export default defineConfig({
       $shared: resolve(import.meta.dirname, "src/shared"),
       $webview: resolve(import.meta.dirname, "src/webview"),
       "@frostime/pi-rpc": resolve(import.meta.dirname, "../../packages/pi-rpc/src/index.ts"),
+      "@frostime/provider-usage": resolve(import.meta.dirname, "../../packages/provider-usage/src/index.ts"),
     },
   },
   build: {

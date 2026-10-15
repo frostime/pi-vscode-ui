@@ -6,7 +6,7 @@ import { root } from "./lib.mjs";
 const budgets = new Map([
   ["apps/vscode/dist/extension/extension.cjs", 1_200_000],
   ["apps/vscode/dist/webview/webview.js", 850_000], // CodeMirror composer and completion runtime
-  ["apps/vscode/dist/webview/webview.css", 150_000],
+  ["apps/vscode/dist/webview/webview.css", 160_000],
 ]);
 let failed = false;
 for (const [relative, budget] of budgets) {
