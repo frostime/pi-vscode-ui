@@ -1,3 +1,4 @@
+import type { ProviderUsageDescriptor, ProviderUsageResult } from "@frostime/provider-usage";
 import type { ChatTypographyView } from "../model/chatTypography.js";
 import type { ComposerDraftView } from "../model/composerDraftModel.js";
 import type { ConversationItemView } from "../model/conversationModel.js";
@@ -36,6 +37,9 @@ export interface PresentationDeltaView extends Omit<WebviewPresentationView, "di
 }
 
 export type HostToWebviewPayload =
+  | { type: "usageProvidersResult"; requestId: string; providers: readonly ProviderUsageDescriptor[] }
+  | { type: "providerUsageResult"; requestId: string; results: readonly ProviderUsageResult[] }
+  | { type: "providerUsageError"; requestId: string; message: string }
   | { type: "snapshot"; presentation: WebviewPresentationView; draft: ComposerDraftView | null }
   | { type: "setChatTypography"; typography: ChatTypographyView }
   | { type: "presentationDelta"; presentation: PresentationDeltaView }

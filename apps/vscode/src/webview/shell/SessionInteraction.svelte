@@ -48,7 +48,7 @@
 {:else}
   {#key session.id}<ConversationView {session} />{/key}
   <div class="composer-region">
-    <SessionMetrics {session} />
+    <SessionMetrics {session} providerUsageAvailable={surfaceKind === "sidebar"} />
     <ExtensionWidgets widgets={aboveWidgets} />
     <ExtensionUiHost sessionId={session.id} requests={session.pendingExtensionUi} />
     <Composer bind:this={composer} {session} {surfaceKind} {draftAuthority} />

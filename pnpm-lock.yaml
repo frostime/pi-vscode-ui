@@ -53,6 +53,9 @@ importers:
       '@frostime/pi-rpc':
         specifier: workspace:*
         version: link:../../packages/pi-rpc
+      '@frostime/provider-usage':
+        specifier: workspace:*
+        version: link:../../packages/provider-usage
       '@vscode/codicons':
         specifier: ^0.0.44
         version: 0.0.44
@@ -131,6 +134,19 @@ importers:
         version: 4.1.10(@types/node@24.13.3)(jsdom@26.1.0)(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1))
 
   packages/pi-rpc:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.1.0
+        version: 24.13.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@24.13.3)(jsdom@26.1.0)(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1))
+
+  packages/provider-usage:
+    dependencies:
+      undici:
+        specifier: ^7.28.0
+        version: 7.28.0
     devDependencies:
       '@types/node':
         specifier: ^24.1.0

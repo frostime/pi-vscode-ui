@@ -1,0 +1,17 @@
+{
+  "dedicated_usage": {
+    "total": "1000.00",
+    "credits_used": "100.00",
+    "subtotal": "900.00"
+  },
+  "model_apis_usage": {
+    "total": "171.150000000000000001",
+    "credits_used": 5,
+    "subtotal": "166.150000000000000001"
+  },
+  "training_usage": {
+    "total": "500.00",
+    "credits_used": "0",
+    "subtotal": "500.00"
+  }
+}

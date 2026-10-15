@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.5] - 2026-10-15
+
+### Added
+
+- View supported providers' quotas, balances, credits and available usage-reset counts in a compact Usage popover beside Context.
+
 ## [0.15.4] - 2026-10-13
 
 ### Added
@@ -499,7 +505,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.3...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.5...HEAD
+[0.15.5]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.4...v0.15.5
+[0.15.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.3...v0.15.4
 [0.15.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.2...v0.15.3
 [0.15.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.0...v0.15.1

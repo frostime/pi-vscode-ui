@@ -205,6 +205,12 @@ PI_INSIDE_FROSTPI_VERSION=<extension version>
 
 无论内置问题工具是否启用，`PI_INSIDE_FROSTPI` 都表示 FrostPi 的存在。因此，扩展**不应仅仅因为存在这个变量就无条件禁用自身**。
 
+### Provider 用量
+
+点击侧栏 Context 左侧的 **Usage**，查看支持的 Provider 额度、余额和积分。当前 Provider 可用时会自动查询。成功快照按 Provider 缓存在内存中，重新打开可复用；点击 Refresh 获取新快照。可用重置次数只读，不提供兑换操作。
+
+该功能读取 Pi 的 `auth.json`、Provider 级 `models.json` 和 workspace Extension Host 环境。它不刷新令牌、不登录，也不读取模型级或扩展注入的认证。用量请求支持环境中的 HTTP(S) 代理；Pi 专用代理设置和 SOCKS 不适用于这些请求。
+
 ### 网络与诊断
 
 FrostPi 为 Pi 子进程支持继承、VS Code、自定义和直连代理模式。
