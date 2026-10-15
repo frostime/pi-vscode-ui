@@ -39,10 +39,11 @@ describe("provider usage component interaction", () => {
     });
     await waitFor(() => expect(view.queryByText("Usage queries are not supported for custom-provider.")).not.toBeNull());
     expect(view.queryByText("You can select another configured provider.")).not.toBeNull();
-    expect((view.getByRole("combobox", { name: "Provider" }) as HTMLSelectElement).value).toBe("custom-provider");
+    expect(view.getByRole("button", { name: "Provider: custom-provider" }).textContent).toContain("custom-provider");
     expect((view.getByRole("button", { name: "Query usage" }) as HTMLButtonElement).disabled).toBe(true);
     expect(queryUsage).not.toHaveBeenCalled();
-    await fireEvent.change(view.getByRole("combobox", { name: "Provider" }), { target: { value: "other" } });
+    await fireEvent.click(view.getByRole("button", { name: "Provider: custom-provider" }));
+    await fireEvent.click(view.getByRole("option", { name: "Other" }));
     await waitFor(() => expect(view.queryByText("other-result")).not.toBeNull());
     expect(view.queryByText("Usage queries are not supported for custom-provider.")).toBeNull();
   });
@@ -62,8 +63,10 @@ describe("provider usage component interaction", () => {
     });
     await waitFor(() => expect(view.queryByText("Could not obtain credentials for Example.", { exact: false })).not.toBeNull());
     expect(view.queryByText("Usage queries are not supported for example.")).toBeNull();
-    expect(view.queryByRole("option", { name: "Unused · unavailable" })).toBeNull();
+    await fireEvent.click(view.getByRole("button", { name: "Provider: Example" }));
+    expect(view.queryByRole("option", { name: /Unused/ })).toBeNull();
     expect(view.queryByRole("option", { name: "All configured providers" })).toBeNull();
+    await fireEvent.click(view.getByRole("button", { name: "Provider: Example" }));
     expect(view.queryByText("About this data")).toBeNull();
     expect(view.queryByText(/Credentials injected dynamically/)).toBeNull();
     const details = view.getByRole("button", { name: "Details" });
@@ -76,6 +79,61 @@ describe("provider usage component interaction", () => {
     await fireEvent.click(details);
     expect(view.queryByText(/Credentials injected dynamically/)).toBeNull();
     expect(queryUsage).not.toHaveBeenCalled();
+  });
+
+  it("navigates the picker without querying, commits with the keyboard and dismisses Escape before the panel", async () => {
+    const queryUsage = vi.fn<ProviderUsageSource["queryUsage"]>()
+      .mockImplementation((scope) => Promise.resolve([snapshot(scope, `result-${scope}`)]));
+    const onclose = vi.fn();
+    const view = render(ProviderUsagePanel, {
+      source: { listProviders: () => Promise.resolve(providers), queryUsage },
+      currentProviderId: "example", onclose,
+    });
+    await waitFor(() => expect(view.queryByText("result-example")).not.toBeNull());
+    const trigger = view.getByRole("button", { name: "Provider: Example" });
+    await fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    await waitFor(() => expect(document.activeElement).toBe(view.getByRole("option", { name: "Example" })));
+    expect(view.queryByRole("option", { name: "Choose a provider…" })).toBeNull();
+    expect(view.getByRole("option", { name: "Example" }).getAttribute("aria-selected")).toBe("true");
+
+    await fireEvent.keyDown(document.activeElement!, { key: "End" });
+    expect(document.activeElement).toBe(view.getByRole("option", { name: "Other" }));
+    await fireEvent.keyDown(document.activeElement!, { key: "Home" });
+    expect(document.activeElement).toBe(view.getByRole("option", { name: "All configured providers" }));
+    await fireEvent.keyDown(document.activeElement!, { key: "o" });
+    expect(document.activeElement).toBe(view.getByRole("option", { name: "Other" }));
+    expect(queryUsage).toHaveBeenCalledTimes(1);
+    await fireEvent.keyDown(document.activeElement!, { key: "Enter" });
+    await waitFor(() => expect(view.queryByText("result-other")).not.toBeNull());
+    expect(view.queryByRole("listbox")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(queryUsage).toHaveBeenCalledTimes(2);
+
+    await fireEvent.click(trigger);
+    await waitFor(() => expect(document.activeElement).toBe(view.getByRole("option", { name: "Other" })));
+    await fireEvent.keyDown(document.activeElement!, { key: " " });
+    expect(queryUsage).toHaveBeenCalledTimes(2);
+    await fireEvent.click(trigger);
+    await fireEvent.keyDown(view.getByRole("option", { name: "Other" }), { key: "Escape" });
+    expect(view.queryByRole("listbox")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(onclose).not.toHaveBeenCalled();
+    await fireEvent.keyDown(trigger, { key: "Escape" });
+    expect(onclose).toHaveBeenCalledWith(true);
+  });
+
+  it("dismisses the picker on focus leaving its controls without restoring focus", async () => {
+    const view = render(ProviderUsagePanel, {
+      source: { listProviders: () => Promise.resolve(providers), queryUsage: () => Promise.resolve([snapshot("example", "ready")]) },
+      currentProviderId: "example", onclose: vi.fn(),
+    });
+    await waitFor(() => expect(view.queryByText("ready")).not.toBeNull());
+    await fireEvent.click(view.getByRole("button", { name: "Provider: Example" }));
+    await waitFor(() => expect(document.activeElement).toBe(view.getByRole("option", { name: "Example" })));
+    const refresh = view.getByRole("button", { name: "Refresh usage" });
+    refresh.focus();
+    await waitFor(() => expect(view.queryByRole("listbox")).toBeNull());
+    expect(document.activeElement).toBe(refresh);
   });
 
   it("auto-loads, reuses the snapshot after closing/reopening, refreshes and opens predefined links", async () => {
@@ -135,13 +193,15 @@ describe("provider usage component interaction", () => {
     const source = cacheProviderUsage(raw);
     const view = render(ProviderUsagePanel, { source, currentProviderId: "example", onclose: () => view.unmount() });
     await waitFor(() => expect(signals.length).toBe(1));
-    await fireEvent.change(view.getByRole("combobox", { name: "Provider" }), { target: { value: "other" } });
+    await fireEvent.click(view.getByRole("button", { name: "Provider: Example" }));
+    await fireEvent.click(view.getByRole("option", { name: "Other" }));
     await waitFor(() => expect(view.queryByText("current-result")).not.toBeNull());
     expect(signals[0]!.aborted).toBe(true);
     first.resolve([snapshot("example", "stale-result")]);
     await waitFor(() => expect(view.queryByText("Fetching usage…")).toBeNull());
     expect(view.queryByText("stale-result")).toBeNull();
-    await fireEvent.change(view.getByRole("combobox", { name: "Provider" }), { target: { value: "example" } });
+    await fireEvent.click(view.getByRole("button", { name: "Provider: Other" }));
+    await fireEvent.click(view.getByRole("option", { name: "Example" }));
     await waitFor(() => expect(signals.length).toBe(3));
     view.unmount();
     expect(signals[2]!.aborted).toBe(true);

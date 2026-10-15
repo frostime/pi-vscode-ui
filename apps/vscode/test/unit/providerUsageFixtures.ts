@@ -6,6 +6,7 @@ const providers: readonly ProviderUsageDescriptor[] = [
   { providerId: "openai-codex", displayName: "OpenAI Codex", availability: "ready", source: "auth.json", reason: "" },
   { providerId: "deepseek", displayName: "DeepSeek", availability: "ready", source: "environment", reason: "" },
   { providerId: "openrouter", displayName: "OpenRouter", availability: "ready", source: "models.json", reason: "" },
+  { providerId: "opencode-go", displayName: "OpenCode Go", availability: "ready", source: "auth.json", reason: "" },
   { providerId: "openai", displayName: "OpenAI · native ChatGPT", availability: "ready", source: "auth.json", reason: "" },
   { providerId: "github-copilot", displayName: "GitHub Copilot", availability: "ready", source: "auth.json", reason: "" },
   { providerId: "fireworks", displayName: "Fireworks", availability: "ready", source: "environment", reason: "" },
@@ -61,6 +62,17 @@ function mockResult(provider: ProviderUsageDescriptor, capturedAt: number): Prov
         { id: "cny-topped-up", label: "Topped-up balance", value: "100.00", unit: "currency", currency: "CNY" },
         { id: "usd-total", label: "Total balance", value: "4.20", unit: "currency", currency: "USD" },
       ],
+    } };
+  }
+  if (providerId === "opencode-go") {
+    const resetsAt = Math.floor(capturedAt / 1_000);
+    return { providerId, source, status: "ready", report: {
+      ...report, semantics: { kind: "consumer-subscription", label: "OpenCode Zen plan usage" },
+      buckets: [
+        { id: "rolling", label: "Rolling window", used: 25, remaining: 75, limit: 100, unit: "percent", resetsAt: resetsAt + 7_200 },
+        { id: "monthly", label: "Monthly window", used: 100, remaining: 0, limit: 100, unit: "percent", resetsAt: resetsAt + 259_200 },
+      ],
+      metrics: [], notes: ["Weekly window unavailable (error)."],
     } };
   }
   if (providerId === "openrouter") {

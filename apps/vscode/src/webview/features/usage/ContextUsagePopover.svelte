@@ -111,7 +111,10 @@
   z-index: 70;
   right: 0;
   bottom: calc(100% + 6px);
-  width: min(220px, calc(100vw - 18px));
+  width: min(var(--metrics-popover-width), calc(100vw - 20px));
+  max-height: min(480px, 70vh);
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: 10px;
   border: 1px solid var(--frost-border);
   border-radius: 8px;
@@ -203,7 +206,4 @@
   white-space: nowrap;
 }
 
-@media (max-width: 430px) {
-  .context-usage-popover { right: -4px; }
-}
 </style>

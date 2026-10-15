@@ -59,6 +59,55 @@ describe("provider usage presentation", () => {
     expect(body).not.toContain("remaining");
   });
 
+  it("preserves decimal-string precision and separates currencies without converting them to quotas", async () => {
+    const report = readyReport(await mockReports(), "deepseek");
+    report.metrics = [
+      { id: "cny", label: "Total balance", value: "-0.01", unit: "currency", currency: "CNY" },
+      { id: "usd", label: "Total balance", value: "0.12345678901234567890", unit: "currency", currency: "USD" },
+    ];
+    const { body } = render(ProviderUsageReport, { props: { report } });
+    expect(body).toContain('aria-label="CNY metrics"');
+    expect(body).toContain('aria-label="USD metrics"');
+    expect(body).toContain("CNY -0.01");
+    expect(body).toContain("USD 0.12345678901234567890");
+    expect(body).not.toContain('class="usage-bar');
+  });
+
+  it("renders capped, incomplete and unlimited API-key spending without assuming missing usage is zero", async () => {
+    const report = readyReport(await mockReports(), "openrouter");
+    const capped = render(ProviderUsageReport, { props: { report } }).body;
+    expect(capped).toContain("USD 12.50 used");
+    expect(capped).toContain("USD 37.50 remaining");
+    expect(capped).toContain("Limit USD 50.00");
+    expect(capped).toContain("Demo key");
+    expect(capped).toContain('class="usage-bar');
+
+    const incomplete = render(ProviderUsageReport, { props: { report: {
+      ...report, buckets: [{ id: "key-limit", label: "Key limit", unit: "usd", limit: 50 }],
+    } } }).body;
+    expect(incomplete).toContain("Limit USD 50.00");
+    expect(incomplete).not.toContain('class="usage-bar');
+    expect(incomplete).not.toContain("USD 0.00 used");
+
+    const unlimited = render(ProviderUsageReport, { props: { report: {
+      ...report, buckets: [], notes: ["No per-key spend cap"],
+    } } }).body;
+    expect(unlimited).toContain("No per-key spend cap");
+    expect(unlimited).toContain("USD 48.75");
+    expect(unlimited).not.toContain('class="usage-bar');
+  });
+
+  it("preserves ungrouped subscription windows, exhausted limits and partial-window notes", async () => {
+    const report = readyReport(await mockReports(), "opencode-go");
+    const { body } = render(ProviderUsageReport, { props: { report } });
+    expect(body).toContain("Rolling window");
+    expect(body).toContain("Monthly window");
+    expect(body).toContain("100% used");
+    expect(body).toContain("0% remaining");
+    expect(body).toContain("Weekly window unavailable (error).");
+    expect(body).toContain(new Date(report.buckets[0]!.resetsAt! * 1_000).toISOString());
+  });
+
   it("does not turn a missing counter into zero and clamps only the visual bar", () => {
     expect(bucketProgress({ id: "a", label: "Quota", unit: "percent", remaining: 40 })).toBeUndefined();
     expect(bucketProgress({ id: "b", label: "Quota", unit: "count", used: 10 })).toBeUndefined();
@@ -87,10 +136,25 @@ describe("provider usage presentation", () => {
     expect(body).not.toContain("class=\"usage-bar");
   });
 
+  it("keeps arbitrary text-only values and notes readable without parsing them into numbers or markup", () => {
+    const report: UsageReport = {
+      providerId: "text-example", providerName: "Example", capturedAt: 1_700_000_000_000, source: "synthetic",
+      semantics: { kind: "api-key", label: "Account status" }, buckets: [],
+      metrics: [{ id: "status", label: "Access status", value: "Available through the provider dashboard.\nNo numerical quota was reported." }],
+      notes: ["A plan name such as <unlimited> is explanatory text, not a quota."],
+    };
+    const { body } = render(ProviderUsageReport, { props: { report } });
+    expect(body).toContain("Available through the provider dashboard.\nNo numerical quota was reported.");
+    expect(body).toContain("&lt;unlimited");
+    expect(body).not.toContain("<unlimited>");
+    expect(body).not.toContain('class="usage-bar');
+    expect(body).not.toContain("NaN");
+  });
+
   it("supplies mixed real-format results for UI review, including unavailable and account selection", async () => {
     const results = await mockReports();
     expect(results.map((result) => result.status)).toEqual([
-      "ready", "ready", "ready", "ready", "query-failed", "selection-required", "unavailable",
+      "ready", "ready", "ready", "ready", "ready", "query-failed", "selection-required", "unavailable",
     ]);
   });
 

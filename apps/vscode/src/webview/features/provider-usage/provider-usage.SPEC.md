@@ -16,6 +16,14 @@ Successful reports are cached per provider for the metrics component/data-source
 
 Replacement, selection change, close and destruction cancel pending work. Even if the source ignores cancellation, late results cannot replace the current view. Old results are cleared before refresh; failures must not present them as current. Unexpected source failures use generic messages rather than raw exceptions.
 
+## Visual language
+
+Usage and Context share the `--metrics-popover-width` target (256px), viewport-clamped width, 8px corners, 10px padding, raised surface, subtle border/shadow and 11px base type. Use natural height, capped at `min(480px, 70vh)`, rather than a fixed aspect ratio or padding short states to match quota reports. Overflow stays inside the popover. The Provider selector is the Usage heading; refresh and close are compact labelled icon actions, not a separate query form.
+
+The heading opens a custom compact listbox, not a native select. Use a check for the current choice, separate subdued status text for unavailable/unsupported Providers, and a divider after the aggregate scope. The empty placeholder is never an option. Opening focuses the current choice; arrow keys, Home/End and type-ahead move focus without querying. Enter/Space commits; selecting the existing scope only dismisses. Escape first dismisses the picker and restores its trigger, without closing the Usage panel. Tab leaves the picker; outside pointer/focus dismisses without stealing focus. The menu spans the positioned header, flips above when below-space is insufficient, and scrolls within viewport bounds. The outer Panel allows menu overflow so short states do not crop choices; results remain independently scrollable.
+
+Report layout follows data, never Provider IDs: quota groups use rounded bars and monospaced counters; monetary/count metrics use label/value rows; unitless text values wrap in full-width rows using the UI font. Group currencies separately when multiple currencies are reported. Preserve decimal strings exactly; do not parse, round, add or convert balances to create a highlight. Notes, account labels, snapshot time and official links remain secondary but readable. No status, text-only or incomplete-limit result receives a fabricated quota bar.
+
 ## Report meaning
 
 - Preserve provider labels, quota groups, window durations, reset timestamps and account/plan notes. Capture time is milliseconds; quota reset timestamps are seconds.
