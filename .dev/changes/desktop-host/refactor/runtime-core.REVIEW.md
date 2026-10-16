@@ -1,5 +1,7 @@
 # R1 独立审阅：可进入用户实测
 
+本文件保留旧 `efa9c78` 的审阅快照。当前 main 已升级并完成同步，最新基线、候选及验证见 [main-sync.RESULT](main-sync.RESULT.md)，不要把旧候选当作最新版本运行。
+
 ## 结论与候选
 
 候选分支 `refactor/desktop-host-boundary`，最终候选 `efa9c78`，实施 worktree 为 `.worktrees/261011_desktop-host-boundary`。基线 `370e30b`；职责变更在 `078895d`，提取在 `35a0f41`，`eda49f2` 记录验证，`efa9c78` 补齐两项审阅收尾。

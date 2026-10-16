@@ -16,7 +16,7 @@
 
 旧 R1 候选 `efa9c78` 已完成 Runtime/core/shared 提取和当时基线的自动审阅，历史证据见 [REVIEW](refactor/runtime-core.REVIEW.md)。main 后续已发布 0.15.5，旧候选不包含 Provider usage 和 Pi 工具时长新功能，因此不能继续当作最新实测版本。
 
-用户要求同步两个开发分支，尤其实际工作的 refactor worktree。当前以 `main@2ed69c1` 为同步基线：顶层已合入，refactor 正在合并、修正迁移后接线并重新验证。旧 575 项检查不能替代本轮证据。main 本身不改；完成后仍等待用户实测，不继续 Desktop。
+已按 `main@2ed69c1` 同步顶层与实际 refactor worktree。生产合并 checkpoint 为 `798ff05`，E2E 收尾为 `a314714`，已验证代码快照为 `242bbab`；后续仅追加计划/结果文档。完整检查 784 项、VSIX 和标准 E2E 均通过，见 [本轮结果](refactor/main-sync.RESULT.md)。main 本身不改；当前仍等待用户实测，不继续 Desktop。
 
 ## 分支与变更归属
 
@@ -30,7 +30,7 @@ Git 没有自动的父子分支关系，这里的“子分支”指从顶层指�
 
 用户已同意首步实现到一个可实测的重构检查点：自动验证后由用户运行插件，确认行为正常才继续。研究结果已整合到顶层；生产代码在独立重构分支交付，不立即进入顶层或 main。推送、发布及进一步功能工作不在本次范围。
 
-S243 已在其独立 Session 获得用户直接授权并完成候选交付；peer mail 仅传递上下文。S528 负责主计划、独立审阅及用户检查点。用户已同意清理完成调研的 worktree 和临时实验材料；先安全移除目录链接，再用 Git 移除研究 worktree。报告及复核方法仍保存在顶层和研究提交中。实施 worktree 与 `efa9c78` 候选保留，等待用户实测；不安装 Desktop 依赖。
+S243 已在其独立 Session 获得用户直接授权并完成候选交付；peer mail 仅传递上下文。S528 负责主计划、独立审阅及用户检查点。用户已同意清理完成调研的 worktree 和临时实验材料；先安全移除目录链接，再用 Git 移除研究 worktree。报告及复核方法仍保存在顶层和研究提交中。实施 worktree 保留；`efa9c78` 是历史检查点，当前候选以本轮同步结果为准，等待用户实测。不安装 Desktop 依赖。
 
 ## 推进路径
 
@@ -64,15 +64,15 @@ REQUIRES [首步重构]: 干净的候选提交和 `runtime-core.RESULT.md` 的�
 
 S528 审阅职责改动、机械迁移、依赖方向和证据；发现问题返回实施者范围内修复。自动验收通过后提供候选 worktree 供用户运行，不启动下一阶段。
 
-[R1 同步 main] << CURRENT
-# IN PROGRESS: 用户要求实际 worktree 跟上最新 main。顶层已同步 `2ed69c1`，refactor 合并正在重新验证；采用 merge 保留已审阅提交，不改写历史。
+[R1 同步 main]
+# DONE: 两分支包含 `main@2ed69c1`，合并已提交；784 项完整检查、VSIX 和标准 E2E 退出 0。额外只读审阅及类型/导入复核无剩余阻塞。结果见 [main-sync.RESULT](refactor/main-sync.RESULT.md)，采用 merge 保留历史。
 
 REQUIRES [R1 独立审阅]: 已知的重构边界和旧候选检查点。
 
 保留 main 的 0.15.5、Bridge 3.3、Provider usage、工具时长和发布检查修复；保留 pi-client 的职责和目录。冲突解消之外，还需修正新代码的旧路径导入、共享数据类型边界、依赖/构建/测试入口。所有检查在实际 refactor worktree 运行，不把主目录或旧候选结果作为新候选证据。
 
-[R1 用户运行确认]
-# WAITING: 等待同步后的新候选及验证结果，再提供同一 refactor worktree 的 F5 入口；暂不推荐旧 `efa9c78` 作为最新版本验收。
+[R1 用户运行确认] << CURRENT
+# WAITING: 同步 0.15.5 后的新候选已就绪，在 `.worktrees/261011_desktop-host-boundary` 用 F5 的 `Run FrostPi Extension` 运行。等待真实 Pi 及常用功能反馈，尤其 Provider usage、工具时长；不继续后续阶段。
 
 REQUIRES [R1 独立审阅] and [R1 同步 main]: 可由用户运行的新候选、最新基线验证和确切启动步骤。
 
