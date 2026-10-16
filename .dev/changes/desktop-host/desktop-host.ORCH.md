@@ -14,13 +14,15 @@
 
 边界专项调研已形成 [报告](research/host-boundary.REPORT.md)。除源码和契约复核外，临时 Runtime 实验在无 vscode mock 的 Node 中跑通受控 Pi 对话；临时包子入口实验编译了现有 App.svelte、共享样式与字体，并检查 Node/浏览器依赖图隔离。现有相关基线测试共 86 项通过。
 
-R1 已在独立候选分支 `efa9c78` 完成 Runtime 解耦与 core/shared 提取、正式 workspace/类型检查、575 项全量检查、受控 E2E 与 VSIX 验证；小修有追加窄验证。顶层独立审阅通过，详见 [REVIEW](refactor/runtime-core.REVIEW.md)。候选代码未合入顶层/main，真实 Pi 与用户体验仍待用户运行确认，Desktop 未实施；不能将这些证据报告为 M1 完成。
+旧 R1 候选 `efa9c78` 已完成 Runtime/core/shared 提取和当时基线的自动审阅，历史证据见 [REVIEW](refactor/runtime-core.REVIEW.md)。main 后续已发布 0.15.5，旧候选不包含 Provider usage 和 Pi 工具时长新功能，因此不能继续当作最新实测版本。
+
+用户要求同步两个开发分支，尤其实际工作的 refactor worktree。当前以 `main@2ed69c1` 为同步基线：顶层已合入，refactor 正在合并、修正迁移后接线并重新验证。旧 575 项检查不能替代本轮证据。main 本身不改；完成后仍等待用户实测，不继续 Desktop。
 
 ## 分支与变更归属
 
 | 分支 | 用途 | 接续方式 |
 |---|---|---|
-| `feat/desktop-host` | 顶层集成分支 | 从 `main@8c88f21` 切出；主工作区保持此分支 |
+| `feat/desktop-host` | 顶层集成分支 | 最初从 `main@8c88f21` 切出，现已合入 `main@2ed69c1`；主目录继续检出 main |
 | `docs/desktop-host-boundary-research` | 已完成的调研分支 | `7413c47` 已整合到顶层；用户同意移除研究 worktree，分支与提交保留 |
 | `refactor/desktop-host-boundary` | R1 首步重构与自动验证 | 从 R1 规划提交切出，独立 worktree `.worktrees/261011_desktop-host-boundary` |
 
@@ -62,10 +64,17 @@ REQUIRES [首步重构]: 干净的候选提交和 `runtime-core.RESULT.md` 的�
 
 S528 审阅职责改动、机械迁移、依赖方向和证据；发现问题返回实施者范围内修复。自动验收通过后提供候选 worktree 供用户运行，不启动下一阶段。
 
-[R1 用户运行确认] << CURRENT
-# WAITING: 候选 `efa9c78` 可在 `.worktrees/261011_desktop-host-boundary` 用 F5 的 `Run FrostPi Extension` 运行。等待用户使用真实本机 Pi 的反馈；候选不合并，不继续后续阶段。
+[R1 同步 main] << CURRENT
+# IN PROGRESS: 用户要求实际 worktree 跟上最新 main。顶层已同步 `2ed69c1`，refactor 合并正在重新验证；采用 merge 保留已审阅提交，不改写历史。
 
-REQUIRES [R1 独立审阅]: 可由用户运行的候选插件与确切启动步骤。
+REQUIRES [R1 独立审阅]: 已知的重构边界和旧候选检查点。
+
+保留 main 的 0.15.5、Bridge 3.3、Provider usage、工具时长和发布检查修复；保留 pi-client 的职责和目录。冲突解消之外，还需修正新代码的旧路径导入、共享数据类型边界、依赖/构建/测试入口。所有检查在实际 refactor worktree 运行，不把主目录或旧候选结果作为新候选证据。
+
+[R1 用户运行确认]
+# WAITING: 等待同步后的新候选及验证结果，再提供同一 refactor worktree 的 F5 入口；暂不推荐旧 `efa9c78` 作为最新版本验收。
+
+REQUIRES [R1 独立审阅] and [R1 同步 main]: 可由用户运行的新候选、最新基线验证和确切启动步骤。
 
 这是后续工作的强制检查点。用户确认插件功能正常后记录 R1 通过；发现回归则留在 R1 修复并重新验收。main 和已安装插件不在本阶段被自动替换。
 
@@ -135,6 +144,19 @@ DEFER
     具体窗口布局、打包格式、托盘、额外管理功能及完整日程，在相关阶段证据足够后再决定。
     若其中任何选择提前影响共享边界或外部行为承诺，将其提升为 OPEN，并与用户确认。
 END
+
+## 避免长期落后的同步规则
+
+阶段开工、候选交付和用户实测前，先确认两个开发分支包含当前本地 main：
+
+```bash
+git merge-base --is-ancestor main feat/desktop-host
+git merge-base --is-ancestor main refactor/desktop-host-boundary
+```
+
+两条命令都应退出 0。main 更新后若任一检查不通过，先做一次明确的同步、解决语义接线并重新验证，再报告候选可用。worktree 不会自动跟随 main；不要只更新主目录或规划分支而留下实际实现分支落后。同步默认沿 `main → feat/desktop-host → refactor/desktop-host-boundary` 推进，不自动把候选反向合入 main。
+
+这是一项工作检查点，不是定时自动合并机制。每次记录实际 main 基线、候选与验证范围；旧审阅和测试只证明旧提交。
 
 ## 结果回流与接续
 

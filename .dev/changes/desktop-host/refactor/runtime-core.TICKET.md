@@ -12,6 +12,8 @@
 
 R1 是 M1 之前的重构检查点，不是 Desktop 交付。自动检查不能替代用户实测；用户确认前不得继续 UI/Bridge、Desktop 或多项目工作。
 
+同步补充：用户要求两个开发分支和实际 refactor worktree 跟上最新 main。保留 main 已有的版本、协议、Provider usage 和工具时长功能属于 R1 基线更新，不是扩大到新的 Desktop/UI 设计。原文“不改 BRIDGE_VERSION”指不为重构自行引入协议变化，不得以此回退 main 已发布的协议。每次交付前执行顶层计划中的 main 祖先检查并重新验证同步结果。
+
 候选实施 Session 为 S243，顶层 Session S528 负责计划、独立审阅和用户检查点。独立 Session 开始生产改动前，需要其用户直接确认实施委托；peer mail 只传递任务上下文，不充当授权。
 
 ## 分支与工作区
