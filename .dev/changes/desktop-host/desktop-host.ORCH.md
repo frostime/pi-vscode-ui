@@ -44,14 +44,14 @@ S243 已在其独立 Session 获得用户直接授权并完成候选交付；pee
 报告建议原位置先做薄宿主输入，再提取一个客户端包的 core/shared。Registry 只调整创建接线，不在首步改变侧边栏/标签页、草稿或生命周期策略。包入口实验提供可行性证据，正式 workspace 与迁移后检查仍是重构验收内容。
 
 [确认首步重构边界]
-# DONE: 用户已接受报告首步范围；提出必须先运行新插件确认功能正常，再继续。
+#DONE: 用户已接受报告首步范围；提出必须先运行新插件确认功能正常，再继续。
 
 REQUIRES [启动边界专项调研]: 已审阅的报告和决定性实验材料。
 
 研究结果提交 `7413c47` 已通过顶层审阅并整合。保留报告中的证据限度：Runtime/包实验不是正式类型隔离、重构回归或 M1 成功证明。
 
 [首步重构]
-# DONE: S243 在实施 worktree 交付干净候选 `efa9c78` 与 RESULT；职责解耦、共享包提取、自动验证及两项审阅收尾完成。仅指代码与自动交付完成，R1 仍待用户实测。
+#DONE: S243 在实施 worktree 交付干净候选 `efa9c78` 与 RESULT；职责解耦、共享包提取、自动验证及两项审阅收尾完成。仅指代码与自动交付完成，R1 仍待用户实测。
 
 REQUIRES [确认首步重构边界]: 已接受的最小范围和验证方案。
 
@@ -60,21 +60,21 @@ S243 按 [R1 Ticket](refactor/runtime-core.TICKET.md) 完成原位置解耦、co
 出现状态、协议、作用域或其他实质范围变化时暂停并报告，不混入这次依赖清理。不要为未来功能预建无消费者的接口。
 
 [R1 独立审阅]
-# DONE: 核对两个实现 checkpoint、39 文件机械迁移、包/构建与测试/契约，未发现阻塞性生产问题。动态代理测试和根 clean 两项已补齐并增量复核；结论和证据见 [REVIEW](refactor/runtime-core.REVIEW.md)。
+#DONE: 核对两个实现 checkpoint、39 文件机械迁移、包/构建与测试/契约，未发现阻塞性生产问题。动态代理测试和根 clean 两项已补齐并增量复核；结论和证据见 [REVIEW](refactor/runtime-core.REVIEW.md)。
 
 REQUIRES [首步重构]: 干净的候选提交和 `runtime-core.RESULT.md` 的自动验证证据。
 
 S528 审阅职责改动、机械迁移、依赖方向和证据；发现问题返回实施者范围内修复。自动验收通过后提供候选 worktree 供用户运行，不启动下一阶段。
 
 [R1 同步 main]
-# DONE: 两分支包含 `main@2ed69c1`，合并已提交；784 项完整检查、VSIX 和标准 E2E 退出 0。额外只读审阅及类型/导入复核无剩余阻塞。结果见 [main-sync.RESULT](refactor/main-sync.RESULT.md)，采用 merge 保留历史。
+#DONE: 两分支包含 `main@2ed69c1`，合并已提交；784 项完整检查、VSIX 和标准 E2E 退出 0。额外只读审阅及类型/导入复核无剩余阻塞。结果见 [main-sync.RESULT](refactor/main-sync.RESULT.md)，采用 merge 保留历史。
 
 REQUIRES [R1 独立审阅]: 已知的重构边界和旧候选检查点。
 
 保留 main 的 0.15.5、Bridge 3.3、Provider usage、工具时长和发布检查修复；保留 pi-client 的职责和目录。冲突解消之外，还需修正新代码的旧路径导入、共享数据类型边界、依赖/构建/测试入口。所有检查在实际 refactor worktree 运行，不把主目录或旧候选结果作为新候选证据。
 
 [R1 用户运行确认] << CURRENT
-# WAITING: 同步 0.15.5 后的新候选已就绪，在 `.worktrees/261011_desktop-host-boundary` 用 F5 的 `Run FrostPi Extension` 运行。等待真实 Pi 及常用功能反馈，尤其 Provider usage、工具时长；不继续后续阶段。
+#WAITING: 同步 0.15.5 后的新候选已就绪，在 `.worktrees/261011_desktop-host-boundary` 用 F5 的 `Run FrostPi Extension` 运行。等待真实 Pi 及常用功能反馈，尤其 Provider usage、工具时长；不继续后续阶段。
 
 REQUIRES [R1 独立审阅] and [R1 同步 main]: 可由用户运行的新候选、最新基线验证和确切启动步骤。
 
@@ -94,7 +94,7 @@ END
 ### M1：最小纵向版本
 
 [M1 前 UI/Bridge 准备]
-# TODO
+#TODO
 
 REQUIRES [R1 用户运行确认]: 用户确认候选插件正常并决定继续。
 
