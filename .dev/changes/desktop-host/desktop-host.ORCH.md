@@ -2,6 +2,8 @@
 
 这是本 change 的唯一推进入口。先读 [目标与边界](desktop-host.DEV-SPEC.md)，按需查阅 [Issues](desktop-host.ISSUES.md)、[首步边界调研说明](research/host-boundary.RESEARCH.md) 和 [调研报告](research/host-boundary.REPORT.md)。不要把本计划当作已生效的模块契约。
 
+新会话先读 [整体交接](handover/R1-desktop-host-continuation.HANDOVER.md)，了解当前目录/分支、用户检查点与原始会话定位；执行进度仍以本文件为准。
+
 ## 目标与成功判断
 
 在现有 Pi VS Code UI 基础上增加简单 Desktop GUI，使用本机 Pi，支持项目管理与跨项目 Session 并行。插件开发者只需遵守模块边界，不需要知道 Desktop 的实现，也不需要为每项插件功能完成两端适配。
@@ -22,7 +24,7 @@
 
 | 分支 | 用途 | 接续方式 |
 |---|---|---|
-| `feat/desktop-host` | 顶层集成分支 | 最初从 `main@8c88f21` 切出，现已合入 `main@2ed69c1`；主目录继续检出 main |
+| `feat/desktop-host` | 顶层集成分支 | 最初从 `main@8c88f21` 切出，已合入 `main@2ed69c1`；主目录现按用户要求检出此分支，用于顶层规划和交接 |
 | `docs/desktop-host-boundary-research` | 已完成的调研分支 | `7413c47` 已整合到顶层；用户同意移除研究 worktree，分支与提交保留 |
 | `refactor/desktop-host-boundary` | R1 首步重构与自动验证 | 从 R1 规划提交切出，独立 worktree `.worktrees/261011_desktop-host-boundary` |
 
