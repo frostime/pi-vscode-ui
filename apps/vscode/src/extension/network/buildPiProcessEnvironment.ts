@@ -41,6 +41,27 @@ export function buildPiProcessEnvironment(
   return { env, label: "Custom proxy" };
 }
 
+/** Usage queries use current policy without changing the Host or a running Pi process. */
+export function buildProviderUsageEnvironment(
+  base: NodeJS.ProcessEnv,
+  proxy: ProxyConfiguration,
+  credentials?: ProxyCredentials,
+  vscodeProxy?: string,
+): NodeJS.ProcessEnv {
+  if (proxy.mode === "inherit") return { ...base };
+  if ((proxy.mode === "custom" && !proxy.endpoint?.trim())
+    || (proxy.mode === "vscode" && !vscodeProxy?.trim())) {
+    throw new Error("The selected usage proxy is not configured.");
+  }
+
+  // Explicit modes must not retain a different inherited HTTP/SOCKS proxy.
+  return {
+    ...base,
+    ...clearProxyEnvironment(),
+    ...buildPiProcessEnvironment(proxy, credentials, vscodeProxy).env,
+  };
+}
+
 export function proxyFingerprint(proxy: ProxyConfiguration, vscodeProxy?: string): string {
   return JSON.stringify({ ...proxy, vscodeProxy: proxy.mode === "vscode" ? vscodeProxy ?? "" : "" });
 }

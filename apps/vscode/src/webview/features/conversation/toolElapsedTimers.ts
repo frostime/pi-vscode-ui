@@ -1,6 +1,4 @@
-import { formatTurnDuration } from "./collapseTurnTrace";
-
-export { formatTurnDuration };
+export { formatDurationMs, formatTurnDuration } from "./collapseTurnTrace";
 
 /**
  * Tools whose runs are long enough that a live elapsed readout replaces the breathing

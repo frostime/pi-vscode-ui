@@ -7,7 +7,7 @@ import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import type { SessionRegistry } from "../sessions/SessionRegistry.js";
 import { ComposerDraftCache } from "./ComposerDraftCache.js";
 import { SessionPanelManager } from "./SessionPanelManager.js";
-import { WebviewActionDispatcher } from "./WebviewActionDispatcher.js";
+import { WebviewActionDispatcher, type WebviewActionDispatcherDependencies } from "./WebviewActionDispatcher.js";
 import { WebviewConnection } from "./WebviewConnection.js";
 import type { WebviewEndpoint } from "./webviewTypes.js";
 
@@ -32,7 +32,8 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
   #externalizedSessionIds = new Set<string>();
   #pendingSidebarComposerText = new Map<string, string>();
 
-  constructor(registry: SessionRegistry, logger: DiagnosticLogger, extensionUri: vscode.Uri) {
+  constructor(registry: SessionRegistry, logger: DiagnosticLogger, extensionUri: vscode.Uri,
+    getProxyCredentials: WebviewActionDispatcherDependencies["getProxyCredentials"]) {
     this.#registry = registry;
     this.#logger = logger;
     this.#knownSessionIds = new Set(registry.snapshot().sessions.map((session) => session.id));
@@ -41,6 +42,7 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
     );
     this.#dispatcher = new WebviewActionDispatcher({
       registry,
+      getProxyCredentials,
       logger,
       drafts: this.#drafts,
       openPanel: (sessionId, draft) => this.openPanel(sessionId, draft),

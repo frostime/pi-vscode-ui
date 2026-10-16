@@ -208,6 +208,12 @@ Third-party Pi extensions can read these variables to detect that they are runni
 
 `PI_INSIDE_FROSTPI` identifies FrostPi regardless of whether the bundled question tool is enabled. Extensions therefore **should not unconditionally disable themselves just because this variable is present**.
 
+### Provider usage
+
+Click **Usage**, left of Context in the sidebar, to view supported providers' quotas, balances and credits. The active provider loads automatically when available. Successful snapshots are cached by provider while the view remains mounted; use Refresh to fetch a new snapshot. Reset availability is read-only.
+
+This feature reads Pi's `auth.json`, provider-level `models.json` and the workspace Extension Host environment. It does not refresh/login or use model-specific/extension-injected authentication. HTTP(S) environment proxies are supported; Pi-only custom proxy settings and SOCKS do not apply to these queries.
+
 ### Network and diagnostics
 
 FrostPi supports inherited, VS Code, custom, and direct proxy modes for Pi subprocesses.

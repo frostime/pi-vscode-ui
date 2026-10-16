@@ -22,6 +22,9 @@
       ],
       "@frostime/pi-rpc": [
         "../../packages/pi-rpc/src/index.ts"
+      ],
+      "@frostime/provider-usage": [
+        "../../packages/provider-usage/src/index.ts"
       ]
     }
   },
@@ -30,6 +33,7 @@
     "src/**/*.svelte",
     "pi-extensions/**/*.ts",
     "test/**/*.ts",
-    "vite.config.ts"
+    "vite.config.ts",
+    "vitest.config.ts"
   ]
 }

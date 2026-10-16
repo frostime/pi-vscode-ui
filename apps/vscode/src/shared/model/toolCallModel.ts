@@ -5,6 +5,11 @@ interface ToolCallBase {
   isError: boolean;
   startedAt: number;
   endedAt?: number;
+  /**
+   * Milliseconds Pi measured for this call's own execution. Absent when the session was recorded
+   * before Pi reported durations, in which case `startedAt` and `endedAt` are the only clue.
+   */
+  durationMs?: number;
 }
 
 export interface PreparingToolCallView extends ToolCallBase {

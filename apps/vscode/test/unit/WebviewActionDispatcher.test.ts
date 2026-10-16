@@ -33,6 +33,7 @@ describe("Session Tab Host authorization", () => {
     };
     const dispatcher = new WebviewActionDispatcher({
       registry: registry as never,
+      getProxyCredentials: () => Promise.resolve(undefined),
       logger: logger as never,
       drafts: drafts as never,
       openPanel,
@@ -44,6 +45,9 @@ describe("Session Tab Host authorization", () => {
       surface: { kind: "panel" as const, sessionId: "source" },
       sessionId: "source",
       fileSearch: {} as never,
+      beginProviderUsageRequest: vi.fn(() => new AbortController().signal),
+      cancelProviderUsageRequest: vi.fn(),
+      finishProviderUsageRequest: vi.fn(() => true),
       post: (message: unknown) => posted.push(message),
       insertPromptText: vi.fn(),
     };

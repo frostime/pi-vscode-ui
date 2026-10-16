@@ -75,6 +75,7 @@ describe("Session Webview coordination", () => {
       registry as never,
       { error: vi.fn(), info: vi.fn() } as never,
       {} as never,
+      () => Promise.resolve(undefined),
     );
     const sidebarMessages: unknown[] = [];
     coordinator.attachSidebar(sidebarEndpoint(sidebarMessages) as never);
@@ -123,6 +124,7 @@ describe("Session Webview coordination", () => {
       registry as never,
       { error: vi.fn(), info: vi.fn() } as never,
       {} as never,
+      () => Promise.resolve(undefined),
     );
     const sidebarMessages: unknown[] = [];
     coordinator.attachSidebar(sidebarEndpoint(sidebarMessages) as never);

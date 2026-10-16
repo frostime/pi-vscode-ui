@@ -6,7 +6,7 @@
   import { presentDiff } from "./diffPresentation";
   import { isToolSectionId, planToolSections, sectionToShow, type ToolSectionId } from "./toolSectionPlan";
   import ToolElapsedTimer from "./ToolElapsedTimer.svelte";
-  import { formatTurnDuration, isElapsedTimerTool } from "./toolElapsedTimers";
+  import { formatDurationMs, formatTurnDuration, isElapsedTimerTool } from "./toolElapsedTimers";
 
   let { activity }: { activity: ToolActivityView } = $props();
   let open = $state(false);
@@ -44,14 +44,15 @@
   /** Long-running tools read out elapsed time instead of the breathing dot; the name is
    * only known once arguments are bound, so a preparing call still shows the dot. */
   const elapsedTimer = $derived(tool.state === "bound" && isElapsedTimerTool(tool.name));
-  /** Final wall-clock duration for a matched call that ended; cancelled has no end time,
-   * and a missing persisted timestamp (projection fallback 0) cannot show a duration. */
-  const finishedElapsed = $derived(
-    elapsedTimer && tool.state === "bound" && tool.status !== "running"
-      && tool.endedAt !== undefined && tool.startedAt > 0
-      ? formatTurnDuration(tool.startedAt, tool.endedAt)
-      : null,
-  );
+  /** Final duration of a call that ended. Pi's own measurement wins because it survives a restart
+   * unchanged; the timestamp span is only the fallback for sessions Pi recorded without it. A
+   * cancelled call has no end, and a legacy call with no usable timestamps shows nothing. */
+  const finishedElapsed = $derived.by(() => {
+    if (!elapsedTimer || tool.state !== "bound" || tool.status === "running") return null;
+    if (tool.durationMs !== undefined) return formatDurationMs(tool.durationMs);
+    if (tool.endedAt === undefined || tool.startedAt <= 0) return null;
+    return formatTurnDuration(tool.startedAt, tool.endedAt);
+  });
 
   /**
    * Fixes the section this card shows the first time the reader expands it. Tools stream in:
