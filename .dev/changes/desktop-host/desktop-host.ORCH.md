@@ -2,7 +2,7 @@
 
 这是本 change 的唯一推进入口。先读 [目标与边界](desktop-host.DEV-SPEC.md)，按需查阅 [Issues](desktop-host.ISSUES.md)、[首步边界调研说明](research/host-boundary.RESEARCH.md) 和 [调研报告](research/host-boundary.REPORT.md)。不要把本计划当作已生效的模块契约。
 
-新会话先读 [整体交接](handover/R1-desktop-host-continuation.HANDOVER.md)，了解当前目录/分支、用户检查点与原始会话定位；执行进度仍以本文件为准。
+新会话先读 [R2a 结果](refactor/ui-bridge-inputs.RESULT.md)和[次日验收 SOP](refactor/ui-bridge-inputs.SOP.md)。[R1 整体交接](handover/R1-desktop-host-continuation.HANDOVER.md)保留历史目录与原始会话定位，其暂停规则已被用户允许延后验收、先做准备的后续授权更新；当前状态以本文件为准。
 
 ## 目标与成功判断
 
@@ -20,19 +20,22 @@
 
 已按 `main@2ed69c1` 同步顶层与实际 refactor worktree。生产合并 checkpoint 为 `798ff05`，E2E 收尾为 `a314714`，已验证代码快照为 `242bbab`；后续仅追加计划/结果文档。完整检查 784 项、VSIX 和标准 E2E 均通过，见 [本轮结果](refactor/main-sync.RESULT.md)。main 本身不改。用户随后允许在人工验收前先推进无产品决策卡点的准备工作；R1 实测延后，不记为通过。新增工作单独交付，不覆盖 R1 候选。
 
+R2a 原位 UI/Bridge 宿主输入解耦已交付：生产实现 `45a2e72`，已验证代码快照 `eb05c72`。完整检查 120 文件、799 项、VSIX 和标准 E2E 均通过，独立静态审阅无新增发现，见 [R2a 结果](refactor/ui-bridge-inputs.RESULT.md)。现在等待用户在新增 worktree 验收 R1 核心链路和本段补测；没有创建 Electron 或共享 UI 包，不把 M1 标为完成。
+
 ## 分支与变更归属
 
 | 分支 | 用途 | 接续方式 |
 |---|---|---|
 | `feat/desktop-host` | 顶层集成分支 | 最初从 `main@8c88f21` 切出，已合入 `main@2ed69c1`；主目录现按用户要求检出此分支，用于顶层规划和交接 |
 | `docs/desktop-host-boundary-research` | 已完成的调研分支 | `7413c47` 已整合到顶层；用户同意移除研究 worktree，分支与提交保留 |
-| `refactor/desktop-host-boundary` | R1 首步重构与自动验证 | 从 R1 规划提交切出，独立 worktree `.worktrees/261011_desktop-host-boundary` |
+| `refactor/desktop-host-boundary` | R1 首步重构与自动验证 | `.worktrees/261011_desktop-host-boundary@acc25f2` 保留为原候选对照 |
+| `refactor/desktop-bridge-inputs` | R2a 原位 UI/Bridge 准备与当前验收候选 | 从 R1 候选切出，再合入顶层 `cd32f60` 文档；独立 worktree `.worktrees/261019_desktop-bridge-inputs`，包含 R1 |
 
 Git 没有自动的父子分支关系，这里的“子分支”指从顶层指定提交切出，并将结果整合回顶层。调研结论只以文档结果回流；不能把实验或未经确认的生产改动顺带合入。
 
-用户已同意首步实现到一个可实测的重构检查点：自动验证后由用户运行插件，确认行为正常才继续。研究结果已整合到顶层；生产代码在独立重构分支交付，不立即进入顶层或 main。推送、发布及进一步功能工作不在本次范围。
+用户允许先完成可回退、无需新增产品取舍的准备检查点，次日再实测；原 R1 人工验收不免除。研究和阶段报告整合到顶层；生产代码只在独立实施分支交付，不自动进入顶层或 main。推送、发布及新增 Desktop 产品行为不在本段范围。
 
-S243 已在其独立 Session 获得用户直接授权并完成候选交付；peer mail 仅传递上下文。S528 负责主计划、独立审阅及用户检查点。用户已同意清理完成调研的 worktree 和临时实验材料；先安全移除目录链接，再用 Git 移除研究 worktree。报告及复核方法仍保存在顶层和研究提交中。实施 worktree 保留；`efa9c78` 是历史检查点，当前候选以本轮同步结果为准，等待用户实测。不安装 Desktop 依赖。
+S243 已在其独立 Session 获得用户直接授权并完成候选交付；peer mail 仅传递上下文。S528 负责主计划、独立审阅及用户检查点。用户已同意清理完成调研的 worktree 和临时实验材料；先安全移除目录链接，再用 Git 移除研究 worktree。报告及复核方法仍保存在顶层和研究提交中。实施 worktree 保留；`efa9c78` 是历史检查点，原 R1 候选以同步结果为准保留；当前包含后续准备的验收候选见 R2a 结果，等待用户实测。不安装 Desktop 依赖。
 
 ## 推进路径
 
@@ -74,7 +77,7 @@ REQUIRES [R1 独立审阅]: 已知的重构边界和旧候选检查点。
 保留 main 的 0.15.5、Bridge 3.3、Provider usage、工具时长和发布检查修复；保留 pi-client 的职责和目录。冲突解消之外，还需修正新代码的旧路径导入、共享数据类型边界、依赖/构建/测试入口。所有检查在实际 refactor worktree 运行，不把主目录或旧候选结果作为新候选证据。
 
 [R1 用户运行确认]
-#WAITING: 同步 0.15.5 后的新候选已就绪，在 `.worktrees/261011_desktop-host-boundary` 用 F5 的 `Run FrostPi Extension` 运行，具体步骤和反馈模板见 [R1 人工验收 SOP](refactor/R1-manual-test.SOP.md)。仍待真实 Pi 及常用功能反馈，尤其 Provider usage、工具时长。用户允许先做下一段准备，不代表本项已通过。
+#WAITING: 同步 0.15.5 后的新候选已就绪，在 `.worktrees/261011_desktop-host-boundary` 用 F5 的 `Run FrostPi Extension` 运行，具体步骤和反馈模板见 [R1 人工验收 SOP](refactor/R1-manual-test.SOP.md)。仍待真实 Pi 及常用功能反馈，尤其 Provider usage、工具时长。现在建议按 [R2a SOP](refactor/ui-bridge-inputs.SOP.md)在新候选一次覆盖两段，回归时再用原 R1 对照。用户允许先做下一段准备，不代表本项已通过。
 
 REQUIRES [R1 独立审阅] and [R1 同步 main]: 可由用户运行的新候选、最新基线验证和确切启动步骤。
 
@@ -84,7 +87,7 @@ OPEN 用户对候选版本的实际运行反馈。
     自动测试通过、静态审阅、构建成功或代码提交均不能替代这项反馈。提前推进仅限不需要新增产品取舍的可回退工作，不把“先做”当作 R1 验收。
 
 IF 用户确认候选行为正常，且决定继续
-    整合已接受的重构结果，再讨论 M1 前的 UI/Bridge 最小准备范围。
+    核对 R1 与 R2a 反馈，按用户决定整合已接受结果，再讨论共享 UI 物理提取及 M1 的下一段范围。
 ELSE IF 用户发现回归
     返回 [首步重构] 修复，保留原反馈和修复证据，再次独立审阅与实测。
 ELSE IF 用户明确允许延后验收并先推进
@@ -96,11 +99,11 @@ END
 ### M1：最小纵向版本
 
 [M1 前 UI/Bridge 准备] << CURRENT
-#IN_PROGRESS: 用户允许先做无产品决策卡点的下一段。先实施 [R2a 原位宿主输入解耦](refactor/ui-bridge-inputs.TICKET.md)，使用独立 worktree，保留 R1 候选；不创建 Electron，不宣布共享 UI 或 M1 完成。
+#WAITING: [R2a 原位宿主输入解耦](refactor/ui-bridge-inputs.TICKET.md)已实现并验证，见 [RESULT](refactor/ui-bridge-inputs.RESULT.md)。当前在 `.worktrees/261019_desktop-bridge-inputs` 按 [SOP](refactor/ui-bridge-inputs.SOP.md)等待用户验收。R1 对照保留；共享 UI 提取、资源边界和 Electron 仍未完成，本段到可验收检查点停止。
 
 REQUIRES [R1 用户运行确认] 或用户明确允许延后验收：本轮采用后者，后续验收不免除。
 
-本段先让浏览器消息传输、Host 端点以及聊天组件实际使用的宿主输入显式化，现有 sidebar/panel 作为生产消费者保持既有行为。协议版本、授权、会话集合、草稿权威、批注清理、资源布局和持久化不改。范围与出口见 Ticket。
+R2a 已让浏览器消息传输、Host 端点以及聊天组件实际使用的宿主输入显式化，现有 sidebar/panel 是生产消费者。协议版本、授权、会话集合、草稿权威、批注清理、资源布局和持久化不改。范围与出口见 Ticket，具体证据与未验证项见 RESULT。
 
 Project 集合、Desktop 草稿/批注生命周期、首版能力和退出规则仍未确认。它们不阻塞原位依赖清理，但不得被准备工作默认为产品决定。共享 UI 的物理提取和最小 Electron 链路在本段证据后再评估。
 
@@ -153,14 +156,15 @@ END
 
 ## 避免长期落后的同步规则
 
-阶段开工、候选交付和用户实测前，先确认两个开发分支包含当前本地 main：
+阶段开工、候选交付和用户实测前，先确认顶层、R1 和当前 R2a 实施分支包含当前本地 main：
 
 ```bash
 git merge-base --is-ancestor main feat/desktop-host
 git merge-base --is-ancestor main refactor/desktop-host-boundary
+git merge-base --is-ancestor main refactor/desktop-bridge-inputs
 ```
 
-两条命令都应退出 0。main 更新后若任一检查不通过，先做一次明确的同步、解决语义接线并重新验证，再报告候选可用。worktree 不会自动跟随 main；不要只更新主目录或规划分支而留下实际实现分支落后。同步默认沿 `main → feat/desktop-host → refactor/desktop-host-boundary` 推进，不自动把候选反向合入 main。
+三条命令都应退出 0。main 更新后若任一检查不通过，先做一次明确的同步、解决语义接线并重新验证，再报告候选可用。worktree 不会自动跟随 main；不要只更新主目录或规划分支而留下实际实现分支落后。同步默认先 `main → feat/desktop-host`，再显式同步到实际实施分支；R2a 已基于 R1。原候选作为旧提交对照时应保留确切提交，不把旧验证当作新 main 的证据；当前运行候选必须包含最新本地 main。不自动把候选反向合入 main。
 
 这是一项工作检查点，不是定时自动合并机制。每次记录实际 main 基线、候选与验证范围；旧审阅和测试只证明旧提交。
 
