@@ -1,7 +1,7 @@
 ---
 title: Desktop 宿主整体接续
 created: 2026-10-16T14:17:57+08:00
-consumed: false # Reader: set to true once you have read this. Questions about missing context go under "Clarifications".
+consumed: true # Reader: set to true once you have read this. Questions about missing context go under "Clarifications".
 ---
 
 ## Assume Reader
