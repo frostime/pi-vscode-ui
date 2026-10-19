@@ -2,7 +2,7 @@
 
 ## 结论与运行入口
 
-R2a 已完成实现、独立静态审阅和自动验证，等待用户运行。它包含 R1，但不把延后的 R1 人工验收标为通过。**没有创建 Desktop、安装 Electron 或提取共享 UI 包。**
+R2a 已完成实现、独立静态审阅和自动验证。2026-10-19 用户反馈“测试了一下，似乎都是正常的”，按最近提供的 R2a 候选入口记录 R1 与 R2a 人工检查点通过。**没有创建 Desktop、安装 Electron 或提取共享 UI 包。**
 
 - 分支：`refactor/desktop-bridge-inputs`。
 - 工作目录：`H:/SrcCode/playground/FrostPi/.worktrees/261019_desktop-bridge-inputs`。
@@ -10,7 +10,7 @@ R2a 已完成实现、独立静态审阅和自动验证，等待用户运行。�
 - 原 R1 对照：`.worktrees/261011_desktop-host-boundary`，`refactor/desktop-host-boundary@acc25f2`，保留且未修改。
 - 本地 main 基线仍为 `2ed69c1`；顶层、R1 及 R2a 均包含该基线。R2a 也包含顶层文档提交 `cd32f60`，记录用户允许先推进、次日验收的更新授权。
 
-人工入口见 [R2a 次日验收 SOP](ui-bridge-inputs.SOP.md)。建议在新 worktree 按 F5 → **Run FrostPi Extension**，一次完成 R1 核心用例与本段补测。出现回归时再用原 R1 候选定位，不必默认把整套测试做两遍。
+人工反馈针对最近提供的 `.worktrees/261019_desktop-bridge-inputs@f938664` 候选记录，包含 R1 和 R2a。用户未提供逐项结果、Pi 版本、平台或资源覆盖记录，不将未报告项补为通过，也不宣称原 R1 worktree 被单独完整测试。[R2a SOP](ui-bridge-inputs.SOP.md)保留作复测入口；出现回归时可用原 R1 候选定位。
 
 main 和已安装插件未改，未推送、发布、安装 VSIX，也未将生产代码合入顶层规划分支。
 
@@ -58,10 +58,10 @@ E2E 对该命令清除继承的 `ELECTRON_RUN_AS_NODE`，没有修改产品启�
 
 ## 限度与后续边界
 
-- 仍需用户使用真实 Pi、自己的可测试历史及常用插件能力运行 SOP；远程、其他平台、视觉/输入法/字体/Mermaid/图片未由本轮自动化完整验证。
+- 用户已反馈运行正常，但未提供逐项测试详情。远程、其他平台、视觉/输入法/字体/Mermaid/图片未由本轮自动化完整验证，不能从总体反馈推断这些项目均已覆盖。
 - App、Shell、聊天组件及 Connection 仍归属 VS Code app。本段没有声称全部 UI 已宿主无关；`PromptEditor` 的命令再组合、编辑器 mentions、资源与主题入口等仍需在实际共享 UI 提取时继续处理。
 - `PromptEditor` 二次组合命令可能补回 Panel `/resume` 补全，这是基线既有行为，本段未修；显式提交仍按原规则拒绝。不能把它算成本段新增回归，也不能因此声称完整能力边界已完成。
 - 当前 UI stores 仍按一文档一个 presentation 使用，不承诺同页独立多聊天根，也未决定 Project 切换时的草稿/批注保留。
 - 本段没有技术阻塞。下一段须先据实测反馈确定共享聊天/资源的提取范围；Project 集合、Desktop 能力、草稿生命周期和退出/恢复规则仍是用户取舍，不用新接口或默认实现代替决定。
 
-本段到可验收检查点即停止。用户反馈后再决定整合与下一段，不自动继续 Electron 或多项目实现。
+本段人工检查点已通过，当前待用户确认整合到顶层及下一段范围。不自动合入 main、发布或继续 Electron/多项目实现。

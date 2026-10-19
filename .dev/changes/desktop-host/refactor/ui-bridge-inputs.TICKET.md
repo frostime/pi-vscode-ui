@@ -2,7 +2,7 @@
 
 ## 授权与目标
 
-用户允许在 R1 人工验收前先检查后续卡点；无需新增产品决定的部分可以提前实施，次日提供验收。R1 仍未通过，原候选 `refactor/desktop-host-boundary@acc25f2` 保留。
+用户允许在 R1 人工验收前先检查后续卡点；无需新增产品决定的部分可以提前实施，次日提供验收。实施授权时 R1 尚未通过人工验收，原候选 `refactor/desktop-host-boundary@acc25f2` 保留。当前验收状态以主计划为准。
 
 本段减少聊天代码对宿主的隐式依赖，不改插件行为。入口是[主计划](../desktop-host.ORCH.md)，约束以 DEV-SPEC 和现有模块 SPEC 为准。此段不是 Desktop、共享 UI 包或 M1 完成。
 
