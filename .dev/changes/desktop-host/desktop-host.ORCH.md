@@ -42,7 +42,7 @@ R1 已提取 `packages/pi-client` 的 core/shared；R2a 已原位隔离部分 UI
 [最小真实双端复用] << CURRENT
 #TODO: 从现有 UI 出发，确认最小提取与宿主接线范围，再实施共享链路，不再先设计一套独立 App UI。
 
-先看候选中的 [SidebarShell.svelte](../../../.worktrees/261019_desktop-bridge-inputs/apps/vscode/src/webview/shell/SidebarShell.svelte)，沿现有组件和会话动作判断怎样复用；边界依该 worktree 的 AGENTS 与最近模块 SPEC。New/Resume 等已有能力不是待重新发明的需求。
+先看候选中的 `apps/vscode/src/webview/shell/SidebarShell.svelte`，沿现有组件和会话动作判断怎样复用；边界依该 worktree 的 AGENTS 与最近模块 SPEC。New/Resume 等已有能力不是待重新发明的需求。
 
 下一段交付应证明：真实桌面窗口与插件消费同一份通用 UI/会话实现；改一处通用 UI 能进入两端；插件仍能独立开发、构建和使用，并验证真实 Pi 的发送、停止、历史恢复。开发约定须说明哪些改动无需 Desktop 特别处理，哪些必须适配；用代码边界与检查支撑，不只写说明。
 
