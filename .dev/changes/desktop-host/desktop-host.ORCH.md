@@ -7,28 +7,32 @@
 | 位置 | 用途 |
 |---|---|
 | 主目录，`feat/desktop-host` | 控制文档；生产代码与本地 `main@2ed69c1` 相同 |
-| `.worktrees/261019_desktop-bridge-inputs`，`wip/desktop-client` | **唯一施工入口**；从 R1＋R2a 候选 `d551904` 继续 |
-| `refactor/desktop-bridge-inputs@d551904` | 本轮施工前的可回退基线 |
+| `.worktrees/261019_desktop-bridge-inputs`，`wip/desktop-client` | **唯一施工入口**；已验证 checkpoint `7c3f671`；前一 checkpoint 为 `367d295` |
+| `refactor/desktop-bridge-inputs@d551904` | 本轮施工前的 R1＋R2a 基线 |
 | `.worktrees/261011_desktop-host-boundary` | 旧 R1 对照，不继续维护另一条候选 |
 
-控制状态只在 `feat/desktop-host` 维护。其他分支同名文件是快照，可用 `git show feat/desktop-host:.dev/changes/desktop-host/desktop-host.ORCH.md` 读取当前入口。开工前核对 Git，生产候选必须包含最新本地 main；本轮未授权合入 main 或发布。
+控制状态只在 `feat/desktop-host` 维护。其他分支同名文件是快照，可用 `git show feat/desktop-host:.dev/changes/desktop-host/desktop-host.ORCH.md` 取当前入口。开工前核对 Git；候选须包含最新本地 main。尚未合入 main、改变产品版本或发布。
 
-已有 R1/R2a 主要是搬迁与宿主输入隔离，不需要从 main 重写。共享 UI 尚未提取，Desktop 尚未创建。重新检查的 client/插件类型检查及 127 项针对性测试通过；Svelte 有一条可访问性警告。宿主内存打包实际解析共享源码；尚无真实桌面运行证据。更早证据见 [验证记录](refactor/ui-bridge-inputs.RESULT.md)，不替代本轮验收。
+## 已实现与证据边界
 
-## 执行路线
+- 客户端主体已迁入 `apps/pi-client`：同一份 UI、Runtime、Registry、消息分派/同步和 Pi 扩展产物源码供两端消费。`src/host/clientHost.ts` 集中声明有限宿主能力；插件薄接线，Desktop 适配。现有 CSS/class/Codicons/主题映射保留。
+- `apps/desktop` 已有 Electron main/preload、同源 ClientApp、多 Project/全部 Pi 导航及选择/输入弹窗。**这是明确标记的开发预览**：Project、设置和客户端元数据仅在内存，启动器使用临时 Electron profile。关闭预览会停止其子进程；持久配置路径和正式关闭/重开策略仍未决定。
+- 已取得实际 Electron＋受控 Pi 子进程的证据：两个无关 Project、两个 Pi 并行，现有 New 与聊天渲染、前台切换/cwd 稳定、Stop 隔离、renderer 无 Node/原始 IPC。不是 HTML 原型，也不是实际模型/历史验收。
+- 独立审查问题已修复。完整 `pnpm check` 的 824 项测试/双端构建、VSIX 打包校验、受控 Extension Host E2E 和修复后的 Desktop smoke 全部通过。实际证明一次共享 UI 文案修改进入双产出，9 份原 CSS 未改。
+- 同一共享 Runtime 已在真实本机 Pi 1.1.0 上验过发送、Abort、进程重建后的历史恢复和 RPC 阻塞输入；真实 Pi 与受控 GUI 的证据边界见 [本轮验证记录](refactor/desktop-client.RESULT.md)。
 
-[现有客户端＋集中宿主接口＋Desktop 适配] << CURRENT
+## 当前工作
 
-1. #TODO: 将客户端从 `packages/pi-client` 归入 `apps/pi-client`，继续使用同一源码；更新解析、依赖检查、测试和构建，不改变插件行为。
-2. #TODO: 将现有通用会话集合、消息分派/同步和 UI 纳入客户端入口。集中声明实际需要的 VS Code 形状的宿主能力；插件薄接线，Desktop 适配。不重写 Registry、聊天或 New/Resume，不设计完整 VS Code SDK 兼容层。
-3. #TODO: 建立 Electron 薄宿主，提供必须的目录、配置、选择/确认、主题变量与消息传输。增加多 Project/全部 Pi 导航，尽早用两个无关目录验证共享链路，而不是先完成广泛准备性重构。
-4. #TODO: 验证插件独立构建/运行、共同 UI 进入双产出、多 Pi 并行与切换归属；再跑真实 Pi 的发送/停止/历史恢复/阻塞输入。未获得的证据明确留空，不把受控 fixture 当真实 Pi 验收。
+[预览体验与持久化取舍] << CURRENT
 
-## 执行约束与停点
+1. #TODO: 用户检查现有 UI 加薄 Project 外壳是否符合日常多开的用法，并走完整真实 Pi GUI 路径；自动化结果不替用户判断操作是否顺手。
+2. #TODO: 确认持久 Project/设置的存储位置、Project 配置覆盖首版范围和正式关闭/重开策略，再实施。当前内存预览不能冒充这些决策已完成。
+3. #TODO: 按需要补齐 Desktop 设置入口、主题/平台验证及剩余宿主适配；不扩大为整个 VS Code SDK 兼容。
 
-- 保留现有 Header、会话动作、CSS/class/Codicons 和主题变量约定。Desktop UI 只补宿主缺口与项目导航，不从 HTML 原型恢复旧设计。
-- 配置定义不手抄两份；Desktop 的 `vscode` 代理模式明确不支持。配置具体路径、Project 覆盖、退出/重开恢复仍不能由实现默默定案。
-- 技术阻塞先做小范围验证；若需改变目标、插件行为或引入显著额外运行机制，暂停该部分并说明取舍。一般构建、路径和适配问题自行解决。
-- 本轮可实施和建立 checkpoint，但不提前宣称产品完成、不合并 main、不发布。需要用户验收时提供真实候选与短检查项。
+开发/验证命令见候选内 `.dev/docs/development.md`、`.dev/docs/testing.md` 与 `apps/desktop/SPEC.md`。旧 R1/R2a 证据见 [原验证记录](refactor/ui-bridge-inputs.RESULT.md)。本轮最终检查见上述验证记录；预览不等于产品完成。
+
+## 继续时的约束
+
+不重写聊天、Header/New/Resume 或另建 Desktop Registry；不恢复已移除的 HTML 原型。配置不手抄两份，`vscode` 代理模式在 Desktop 明确不兼容。一般构建/适配问题自行解决；涉及目标、插件行为、持久数据或后台机制的新取舍要暂停确认。只在施工分支 checkpoint，不合并 main、不发布。
 
 旧调研、Ticket、SOP 与 handover 可从 `9a308d4` 的 Git 树追查，不作为当前执行指令。
