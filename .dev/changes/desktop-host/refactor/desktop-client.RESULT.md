@@ -37,6 +37,17 @@ Svelte 保留基线中的一条可访问性警告（ExtensionUiRequestCard 的�
 
 用户已反馈两端最基础功能似乎可用，但 Desktop 的 `$(...)` 图标标签未解析。独立审查及源码核对还发现 Mermaid 产物路径不匹配、Desktop 字体规则被硬编码、设置默认值存在 manifest/fallback 双来源，以及受控 fixture 的 `get_state.isStreaming` 固定为 false。先前成功记录保留，但不能以一次旧 smoke 通过证明可重复的并发/Stop 隔离；需要修正 fixture 后重验。整合到主目录不表示这些问题已经修复。
 
+## 主目录整合与兼容收尾
+
+- `e2cdae9` 将 `wip/desktop-client@7c3f671` squash 进主目录 `feat/desktop-host`；原 worktree 冻结作回退，不再施工。锁定依赖已在主目录重装；本机 Electron 开发二进制复用已校验版本，未改变全局配置。
+- `d0dbc29` 修复 Desktop 的 VS Code 图标标签及搜索字段语义、Mermaid 入口相对资源路径；两端改为消费同一个 `ui/styles` 入口和 Chat 字体解析函数，原 9 份 CSS 不变。字体测试随解析函数迁入共享客户端。
+- 受控 Pi 的 `get_state.isStreaming` 现在随真实 fixture 事件变化；smoke 用显式 release 文件控制流完成，Abort 取消后续定时输出，不再依赖 240ms 的竞速窗口。
+- 主目录 `pnpm check` 通过：127 个测试文件 / **828 项测试**、lint、类型、双端构建和预算；VSIX 打包/校验通过，仍为 0.15.5 / 78 entries / 2.65 MB。增强后的 Electron smoke **连续 3 次通过**，新增实际 QuickPick 图标及 Mermaid SVG 断言。
+- 主目录额外尝试使用现有离线 VS Code 1.129.1 缓存运行同一 Extension Host suite，启动被系统 `vscode-updating` mutex 阻塞，未运行到插件测试，**不能记为通过**。未关闭用户 VS Code、干预更新器或绕过系统锁；待环境允许后重跑。
+- 设置 manifest 与 fallback 双来源、首次导入范围和其余维护收尾仍未解决。本次未实现持久设置或首次导入，也未将基础试用反馈视为首版总验收。
+
+本轮临时日志：`G:/Enviroment/msys2/tmp/frostpi-primary-gates.wAfwky/`、`frostpi-primary-smoke.yNRk4t/`、`frostpi-primary-vsix.THQFRY/`；最后一次 smoke 截图/结果在 `C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-smoke-E6H1y5/`。
+
 ## 尚未证明
 
 用户日常操作的布局/流程满意度、完整真实 Pi GUI 路径、所有用户扩展组合、Desktop 持久化/重开恢复和其他平台尚未验收。不能把此 checkpoint 宣称为 Desktop 产品完成或发布就绪。

@@ -27,10 +27,10 @@
 
 客户端主体已迁入 `apps/pi-client`，同一份 UI、Runtime、Registry 和消息桥供两端使用。`src/host/clientHost.ts` 集中声明有限能力，VS Code 薄接线，Desktop 适配；原 CSS/class/Codicons/主题映射保留。Electron 已有多 Project/全部 Pi 导航，未另写聊天或会话管理器。
 
-证据：checkpoint `7c3f671`；824 项测试、双端构建、VSIX 校验、受控 Extension Host E2E、两个无关 Project 的 Electron smoke 通过。一次共享 UI 文案修改已进入双产出。真实本机 Pi 1.1.0 的共享 Runtime 发送、Abort、历史恢复、阻塞输入通过。GUI 自动化使用受控子进程，不能混称为完整真实 Pi GUI 验收。详见 [验证记录](refactor/desktop-client.RESULT.md)。
+证据：checkpoint `7c3f671`；824 项测试、双端构建、VSIX 校验、受控 Extension Host E2E、两个无关 Project 的 Electron smoke 通过。一次共享 UI 文案修改已进入双产出。真实本机 Pi 1.1.0 的共享 Runtime 发送、Abort、历史恢复、阻塞输入通过。后续主目录修复 checkpoint `d0dbc29` 的完整检查为 828 项测试，增强的 Electron smoke 连续 3 次通过；新增主目录插件 E2E 尝试被系统 VS Code 更新锁阻塞，未算通过。GUI 自动化使用受控子进程，不能混称为完整真实 Pi GUI 验收。快照与证据限制见 [验证记录](refactor/desktop-client.RESULT.md)。
 
 [预览体验与持久化取舍] << CURRENT
-#IN PROGRESS: 用户反馈两端最基础功能似乎可用，但 Desktop 有图标等细节问题；先收齐兼容/维护缺口，再逐项确认首版运行约定。
+#IN PROGRESS: 用户反馈两端最基础功能似乎可用。主目录已修图标/搜索语义、Mermaid、共同样式入口、字体解析及 fixture 状态；当前继续收齐设置默认值权威来源，并确认首次导入/持久化约定。
 REQUIRES [双端共享架构验证]: 有真实可运行的候选，而非假页面。
 
 基础体验反馈已收到，不要求用户重复技术检查。后续从主目录启动/复测：
@@ -52,6 +52,7 @@ END
 OPEN 首版运行约定
     由 Agent 提出具体建议，用户确认影响使用的取舍，不让用户设计内部接口：
     - 配置与 Project/会话元数据的存储位置；首版是否提供 Project 级设置覆盖。
+    - 首次从 VS Code 一次性导入的来源/范围：用户级显式设置还是当前窗口的有效配置。后续独立配置、不持续同步；范围未确认，不擅自读取用户设置。
     - 关闭窗口/退出 App 时如何处理运行中的 Pi；重开恢复哪些元数据、会话和草稿。
     这些决定供 [日常使用闭环] 使用。跨会话恢复规则不得由当前临时实现反推。
 
@@ -74,6 +75,7 @@ REQUIRES [双端共享架构验证]: 两端确实消费同一实现。本节点�
 
 - 由 Agent 维护依赖/类型/兼容检查：通用 UI 改一处进入双端；客户端新增宿主依赖必须经过集中 interface；不兼容项显式暴露。
 - 验证插件可独立构建和开发，无需启动 Desktop；VS Code 专属能力不受 Desktop 最低公共能力限制。
+- 维护规则收齐后增加 `.agents/skills/dual-maintenance/SKILL.md`，说明改动分类、源码归属、适配与最小检查；引用 SPEC/实际命令，不另写一份架构政策，不替代机械检查。
 - 在最终候选中回归插件的会话、工作区、编辑器标签页、草稿交接及 light/dark/high-contrast、280px 表现。Agent 自动验证；需要用户判断的部分提供候选和短检查项。
 - 整合前核对 main；若 main 前进，必须同步实际施工代码并重验，不能只更新控制文档。
 
@@ -98,7 +100,7 @@ Agent 对照 TARGET-SPEC 汇总可执行证据和明确限制；用户判断它�
 
 | 位置 | 用途 |
 |---|---|
-| 主目录，`feat/desktop-host` | **唯一施工入口**；已 squash 整合 `wip/desktop-client@7c3f671` 的产品代码，继续在此开发；控制脚本与 TARGET-SPEC 也在此维护 |
+| 主目录，`feat/desktop-host` | **唯一施工入口**；`e2cdae9` 已 squash 整合 WIP，当前代码 checkpoint `d0dbc29`；控制脚本与 TARGET-SPEC 也在此维护 |
 | `.worktrees/261019_desktop-bridge-inputs`，`wip/desktop-client` | 整合前的冻结回退点，不再施工；checkpoint `7c3f671`，前一 checkpoint `367d295` |
 | `refactor/desktop-bridge-inputs@d551904` | 本轮施工前的 R1＋R2a 对照基线 |
 | `.worktrees/261011_desktop-host-boundary` | 旧 R1 对照，不继续维护另一条候选 |
