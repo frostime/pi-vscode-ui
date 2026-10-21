@@ -9,7 +9,7 @@ import type { WebviewEndpoint } from "@frostime/pi-client/host/bridge/webviewTyp
 import { WorkspaceFileSearch } from "@frostime/pi-client/host/file-search/WorkspaceFileSearch";
 import type { SessionRegistry } from "@frostime/pi-client/host/SessionRegistry";
 import { ComposerExternalEditor } from "../composer/ComposerExternalEditor.js";
-import { readChatTypography } from "../configuration/readChatTypography.js";
+import { readChatTypography } from "@frostime/pi-client/host/readChatTypography";
 import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { SessionPanelManager } from "./SessionPanelManager.js";
 

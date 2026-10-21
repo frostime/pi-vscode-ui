@@ -24,6 +24,7 @@ void app.whenReady().then(async () => {
     directories: [join(directory, "project-a"), join(directory, "project-b")], show: false,
     settings: {
       "frostpi.pi.executable": process.env.FROSTPI_DESKTOP_SMOKE_PI!,
+      "frostpi.pi.arguments": ["--stream-084-release", join(directory, "release-stream")],
     },
   });
   const browser = desktop.window.webContents;
@@ -51,23 +52,36 @@ void app.whenReady().then(async () => {
     await desktop.registry.sendPrompt(b, "commit project B", []);
     await until(() => desktop.registry.sessionView(b)?.status === "ready", "Project B committed");
     assert.equal(desktop.registry.snapshot().sessions.length, 2);
+    const resume = desktop.registry.resumeSession();
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('dialog .codicon-folder-opened'))"), "native QuickPick icon-label rendering");
+    const labelRendering: unknown = await browser.executeJavaScript("({rawMarker:document.querySelector('dialog').textContent.includes('$('),glyph:getComputedStyle(document.querySelector('dialog .codicon-folder-opened'),'::before').content!=='none'})");
+    assert.deepEqual(labelRendering, { rawMarker: false, glyph: true });
+    await browser.executeJavaScript("document.querySelector('dialog footer button').click()");
+    await resume;
     await Promise.all([desktop.registry.sendPrompt(a, "stream-084", []), desktop.registry.sendPrompt(b, "stream-084", [])]);
-    assert.equal(desktop.registry.sessionView(a)?.status, "running");
-    assert.equal(desktop.registry.sessionView(b)?.status, "running");
+    await until(() => desktop.registry.sessionView(a)?.status === "running" && desktop.registry.sessionView(b)?.status === "running", "both Pi actively stream");
     await desktop.registry.abort(a);
+    await until(() => !desktop.registry.sessionView(a)?.isStreaming, "target Pi stops");
     assert.equal(desktop.registry.sessionView(b)?.status, "running");
+    await writeFile(join(directory, "release-stream"), "finish");
     await until(() => desktop.registry.sessionView(b)?.status === "ready", "other Pi remains live after Stop");
     await browser.executeJavaScript(`window.frostpiDesktop.postClientMessage({type:'activateSession',sessionId:${JSON.stringify(a)},bridgeVersion:${JSON.stringify((await import("@frostime/pi-client/shared/bridge/bridgeVersion")).BRIDGE_VERSION)}})`);
     await until(() => desktop.registry.activeSessionId === a, "foreground Pi switch");
     assert.equal(desktop.registry.sessionView(a)?.cwd, projectA!.cwd);
     assert.equal(desktop.registry.sessionView(b)?.cwd, projectB!.cwd);
+    await desktop.registry.sendPrompt(a, "mermaid", []);
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('.mermaid-host svg'))"), "shared Mermaid renders from packaged vendor resource");
+    const diagramText: unknown = await browser.executeJavaScript("document.querySelector('.mermaid-host svg').textContent");
+    assert.equal(typeof diagramText, "string");
+    assert.match(String(diagramText), /Shared/);
+    assert.match(String(diagramText), /Desktop/);
     const security: unknown = await browser.executeJavaScript("({node:typeof window.require,process:typeof window.process,rawIpc:typeof window.frostpiDesktop.ipcRenderer,editorButtons:[...document.querySelectorAll('button')].filter(b=>b.textContent.includes('Open in editor tab')).length})");
     assert.deepEqual(security, { node: "undefined", process: "undefined", rawIpc: "undefined", editorButtons: 0 });
-    await until(() => browser.executeJavaScript("document.querySelectorAll('aside .pi-row').length === 2 && document.querySelector('.conversation')?.innerText.includes('Streaming')"), "both Pi and active conversation reach the renderer");
+    await until(() => browser.executeJavaScript("document.querySelectorAll('aside .pi-row').length === 2 && Boolean(document.querySelector('.mermaid-host svg'))"), "both Pi and active conversation reach the renderer");
     desktop.window.showInactive();
     await browser.executeJavaScript("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
     await writeFile(join(directory, "desktop.png"), (await browser.capturePage()).toPNG());
-    await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true }));
+    await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true }));
   } finally {
     await desktop.dispose();
     desktop.window.destroy();

@@ -16,9 +16,9 @@ The renderer has context isolation and sandboxing with Node integration disabled
 
 Adding a Project requires a main-process native directory choice (or an explicit process-start directory argument). Renderer selection can reference only a registered identity. It cannot submit an arbitrary process cwd or configuration file path. The same rule applies while another Pi runs in the background.
 
-Desktop pick/input responses correlate to one Host-owned request; unknown/stale ids have no effect. Only listed non-separator choices are selectable. Window disposal cancels pending interactions rather than approving them. Main owns native confirmation/file/clipboard/external-link operations; shared external links retain the http(s) check.
+Desktop pick/input responses correlate to one Host-owned request; unknown/stale ids have no effect. Only listed non-separator choices are selectable. QuickPick labels retain VS Code's `$(icon~modifier)` syntax, rendered as Codicons and text nodes rather than HTML; filtering excludes icon names and respects the caller's description/detail matching options. Separator labels remain plain text. Window disposal cancels pending interactions rather than approving them. Main owns native confirmation/file/clipboard/external-link operations; shared external links retain the http(s) check.
 
-The renderer consumes unchanged client styles and a Desktop-supplied VS Code variable palette. Theme import, VS Code Workbench internals and TextMate grammar execution are not implied by that palette.
+The renderer consumes the common client style entry and a Desktop-supplied VS Code variable palette. Packaged entry scripts and their `vendor/` resources share the VS Code Webview's entry-relative URL layout. Theme import, VS Code Workbench internals and TextMate grammar execution are not implied by that palette.
 
 ## Evidence
 

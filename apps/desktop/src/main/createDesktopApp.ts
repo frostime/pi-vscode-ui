@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
 import { BrowserWindow, dialog, ipcMain } from "electron";
-import { ComposerDraftCache, SessionRegistry, WebviewActionDispatcher, WebviewConnection, WorkspaceFileSearch } from "@frostime/pi-client/host";
+import { ComposerDraftCache, SessionRegistry, WebviewActionDispatcher, WebviewConnection, WorkspaceFileSearch, readChatTypography } from "@frostime/pi-client/host";
 import type { RuntimeLogger } from "@frostime/pi-client/core/diagnostics/RuntimeLogger";
 import { DesktopDialogs } from "./dialogs.js";
 import { createDesktopHost } from "./desktopHost.js";
@@ -64,7 +64,7 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     onDidChangeVisibility: visibility.event,
   }, dispatcher, drafts, logger, () => false, () => false, {
     fileSearch: new WorkspaceFileSearch(),
-    readChatTypography: () => ({ message: { fontSize: 13 }, composer: { fontSize: 13 } }),
+    readChatTypography: () => readChatTypography(host.configuration.getConfiguration("chat")),
   });
   const projectsView = (): DesktopProjectsView => ({ projects: [...projects.list()], activeProjectId: projects.selected?.id ?? null });
   const publishProjects = (): void => {

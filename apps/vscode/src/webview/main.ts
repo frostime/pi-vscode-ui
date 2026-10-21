@@ -1,13 +1,4 @@
-import "@vscode/codicons/dist/codicon.css";
-import "$ui/styles/reset.css";
-import "$ui/styles/vscode-theme.css";
-import "$ui/styles/tokens.css";
-import "$ui/styles/sessions.css";
-import "$ui/styles/composer.css";
-import "$ui/styles/pickers.css";
-import "$ui/styles/typography.css";
-import "$ui/styles/markdown.css";
-import "$ui/styles/motion.css";
+import "$ui/styles";
 
 import { mount } from "svelte";
 

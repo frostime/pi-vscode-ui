@@ -6,13 +6,16 @@
   import { presentationStore } from "@frostime/pi-client/ui/state/sessionViewStore.svelte";
   import { withFrostPiCommands, type LocalComposerCommands } from "@frostime/pi-client/ui/features/composer/frostPiCommands";
   import type { DesktopDialog, DesktopProjectsView } from "../shared/desktopBridge.js";
+  import VscodeLabel from "./VscodeLabel.svelte";
+  import { quickPickMatches } from "./quickPick.js";
 
   let projects = $state<DesktopProjectsView>({ projects: [], activeProjectId: null });
   let request = $state<DesktopDialog | null>(null);
   let input = $state("");
-  const visibleItems = $derived(request?.kind === "pick"
-    ? request.items.filter((item) => item.separator || item.alwaysShow || `${item.label} ${item.description ?? ""} ${item.detail ?? ""}`.toLowerCase().includes(input.toLowerCase()))
-    : []);
+  const visibleItems = $derived.by(() => {
+    const pick = request;
+    return pick?.kind === "pick" ? pick.items.filter((item) => quickPickMatches(item, input, pick)) : [];
+  });
 
   const commands: LocalComposerCommands = {
     completions: (items) => withFrostPiCommands(items).filter((item) => item.name !== "editor"),
@@ -73,7 +76,7 @@
         <div class="choices">
           {#each visibleItems as item (item.id)}
             {#if item.separator}<h3>{item.label}</h3>{:else}
-              <button type="button" onclick={() => respond(item.id)}><strong>{item.label}</strong>{#if item.description}<span>{item.description}</span>{/if}{#if item.detail}<small>{item.detail}</small>{/if}</button>
+              <button type="button" onclick={() => respond(item.id)}><strong><VscodeLabel label={item.label} /></strong>{#if item.description}<span><VscodeLabel label={item.description} /></span>{/if}{#if item.detail}<small><VscodeLabel label={item.detail} /></small>{/if}</button>
             {/if}
           {/each}
         </div>

@@ -37,6 +37,8 @@ export default defineConfig({
   build: {
     outDir: resolve(import.meta.dirname, "dist/renderer"),
     emptyOutDir: true,
+    // Shared loaders resolve vendor assets beside the entry, as in the VS Code Webview.
+    assetsDir: "",
     cssCodeSplit: false,
     chunkSizeWarningLimit: 800,
   },

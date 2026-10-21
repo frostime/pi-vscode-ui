@@ -4,6 +4,10 @@ let buffer = "";
 let sessionName = "E2E session";
 let entries = [];
 let entrySequence = 0;
+let isStreaming = false;
+let cancelStreaming;
+const streamReleaseIndex = process.argv.indexOf("--stream-084-release");
+const streamRelease = streamReleaseIndex >= 0 ? process.argv[streamReleaseIndex + 1] : undefined;
 const startupMailRaceIndex = process.argv.indexOf("--startup-mail-race");
 const startupMailRaceRelease = startupMailRaceIndex >= 0 ? process.argv[startupMailRaceIndex + 1] : undefined;
 let pendingStartupModelsId = null;
@@ -41,7 +45,7 @@ function handle(command) {
       respond(id, {
         model: { provider: "e2e", id: "model", name: "E2E Model", supportsImages: true, reasoning: true },
         thinkingLevel: "medium",
-        isStreaming: false,
+        isStreaming,
         isCompacting: false,
         sessionFile,
         sessionId: "e2e-session",
@@ -82,7 +86,7 @@ function handle(command) {
       respond(id, { provider: command.provider, id: command.modelId, name: "E2E Model", supportsImages: true, reasoning: true });
       break;
     case "set_thinking_level": respond(id); break;
-    case "abort": respond(id); event({ type: "agent_settled" }); break;
+    case "abort": cancelStreaming?.(); respond(id); event({ type: "agent_settled" }); break;
     case "compact":
       event({ type: "compaction_start", reason: "manual" });
       event({
@@ -159,7 +163,7 @@ function handle(command) {
           role: "assistant",
           timestamp: timestamp + 1,
           stopReason: "stop",
-          content: [{ type: "text", text: "E2E response" }],
+          content: [{ type: "text", text: command.message === "mermaid" ? "```mermaid\nflowchart LR\nA[Shared] --> B[Desktop]\n```" : "E2E response" }],
         };
         event({ type: "message_start", message: assistantMessage });
         event({ type: "message_end", message: assistantMessage });
@@ -200,15 +204,31 @@ function stream084({ timestamp, parentId, userId, userMessage }) {
   event({ type: "message_update", assistantMessageEvent: { type: "toolcall_start", contentIndex: 2 } });
   event({ type: "message_update", assistantMessageEvent: { type: "toolcall_delta", contentIndex: 2, delta: '{"path":"stream.ts"' } });
 
-  setTimeout(() => {
+  let cancelled = false;
+  let progressed = false;
+  let finishTimer;
+  const progress = () => {
+    if (cancelled || progressed) return;
+    progressed = true;
     event({ type: "message_update", assistantMessageEvent: { type: "thinking_end", contentIndex: 0, content: "Checked the file" } });
     event({ type: "message_update", assistantMessageEvent: { type: "text_end", contentIndex: 1, content: "Streaming response" } });
     event({ type: "message_update", assistantMessageEvent: { type: "toolcall_end", contentIndex: 2, toolCall } });
     event({ type: "message_end", message: assistantMessage });
     event({ type: "tool_execution_start", toolCallId: toolCall.id, toolName: toolCall.name, args: toolCall.arguments });
-  }, 120);
+  };
+  const progressTimer = setTimeout(progress, 120);
 
-  setTimeout(() => {
+  const cancel = () => {
+    cancelled = true;
+    clearTimeout(progressTimer);
+    clearTimeout(finishTimer);
+    if (cancelStreaming === cancel) cancelStreaming = undefined;
+  };
+  cancelStreaming = cancel;
+  const finish = () => {
+    if (cancelled) return;
+    progress();
+    cancel();
     const toolResultMessage = {
       role: "toolResult",
       toolCallId: toolCall.id,
@@ -233,7 +253,11 @@ function stream084({ timestamp, parentId, userId, userMessage }) {
     ];
     event({ type: "agent_end", messages: [], willRetry: false });
     event({ type: "agent_settled" });
-  }, 240);
+  };
+  // Native smoke controls completion explicitly rather than racing a short wall-clock window.
+  finishTimer = streamRelease
+    ? setInterval(() => { if (require("node:fs").existsSync(streamRelease)) finish(); }, 10)
+    : setTimeout(finish, 240);
 }
 
 function customMail({ timestamp, parentId, userId, userMessage }) {
@@ -306,6 +330,8 @@ function respond(id, data) {
 }
 
 function event(value) {
+  if (value.type === "agent_start") isStreaming = true;
+  if (value.type === "agent_settled") isStreaming = false;
   process.stdout.write(`${JSON.stringify(value)}\n`);
 }
 

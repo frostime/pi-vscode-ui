@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readChatTypography } from "../../src/extension/configuration/readChatTypography.js";
+import { readChatTypography } from "../../src/host/readChatTypography.js";
 
 describe("readChatTypography", () => {
   it("uses VS Code fonts when Chat settings are default", () => {

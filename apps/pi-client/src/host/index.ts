@@ -23,6 +23,7 @@ export type { WebviewEndpoint, ConnectionContext } from "./bridge/webviewTypes.j
 export { collectionDelta } from "./bridge/collectionDelta.js";
 export { resolveLocalMarkdownImage } from "./bridge/markdown-images/MarkdownImageResolver.js";
 export { readConfiguration, readHostProxy } from "./readConfiguration.js";
+export { readChatTypography } from "./readChatTypography.js";
 export { SessionPersistence } from "./sessions/SessionPersistence.js";
 export { parseLaunchArguments } from "./sessions/parseLaunchArguments.js";
 export type { PersistedSessionRecord, PersistedSessionRegistry } from "./sessions/sessionTypes.js";

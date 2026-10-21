@@ -21,6 +21,7 @@ export class DesktopDialogs implements DesktopInteractions {
     const id = randomUUID();
     const request: DesktopDialog = {
       id, kind: "pick", title: options.title ?? "Choose an item", placeholder: options.placeHolder ?? "Search",
+      matchOnDescription: options.matchOnDescription ?? false, matchOnDetail: options.matchOnDetail ?? false,
       items: items.map((item, index) => ({
         id: String(index), label: item.label,
         ...("description" in item && item.description ? { description: item.description } : {}),

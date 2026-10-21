@@ -13,7 +13,7 @@ export interface DesktopProjectsView {
 }
 
 export type DesktopDialog =
-  | { id: string; kind: "pick"; title: string; placeholder: string; items: Array<{ id: string; label: string; description?: string; detail?: string; alwaysShow?: boolean; separator?: boolean }> }
+  | { id: string; kind: "pick"; title: string; placeholder: string; matchOnDescription: boolean; matchOnDetail: boolean; items: Array<{ id: string; label: string; description?: string; detail?: string; alwaysShow?: boolean; separator?: boolean }> }
   | { id: string; kind: "input"; title: string; prompt: string; placeholder: string; value: string; error?: string };
 
 /** The renderer gets this finite bridge, never ipcRenderer or Node access. */

@@ -10,6 +10,7 @@
     "./shared": { "types": "./dist/shared/index.d.ts", "import": "./dist/shared/index.js" },
     "./shared/*": { "types": "./dist/shared/*.d.ts", "import": "./dist/shared/*.js" },
     "./ui": "./src/ui/ClientApp.svelte",
+    "./ui/styles": "./src/ui/styles.ts",
     "./ui/*": "./src/ui/*"
   },
   "files": ["dist", "src/ui", "SPEC.md"],
