@@ -4,7 +4,8 @@ description: Why FrostPi supports OMP through a Pi-centered contract, how the tw
 scope:
   - /packages/pi-rpc/**
   - /apps/vscode/src/extension/**
-updated: 2026-10-03
+  - /apps/pi-client/**
+updated: 2026-10-11
 ---
 
 # OMP Compatibility Architecture
@@ -24,7 +25,7 @@ OMP process
 RPC compatibility layer (`packages/pi-rpc`)
    │ Pi-shaped RPC contract + preserved protocol facts
    ▼
-Product compatibility layer (VS Code Extension Host)
+Product compatibility layer (pi-client core in the Host)
    │ FrostPi session and feature behavior
    ▼
 Session lifecycle, conversation projection, and UI
@@ -53,7 +54,7 @@ Do not translate two operations merely because their names or return values look
 
 ## Layer two: decide what the product supports
 
-The VS Code Extension Host owns runtime facts and FrostPi feature policy. [`runtimeCompatibility.ts`](../../../apps/vscode/src/extension/configuration/runtimeCompatibility.ts) declares profile defaults, settings ownership, and product capabilities. [`SessionRuntime`](../../../apps/vscode/src/extension/sessions/SessionRuntime.ts) uses the selected profile to assemble the RPC dialect, extensions, and feature gates. Session lifecycle and conversation projection continue to consume the Pi-shaped contract.
+The shared client core owns runtime facts and single-session FrostPi feature policy; the shared host module owns collection behavior over injected configuration/workspace services. [`runtimeCompatibility.ts`](../../../apps/pi-client/src/core/configuration/runtimeCompatibility.ts) declares profile defaults, settings ownership, and product capabilities. [`SessionRuntime`](../../../apps/pi-client/src/core/sessions/SessionRuntime.ts) uses the selected profile to assemble the RPC dialect, extensions, and feature gates. Session lifecycle and conversation projection continue to consume the Pi-shaped contract.
 
 Some OMP differences are not message translations. They depend on prior events, session state, UI interaction, or product-specific commit rules. When a requested feature falls into that category, implement it in an explicit OMP business-compatibility module selected at the runtime assembly point. Such a module should own the complete behavior and return explicit outcomes to the common lifecycle; do not scatter `if (isOmp)` branches through session and projection code.
 

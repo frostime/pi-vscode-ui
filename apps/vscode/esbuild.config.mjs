@@ -21,7 +21,7 @@ await Promise.all([
     logLevel: "info",
   }),
   esbuild.build({
-    entryPoints: ["pi-extensions/session-tree.ts"],
+    entryPoints: ["../pi-client/pi-extensions/session-tree.ts"],
     bundle: true,
     platform: "node",
     format: "esm",
@@ -32,7 +32,7 @@ await Promise.all([
     logLevel: "info",
   }),
   esbuild.build({
-    entryPoints: ["pi-extensions/question-tool.ts"],
+    entryPoints: ["../pi-client/pi-extensions/question-tool.ts"],
     bundle: true,
     platform: "node",
     format: "esm",

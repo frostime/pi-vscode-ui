@@ -1,26 +1,35 @@
 import "@vscode/codicons/dist/codicon.css";
-import "./styles/reset.css";
-import "./styles/vscode-theme.css";
-import "./styles/tokens.css";
-import "./styles/sessions.css";
-import "./styles/composer.css";
-import "./styles/pickers.css";
-import "./styles/typography.css";
-import "./styles/markdown.css";
-import "./styles/motion.css";
+import "$ui/styles/reset.css";
+import "$ui/styles/vscode-theme.css";
+import "$ui/styles/tokens.css";
+import "$ui/styles/sessions.css";
+import "$ui/styles/composer.css";
+import "$ui/styles/pickers.css";
+import "$ui/styles/typography.css";
+import "$ui/styles/markdown.css";
+import "$ui/styles/motion.css";
 
 import { mount } from "svelte";
 
-import App from "./App.svelte";
-import { applyHostMessage } from "./bridge/applyHostMessage";
-import { onHostMessage, postToHost } from "./bridge/vscodeBridge";
+import ClientApp from "$ui/ClientApp.svelte";
+import { applyHostMessage } from "$ui/bridge/applyHostMessage";
+import { connectHostBridge, onHostMessage, postToHost } from "$ui/bridge/hostBridge";
+import { createVsCodeTransport } from "./bridge/vscodeBridge";
+import { createVsCodeComposerCommands } from "./shell/vscodeComposerCommands";
 
-const app = mount(App, { target: document.getElementById("app")! });
+const disconnect = connectHostBridge(createVsCodeTransport());
+const app = mount(ClientApp, {
+  target: document.getElementById("app")!,
+  props: { localComposerCommands: createVsCodeComposerCommands() },
+});
 const unsubscribe = onHostMessage(applyHostMessage);
 postToHost({ type: "ready" });
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(() => unsubscribe());
+  import.meta.hot.dispose(() => {
+    unsubscribe();
+    disconnect();
+  });
 }
 
 export default app;

@@ -1,11 +1,8 @@
 import type * as vscode from "vscode";
 
-const SECRET_KEY = "frostpi.network.proxy.credentials.v1";
+import type { ProxyCredentials } from "@frostime/pi-client/core/network/proxyCredentials";
 
-export interface ProxyCredentials {
-  username: string;
-  password: string;
-}
+const SECRET_KEY = "frostpi.network.proxy.credentials.v1";
 
 export class ProxySecretStore {
   constructor(private readonly secrets: vscode.SecretStorage) {}

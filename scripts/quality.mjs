@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import { run } from "./lib.mjs";
 
 const targets = new Set(["lint", "typecheck", "test"]);
-const packageNames = ["@frostime/pi-rpc", "@frostime/provider-usage", "frostpi"];
+const packageNames = ["@frostime/pi-rpc", "@frostime/provider-usage", "@frostime/pi-client", "frostpi", "@frostime/frostpi-desktop"];
 
 export function runQuality(target) {
   if (!target || !targets.has(target)) {

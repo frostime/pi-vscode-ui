@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "vitest/globals", "vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "$shared/*": ["src/shared/*"],
+      "$webview/*": ["src/ui/*"],
+      "$ui/*": ["src/ui/*"],
+      "@frostime/pi-rpc": ["../../packages/pi-rpc/src/index.ts"],
+      "@frostime/provider-usage": ["../../packages/provider-usage/src/index.ts"],
+      "@frostime/provider-usage/types": ["../../packages/provider-usage/src/publicTypes.ts"],
+      "@frostime/pi-client/core": ["src/core/index.ts"],
+      "@frostime/pi-client/core/*": ["src/core/*"],
+      "@frostime/pi-client/host": ["src/host/index.ts"],
+      "@frostime/pi-client/host/*": ["src/host/*"],
+      "@frostime/pi-client/shared": ["src/shared/index.ts"],
+      "@frostime/pi-client/shared/*": ["src/shared/*"],
+      "@frostime/pi-client/ui": ["src/ui/ClientApp.svelte"],
+      "@frostime/pi-client/ui/*": ["src/ui/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.svelte", "test/**/*.ts", "pi-extensions/**/*.ts", "vitest.config.ts"]
+}

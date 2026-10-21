@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   workspaceMentionEdit,
   workspaceMentionReplaceTo,
-} from "../../src/webview/features/composer/workspaceMentionCompletion.js";
+} from "$ui/features/composer/workspaceMentionCompletion.js";
 
 describe("workspace mention completion", () => {
   it("inserts a selected file path wrapped in backticks", () => {

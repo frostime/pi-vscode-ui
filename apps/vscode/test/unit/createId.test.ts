@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createId } from "../../src/webview/utils/createId.js";
+import { createId } from "$ui/utils/createId.js";
 
 describe("createId", () => {
   it("returns a non-empty identifier without assuming crypto.randomUUID exists", () => {

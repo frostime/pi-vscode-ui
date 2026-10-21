@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { afterEach, describe, expect, it } from "vitest";
-import ContextUsagePopover from "../../src/webview/features/usage/ContextUsagePopover.svelte";
+import ContextUsagePopover from "$ui/features/usage/ContextUsagePopover.svelte";
 
 function session(percent: number | null) {
   return {

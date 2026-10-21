@@ -30,14 +30,16 @@ For commands where only the result matters, print only the tail or even just the
 ## Boundaries
 
 - `packages/pi-rpc`: child process, JSONL framing, request/response mechanics. No VS Code dependency.
-- `apps/vscode/src/extension`: VS Code APIs, session/process policy, Pi event projection.
-- `apps/vscode/src/shared`: serializable contracts and pure helpers only.
-- `apps/vscode/src/webview`: Svelte/browser code. No Node or `vscode` imports.
+- `apps/pi-client/src/core` and `src/host`: shared runtime, session/application behavior and bridge. `src/host/clientHost.ts` centrally declares the finite VS Code-shaped host interface; no runtime VS Code/Electron or product-entry imports.
+- `apps/pi-client/src/shared`: serializable contracts and pure helpers only. No Node/core/host runtime imports.
+- `apps/pi-client/src/ui`: shared Svelte/browser UI. No Node, `vscode`, Electron or client backend imports.
+- `apps/vscode`: thin real VS Code assembly and editor integration; its Webview entry injects the native transport and commands.
+- `apps/desktop`: Electron adaptation, Project navigation and desktop-only UI. Renderer uses the finite preload bridge, never Node or raw IPC.
 - Raw Pi events must not reach Webview components.
 - One `SessionRuntime` owns one Pi process. Do not add a global concurrency lock.
 - FrostPi never intercepts Pi file writes or injects `@file` contents.
 - Proxy changes apply only after session process restart; never silently interrupt a running turn.
-- Webview CSS: component-private chrome lives in that Svelte component's scoped `<style>`; keep shared primitives, design tokens/variables, cross-tree layout (`:has`, shell), and body-mounted surfaces (e.g. CodeMirror tooltips) in `apps/vscode/src/webview/styles/` (`tokens.css`, `sessions.css`, `composer.css`, `pickers.css`, plus markdown/motion/theme sheets). Do not grow feature-only rules back into the global bags.
+- Webview CSS: component-private chrome lives in that Svelte component's scoped `<style>`; keep shared primitives, design tokens/variables, cross-tree layout (`:has`, shell), and body-mounted surfaces (e.g. CodeMirror tooltips) in `apps/pi-client/src/ui/styles/` (`tokens.css`, `sessions.css`, `composer.css`, `pickers.css`, plus markdown/motion/theme sheets). Do not grow feature-only rules back into the global bags.
 
 ## Change discipline
 

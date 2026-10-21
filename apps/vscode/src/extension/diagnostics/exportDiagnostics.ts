@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
-import { redactDiagnosticText, type DiagnosticLogger } from "./DiagnosticLogger.js";
+import type { DiagnosticLogger } from "./DiagnosticLogger.js";
+import { redactDiagnosticText } from "@frostime/pi-client/core/diagnostics/diagnosticRedaction";
 
 export async function exportDiagnostics(logger: DiagnosticLogger, sessionSummary: string): Promise<void> {
   const target = await vscode.window.showSaveDialog({

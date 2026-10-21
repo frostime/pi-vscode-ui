@@ -8,7 +8,7 @@ import sessionTreeExtension, {
   SESSION_TREE_COMMAND,
   SESSION_TREE_RESULT_DIR_ENV,
   SESSION_TREE_TOKEN_ENV,
-} from "../../pi-extensions/session-tree.js";
+} from "../../../pi-client/pi-extensions/session-tree.js";
 
 type Handler = (args: string, context: CommandContext) => Promise<void>;
 type NavigateOptions = { summarize?: boolean; customInstructions?: string; replaceInstructions?: boolean };

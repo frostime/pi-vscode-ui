@@ -1,4 +1,4 @@
-import type { ChatTypographyView } from "../../shared/model/chatTypography.js";
+import type { ChatTypographyView } from "@frostime/pi-client/shared/model/chatTypography";
 
 interface ConfigurationReader {
   get<T>(section: string, defaultValue: T): T;

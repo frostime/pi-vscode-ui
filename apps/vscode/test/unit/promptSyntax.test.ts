@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { findPromptTokens } from "../../src/webview/features/composer/promptSyntax.js";
+import { findPromptTokens } from "$ui/features/composer/promptSyntax.js";
 
 describe("prompt syntax", () => {
   it("distinguishes known commands, unknown commands, and file mentions", () => {

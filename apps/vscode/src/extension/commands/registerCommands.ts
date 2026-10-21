@@ -7,7 +7,7 @@ import { exportDiagnostics } from "../diagnostics/exportDiagnostics.js";
 import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { configureProxy, configureProxyCredentials } from "../network/configureProxy.js";
 import { ProxySecretStore } from "../network/ProxySecretStore.js";
-import type { SessionRegistry } from "../sessions/SessionRegistry.js";
+import type { SessionRegistry } from "@frostime/pi-client/host/SessionRegistry";
 import type { PiViewProvider } from "../webview-host/PiViewProvider.js";
 import type { SessionWebviewCoordinator } from "../webview-host/SessionWebviewCoordinator.js";
 

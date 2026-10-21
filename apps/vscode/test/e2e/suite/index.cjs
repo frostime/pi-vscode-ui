@@ -12,7 +12,7 @@ async function waitFor(predicate, timeoutMs = 10_000) {
 }
 
 async function run() {
-  const fakePi = path.resolve(__dirname, "../fake-pi.cjs");
+  const fakePi = path.resolve(__dirname, "../../../../pi-client/test/fixtures/fake-pi.cjs");
   await vscode.workspace.getConfiguration("frostpi").update("pi.executable", fakePi, vscode.ConfigurationTarget.Global);
   await vscode.workspace.getConfiguration("frostpi").update("session.startOnOpen", true, vscode.ConfigurationTarget.Global);
 

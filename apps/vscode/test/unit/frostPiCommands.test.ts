@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { withFrostPiCommands } from "../../src/webview/features/composer/frostPiCommands.js";
+import { withFrostPiCommands } from "$ui/features/composer/frostPiCommands.js";
 
 describe("FrostPi composer commands", () => {
   it("advertises built-in commands ahead of same-named Pi resources", () => {

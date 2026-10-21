@@ -1,19 +1,38 @@
 ---
 title: Development Workflow
-description: Workspace setup, package ownership, debugging, and source entry points.
+description: Workspace setup, independent product builds, shared-client ownership, and debugging.
 scope:
   - /**
-updated: 2026-10-15
+updated: 2026-10-20
 ---
 
 # Development Workflow
 
-Use Node 20.19+ and pnpm 10. A manually tested Pi executable may require a newer external Node than the extension build runtime.
+Use Node 20.19+ and pnpm 10. The Electron development host and a manually tested Pi executable can have newer Node requirements than the extension build runtime.
 
-Run `pnpm install --frozen-lockfile` from the repository root, then use `pnpm check` and `pnpm build` as needed. The shared lockfile covers all workspaces; never install independently inside a package. App TypeScript and Vite/Vitest workspace aliases must resolve internal packages to source so lint, type checks, and tests work before any package has built `dist`.
+Install from the repository root with `pnpm install --frozen-lockfile`. The lockfile covers all workspaces; never install independently inside an app. Root `check`/`build` orchestrate the client, both products, RPC and provider-usage packages. Each package owns its local scripts.
 
-Packages own local `build`, `clean`, `lint`, `typecheck`, and `test` scripts; root commands only orchestrate them. `packages/provider-usage` owns the independent credential/usage engine and synthetic/local HTTP tests; run its checks with `pnpm --filter @frostime/provider-usage <script>`. Add shared tools with `pnpm add -Dw <package>` and package dependencies with `pnpm --filter <workspace-name> add <package>`.
+## Product-local work
 
-Launch the Extension Development Host with `.vscode/launch.json`. esbuild bundles the extension and Vite builds the Webview; production source maps require `FROSTPI_SOURCEMAP=1`. Production Host bundles are minified to keep the embedded HTTP client within the existing bundle budget; `FROSTPI_SOURCEMAP=1` retains unminified debug output. The launch configuration runs the `build:debug` task, which sets that variable automatically, so TypeScript breakpoints bind in the Development Host without any manual step.
+- `pnpm --dir apps/vscode build` builds the shared client/RPC/provider dependencies and the extension only. It does not build or launch Desktop; the existing VS Code debug task remains sufficient.
+- `pnpm --dir apps/pi-client <typecheck|lint|test>` checks shared application behavior, concentrated host contracts and browser UI. Core/shared/UI have separate environment checks. Host-independent tests isolate Pi settings and use explicit fake host services, not VS Code mocks.
+- `pnpm --dir apps/desktop build` builds the Electron main/preload and a renderer consuming the same ClientApp. `pnpm --dir apps/desktop start` launches the development preview; directories may be passed as arguments or added in the UI.
+- `pnpm --dir apps/desktop test:smoke` requires a current Desktop build. It launches real Electron with isolated fake Pi children, two temporary unrelated Projects and a temporary Electron/Pi profile; it never uses real model credentials. It prints the result and OS-temporary screenshot/log location. This is not real-Pi acceptance.
 
-Start transport work in `packages/pi-rpc`, lifecycle work in `apps/vscode/src/extension/sessions/`, projection work in `apps/vscode/src/extension/conversation/`, and rendering work in the owning Webview feature. Preserve adjacent SPECs and never bridge raw Pi events or entries.
+Desktop is currently an explicitly labelled development preview: Projects, settings and client session metadata are in-memory, the launcher uses a temporary Electron profile, and closing the preview disposes its child processes. This does not settle the future persistent configuration path or app-reopen/background policy. Pi-owned conversation persistence is separate.
+
+Both Electron launchers remove `ELECTRON_RUN_AS_NODE` only from the launch environment. Do not modify Pi's process policy to compensate for an Electron launcher variable. Electron's executable must be available before launch; a JS package install or successful renderer build alone does not prove native launch.
+
+## Ownership and source resolution
+
+- `apps/pi-client/src/core`: one-session Runtime/state/projection and Pi/OMP policy.
+- `src/host`: shared Registry, history discovery/pickers, bridge and finite `clientHost.ts` interface.
+- `src/shared`: serializable models and messages; `src/ui`: shared Svelte/browser implementation.
+- `apps/vscode`: real VS Code adapter/editor integration and native browser startup. `apps/desktop`: Electron adapter, Project navigation and finite preload.
+- `apps/pi-client/pi-extensions`: shared Pi-side tree/Question artifact sources; both products bundle them into their own output.
+
+Product TypeScript/Vite/Vitest/esbuild mappings resolve the same shared sources. Core/shared/host default package exports refer to built JS/declarations; UI exports Svelte/CSS source for the consuming browser build. Shared code declares its own runtime/type dependencies. Do not introduce stale copied implementations or a shared root barrel mixing browser and Node modules.
+
+Launch the extension with `.vscode/launch.json`. `build:debug` sets `FROSTPI_SOURCEMAP=1` for source maps/unminified Host output; regular production bundles stay minified for the bundle budget. Preserve remote workspace Extension Host placement.
+
+`packages/provider-usage` retains its independent credential/query engine; run its package-local scripts for changes there. Product versions still change only through the root version workflow; see [release](release.md).

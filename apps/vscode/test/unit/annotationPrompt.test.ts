@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAnnotationPrompt } from "../../src/webview/features/annotation-review/annotationPrompt.js";
-import type { ResponseAnnotation } from "../../src/webview/features/annotation-review/annotationReviewModel.js";
+import { formatAnnotationPrompt } from "$ui/features/annotation-review/annotationPrompt.js";
+import type { ResponseAnnotation } from "$ui/features/annotation-review/annotationReviewModel.js";
 
 describe("response annotation prompt", () => {
   it("emits the fixed envelope in source order and quotes every source line", () => {

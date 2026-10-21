@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { readSourceSelection } from "../../src/webview/features/annotation-review/annotationSelection.js";
+import { readSourceSelection } from "$ui/features/annotation-review/annotationSelection.js";
 
 describe("response source selection", () => {
   beforeEach(() => {

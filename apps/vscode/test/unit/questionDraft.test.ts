@@ -6,8 +6,8 @@ import {
   questionSubmission,
   saveCustomQuestionAnswer,
   selectQuestionOption,
-} from "../../src/webview/features/question-tool/questionDraft.js";
-import type { QuestionItem } from "../../src/shared/question-tool/questionToolProtocol.js";
+} from "$ui/features/question-tool/questionDraft.js";
+import type { QuestionItem } from "@frostime/pi-client/shared/question-tool/questionToolProtocol";
 
 const questions: QuestionItem[] = [
   { id: "scope", label: "Scope", prompt: "Choose scope", options: [{ value: "local", label: "Local" }] },

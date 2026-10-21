@@ -2,7 +2,8 @@
 title: UI Design Specification
 description: Cross-feature visual, layout, accessibility, theme, and user-owned interaction constraints.
 scope:
-  - /apps/vscode/src/webview/**
+  - /apps/pi-client/src/ui/**
+  - /apps/desktop/src/renderer/**
 updated: 2026-10-02
 ---
 
@@ -12,7 +13,7 @@ FrostPi uses a first-party VS Code visual language: compact, low-noise, keyboard
 
 ## Layout and theming
 
-- The FrostPi sidebar is the sole Session-management surface. Editor Session Tabs are restricted conversation projections: they omit the Session list, New/Resume, rename, close/restart, configuration, and diagnostics controls.
+- In VS Code, the FrostPi sidebar is the sole Session-management surface. Editor Session Tabs are restricted conversation projections: they omit the Session list, New/Resume, rename, close/restart, configuration, and diagnostics controls.
 - Externalizing the sidebar-selected Session keeps its sidebar header/navigation and replaces only conversation/Composer with a tab-reveal placeholder. Closing the tab restores conversation eligibility without affecting the Session process.
 - The complete shell remains usable at 280px width and under VS Code light, dark, and high-contrast themes; committed capabilities may wrap or move, but must not require horizontal scrolling.
 - Use semantic FrostPi variables mapped from VS Code variables. Respect editor zoom; avoid fixed widths, large shadows, gradients, and pill-heavy chrome.

@@ -7,7 +7,7 @@
 ```text
 双端共享架构验证（已完成技术验收）
     ↓
-预览体验与持久化取舍（当前：先请用户体验预览）
+预览体验与持久化取舍（当前：基础体验已反馈，修复兼容细节）
     ↓
 日常使用闭环（把临时预览补成能持续使用的 App）
     ↓
@@ -30,13 +30,13 @@
 证据：checkpoint `7c3f671`；824 项测试、双端构建、VSIX 校验、受控 Extension Host E2E、两个无关 Project 的 Electron smoke 通过。一次共享 UI 文案修改已进入双产出。真实本机 Pi 1.1.0 的共享 Runtime 发送、Abort、历史恢复、阻塞输入通过。GUI 自动化使用受控子进程，不能混称为完整真实 Pi GUI 验收。详见 [验证记录](refactor/desktop-client.RESULT.md)。
 
 [预览体验与持久化取舍] << CURRENT
-#WAITING: 先等待用户对现有 UI 加 Project 外壳的体验反馈，再逐项确认首版运行约定。
+#IN PROGRESS: 用户反馈两端最基础功能似乎可用，但 Desktop 有图标等细节问题；先收齐兼容/维护缺口，再逐项确认首版运行约定。
 REQUIRES [双端共享架构验证]: 有真实可运行的候选，而非假页面。
 
-现在请用户从仓库根目录运行：
+基础体验反馈已收到，不要求用户重复技术检查。后续从主目录启动/复测：
 
 ```bash
-pnpm --dir .worktrees/261019_desktop-bridge-inputs/apps/desktop start
+pnpm --dir apps/desktop start
 ```
 
 添加两个熟悉的目录，各 New 或 Resume 一个 Pi，切换查看。只判断：现有聊天/Header/输入框是否保持顺手；Project 与全部 Pi 导航是否适合替代终端多开；有没有缺少的关键操作或会话切换问题。不要求用户重跑技术检查或判断代码架构。
@@ -98,11 +98,11 @@ Agent 对照 TARGET-SPEC 汇总可执行证据和明确限制；用户判断它�
 
 | 位置 | 用途 |
 |---|---|
-| 主目录，`feat/desktop-host` | 控制脚本与 TARGET-SPEC；生产代码仍与本地 `main@2ed69c1` 相同 |
-| `.worktrees/261019_desktop-bridge-inputs`，`wip/desktop-client` | 唯一施工入口；已验证代码 checkpoint `7c3f671`，前一 checkpoint `367d295` |
+| 主目录，`feat/desktop-host` | **唯一施工入口**；已 squash 整合 `wip/desktop-client@7c3f671` 的产品代码，继续在此开发；控制脚本与 TARGET-SPEC 也在此维护 |
+| `.worktrees/261019_desktop-bridge-inputs`，`wip/desktop-client` | 整合前的冻结回退点，不再施工；checkpoint `7c3f671`，前一 checkpoint `367d295` |
 | `refactor/desktop-bridge-inputs@d551904` | 本轮施工前的 R1＋R2a 对照基线 |
 | `.worktrees/261011_desktop-host-boundary` | 旧 R1 对照，不继续维护另一条候选 |
 
 当前未合入 main、未改产品版本、未发布。施工中按可检查结果及时 checkpoint，避免长期大 working diff。其他分支的 ORCH 是快照；用 `git show feat/desktop-host:.dev/changes/desktop-host/desktop-host.ORCH.md` 取当前控制状态。
 
-开发/验证命令见施工候选的 `.dev/docs/development.md`、`.dev/docs/testing.md` 和 `apps/desktop/SPEC.md`。旧 R1/R2a 证据见 [原验证记录](refactor/ui-bridge-inputs.RESULT.md)；已退出活动目录的调研/Ticket/原型可从 `9a308d4` 追查，不作为当前指令。
+开发/验证命令见主目录的 `.dev/docs/development.md`、`.dev/docs/testing.md` 和 `apps/desktop/SPEC.md`。旧 R1/R2a 证据见 [原验证记录](refactor/ui-bridge-inputs.RESULT.md)；已退出活动目录的调研/Ticket/原型可从 `9a308d4` 追查，不作为当前指令。

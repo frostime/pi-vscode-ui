@@ -1,9 +1,9 @@
 import { get } from "svelte/store";
 import { describe, expect, it } from "vitest";
 
-import { applyComposerSeed } from "../../src/webview/features/composer/composerSeedClient.js";
-import { composerDrafts } from "../../src/webview/features/composer/composerDraftStore.svelte.js";
-import { updateDraft } from "../../src/webview/features/composer/composerDraftSync.js";
+import { applyComposerSeed } from "$ui/features/composer/composerSeedClient.js";
+import { composerDrafts } from "$ui/features/composer/composerDraftStore.svelte.js";
+import { updateDraft } from "$ui/features/composer/composerDraftSync.js";
 
 describe("host-validated Composer seed", () => {
   it("applies each host-validated Composer seed once", () => {

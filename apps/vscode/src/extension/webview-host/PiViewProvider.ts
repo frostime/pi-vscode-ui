@@ -23,7 +23,8 @@ export class PiViewProvider implements vscode.WebviewViewProvider {
     };
     webviewView.webview.html = createWebviewHtml(webviewView.webview, this.#extensionUri);
     this.#coordinator.attachSidebar({
-      webview: webviewView.webview,
+      postMessage: (message) => Promise.resolve(webviewView.webview.postMessage(message)),
+      onDidReceiveMessage: (listener) => webviewView.webview.onDidReceiveMessage(listener),
       surface: { kind: "sidebar" },
       isVisible: () => webviewView.visible,
       onDidChangeVisibility: (listener) => webviewView.onDidChangeVisibility(() => {

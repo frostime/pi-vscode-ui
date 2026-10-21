@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
-import { normalizeProxyEndpoint } from "./buildPiProcessEnvironment.js";
-import type { ProxyMode } from "./proxyConfiguration.js";
+import { normalizeProxyEndpoint } from "@frostime/pi-client/core/network/buildPiProcessEnvironment";
+import type { ProxyMode } from "@frostime/pi-client/core/network/proxyConfiguration";
 import type { ProxySecretStore } from "./ProxySecretStore.js";
 
 interface ProxyModeItem extends vscode.QuickPickItem {

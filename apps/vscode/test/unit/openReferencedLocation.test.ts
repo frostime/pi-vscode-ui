@@ -67,7 +67,7 @@ vi.mock("vscode", () => ({
   TextEditorRevealType: vscodeMock.TextEditorRevealType,
 }));
 
-vi.mock("../../src/extension/fd/WorkspaceFileSearch.js", () => ({
+vi.mock("@frostime/pi-client/host/file-search/WorkspaceFileSearch", () => ({
   WorkspaceFileSearch: class {
     readonly search = searchMock.search;
   },

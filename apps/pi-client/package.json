@@ -1,0 +1,49 @@
+{
+  "name": "@frostime/pi-client",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./core": { "types": "./dist/core/index.d.ts", "import": "./dist/core/index.js" },
+    "./core/*": { "types": "./dist/core/*.d.ts", "import": "./dist/core/*.js" },
+    "./host": { "types": "./dist/host/index.d.ts", "import": "./dist/host/index.js" },
+    "./host/*": { "types": "./dist/host/*.d.ts", "import": "./dist/host/*.js" },
+    "./shared": { "types": "./dist/shared/index.d.ts", "import": "./dist/shared/index.js" },
+    "./shared/*": { "types": "./dist/shared/*.d.ts", "import": "./dist/shared/*.js" },
+    "./ui": "./src/ui/ClientApp.svelte",
+    "./ui/*": "./src/ui/*"
+  },
+  "files": ["dist", "src/ui", "SPEC.md"],
+  "scripts": {
+    "build": "pnpm --filter @frostime/pi-rpc build && pnpm --filter @frostime/provider-usage build && node ../../scripts/clean-dir.mjs dist && tsc -p tsconfig.build.json",
+    "clean": "node ../../scripts/clean-dir.mjs dist coverage",
+    "typecheck": "tsc -p tsconfig.core.json --noEmit && tsc -p tsconfig.shared.json --noEmit && svelte-check --tsconfig ./tsconfig.ui.json",
+    "test": "vitest run",
+    "lint": "eslint src pi-extensions test --max-warnings 0"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.10.4",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.6",
+    "@frostime/pi-rpc": "workspace:*",
+    "@frostime/provider-usage": "workspace:*",
+    "@vscode/codicons": "^0.0.44",
+    "bits-ui": "^2.18.1",
+    "dompurify": "^3.4.12",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.18.1",
+    "markdown-it": "^14.3.0",
+    "mermaid": "^11.16.0",
+    "minimatch": "^10.2.5",
+    "svelte": "^5.56.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/katex": "^0.16.8",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^24.1.0",
+    "svelte-check": "^4.3.1",
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10"
+  }
+}

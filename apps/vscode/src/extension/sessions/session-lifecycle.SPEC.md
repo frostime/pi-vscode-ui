@@ -3,16 +3,16 @@ title: Pi Session Lifecycle
 description: Observable session ownership, authorization, state, persistence, concurrency, mutation, and recovery rules.
 scope:
   - /apps/vscode/src/extension/sessions/**
-  - /apps/vscode/src/extension/conversation/**
-  - /apps/vscode/src/extension/extension-ui/**
-updated: 2026-10-07
+  - /apps/pi-client/src/core/**
+  - /apps/pi-client/src/host/**
+updated: 2026-10-11
 ---
 
 # Pi Session Lifecycle
 
 ## Ownership and working directories
 
-One `SessionRuntime` owns exactly one live `pi --mode rpc` or selected compatibility-runtime `--mode rpc` process. The RPC package normalizes runtime-specific isomorphic event vocabulary before the runtime ingress; the session lifecycle consumes only the Pi-shaped contract. `SessionRegistry` owns runtimes, sidebar selection (`activeSessionId`), metadata persistence, and arbitrary per-Session views; the child runtime owns session JSONL and conversation persistence. The `oh-my-pi` compatibility profile is limited to FrostPi's launch, RPC, session discovery, and resume surface; it does not claim complete OMP support. Sidebar and editor-tab Webviews are disposable presentations and never control Runtime lifetime.
+The shared [client](../../../../pi-client/SPEC.md) supplies `SessionRuntime` and `SessionRegistry`; the VS Code adapter supplies workspace, storage and native integration services. This SPEC remains the VS Code behavior reference. One `SessionRuntime` owns exactly one live `pi --mode rpc` or selected compatibility-runtime `--mode rpc` process. The RPC package normalizes runtime-specific isomorphic event vocabulary before the runtime ingress; the session lifecycle consumes only the Pi-shaped contract. `SessionRegistry` owns runtimes, sidebar selection (`activeSessionId`), metadata persistence, and arbitrary per-Session views; the child runtime owns session JSONL and conversation persistence. The `oh-my-pi` compatibility profile is limited to FrostPi's launch, RPC, session discovery, and resume surface; it does not claim complete OMP support. Sidebar and editor-tab Webviews are disposable presentations and never control Runtime lifetime.
 
 New/Resume anchor to the active editor's workspace folder, otherwise the first folder. The anchor and existing non-bare, non-prunable worktrees of the same repository are allowed; a workspace opened below a worktree root maps that relative subdirectory into linked worktrees only when it exists. The Webview cannot provide a cwd.
 
@@ -36,7 +36,7 @@ stopped ─ request ─> queued ─> starting ─ handshake ─> ready ─ agent
 
 `failed` ends the current child process but leaves retryable metadata. Queued/starting sessions reject submission and model mutation while retaining session actions; running sessions keep the Composer editable and expose Stop. Prompt RPC success means accepted, not completed; only `agent_settled` returns a running session to ready.
 
-`agent_end` closes one model attempt, not necessarily the user turn. With `willRetry: true`, the session remains running and conversation projection keeps the pending assistant error in the same user turn; `auto_retry_start` supplies the transient retry notice. With `willRetry: false`, the pending error may become final. `agent_settled` is the completion boundary: Runtime returns the session to ready, refreshes persisted entries, and may issue the one normal-completion notification. Assistant protocol errors remain errors when no continuation succeeds, while a tool failure remains visible without by itself failing the whole turn. Unresolved tool semantics and finalization boundaries belong to [`conversation-projection.SPEC.md`](../conversation/conversation-projection.SPEC.md#unresolved-tool-results).
+`agent_end` closes one model attempt, not necessarily the user turn. With `willRetry: true`, the session remains running and conversation projection keeps the pending assistant error in the same user turn; `auto_retry_start` supplies the transient retry notice. With `willRetry: false`, the pending error may become final. `agent_settled` is the completion boundary: Runtime returns the session to ready, refreshes persisted entries, and may issue the one normal-completion notification. Assistant protocol errors remain errors when no continuation succeeds, while a tool failure remains visible without by itself failing the whole turn. Unresolved tool semantics and finalization boundaries belong to [`conversation-projection.SPEC.md`](../../../../pi-client/src/core/conversation/conversation-projection.SPEC.md#unresolved-tool-results).
 
 `abort` stops the current run and keeps the process. Process stop or connection failure first marks unresolved bound and preparing tools `cancelled`, preserving received arguments, then clears temporary assistant delta assembly. A restart cancels pending extension UI, stops the child, and starts Pi with the recorded session file; active streams, tools, pending requests, and partial assembly state do not survive. Disruptive explicit restart requires confirmation.
 
@@ -66,7 +66,7 @@ Failure or cancellation before Pi confirms commit preserves history and Composer
 
 ## Persistence
 
-FrostPi persists only local session id, title, cwd, Pi session-file path, last-updated time, and active session id. It excludes messages, reasoning, tool output, images, credentials, keys, worktree/branch data, and anchor folder. Restoration rebuilds conversation from Pi `get_entries`; see `apps/vscode/src/extension/conversation/conversation-projection.SPEC.md`.
+FrostPi persists only local session id, title, cwd, Pi session-file path, last-updated time, and active session id. It excludes messages, reasoning, tool output, images, credentials, keys, worktree/branch data, and anchor folder. Restoration rebuilds conversation from Pi `get_entries`; see `apps/pi-client/src/core/conversation/conversation-projection.SPEC.md`.
 
 ## Streaming queues and slash commands
 
@@ -84,10 +84,12 @@ OMP runtime slash support is bounded to discovered Markdown commands and skills.
 
 A resumed process may reach ready before history finishes. Automatic loading disables/rejects submission; events arriving during load are replayed after replacement. Custom message delivery events have no shared persisted ID: if they arrive during a history snapshot capture, Runtime captures entries again until no new custom deliveries occur during capture. The final snapshot therefore covers every buffered custom `message_end`, which is not replayed; all other buffered events retain their normal replay behavior. Files over 8 MiB defer full history until explicit load, and tree actions remain unavailable. Failed history/projection is retryable and does not fail the live process. Incremental/complete-entry authority belongs to the conversation projection SPEC.
 
-Blocking extension UI is session-owned and never auto-confirmed. It remains pending until response, Pi timeout, or explicit session cancellation; stop/close/restart cancels pending requests. Background owners are marked as requiring input. Detailed standard/Question behavior belongs to `apps/vscode/src/extension/extension-ui/extension-ui.SPEC.md`.
+Blocking extension UI is session-owned and never auto-confirmed. It remains pending until response, Pi timeout, or explicit session cancellation; stop/close/restart cancels pending requests. Background owners are marked as requiring input. Detailed standard/Question behavior belongs to `apps/pi-client/src/core/extension-ui/extension-ui.SPEC.md`.
 
 When notifications are enabled, only first pending input, transition to failed, and a normal turn closed by `agent_settled` notify; explicit abort, `/compact`, immediate extension commands, error turns, and repeated updates do not count as normal completion. A local Windows Extension Host may launch Windows PowerShell with fixed FrostPi notification text encoded as data; other hosts and native-delivery failures fall back to VS Code notifications.
 
 ## Recovery
+
+Runtime receives client identity, a live host-proxy reader, a read-only credential provider, and logging capabilities from its owner; it does not query VS Code APIs. The host-proxy reader is used both when refreshing restart-required state and when starting a process; it must not capture proxy settings at Runtime construction. Credential values are read only at process start.
 
 Executable, proxy, and process-environment changes apply only after start/restart. A failed runtime restarts from its stored session file. Missing, corrupt, or incompatible files fail visibly; FrostPi never silently creates an empty replacement under the same UI identity.

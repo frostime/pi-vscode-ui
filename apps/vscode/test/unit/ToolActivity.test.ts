@@ -5,8 +5,8 @@ import type {
   BoundToolCallView,
   PreparingToolCallView,
   ToolCallView,
-} from "../../src/shared/model/toolCallModel.js";
-import ToolActivity from "../../src/webview/features/conversation/ToolActivity.svelte";
+} from "@frostime/pi-client/shared/model/toolCallModel";
+import ToolActivity from "$ui/features/conversation/ToolActivity.svelte";
 
 /**
  * The card is pinned through its rendered markup instead of a mounted tree: the section set and

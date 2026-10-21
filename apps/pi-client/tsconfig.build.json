@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.core.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {},
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/core/**/*.ts", "src/host/**/*.ts", "src/shared/**/*.ts"],
+  "exclude": ["test"]
+}

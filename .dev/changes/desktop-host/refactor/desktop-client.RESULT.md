@@ -2,7 +2,7 @@
 
 ## 候选与范围
 
-- 实现：`wip/desktop-client@7c3f671`，位于 `.worktrees/261019_desktop-bridge-inputs`；前一 checkpoint 为 `367d295`。包含本地 `main@2ed69c1`，未合并 main、未改产品版本、未发布。
+- 原验证快照：`wip/desktop-client@7c3f671`，前一 checkpoint 为 `367d295`，包含本地 `main@2ed69c1`。产品代码现已 squash 整合进主目录 `feat/desktop-host`，后续在主目录开发；原 worktree 冻结作回退。未合并 main、未改产品版本、未发布。
 - `apps/pi-client` 的现有 UI、Runtime、Registry 和消息桥供两个产出实际消费。宿主需求集中在 `src/host/clientHost.ts`，VS Code 薄接线，Desktop 适配。
 - Desktop 是内存态开发预览：Project、设置和客户端元数据不跨应用重启保存。配置路径、Project 配置覆盖与正式关闭/恢复策略仍未定。
 
@@ -32,6 +32,10 @@ Svelte 保留基线中的一条可访问性警告（ExtensionUiRequestCard 的�
 结果全部通过。Pi 仍拥有会话文件；未修改用户项目或设置。验证关闭了自动扩展/skill/template 发现及 MCP，显式加载临时输入扩展；这不证明所有用户扩展组合。**真实 Pi 证据来自共享 Runtime；Electron GUI 路径的自动化使用受控子进程，两份证据不能混称为完整真人 GUI 验收。**
 
 临时证据：gate 日志 `G:/Enviroment/msys2/tmp/frostpi-gates.eJz95L/`；最终 Desktop smoke 的结果/截图在 `C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-smoke-ok5mYD/`；真实 Pi 结果在 `C:/Users/EEG/AppData/Local/Temp/frostpi-real-pi-6Wfr3w/`。这些是当时证据，不是运行依赖。
+
+## 后续审查发现
+
+用户已反馈两端最基础功能似乎可用，但 Desktop 的 `$(...)` 图标标签未解析。独立审查及源码核对还发现 Mermaid 产物路径不匹配、Desktop 字体规则被硬编码、设置默认值存在 manifest/fallback 双来源，以及受控 fixture 的 `get_state.isStreaming` 固定为 false。先前成功记录保留，但不能以一次旧 smoke 通过证明可重复的并发/Stop 隔离；需要修正 fixture 后重验。整合到主目录不表示这些问题已经修复。
 
 ## 尚未证明
 

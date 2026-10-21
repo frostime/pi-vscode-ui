@@ -76,6 +76,7 @@ describe("Session Webview coordination", () => {
       { error: vi.fn(), info: vi.fn() } as never,
       {} as never,
       () => Promise.resolve(undefined),
+      { createEventEmitter: <T>() => new vscodeMock.EventEmitter<T>() } as never,
     );
     const sidebarMessages: unknown[] = [];
     coordinator.attachSidebar(sidebarEndpoint(sidebarMessages) as never);
@@ -125,6 +126,7 @@ describe("Session Webview coordination", () => {
       { error: vi.fn(), info: vi.fn() } as never,
       {} as never,
       () => Promise.resolve(undefined),
+      { createEventEmitter: <T>() => new vscodeMock.EventEmitter<T>() } as never,
     );
     const sidebarMessages: unknown[] = [];
     coordinator.attachSidebar(sidebarEndpoint(sidebarMessages) as never);
@@ -194,7 +196,11 @@ function createPanel() {
 function sidebarEndpoint(messages: unknown[]) {
   return {
     surface: { kind: "sidebar" },
-    webview: webview(messages),
+    postMessage: (message: unknown) => {
+      messages.push(message);
+      return Promise.resolve(true);
+    },
+    onDidReceiveMessage: () => ({ dispose: vi.fn() }),
     isVisible: () => true,
     onDidChangeVisibility: () => ({ dispose: vi.fn() }),
   };

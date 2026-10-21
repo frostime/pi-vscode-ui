@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ELAPSED_TIMER_TOOLS, isElapsedTimerTool } from "../../src/webview/features/conversation/toolElapsedTimers.js";
+import { ELAPSED_TIMER_TOOLS, isElapsedTimerTool } from "$ui/features/conversation/toolElapsedTimers.js";
 
 describe("elapsed timer tool list", () => {
   it("matches the listed shell and code tools case-insensitively", () => {

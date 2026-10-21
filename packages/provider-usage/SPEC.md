@@ -21,6 +21,10 @@ environment map. It does not discover agent directories itself and has no
 
 ## Public surface
 
+`@frostime/provider-usage/types` exposes only serializable descriptor/result contracts.
+It has no Node transport, credential or filesystem dependency and is the entry used
+by shared bridge definitions. The root entry retains its existing type exports.
+
 - `resolveProviderCredentials(input)` — trusted Node output
   (`ReadyProviderCredential` with the real bearer token, or an explicit
   `UnavailableProviderCredential`). Never hand this result to browser code.

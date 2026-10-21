@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildProviderUsageEnvironment, DEFAULT_NO_PROXY } from "../../src/extension/network/buildPiProcessEnvironment.js";
+import { buildProviderUsageEnvironment, DEFAULT_NO_PROXY } from "@frostime/pi-client/core/network/buildPiProcessEnvironment";
 
 const proxyKeys = ["HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy"];
 const base: NodeJS.ProcessEnv = Object.fromEntries<string>([

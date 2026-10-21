@@ -2,8 +2,8 @@ import { basename, isAbsolute, resolve } from "node:path";
 
 import * as vscode from "vscode";
 
-import type { WorkspaceFileSearchOptions } from "../fd/fdArgs.js";
-import { WorkspaceFileSearch } from "../fd/WorkspaceFileSearch.js";
+import type { WorkspaceFileSearchOptions } from "@frostime/pi-client/host/file-search/fdArgs";
+import { WorkspaceFileSearch } from "@frostime/pi-client/host/file-search/WorkspaceFileSearch";
 
 export interface ReferencedLocation {
   path: string;

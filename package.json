@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "clean": "pnpm --filter @frostime/pi-rpc clean && pnpm --filter @frostime/provider-usage clean && pnpm --filter frostpi clean && node scripts/clean-dir.mjs artifacts",
+    "clean": "pnpm --filter @frostime/pi-rpc clean && pnpm --filter @frostime/provider-usage clean && pnpm --filter @frostime/pi-client clean && pnpm --filter frostpi clean && pnpm --filter @frostime/frostpi-desktop clean && node scripts/clean-dir.mjs artifacts",
     "version:set": "node scripts/version.mjs set",
     "version:check": "node scripts/version.mjs check",
     "typecheck": "node scripts/quality.mjs typecheck",

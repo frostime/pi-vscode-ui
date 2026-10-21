@@ -1,9 +1,9 @@
 import { render } from "svelte/server";
 import { describe, expect, it } from "vitest";
 
-import { ConversationProjection } from "../../src/extension/conversation/ConversationProjection.js";
-import type { AgentTurnView } from "../../src/shared/model/conversationModel.js";
-import AgentTurn from "../../src/webview/features/conversation/AgentTurn.svelte";
+import { ConversationProjection } from "@frostime/pi-client/core/conversation/ConversationProjection";
+import type { AgentTurnView } from "@frostime/pi-client/shared/model/conversationModel";
+import AgentTurn from "$ui/features/conversation/AgentTurn.svelte";
 
 describe("AgentTurn", () => {
   it("renders projected live mail while running, even with work-trace collapsing enabled", () => {

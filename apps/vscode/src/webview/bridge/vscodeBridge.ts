@@ -1,35 +1,33 @@
 import type { HostToWebviewMessage } from "$shared/bridge/hostToWebview";
-import { BRIDGE_VERSION } from "$shared/bridge/bridgeVersion";
-import type { WebviewToHostPayload } from "$shared/bridge/webviewToHost";
+import type { HostTransport } from "$ui/bridge/hostBridge";
 
-interface VsCodeApi<State = unknown> {
+interface VsCodeApi {
   postMessage(message: unknown): void;
-  getState(): State | undefined;
-  setState(state: State): void;
 }
 
 declare global {
   interface Window {
-    acquireVsCodeApi?: <State = unknown>() => VsCodeApi<State>;
+    acquireVsCodeApi?: () => VsCodeApi;
   }
 }
 
-const browserWindow = typeof window === "undefined" ? undefined : window;
-const api = browserWindow?.acquireVsCodeApi?.() ?? {
-  postMessage() {},
-  getState() {
-    return undefined;
-  },
-  setState() {},
-};
+let transport: HostTransport | undefined;
 
-export function postToHost(message: WebviewToHostPayload): void {
-  api.postMessage({ ...message, bridgeVersion: BRIDGE_VERSION });
-}
-
-export function onHostMessage(listener: (message: HostToWebviewMessage) => void): () => void {
-  if (!browserWindow) return () => {};
-  const handler = (event: MessageEvent<HostToWebviewMessage>) => listener(event.data);
-  browserWindow.addEventListener("message", handler);
-  return () => browserWindow.removeEventListener("message", handler);
+export function createVsCodeTransport(): HostTransport {
+  // VS Code permits one API acquisition per document; reconnecting the presentation reuses it.
+  if (transport) return transport;
+  const browserWindow = typeof window === "undefined" ? undefined : window;
+  if (!browserWindow?.acquireVsCodeApi) {
+    throw new Error("VS Code messaging API is unavailable. Open FrostPi inside VS Code.");
+  }
+  const api = browserWindow.acquireVsCodeApi();
+  transport = {
+    postMessage: (message) => api.postMessage(message),
+    onMessage: (listener) => {
+      const handler = (event: MessageEvent<HostToWebviewMessage>): void => listener(event.data);
+      browserWindow.addEventListener("message", handler);
+      return () => browserWindow.removeEventListener("message", handler);
+    },
+  };
+  return transport;
 }

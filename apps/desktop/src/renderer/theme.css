@@ -1,0 +1,33 @@
+/* Development palette: supplies the VS Code Webview environment without changing client CSS. */
+:root {
+  color-scheme: dark;
+  --vscode-sideBar-background: #181a1f;
+  --vscode-editor-background: #15171b;
+  --vscode-editorWidget-background: #202329;
+  --vscode-quickInput-background: #252930;
+  --vscode-list-hoverBackground: rgba(255,255,255,.06);
+  --vscode-list-activeSelectionBackground: rgba(80,120,220,.25);
+  --vscode-foreground: #d7dae0;
+  --vscode-descriptionForeground: #9298a4;
+  --vscode-widget-border: rgba(255,255,255,.11);
+  --vscode-input-background: #202329;
+  --vscode-input-border: rgba(255,255,255,.12);
+  --vscode-focusBorder: #4f87d9;
+  --vscode-button-background: #0e639c;
+  --vscode-button-hoverBackground: #1177bb;
+  --vscode-button-foreground: #fff;
+  --vscode-button-secondaryBackground: #3a3d41;
+  --vscode-button-secondaryHoverBackground: #45494e;
+  --vscode-errorForeground: #f48771;
+  --vscode-editorWarning-foreground: #cca700;
+  --vscode-testing-iconPassed: #73c991;
+  --vscode-textLink-foreground: #4daafc;
+  --vscode-textCodeBlock-background: rgba(10,12,16,.42);
+  --vscode-scrollbarSlider-background: rgba(121,121,121,.28);
+  --vscode-scrollbarSlider-hoverBackground: rgba(121,121,121,.45);
+  --vscode-badge-background: #0e639c;
+  --vscode-badge-foreground: #fff;
+  --vscode-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --vscode-editor-font-family: Consolas, monospace;
+  --vscode-font-size: 13px;
+}

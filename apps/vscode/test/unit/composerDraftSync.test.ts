@@ -1,13 +1,13 @@
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { WebviewToHostPayload } from "../../src/shared/bridge/webviewToHost.js";
+import type { WebviewToHostPayload } from "@frostime/pi-client/shared/bridge/webviewToHost";
 
 const bridge = vi.hoisted(() => ({ postToHost: vi.fn<(message: WebviewToHostPayload) => void>() }));
-vi.mock("../../src/webview/bridge/vscodeBridge.js", () => bridge);
+vi.mock("$ui/bridge/hostBridge.js", () => bridge);
 
-const { composerDrafts } = await import("../../src/webview/features/composer/composerDraftStore.svelte.js");
-const { applyHostDraft, prefixDraftText, updateDraft } = await import("../../src/webview/features/composer/composerDraftSync.js");
+const { composerDrafts } = await import("$ui/features/composer/composerDraftStore.svelte.js");
+const { applyHostDraft, prefixDraftText, updateDraft } = await import("$ui/features/composer/composerDraftSync.js");
 
 describe("Webview Composer draft synchronization", () => {
   beforeEach(() => {

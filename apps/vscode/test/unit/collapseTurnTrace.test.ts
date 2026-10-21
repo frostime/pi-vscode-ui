@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import type { AgentTurnItemView, AgentTurnView } from "../../src/shared/model/conversationModel.js";
+import type { AgentTurnItemView, AgentTurnView } from "@frostime/pi-client/shared/model/conversationModel";
 import {
   formatTraceSummaryLabel,
   formatDurationMs,
   formatTurnDuration,
   planTurnItems,
   turnStateLabel,
-} from "../../src/webview/features/conversation/collapseTurnTrace.js";
+} from "$ui/features/conversation/collapseTurnTrace.js";
 
 describe("planTurnItems", () => {
   it("keeps running turns flat so live tools remain visible", () => {

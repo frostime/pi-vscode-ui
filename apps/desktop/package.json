@@ -1,0 +1,29 @@
+{
+  "name": "@frostime/frostpi-desktop",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "node build.mjs && vite build",
+    "clean": "node ../../scripts/clean-dir.mjs dist coverage",
+    "start": "node scripts/start.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && svelte-check --tsconfig ./tsconfig.renderer.json",
+    "lint": "eslint src test --max-warnings 0",
+    "test": "vitest run",
+    "test:smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "@frostime/pi-client": "workspace:*",
+    "@vscode/codicons": "^0.0.44",
+    "svelte": "^5.56.5"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "@types/node": "^24.1.0",
+    "electron": "44.9.0",
+    "esbuild": "^0.28.0",
+    "svelte-check": "^4.3.1",
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10"
+  }
+}
