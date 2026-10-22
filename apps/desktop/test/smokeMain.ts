@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { app } from "electron";
+import { app, type WebContents } from "electron";
 import { createDesktopApp } from "../src/main/createDesktopApp.js";
 import { DesktopSettingsStore } from "../src/main/settings/DesktopSettingsStore.js";
 
@@ -18,6 +18,11 @@ async function until(check: () => boolean | Promise<boolean>, label: string): Pr
     await new Promise((resolve) => setTimeout(resolve, 30));
   }
   throw new Error(`Desktop smoke timed out: ${label}`);
+}
+
+async function closeSettings(browser: WebContents): Promise<void> {
+  await browser.executeJavaScript("document.querySelector('dialog[aria-labelledby=\"settings-title\"] header button').click()");
+  await until(() => browser.executeJavaScript("!document.querySelector('#settings-title')"), "settings modal closes");
 }
 
 async function verifySettingsSetup(): Promise<void> {
@@ -73,6 +78,28 @@ async function verifySettingsSetup(): Promise<void> {
   }
 }
 
+async function verifyStartupSettingsEntries(): Promise<void> {
+  const store = await DesktopSettingsStore.open(join(directory, "startup-settings/settings.json"));
+  const missingExecutable = join(directory, "missing-pi-executable");
+  await store.replace({ "frostpi.pi.executable": missingExecutable });
+  const desktop = await createDesktopApp({ settingsStore: store, directories: [join(directory, "project-a")], show: false });
+  const browser = desktop.window.webContents;
+  try {
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('.onboarding-actions .primary'))"), "failure fixture New action");
+    await browser.executeJavaScript("document.querySelector('.onboarding-actions .primary').click()");
+    await until(() => browser.executeJavaScript("document.querySelector('.onboarding-view h1')?.textContent==='Pi could not start'"), "real failed startup presentation");
+    await browser.executeJavaScript("[...document.querySelectorAll('.onboarding-actions button')].find(b=>b.textContent.includes('Configure Pi')).click()");
+    await until(() => browser.executeJavaScript("document.activeElement?.id==='setting-frostpi.pi.executable'"), "Configure Pi focuses existing executable setting");
+    assert.equal(store.values["frostpi.pi.executable"], missingExecutable);
+    await closeSettings(browser);
+    await browser.executeJavaScript("[...document.querySelectorAll('.onboarding-actions button')].find(b=>b.textContent.trim()==='Settings').click()");
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('#settings-title'))"), "failed startup Settings opens Desktop settings");
+    assert.equal(store.values["frostpi.pi.executable"], missingExecutable);
+  } finally {
+    await desktop.dispose(); desktop.window.destroy();
+  }
+}
+
 void app.whenReady().then(async () => {
   const settingsStore = await DesktopSettingsStore.open(join(directory, "electron-profile/settings.json"));
   await settingsStore.replace({
@@ -107,6 +134,20 @@ void app.whenReady().then(async () => {
     await desktop.registry.sendPrompt(b, "commit project B", []);
     await until(() => desktop.registry.sessionView(b)?.status === "ready", "Project B committed");
     assert.equal(desktop.registry.snapshot().sessions.length, 2);
+    await browser.executeJavaScript("document.querySelector('[aria-label=\"Session actions\"]').click()");
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('.session-menu'))"), "session actions menu opens");
+    const actions = await browser.executeJavaScript("document.querySelector('.session-menu').textContent") as string;
+    assert.doesNotMatch(actions, /Export diagnostics|Open in editor tab/);
+    await browser.executeJavaScript("[...document.querySelectorAll('.session-menu button')].find(b=>b.textContent.includes('Network & proxy')).click()");
+    await until(() => browser.executeJavaScript("document.activeElement?.id==='setting-frostpi.network.proxy.mode'"), "shared proxy menu focuses Desktop proxy mode");
+    await closeSettings(browser);
+    await browser.executeJavaScript("document.querySelector('[aria-label=\"Session actions\"]').click()");
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('.session-submenu-trigger'))"), "extensions menu entry appears");
+    await browser.executeJavaScript("document.querySelector('.session-submenu-trigger').click()");
+    await until(() => browser.executeJavaScript("[...document.querySelectorAll('.session-menu button')].some(b=>b.textContent.includes('Question tool'))"), "Question tool entry appears");
+    await browser.executeJavaScript("[...document.querySelectorAll('.session-menu button')].find(b=>b.textContent.includes('Question tool')).click()");
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('#settings-title'))"), "shared Question tool menu opens Desktop settings");
+    await closeSettings(browser);
     const resume = desktop.registry.resumeSession();
     await until(() => browser.executeJavaScript("Boolean(document.querySelector('dialog .codicon-folder-opened'))"), "native QuickPick icon-label rendering");
     const labelRendering: unknown = await browser.executeJavaScript("({rawMarker:document.querySelector('dialog').textContent.includes('$('),glyph:getComputedStyle(document.querySelector('dialog .codicon-folder-opened'),'::before').content!=='none'})");
@@ -170,7 +211,8 @@ void app.whenReady().then(async () => {
     desktop.window.destroy();
   }
   await verifySettingsSetup();
-  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true }));
+  await verifyStartupSettingsEntries();
+  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true, sharedSettingsEntryPoints: true, actualDesktopCapabilities: true }));
   app.exit(0);
 }).catch((error: unknown) => {
   writeFileSync(join(directory, "result.json"), JSON.stringify({ ok: false, error: error instanceof Error ? error.message : "Smoke failure" }));

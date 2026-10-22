@@ -55,7 +55,14 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     const result = await dialog.showOpenDialog(window, { title: "Add Project", properties: ["openDirectory"] });
     if (!result.canceled && result.filePaths[0]) await projects.addProject(result.filePaths[0]);
   };
-  const host = createDesktopHost({ window, projects, interactions, openFolder: addProject, settingsStore });
+  const host = createDesktopHost({
+    window, projects, interactions, openFolder: addProject, settingsStore,
+    openSettings: (target) => {
+      if (window.isDestroyed()) return Promise.reject(new DesktopSettingsError("The Desktop settings window is closed."));
+      window.webContents.send("frostpi:settings:open", target);
+      return Promise.resolve();
+    },
+  });
   const registry = new SessionRegistry(host, {
     logger,
     sessionTreeArtifactPath: join(__dirname, "pi-extensions/session-tree.js"),

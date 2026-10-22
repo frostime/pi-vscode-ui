@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { VSCODE_CLIENT_UI_CAPABILITIES } from "@frostime/pi-client/shared/model/clientUiCapabilities";
 
 import type {
   ClientHost,
@@ -37,6 +38,7 @@ export function createClientHost(
   inputs: ClientHostInputs,
 ): ClientHost {
   return {
+    capabilities: VSCODE_CLIENT_UI_CAPABILITIES,
     createEventEmitter: <T>() => new vscode.EventEmitter<T>(),
     clientVersion: () =>
       (vscode.extensions.getExtension("frostime.frostpi")?.packageJSON as { version?: string } | undefined)?.version ?? "unknown",

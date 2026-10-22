@@ -71,12 +71,13 @@ REQUIRES [预览体验与持久化取舍]: 已确认使用方向与运行约定�
 验收：两个无关 Project 中真实 Pi 经常规 GUI 路径可并行使用；切换不丢草稿/串输入；退出及重开符合已确认规则；用户无需编辑源码才能完成必要配置。Agent 准备技术证据，用户只判断日常操作是否顺手。
 
 [主插件兼容与双产出维护验收]
-#TODO: 自动证据已有基础，仍需最终候选的插件实测与长期维护边界验收。
+#IN PROGRESS: 已提前完成共享设置入口、产品命令归属、四项静态 UI 能力与有边界的适配测试，维护导航已落地。当前 872 项测试、双端构建、VSIX 与增强 Desktop smoke 通过；最终候选的插件 GUI/E2E 与主题/工作区体验验收仍未完成。
 REQUIRES [双端共享架构验证]: 两端确实消费同一实现。本节点可在 Desktop 补全期间提前开展。
 
 - 由 Agent 维护依赖/类型/兼容检查：通用 UI 改一处进入双端；客户端新增宿主依赖必须经过集中 interface；不兼容项显式暴露。
 - 验证插件可独立构建和开发，无需启动 Desktop；VS Code 专属能力不受 Desktop 最低公共能力限制。
-- 维护规则收齐后增加 `.agents/skills/dual-maintenance/SKILL.md`，说明改动分类、源码归属、适配与最小检查；引用 SPEC/实际命令，不另写一份架构政策，不替代机械检查。
+- 已增加 [dual-maintenance](../../../.agents/skills/dual-maintenance/SKILL.md)，按改动类型路由源码归属、适配与最小检查，并引用 SPEC/实际命令及验证证据边界；不另写平行架构政策，不替代机械检查。
+- Host 与 renderer 使用同一产品能力常量。真实宿主绑定测试、指定入口的合成能力 DOM 测试及 native smoke 分别验证不同边界，不把函数存在或 bundle 字符串包含冒充语义正确/不存在复制的证明。Desktop 设置入口已接线；文件引用保留只读表现、诊断导出隐藏，缺失方法仍由 dispatcher 明确拒绝。
 - 在最终候选中回归插件的会话、工作区、编辑器标签页、草稿交接及 light/dark/high-contrast、280px 表现。Agent 自动验证；需要用户判断的部分提供候选和短检查项。
 - 整合前核对 main；若 main 前进，必须同步实际施工代码并重验，不能只更新控制文档。
 
@@ -101,7 +102,7 @@ Agent 对照 TARGET-SPEC 汇总可执行证据和明确限制；用户判断它�
 
 | 位置 | 用途 |
 |---|---|
-| 主目录，`feat/desktop-host` | **唯一施工入口**；`e2cdae9` 已 squash 整合 WIP，基础兼容 checkpoint `d0dbc29`，后续设置默认值收尾见 RESULT；控制脚本与 TARGET-SPEC 也在此维护 |
+| 主目录，`feat/desktop-host` | **唯一施工入口**；`e2cdae9` 已 squash 整合 WIP，基础兼容 checkpoint `d0dbc29`，后续设置与双端维护收尾见 RESULT；控制脚本与 TARGET-SPEC 也在此维护 |
 | `.worktrees/261019_desktop-bridge-inputs`，`wip/desktop-client` | 整合前的冻结回退点，不再施工；checkpoint `7c3f671`，前一 checkpoint `367d295` |
 | `refactor/desktop-bridge-inputs@d551904` | 本轮施工前的 R1＋R2a 对照基线 |
 | `.worktrees/261011_desktop-host-boundary` | 旧 R1 对照，不继续维护另一条候选 |

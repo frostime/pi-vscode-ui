@@ -1,6 +1,7 @@
 import type { ProxyCredentialsProvider } from "../core/network/proxyCredentials.js";
 import type { WebviewToHostMessage } from "../shared/bridge/webviewToHost.js";
 import type { EditorMentionSpecialView } from "../shared/model/workspaceFileModel.js";
+import type { ClientUiCapabilities } from "../shared/model/clientUiCapabilities.js";
 
 /** The webview "open a referenced file" message, parsed by the host's editor service. */
 export type HostOpenFileMessage = Extract<WebviewToHostMessage, { type: "openFile" }>;
@@ -141,6 +142,8 @@ export interface HostEditorService {
  * without importing `vscode`.
  */
 export interface ClientHost {
+  /** Static presentation support, not authorization; real action guards remain mandatory. */
+  readonly capabilities: ClientUiCapabilities;
   createEventEmitter<T>(): HostEventEmitter<T>;
   /** Bundled client version, e.g. the VSIX version; "unknown" is acceptable. */
   clientVersion(): string;

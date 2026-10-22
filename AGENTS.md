@@ -18,6 +18,7 @@ For commands where only the result matters, print only the tail or even just the
 ## Navigation
 
 - When you know **what** feature to change but not **where**: start with [`.dev/docs/feature-map.md`](.dev/docs/feature-map.md) — feature→code index.
+- For extension/shared-client/Desktop maintenance, use [dual-maintenance](.agents/skills/dual-maintenance/SKILL.md) to route ownership, adaptation and focused verification.
 
 ## Maintenance
 

@@ -9,10 +9,12 @@
   import VscodeLabel from "./VscodeLabel.svelte";
   import { quickPickMatches } from "./quickPick.js";
   import SettingsPanel from "./SettingsPanel.svelte";
-  import { desktopSettingDefinitions, type DesktopSettingsAction, type DesktopSettingsView } from "../shared/desktopSettings.js";
+  import { desktopSettingDefinitions, type DesktopSettingsAction, type DesktopSettingsTarget, type DesktopSettingsView } from "../shared/desktopSettings.js";
+  import { DESKTOP_CLIENT_UI_CAPABILITIES } from "../shared/desktopCapabilities.js";
 
   let settingsView = $state<DesktopSettingsView | null>(null);
   let settingsOpen = $state(false);
+  let settingsTarget = $state<DesktopSettingsTarget>("all");
   let settingsBusy = $state(false);
   let settingsError = $state("");
 
@@ -25,7 +27,7 @@
   });
 
   const commands: LocalComposerCommands = {
-    completions: (items) => withFrostPiCommands(items).filter((item) => item.name !== "editor"),
+    completions: (items) => withFrostPiCommands(items),
     handle: ({ text, hasImages }) => !hasImages && text.trim() === "/resume"
       ? { draft: "clear", execute: () => postToHost({ type: "resumeSession" }) }
       : undefined,
@@ -39,13 +41,20 @@
       if (changed) input = value?.kind === "input" ? value.value : "";
     });
     const unsubscribeSettings = window.frostpiDesktop.onSettings(applySettings);
+    const unsubscribeOpenSettings = window.frostpiDesktop.onOpenSettings(showSettings);
     void window.frostpiDesktop.settings({ type: "read" }).then((view) => {
       applySettings(view);
       settingsOpen = view.firstRun || Boolean(view.error);
     }).catch(() => { settingsError = "Could not load Desktop settings."; });
     window.frostpiDesktop.requestProjects();
-    return () => { unsubscribeProjects(); unsubscribeDialog(); unsubscribeSettings(); };
+    return () => { unsubscribeProjects(); unsubscribeDialog(); unsubscribeSettings(); unsubscribeOpenSettings(); };
   });
+
+  function showSettings(target: DesktopSettingsTarget = "all"): void {
+    settingsTarget = target;
+    settingsOpen = true;
+    void settingsAction({ type: "read" });
+  }
 
   function applySettings(view: DesktopSettingsView): void {
     settingsView = view;
@@ -93,17 +102,17 @@
         <StatusDot status={session.status} /><span>{session.title}</span>{#if session.requiresUserInput}<span aria-label="Needs input">!</span>{/if}
       </button>
     {/each}
-    <button type="button" class="settings-button" onclick={() => { settingsOpen = true; void settingsAction({ type: "read" }); }}>Settings</button>
+    <button type="button" class="settings-button" onclick={() => showSettings()}>Settings</button>
     {#if settingsError && !settingsOpen}<p role="alert">{settingsError}</p>{/if}
     <p class="preview-note">Development preview. Settings are saved; Projects and open Pi lists are not restored after exit.</p>
   </aside>
   <div class="client-region">
-    <ClientApp localComposerCommands={commands} capabilities={{ sessionEditorTabs: false, editorMentionSpecials: false }} />
+    <ClientApp localComposerCommands={commands} capabilities={DESKTOP_CLIENT_UI_CAPABILITIES} />
   </div>
 </div>
 
 {#if settingsOpen && settingsView}
-  <SettingsPanel view={settingsView} busy={settingsBusy} error={settingsError} onaction={settingsAction} onclose={() => settingsOpen = false} />
+  <SettingsPanel view={settingsView} target={settingsTarget} busy={settingsBusy} error={settingsError} onaction={settingsAction} onclose={() => settingsOpen = false} />
 {/if}
 
 {#if request}

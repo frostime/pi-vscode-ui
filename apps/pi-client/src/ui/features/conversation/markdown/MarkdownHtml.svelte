@@ -1,5 +1,6 @@
 <script lang="ts">
   import { postToHost } from "../../../bridge/hostBridge";
+  import { clientCapabilities } from "../../../state/clientCapabilities.svelte";
   import { ensureKatex, isKatexReady, renderMarkdownHtml } from "./renderMarkdown";
   import { mountMarkdownImages } from "./mountMarkdownImages";
 
@@ -24,6 +25,21 @@
   const html = $derived.by(() => {
     void katexGeneration;
     return renderMarkdownHtml(content);
+  });
+
+  $effect(() => {
+    const root = container;
+    if (!root) return;
+    void html;
+    for (const anchor of root.querySelectorAll("a[data-file-path]")) {
+      if ($clientCapabilities.openReferencedLocation) {
+        anchor.setAttribute("href", "#");
+        anchor.removeAttribute("aria-disabled");
+      } else {
+        anchor.removeAttribute("href");
+        anchor.setAttribute("aria-disabled", "true");
+      }
+    }
   });
 
   // ---- Code-block actions ----
@@ -130,6 +146,7 @@
     const path = anchor?.getAttribute("data-file-path");
     if (path) {
       event.preventDefault();
+      if (!$clientCapabilities.openReferencedLocation) return;
       const line = positiveInteger(anchor?.getAttribute("data-file-line"));
       const column = positiveInteger(anchor?.getAttribute("data-file-column"));
       const endLine = positiveInteger(anchor?.getAttribute("data-file-end-line"));
@@ -162,3 +179,11 @@
 </script>
 
 <div class="markdown-body" use:linkActions bind:this={container}>{@html html}</div>
+
+<style>
+  .markdown-body :global(a[data-file-path][aria-disabled="true"]) {
+    color: inherit;
+    text-decoration: none;
+    cursor: text;
+  }
+</style>

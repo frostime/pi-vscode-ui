@@ -42,6 +42,9 @@ export const desktopSettingDefinitions: Record<string, SettingDefinition> = {
   ...desktopOnlySettingDefinitions,
 };
 
+/** Main chooses one known field; this is not a renderer-supplied path or VS Code search grammar. */
+export type DesktopSettingsTarget = "all" | "frostpi.network.proxy.mode" | "frostpi.pi.executable";
+
 export interface DesktopSettingsView {
   values: DesktopSettingsValues;
   filePath: string;

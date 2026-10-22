@@ -1,4 +1,5 @@
 import { EditorView } from "@codemirror/view";
+import { currentCompletions, startCompletion } from "@codemirror/autocomplete";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import { tick } from "svelte";
 import { get } from "svelte/store";
@@ -55,6 +56,7 @@ beforeEach(() => {
   composerDrafts.set({});
   promptSubmissionResult.set(null);
   toastStore.set([]);
+  presentationStore.set(EMPTY_PRESENTATION);
   bridge.post.mockReset();
 });
 afterEach(() => cleanup());
@@ -96,6 +98,31 @@ describe("explicit Composer host inputs", () => {
     expect(bridge.post).not.toHaveBeenCalled();
   });
 
+  it.each([true, false])("keeps VS Code command ownership and ordering with resume allowed: %s", (allowResume) => {
+    const commands = createVsCodeComposerCommands({ allowResume: () => allowResume }).completions([
+      { name: "compact", source: "extension" },
+      { name: "editor", source: "extension" },
+      { name: "resume", source: "extension" },
+      { name: "inspect", source: "prompt" },
+    ]);
+    expect(commands.map(({ name, source }) => ({ name, source }))).toEqual([
+      { name: "compact", source: "frostpi" },
+      { name: "editor", source: "frostpi" },
+      ...(allowResume ? [{ name: "resume", source: "frostpi" }] : []),
+      { name: "inspect", source: "prompt" },
+    ]);
+  });
+
+  it.each([false, true])("keeps the actual editor completion list selected by its product adapter (panel=%s)", async (panel) => {
+    setDraft("session", "webview", { text: "/", images: [] });
+    const view = composer(panel, createVsCodeComposerCommands({ allowResume: () => !panel }));
+    const editor = EditorView.findFromDOM(view.container.querySelector(".cm-editor")!)!;
+    editor.dispatch({ selection: { anchor: 1 } });
+    startCompletion(editor);
+    await waitFor(() => expect(currentCompletions(editor.state).map((item) => item.label))
+      .toEqual(panel ? ["/compact", "/editor"] : ["/compact", "/editor", "/resume"]));
+  });
+
   it("derives panel resume rejection from the presentation surface without test overrides", () => {
     presentationStore.set({ ...EMPTY_PRESENTATION, surface: { kind: "panel", sessionId: "session" } });
     const commands = createVsCodeComposerCommands();
@@ -106,16 +133,18 @@ describe("explicit Composer host inputs", () => {
     expect(bridge.post).not.toHaveBeenCalled();
   });
 
-  it("replaces editor text before host dispatch while retaining images; image resume stays an ordinary prompt", async () => {
+  it.each([false, true])("replaces editor text before dispatch and retains images in panel: %s; image resume stays a prompt", async (panel) => {
     setDraft("session", "webview", { text: "/editor\u2003replacement", images: [image] });
     let draftAtOpen: unknown;
     bridge.post.mockImplementation((message) => {
       if (message.type === "openComposerEditor") draftAtOpen = getDraft("session");
     });
-    const view = composer(true);
+    const view = composer(panel);
     await fireEvent.click(view.getByRole("button", { name: "Send to Pi" }));
     expect(draftAtOpen).toMatchObject({ text: "replacement", images: [image] });
-    expect(bridge.post.mock.calls.map(([message]) => message.type)).toEqual(["updateComposerDraft", "openComposerEditor"]);
+    expect(bridge.post.mock.calls.map(([message]) => message.type)).toEqual(
+      panel ? ["updateComposerDraft", "openComposerEditor"] : ["openComposerEditor"],
+    );
     expect(bridge.post).toHaveBeenLastCalledWith({ type: "openComposerEditor", sessionId: "session", text: "replacement" });
     setDraft("session", "webview", { text: "/resume", images: [image] });
     await tick();

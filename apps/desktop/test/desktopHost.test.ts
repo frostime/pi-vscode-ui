@@ -22,6 +22,8 @@ import type { DesktopInteractions } from "../src/main/dialogs.js";
 import { createDesktopHost } from "../src/main/desktopHost.js";
 import { DesktopProjects } from "../src/main/desktopProjects.js";
 import { DesktopSettingsStore } from "../src/main/settings/DesktopSettingsStore.js";
+import { DESKTOP_CLIENT_UI_CAPABILITIES } from "../src/shared/desktopCapabilities.js";
+import type { DesktopSettingsTarget } from "../src/shared/desktopSettings.js";
 
 /** Property-shaped structural stub; methods would trip the unbound-method lint rule on mock refs. */
 interface StubInteractions {
@@ -48,6 +50,29 @@ async function projectsWithRoots(roots: string[]): Promise<DesktopProjects> {
 }
 
 describe("createDesktopHost", () => {
+  it("uses the product's real UI declaration and does not pretend unsupported editor/export operations exist", () => {
+    const host = createDesktopHost({ window: () => null, projects: new DesktopProjects(), interactions: interactions() as unknown as DesktopInteractions });
+    // Independent of synthetic all-false DOM tests: this checks the actual Desktop assembly.
+    expect(host.capabilities).toBe(DESKTOP_CLIENT_UI_CAPABILITIES);
+    expect(host.capabilities).toEqual({ sessionEditorTabs: false, editorMentionSpecials: false, openReferencedLocation: false, exportDiagnostics: false });
+    expect("openReferencedLocation" in host.editor).toBe(false);
+    expect("exportDiagnostics" in host).toBe(false);
+  });
+
+  it("routes supported settings actions to known fields and explicitly rejects unsupported search queries", async () => {
+    const targets: DesktopSettingsTarget[] = [];
+    const host = createDesktopHost({
+      window: () => null, projects: new DesktopProjects(), interactions: interactions() as unknown as DesktopInteractions,
+      openSettings: (target) => { targets.push(target); return Promise.resolve(); },
+    });
+    await host.editor.openSettings!("@ext:frostime.frostpi");
+    await host.editor.openProxySettings!();
+    await host.editor.configurePiExecutable!();
+    expect(targets).toEqual(["all", "frostpi.network.proxy.mode", "frostpi.pi.executable"]);
+    expect(() => host.editor.openSettings!("not-a-supported-query")).toThrow("not supported");
+    expect(targets).toHaveLength(3);
+  });
+
   it("translates VS Code file filters to Electron's native dialog shape", async () => {
     const window = { isDestroyed: () => false };
     native.openDialog.mockResolvedValueOnce({ canceled: false, filePaths: ["/selected/session.jsonl"] });

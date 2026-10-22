@@ -33,7 +33,7 @@ Read [architecture overview](architecture/overview.md) for process and dependenc
 
 ## Host interface and presentation bridge
 
-- Finite injected VS Code-shaped services: `apps/pi-client/src/host/clientHost.ts`. Real implementation: `apps/vscode/src/extension/clientHost.ts`; Desktop translation: `apps/desktop/src/main/desktopHost.ts`.
+- Finite injected VS Code-shaped services: `apps/pi-client/src/host/clientHost.ts`. Real implementation: `apps/vscode/src/extension/clientHost.ts`; Desktop translation: `apps/desktop/src/main/desktopHost.ts`. Static UI support is declared in `src/shared/model/clientUiCapabilities.ts` with Desktop's value in `apps/desktop/src/shared/desktopCapabilities.ts`; each product uses its same value in Host and browser entry.
 - Shared authorization/dispatch/synchronization/drafts: `apps/pi-client/src/host/bridge/`; start with `WebviewConnection.ts`, `WebviewActionDispatcher.ts`, `ComposerDraftCache.ts`.
 - Shared browser bridge and presentation state: `apps/pi-client/src/ui/bridge/` and `state/`.
 - VS Code sidebar/tab assembly: `apps/vscode/src/extension/webview-host/SessionWebviewCoordinator.ts` and `SessionPanelManager.ts`; native browser transport: `src/webview/bridge/vscodeBridge.ts`.

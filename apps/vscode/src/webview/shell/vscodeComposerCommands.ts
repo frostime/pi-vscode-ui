@@ -1,9 +1,18 @@
+import type { RpcCommandDescriptor } from "@frostime/pi-rpc";
 import { get } from "svelte/store";
 
 import { postToHost } from "$ui/bridge/hostBridge";
 import { composerEditorPrefill } from "$ui/features/composer/editorCommand";
-import { withFrostPiCommands, type LocalComposerCommands } from "$ui/features/composer/frostPiCommands";
+import {
+  FROSTPI_COMPACT_COMMAND, FROSTPI_RESUME_COMMAND, withFrostPiCommands, type LocalComposerCommands,
+} from "$ui/features/composer/frostPiCommands";
 import { presentationStore, showToast } from "$ui/state/sessionViewStore.svelte";
+
+const VSCODE_COMPOSER_COMMANDS: readonly RpcCommandDescriptor[] = [
+  FROSTPI_COMPACT_COMMAND,
+  { name: "editor", description: "Edit the composer draft in a VS Code tab", source: "frostpi" },
+  FROSTPI_RESUME_COMMAND,
+];
 
 function allowResume(): boolean {
   // The panel surface never offers session resuming; the sidebar owns it.
@@ -16,7 +25,11 @@ export function createVsCodeComposerCommands(
 ): LocalComposerCommands {
   const resumeAllowed = allowResumeOverride ?? allowResume;
   return {
-    completions: (commands) => withFrostPiCommands(commands, resumeAllowed()),
+    completions(commands) {
+      const completions = withFrostPiCommands(commands, VSCODE_COMPOSER_COMMANDS);
+      // Panel handling still owns /resume, so hide it only after replacing same-named Pi commands.
+      return resumeAllowed() ? completions : completions.filter((command) => command.name !== "resume");
+    },
     handle({ sessionId, text, hasImages }) {
       if (!hasImages && text.trim() === "/resume") {
         return resumeAllowed()

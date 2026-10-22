@@ -836,7 +836,7 @@ process.on("SIGTERM", () => process.exit(0));
     await waitFor(() => hostMocks.systemToast.mock.calls.length === 3);
     expect(hostMocks.systemToast).toHaveBeenLastCalledWith(
       "FrostPi needs your attention",
-      "A FrostPi session failed. Open VS Code for details.",
+      "A FrostPi session failed. Open the session for details.",
     );
     expect(hostMocks.showError).not.toHaveBeenCalled();
   });

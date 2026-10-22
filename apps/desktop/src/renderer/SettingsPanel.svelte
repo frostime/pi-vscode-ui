@@ -1,13 +1,29 @@
 <script lang="ts">
-  import { desktopSettingDefinitions, type DesktopSettingsAction, type DesktopSettingsView, type SettingDefinition } from "../shared/desktopSettings.js";
+  import { desktopSettingDefinitions, type DesktopSettingsAction, type DesktopSettingsTarget, type DesktopSettingsView, type SettingDefinition } from "../shared/desktopSettings.js";
 
-  let { view, busy, error, onaction, onclose }: {
+  let { view, target = "all", busy, error, onaction, onclose }: {
     view: DesktopSettingsView;
+    target?: DesktopSettingsTarget;
     busy: boolean;
     error?: string;
     onaction: (action: DesktopSettingsAction) => Promise<void>;
     onclose: () => void;
   } = $props();
+
+  let panel = $state<HTMLDialogElement>();
+  let focusedTarget: DesktopSettingsTarget | undefined;
+  $effect(() => {
+    const element = panel;
+    const requested = target;
+    if (!element || busy || requested === "all" || focusedTarget === requested) return;
+    queueMicrotask(() => {
+      if (!element.isConnected) return;
+      const field = element.ownerDocument.getElementById(`setting-${requested}`);
+      field?.focus();
+      field?.scrollIntoView({ block: "center" });
+      focusedTarget = requested;
+    });
+  });
 
   const proxyModeKey = "frostpi.network.proxy.mode";
   const notificationsKey = "frostpi.notifications.experimental.enabled";
@@ -101,7 +117,7 @@
   }
 </script>
 
-<dialog use:openDialog aria-labelledby="settings-title" oncancel={(event) => { event.preventDefault(); if (!busy) onclose(); }}>
+<dialog bind:this={panel} use:openDialog aria-labelledby="settings-title" oncancel={(event) => { event.preventDefault(); if (!busy) onclose(); }}>
   <header>
     <h2 id="settings-title">Desktop settings</h2>
     <button type="button" disabled={busy} onclick={onclose}>Close</button>

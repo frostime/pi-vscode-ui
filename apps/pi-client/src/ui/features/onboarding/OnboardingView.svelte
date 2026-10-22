@@ -9,7 +9,7 @@
   <div class="onboarding-logo"><span>π</span></div>
   {#if noWorkspace}
     <h1>Open a workspace</h1>
-    <p>FrostPi runs Pi in the workspace extension host so its files, tools, and shell environment match the project you are editing.</p>
+    <p>FrostPi runs Pi in the selected workspace so its files, tools, and shell environment match the project you are editing.</p>
     <button class="primary" type="button" onclick={() => postToHost({ type: "openFolder" })}>
       <span class="codicon codicon-folder-opened"></span> Open folder
     </button>

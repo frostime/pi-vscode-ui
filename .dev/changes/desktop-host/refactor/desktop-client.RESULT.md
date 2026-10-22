@@ -75,6 +75,27 @@ Svelte 保留基线中的一条可访问性警告（ExtensionUiRequestCard 的�
 
 日志：`tmp/r3-settings-check-final.log`、`tmp/r3-settings-accepted-check.log`、`tmp/r3-settings-vsix-final.log`、`tmp/r3-settings-smoke-exit.log`；最终 smoke 结果/截图：`C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-smoke-rldOhC/`；启动失败负向实验：`C:/Users/EEG/AppData/Local/Temp/frostpi-smoke-bootstrap-negative-icaezG/`。均为临时证据，不是产品依赖。
 
+## 双端维护接线与能力声明
+
+按主 Agent 与独立审查讨论后的收敛范围完成：
+
+- `ClientHost` 增加必填的静态 UI 能力声明；Host/renderer 引用同一产品常量。仅覆盖 editor tabs、IDE mention specials、文件引用导航和诊断导出四项真实差异，不把能力 flag 作为授权或方法存在性检查的替代品。
+- Desktop 的共享 Network & proxy、Question tool、启动失败页 Settings/Configure Pi 接到已有设置页，代理/Pi 路径定位原键。未知 VS Code 设置查询明确拒绝，不扩成通用搜索语法，不改配置或自动重启进程。
+- Desktop 隐藏诊断导出入口，文件引用保持可读且不触发不支持的跳转。合成能力 DOM 测试实际挂载 Header、工具卡片和 Markdown 链接；真实宿主测试另验常量和 native 文件/选区/诊断行为。Editor Tab 执行继续由 coordinator/dispatcher 的既有行为测试负责。
+- `/editor` 归插件本地注册，Desktop 不再先吞掉 Pi 同名命令再过滤。Panel 的 `/resume` 仍隐藏并本地提示。修掉 PromptEditor 二次注册默认命令导致 panel `/resume` 重新出现的问题，新增实际 CodeMirror 补全列表断言。通用实现仍单一，不重写命令框架。
+- 新增 `.agents/skills/dual-maintenance/SKILL.md` 并从 AGENTS 路由，链接真实 SPEC、源码归属、聚焦检查与既有证据边界。未增加 CSS/产品词汇扫描、bundle 标记防复制、每个动作强制 flag 或固定规则数量等机制。
+
+验证：
+
+- `pnpm check` 明确退出 **0**：132 个测试文件 / **872 项测试**，包括 329 项插件测试、291 项共享客户端测试及 47 项 Desktop 测试；双端构建、lint、类型与原插件预算通过。
+- `pnpm package:vsix && pnpm verify:vsix` 退出 **0**，仍为 0.15.5 / 78 entries / 2.65 MB；未安装/发布。
+- 增强 Electron smoke 修正菜单状态等待后连续通过，最终退出 **0**、`ok: true`。实际点击共享菜单和失败页入口，确认代理/Pi 设置焦点、完整设置页打开、实际 Desktop 不显示 editor-tab/diagnostics 动作；保留此前两个受控 Pi、多 Project、Stop 隔离、字体与设置保存/重开证据。
+- 一轮独立限界复核未发现实质缺陷，且补跑了相关 28 项测试；原生事件/焦点未由该复核代验，以上 smoke 单独完成此证据。
+
+未重跑 Extension Host E2E 或完整真实 Pi GUI，不把这些自动检查称为主插件“绝无退化”或 Desktop 首版完成。两份已有 README 暂存链接修正不属于本批提交。
+
+日志：`tmp/r4-check.log`、`tmp/r4-vsix.log`、`tmp/r4-smoke-final.log`；最终 smoke 结果/截图：`C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-smoke-FHAqOT/`。临时材料不是产品依赖。
+
 ## 尚未证明
 
 用户日常操作的布局/流程满意度、完整真实 Pi GUI 路径、所有用户扩展组合、Desktop 持久化/重开恢复和其他平台尚未验收。不能把此 checkpoint 宣称为 Desktop 产品完成或发布就绪。

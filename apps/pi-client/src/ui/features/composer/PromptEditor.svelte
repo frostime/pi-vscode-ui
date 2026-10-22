@@ -12,7 +12,6 @@
   import { onMount } from "svelte";
 
   import { promptCompletionConfigurationKey, shouldStartPromptCompletion } from "./completionPolicy";
-  import { withFrostPiCommands } from "./frostPiCommands";
   import { indentPromptWithTab, insertPromptNewline, outdentPromptWithShiftTab } from "./promptEditing";
   import { promptSyntax } from "./promptSyntax";
   import { commandCompletion } from "./commandCompletion";
@@ -73,17 +72,18 @@
   });
 
   $effect(() => {
-    const allCommands = withFrostPiCommands(commands);
+    // The product's Composer adapter already selected the available local/runtime commands.
+    const currentCommands = commands;
     const activeSessionId = sessionId;
     const editor = view;
     if (!editor) return;
-    const completionKey = promptCompletionConfigurationKey(activeSessionId, allCommands);
+    const completionKey = promptCompletionConfigurationKey(activeSessionId, currentCommands);
     if (completionKey === configuredCompletionKey) return;
     configuredCompletionKey = completionKey;
     editor.dispatch({
       effects: [
-        syntaxCompartment.reconfigure(promptSyntax(allCommands)),
-        completionCompartment.reconfigure(completionExtension(allCommands, activeSessionId)),
+        syntaxCompartment.reconfigure(promptSyntax(currentCommands)),
+        completionCompartment.reconfigure(completionExtension(currentCommands, activeSessionId)),
       ],
     });
   });
@@ -93,7 +93,6 @@
   }
 
   function createState(doc: string): EditorState {
-    const allCommands = withFrostPiCommands(commands);
     return EditorState.create({
       doc,
       extensions: [
@@ -134,8 +133,8 @@
             return true;
           },
         }),
-        syntaxCompartment.of(promptSyntax(allCommands)),
-        completionCompartment.of(completionExtension(allCommands, sessionId)),
+        syntaxCompartment.of(promptSyntax(commands)),
+        completionCompartment.of(completionExtension(commands, sessionId)),
         EditorView.theme({
           "&": { backgroundColor: "transparent", color: "var(--frost-text)" },
           ".cm-scroller": {

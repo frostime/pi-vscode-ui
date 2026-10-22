@@ -3,6 +3,7 @@
   import type { ToolActivityView } from "$shared/model/conversationModel";
 
   import { postToHost } from "../../bridge/hostBridge";
+  import { clientCapabilities } from "../../state/clientCapabilities.svelte";
   import { presentDiff } from "./diffPresentation";
   import { isToolSectionId, planToolSections, sectionToShow, type ToolSectionId } from "./toolSectionPlan";
   import ToolElapsedTimer from "./ToolElapsedTimer.svelte";
@@ -137,10 +138,15 @@
     <button
       type="button"
       class="tool-action"
-      onclick={() => postToHost({ type: "openFile", path: target.path, ...(target.line ? { line: target.line } : {}) })}
+      disabled={!$clientCapabilities.openReferencedLocation}
+      title={$clientCapabilities.openReferencedLocation ? undefined : "Opening file references is unavailable in this client"}
+      onclick={() => {
+        if (!$clientCapabilities.openReferencedLocation) return;
+        postToHost({ type: "openFile", path: target.path, ...(target.line ? { line: target.line } : {}) });
+      }}
     >
       <span class="codicon codicon-go-to-file" aria-hidden="true"></span>
-      <span class="tool-action-label">Open file</span>
+      <span class="tool-action-label">{$clientCapabilities.openReferencedLocation ? "Open file" : `${target.path}${target.line ? `:${target.line}` : ""}`}</span>
     </button>
   {/if}
 {/snippet}
@@ -320,7 +326,8 @@
   font: 11px var(--font-ui);
   cursor: pointer;
 }
-.tool-action:hover { color: var(--frost-text); background: var(--frost-hover); }
+.tool-action:hover:not(:disabled) { color: var(--frost-text); background: var(--frost-hover); }
+.tool-action:disabled { cursor: default; color: var(--frost-muted); overflow-wrap: anywhere; }
 .tool-action:focus-visible { outline: 1px solid var(--frost-focus); outline-offset: 1px; }
 .tool-json {
   max-height: 280px;

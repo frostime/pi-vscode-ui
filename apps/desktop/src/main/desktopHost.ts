@@ -12,7 +12,8 @@ import type {
 import type { DesktopInteractions } from "./dialogs.js";
 import type { DesktopProjects } from "./desktopProjects.js";
 import type { DesktopSettingsStore } from "./settings/DesktopSettingsStore.js";
-import { relatedVscodeSettingDefinitions } from "../shared/desktopSettings.js";
+import { relatedVscodeSettingDefinitions, type DesktopSettingsTarget } from "../shared/desktopSettings.js";
+import { DESKTOP_CLIENT_UI_CAPABILITIES } from "../shared/desktopCapabilities.js";
 
 export interface DesktopHostOptions {
   /** Current window for native dialogs and focus; a getter is allowed (windows are created lazily). */
@@ -28,6 +29,7 @@ export interface DesktopHostOptions {
   clientVersion?: string;
   /** Desktop entry maps Open Folder to Project registration, not an editor or OS reveal. */
   openFolder?: (fsPath?: string) => Promise<void>;
+  openSettings?: (target: DesktopSettingsTarget) => Promise<void>;
 }
 
 /**
@@ -37,6 +39,7 @@ export interface DesktopHostOptions {
  */
 export function createDesktopHost(options: DesktopHostOptions): ClientHost {
   const readSettings = (): Record<string, unknown> => options.settingsStore?.values ?? options.settings ?? {};
+  const openSettings = options.openSettings;
   rejectUnsupportedProxyMode(readSettings());
   const resolveWindow = (): BrowserWindow | undefined => {
     const value = typeof options.window === "function" ? options.window() : options.window;
@@ -44,6 +47,7 @@ export function createDesktopHost(options: DesktopHostOptions): ClientHost {
   };
 
   return {
+    capabilities: DESKTOP_CLIENT_UI_CAPABILITIES,
     createEventEmitter: <T>() => createInMemoryEventEmitter<T>(),
     clientVersion: () => options.clientVersion ?? "unknown",
     storage: createInMemoryMemento(),
@@ -110,6 +114,15 @@ export function createDesktopHost(options: DesktopHostOptions): ClientHost {
         await shell.openExternal(url);
       },
       ...(options.openFolder ? { openFolder: options.openFolder } : {}),
+      ...(openSettings ? {
+        openSettings: (query: string) => {
+          // The shared dispatcher currently requests the extension's full settings view.
+          if (query !== "@ext:frostime.frostpi") throw new Error("This VS Code settings query is not supported in Desktop.");
+          return openSettings("all");
+        },
+        openProxySettings: () => openSettings("frostpi.network.proxy.mode"),
+        configurePiExecutable: () => openSettings("frostpi.pi.executable"),
+      } : {}),
     },
   };
 }

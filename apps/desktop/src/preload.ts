@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import type { DesktopApi, DesktopDialog, DesktopProjectsView } from "./shared/desktopBridge.js";
 import type { HostToWebviewMessage } from "@frostime/pi-client/shared/bridge/hostToWebview";
-import type { DesktopSettingsResult, DesktopSettingsView } from "./shared/desktopSettings.js";
+import type { DesktopSettingsResult, DesktopSettingsTarget, DesktopSettingsView } from "./shared/desktopSettings.js";
 
 function subscribe<T>(channel: string, listener: (value: T) => void): () => void {
   const handler = (_event: Electron.IpcRendererEvent, value: T): void => listener(value);
@@ -31,6 +31,7 @@ const api: DesktopApi = {
     return result.view;
   },
   onSettings: (listener) => subscribe<DesktopSettingsView>("frostpi:settings:view", listener),
+  onOpenSettings: (listener) => subscribe<DesktopSettingsTarget>("frostpi:settings:open", listener),
 };
 
 contextBridge.exposeInMainWorld("frostpiDesktop", api);

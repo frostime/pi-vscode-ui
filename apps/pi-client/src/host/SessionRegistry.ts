@@ -892,7 +892,7 @@ export class SessionRegistry {
       ? backgroundSession ? "A background FrostPi session is waiting for input." : "FrostPi is waiting for your input."
       : event === "completed"
         ? backgroundSession ? "A background FrostPi session completed an agent turn." : "FrostPi completed an agent turn."
-        : "A FrostPi session failed. Open VS Code for details.";
+        : "A FrostPi session failed. Open the session for details.";
     const title = event === "completed" ? "FrostPi turn completed" : "FrostPi needs your attention";
     const shown = this.#host.systemToast ? await this.#host.systemToast(title, message) : false;
     if (!shown && !this.#host.window.focused()) {
