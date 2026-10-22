@@ -30,7 +30,7 @@
 证据：checkpoint `7c3f671`；824 项测试、双端构建、VSIX 校验、受控 Extension Host E2E、两个无关 Project 的 Electron smoke 通过。一次共享 UI 文案修改已进入双产出。真实本机 Pi 1.1.0 的共享 Runtime 发送、Abort、历史恢复、阻塞输入通过。后续主目录修复 checkpoint `d0dbc29` 的完整检查为 828 项测试，增强的 Electron smoke 连续 3 次通过；新增主目录插件 E2E 尝试被系统 VS Code 更新锁阻塞，未算通过。GUI 自动化使用受控子进程，不能混称为完整真实 Pi GUI 验收。快照与证据限制见 [验证记录](refactor/desktop-client.RESULT.md)。
 
 [预览体验与持久化取舍] << CURRENT
-#IN PROGRESS: 用户反馈两端最基础功能似乎可用。主目录已修图标/搜索语义、Mermaid、共同样式入口、字体解析及 fixture 状态；当前继续收齐设置默认值权威来源，并确认首次导入/持久化约定。
+#IN PROGRESS: 用户反馈两端最基础功能似乎可用。主目录已修图标/搜索语义、Mermaid、共同样式入口、字体解析及 fixture 状态；设置默认值已从 VS Code manifest 生成共享模块，构建/测试检查防止分叉。该改动通过 829 项测试、双端构建及默认值变更反例检查，见 [验证记录](refactor/desktop-client.RESULT.md#设置默认值权威来源)。当前需确认首次导入/持久化约定，尚未读取真实 VS Code 设置或实现持久配置。
 REQUIRES [双端共享架构验证]: 有真实可运行的候选，而非假页面。
 
 基础体验反馈已收到，不要求用户重复技术检查。后续从主目录启动/复测：
@@ -100,7 +100,7 @@ Agent 对照 TARGET-SPEC 汇总可执行证据和明确限制；用户判断它�
 
 | 位置 | 用途 |
 |---|---|
-| 主目录，`feat/desktop-host` | **唯一施工入口**；`e2cdae9` 已 squash 整合 WIP，当前代码 checkpoint `d0dbc29`；控制脚本与 TARGET-SPEC 也在此维护 |
+| 主目录，`feat/desktop-host` | **唯一施工入口**；`e2cdae9` 已 squash 整合 WIP，基础兼容 checkpoint `d0dbc29`，后续设置默认值收尾见 RESULT；控制脚本与 TARGET-SPEC 也在此维护 |
 | `.worktrees/261019_desktop-bridge-inputs`，`wip/desktop-client` | 整合前的冻结回退点，不再施工；checkpoint `7c3f671`，前一 checkpoint `367d295` |
 | `refactor/desktop-bridge-inputs@d551904` | 本轮施工前的 R1＋R2a 对照基线 |
 | `.worktrees/261011_desktop-host-boundary` | 旧 R1 对照，不继续维护另一条候选 |

@@ -1,7 +1,7 @@
 ---
 title: 主目录 Desktop 开发接续
 created: 2026-10-22T15:49:19+08:00
-consumed: false # Reader: set to true once you have read this. Questions about missing context go under "Clarifications".
+consumed: true # Read in the primary workspace; continuation is tracked in desktop-host.ORCH.md.
 ---
 
 ## Assume Reader

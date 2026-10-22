@@ -3,7 +3,7 @@ title: Development Workflow
 description: Workspace setup, independent product builds, shared-client ownership, and debugging.
 scope:
   - /**
-updated: 2026-10-20
+updated: 2026-10-22
 ---
 
 # Development Workflow
@@ -22,6 +22,12 @@ Install from the repository root with `pnpm install --frozen-lockfile`. The lock
 Desktop is currently an explicitly labelled development preview: Projects, settings and client session metadata are in-memory, the launcher uses a temporary Electron profile, and closing the preview disposes its child processes. This does not settle the future persistent configuration path or app-reopen/background policy. Pi-owned conversation persistence is separate.
 
 Both Electron launchers remove `ELECTRON_RUN_AS_NODE` only from the launch environment. Do not modify Pi's process policy to compensate for an Electron launcher variable. Electron's executable must be available before launch; a JS package install or successful renderer build alone does not prove native launch.
+
+## Setting definitions
+
+Edit FrostPi setting schemas/defaults in [`apps/vscode/package.json`](../../apps/vscode/package.json) under `contributes.configuration`. Run `pnpm --dir apps/pi-client settings:generate` and commit the generated runtime defaults with that change. Do not edit generated defaults or add host-local fallback tables. Shared code consumes the generated module, not the product manifest at runtime.
+
+`pnpm --dir apps/pi-client settings:check` rejects stale output; both product builds reach this check through the shared-client build. The shared configuration test also checks schema/default parity. New keys still need their behavior wired into shared parsing and applicable host support; generating defaults does not implement a setting or establish Desktop compatibility.
 
 ## Ownership and source resolution
 

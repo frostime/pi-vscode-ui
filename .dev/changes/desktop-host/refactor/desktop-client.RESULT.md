@@ -48,6 +48,16 @@ Svelte 保留基线中的一条可访问性警告（ExtensionUiRequestCard 的�
 
 本轮临时日志：`G:/Enviroment/msys2/tmp/frostpi-primary-gates.wAfwky/`、`frostpi-primary-smoke.yNRk4t/`、`frostpi-primary-vsix.THQFRY/`；最后一次 smoke 截图/结果在 `C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-smoke-E6H1y5/`。
 
+## 设置默认值权威来源
+
+主目录接续将 `apps/vscode/package.json` 的 `contributes.configuration` 保留为设置定义权威来源。`pnpm --dir apps/pi-client settings:generate` 生成共享默认值；解析器及代理的空值回退使用该模块，不再手写第二份默认值。两端构建均经过共享客户端的过期检查，运行时不读取产品 manifest。新增测试比较全部设置的 schema 默认值与生成值，并对比 Native 形状配置和无配置宿主的解析结果。新增设置的实际行为/适配仍须实现，不能由生成默认值代替。
+
+- 主目录 `pnpm check` 通过：127 个测试文件 / **829 项测试**、lint、类型、双端构建及插件预算。保留既有 Svelte 可访问性、Mermaid 构建时资源路径及 chunk 提示。
+- 隔离复制 manifest、生成器和生成文件，修改 `session.startOnOpen` 默认值后，`--check` 明确失败；重新生成后检查通过且输出为新值。未修改真实产品默认值。
+- 本轮未重跑 VSIX、Electron smoke、Extension Host E2E 或真实 Pi；此前证据及限制不变。未读取用户真实设置，未实现首次导入、持久化或设置 UI。
+
+日志：`tmp/r3-setting-check.log`；隔离反例：`tmp/r3-settings-parity-43y8la9i/`。这些是临时验证材料，不是产品依赖。
+
 ## 尚未证明
 
 用户日常操作的布局/流程满意度、完整真实 Pi GUI 路径、所有用户扩展组合、Desktop 持久化/重开恢复和其他平台尚未验收。不能把此 checkpoint 宣称为 Desktop 产品完成或发布就绪。

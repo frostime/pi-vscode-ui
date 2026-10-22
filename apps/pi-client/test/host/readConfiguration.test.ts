@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
+import { frostPiSettingDefaults } from "../../src/core/configuration/frostPiSettingDefaults.generated.js";
 import type { ClientHost } from "../../src/host/clientHost.js";
 import { readConfiguration } from "../../src/host/readConfiguration.js";
 
@@ -35,6 +38,19 @@ describe("FrostPi configuration reading", () => {
       fileMentionRespectIgnoreFiles: true,
       fileMentionFollowSymlinks: true,
     });
+  });
+
+  it("keeps fallback defaults and native configuration aligned with the VS Code schema", () => {
+    const manifest = JSON.parse(readFileSync(new URL("../../../vscode/package.json", import.meta.url), "utf8")) as {
+      contributes: { configuration: { properties: Record<string, { default: unknown }> } };
+    };
+    const nativeDefaults = Object.fromEntries(Object.entries(manifest.contributes.configuration.properties)
+      .map(([key, definition]) => [key.slice("frostpi.".length), definition.default]));
+
+    // Covers every contributed setting, including additions not yet parsed by the client.
+    expect(frostPiSettingDefaults).toEqual(nativeDefaults);
+    expect(readConfiguration(hostWithConfiguration({})))
+      .toEqual(readConfiguration(hostWithConfiguration(nativeDefaults)));
   });
 
   it("passes scope strings through and honors host values", () => {

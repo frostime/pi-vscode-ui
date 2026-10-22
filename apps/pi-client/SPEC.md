@@ -10,7 +10,7 @@ One `SessionRuntime` owns one Pi child. Its identity, cwd and configuration scop
 
 ## Configuration and process lifecycle
 
-[Shared configuration parsing](src/host/readConfiguration.ts) retains VS Code key/default semantics. Hosts provide configuration reads and storage, not a second manually maintained parser/default table. Native setting writes and VS Code proxy reading remain adapter responsibilities. Desktop may reject environment-specific settings explicitly; it must not silently reinterpret `vscode` proxy mode.
+[Shared configuration parsing](src/host/readConfiguration.ts) retains VS Code key/default semantics. The VS Code manifest's `contributes.configuration` is the setting-definition authority; shared runtime defaults are generated from it, never maintained by hand. Builds reject stale generated defaults, and configuration tests compare native-schema reads with unconfigured-host reads. See the [settings workflow](../../.dev/docs/development.md#setting-definitions). Hosts provide configuration reads and storage, not a second parser/default table. Native setting writes and VS Code proxy reading remain adapter responsibilities. Desktop may reject environment-specific settings explicitly; it must not silently reinterpret `vscode` proxy mode.
 
 Runtime receives client version, a live host-proxy reader, read-only credentials, logging and event/editor-text hooks. Configuration/proxy refresh and launch read current values, not construction-time snapshots. Credentials are read at launch only. Changed executable/proxy/credentials/Question configuration never silently interrupts a running turn; changes apply on explicit start/restart.
 
