@@ -4,19 +4,34 @@ import { basename } from "node:path";
 
 import { canonicalPath, sameCanonicalPath } from "@frostime/pi-client/core/_shared/canonicalPath";
 
-import type { DesktopProject } from "../shared/desktopBridge.js";
+import type { DesktopProject, DesktopProjectsView } from "../shared/desktopBridge.js";
 
 /**
  * Desktop's Project registry, injected into the shared client backend as its workspace service.
- *
- * Preview note: Projects live in memory for this technical preview. The durable config
- * location and the reopen-after-restart contract are still undecided by product, so no
- * disk schema is invented here.
+ * Startup restores validated Project metadata; persistence belongs to the caller.
  */
 export class DesktopProjects {
   readonly #projects = new Map<string, DesktopProject>();
   readonly #listeners = new Set<() => void>();
   #selectedId: string | null = null;
+
+  /** Restores the complete validated startup view, retaining metadata even for unavailable directories. */
+  async restore(view: DesktopProjectsView): Promise<void> {
+    const restored = new Map<string, DesktopProject>();
+    let selectedId: string | null = null;
+    for (const saved of view.projects) {
+      const cwd = await canonicalPath(saved.cwd);
+      const existing = [...restored.values()].find((project) => sameCanonicalPath(project.cwd, cwd));
+      const project = existing ?? { ...saved, cwd };
+      if (!existing) restored.set(project.id, project);
+      if (saved.id === view.activeProjectId) selectedId = project.id;
+    }
+
+    this.#projects.clear();
+    for (const [id, project] of restored) this.#projects.set(id, project);
+    this.#selectedId = selectedId;
+    this.#emitChange();
+  }
 
   /** Validates, canonicalizes, and registers a directory. Duplicate paths return the existing Project unchanged. */
   async addProject(rawCwd: string): Promise<DesktopProject> {
@@ -33,13 +48,17 @@ export class DesktopProjects {
     const existing = [...this.#projects.values()].find((project) => sameCanonicalPath(project.cwd, canonical));
     if (existing) {
       // Re-adding an already registered directory (possibly alias-spelled) must not create a second Project.
-      if (this.#selectedId === null) this.#selectedId = existing.id;
+      if (this.#selectedId === null) {
+        this.#selectedId = existing.id;
+        this.#emitChange();
+      }
       return existing;
     }
 
+    const directoryName = basename(canonical);
     const project: DesktopProject = {
       id: randomUUID(),
-      name: basename(canonical),
+      name: directoryName.trim() ? directoryName : canonical,
       cwd: canonical,
     };
     this.#projects.set(project.id, project);

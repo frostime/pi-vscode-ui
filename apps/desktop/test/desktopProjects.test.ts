@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, parse } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -20,11 +20,99 @@ describe("DesktopProjects", () => {
     expect(added).toMatchObject({ name: "target", cwd: target });
     expect(projects.list()).toHaveLength(1);
 
+    const notifications: Array<string | null> = [];
+    projects.onDidChange(() => notifications.push(projects.selected?.id ?? null));
+
     // The alias spelling resolves to the same canonical directory: one Project, stable id.
     const again = await projects.addProject(alias);
     expect(again.id).toBe(added.id);
     expect(projects.list()).toHaveLength(1);
     expect(projects.selected?.id).toBe(added.id);
+    expect(notifications).toEqual([]);
+
+    projects.selectProject(null);
+    expect(notifications).toEqual([null]);
+    await projects.addProject(alias);
+    expect(notifications).toEqual([null, added.id]);
+    expect(projects.selected?.id).toBe(added.id);
+    await projects.addProject(target);
+    expect(notifications).toEqual([null, added.id]);
+  });
+
+  it("restores stable identities, names and selection, publishing the complete view once", async () => {
+    const parent = await realpath(await mkdtemp(join(tmpdir(), "frostpi-projects-")));
+    const target = join(parent, "target");
+    const alias = join(parent, "alias");
+    await mkdir(target);
+    await symlink(target, alias, process.platform === "win32" ? "junction" : "dir");
+
+    const projects = new DesktopProjects();
+    await projects.addProject(parent);
+    const saved = [
+      { id: "saved-target", name: "Custom target name", cwd: alias },
+      { id: "saved-parent", name: "Custom parent name", cwd: parent },
+    ];
+    const expected = [{ ...saved[0], cwd: target }, saved[1]];
+    const notifications: unknown[] = [];
+    projects.onDidChange(() => notifications.push({ projects: projects.list(), selected: projects.selected }));
+
+    await projects.restore({ projects: saved, activeProjectId: "saved-parent" });
+
+    expect(projects.list()).toEqual(expected);
+    expect(projects.selected).toEqual(saved[1]);
+    expect(notifications).toEqual([{ projects: expected, selected: saved[1] }]);
+  });
+
+  it("maps a selected duplicate alias to the first canonical Project identity", async () => {
+    const parent = await realpath(await mkdtemp(join(tmpdir(), "frostpi-projects-")));
+    const target = join(parent, "target");
+    const alias = join(parent, "alias");
+    await mkdir(target);
+    await symlink(target, alias, process.platform === "win32" ? "junction" : "dir");
+    const retained = { id: "original", name: "Original name", cwd: target };
+    const projects = new DesktopProjects();
+
+    await projects.restore({
+      projects: [retained, { id: "alias-id", name: "Alias name", cwd: alias }],
+      activeProjectId: "alias-id",
+    });
+
+    expect(projects.list()).toEqual([retained]);
+    expect(projects.selected).toEqual(retained);
+  });
+
+  it.each([null, "unknown"])("does not infer an anchor for restored selection %s", async (activeProjectId) => {
+    const cwd = await realpath(await mkdtemp(join(tmpdir(), "frostpi-projects-")));
+    const projects = new DesktopProjects();
+    await projects.addProject(cwd);
+    const saved = { id: "saved", name: "Saved", cwd };
+
+    await projects.restore({ projects: [saved], activeProjectId });
+
+    expect(projects.list()).toEqual([saved]);
+    expect(projects.selected).toBeNull();
+  });
+
+  it("retains a missing restored directory while ordinary add still rejects it", async () => {
+    const parent = await realpath(await mkdtemp(join(tmpdir(), "frostpi-projects-")));
+    const missing = join(parent, "moved-away");
+    const saved = { id: "missing", name: "Keep this name", cwd: missing };
+    const projects = new DesktopProjects();
+
+    await projects.restore({ projects: [{ ...saved, cwd: join(missing, "..", "moved-away") }], activeProjectId: saved.id });
+
+    expect(projects.list()).toEqual([saved]);
+    expect(projects.selected).toEqual(saved);
+    await expect(projects.addProject(missing)).rejects.toThrow("not an existing directory");
+    expect(projects.list()).toEqual([saved]);
+    expect(projects.selected).toEqual(saved);
+  });
+
+  it("keeps a non-empty display name for a volume-root Project", async () => {
+    const projects = new DesktopProjects();
+    const root = parse(tmpdir()).root;
+    const project = await projects.addProject(root);
+    expect(project.name).toBe(project.cwd);
   });
 
   it("rejects missing directories, files, and blank input explicitly", async () => {

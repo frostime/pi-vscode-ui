@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { app, type WebContents } from "electron";
 import { createDesktopApp } from "../src/main/createDesktopApp.js";
 import { DesktopSettingsStore } from "../src/main/settings/DesktopSettingsStore.js";
+import { DesktopStateStore } from "../src/main/storage/DesktopStateStore.js";
+import { verifyDesktopStateReopen } from "./statePersistenceSmoke.js";
 
 const directory = process.env.FROSTPI_DESKTOP_SMOKE_DIR!;
 app.setPath("userData", join(directory, "electron-profile"));
@@ -31,7 +33,7 @@ async function verifySettingsSetup(): Promise<void> {
   const source = '{ // default VS Code user settings\n "chat.fontSize": 19, "chat.editor.fontSize": 17, "editor.fontFamily": "Import Mono", "files.exclude": {"**/generated": true}, "[typescript]": {"chat.fontSize": 99}, }';
   await writeFile(sourcePath, source);
   const store = await DesktopSettingsStore.open(settingsPath);
-  const setup = await createDesktopApp({ settingsStore: store, vscodeSettingsPath: sourcePath, show: false });
+  const setup = await createDesktopApp({ settingsStore: store, stateStore: await DesktopStateStore.open(join(directory, "first-run/state.json")), vscodeSettingsPath: sourcePath, show: false });
   const browser = setup.window.webContents;
   try {
     await until(() => browser.executeJavaScript("Boolean(document.querySelector('#settings-title'))"), "first-run settings modal");
@@ -68,7 +70,7 @@ async function verifySettingsSetup(): Promise<void> {
   await writeFile(sourcePath, '{"chat.editor.fontSize":99}');
   const reopenedStore = await DesktopSettingsStore.open(settingsPath);
   assert.equal(reopenedStore.values["chat.editor.fontSize"], 17);
-  const reopened = await createDesktopApp({ settingsStore: reopenedStore, vscodeSettingsPath: sourcePath, show: false });
+  const reopened = await createDesktopApp({ settingsStore: reopenedStore, stateStore: await DesktopStateStore.open(join(directory, "first-run/state.json")), vscodeSettingsPath: sourcePath, show: false });
   try {
     await until(() => reopened.window.webContents.executeJavaScript("document.documentElement.style.getPropertyValue('--vscode-editor-font-family')==='Import Mono'"), "reopen applies persisted settings");
     assert.equal(await reopened.window.webContents.executeJavaScript("Boolean(document.querySelector('#settings-title'))"), false);
@@ -82,7 +84,7 @@ async function verifyStartupSettingsEntries(): Promise<void> {
   const store = await DesktopSettingsStore.open(join(directory, "startup-settings/settings.json"));
   const missingExecutable = join(directory, "missing-pi-executable");
   await store.replace({ "frostpi.pi.executable": missingExecutable });
-  const desktop = await createDesktopApp({ settingsStore: store, directories: [join(directory, "project-a")], show: false });
+  const desktop = await createDesktopApp({ settingsStore: store, stateStore: await DesktopStateStore.open(join(directory, "startup-settings/state.json")), directories: [join(directory, "project-a")], show: false });
   const browser = desktop.window.webContents;
   try {
     await until(() => browser.executeJavaScript("Boolean(document.querySelector('.onboarding-actions .primary'))"), "failure fixture New action");
@@ -108,6 +110,7 @@ void app.whenReady().then(async () => {
   });
   const desktop = await createDesktopApp({
     directories: [join(directory, "project-a"), join(directory, "project-b")], show: false, settingsStore,
+    stateStore: await DesktopStateStore.open(join(directory, "live/state.json")),
   });
   const browser = desktop.window.webContents;
   const text = (): Promise<string> => browser.executeJavaScript("document.body.innerText");
@@ -212,7 +215,8 @@ void app.whenReady().then(async () => {
   }
   await verifySettingsSetup();
   await verifyStartupSettingsEntries();
-  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true, sharedSettingsEntryPoints: true, actualDesktopCapabilities: true }));
+  await verifyDesktopStateReopen(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
+  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true, sharedSettingsEntryPoints: true, actualDesktopCapabilities: true, stateReopen: true, selectedOnlyAutoStart: true, savedNullSelection: true, shutdownFlush: true }));
   app.exit(0);
 }).catch((error: unknown) => {
   writeFileSync(join(directory, "result.json"), JSON.stringify({ ok: false, error: error instanceof Error ? error.message : "Smoke failure" }));

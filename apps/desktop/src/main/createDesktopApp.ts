@@ -13,10 +13,12 @@ import { DesktopSettingsController } from "./settings/DesktopSettingsController.
 import { defaultVscodeSettingsPath, importVscodeSettings } from "./settings/importVscodeSettings.js";
 import { DesktopSettingsError, settingsErrorMessage } from "./settings/DesktopSettingsError.js";
 import type { DesktopSettingsResult } from "../shared/desktopSettings.js";
+import { DesktopStateStore, DesktopStateWriteError } from "./storage/DesktopStateStore.js";
 
 export interface DesktopAppOptions {
   directories?: readonly string[];
   settingsStore?: DesktopSettingsStore;
+  stateStore?: DesktopStateStore;
   /** Trusted main-process test input, never accepted over IPC. */
   vscodeSettingsPath?: string;
   show?: boolean;
@@ -33,8 +35,18 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
       if (error) throw new DesktopSettingsError("Could not open Desktop settings.json with the system editor.");
     },
   });
+  const stateStore = options.stateStore ?? await DesktopStateStore.open(join(app.getPath("userData"), "state.json"));
   const projects = new DesktopProjects();
-  for (const directory of options.directories ?? []) await projects.addProject(directory);
+  await projects.restore(stateStore.projects);
+  let firstStartupProject: string | undefined;
+  for (const directory of options.directories ?? []) {
+    const project = await projects.addProject(directory);
+    firstStartupProject ??= project.id;
+  }
+  if (firstStartupProject) projects.selectProject(firstStartupProject);
+  const projectState = (): DesktopProjectsView => ({ projects: [...projects.list()], activeProjectId: projects.selected?.id ?? null });
+  // Preserve loaded client metadata while registering roots before Registry construction.
+  await stateStore.saveProjects(projectState()).catch(() => undefined);
   const window = new BrowserWindow({
     width: 1100, height: 800, minWidth: 280, minHeight: 400, show: options.show ?? true,
     title: "FrostPi Desktop — development preview",
@@ -56,7 +68,7 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     if (!result.canceled && result.filePaths[0]) await projects.addProject(result.filePaths[0]);
   };
   const host = createDesktopHost({
-    window, projects, interactions, openFolder: addProject, settingsStore,
+    window, projects, interactions, openFolder: addProject, settingsStore, storage: stateStore,
     openSettings: (target) => {
       if (window.isDestroyed()) return Promise.reject(new DesktopSettingsError("The Desktop settings window is closed."));
       window.webContents.send("frostpi:settings:open", target);
@@ -65,6 +77,7 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   });
   const registry = new SessionRegistry(host, {
     logger,
+    restoreSelection: "saved-only",
     sessionTreeArtifactPath: join(__dirname, "pi-extensions/session-tree.js"),
     questionToolArtifactPath: join(__dirname, "pi-extensions/question-tool.js"),
   });
@@ -91,7 +104,10 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     fileSearch: new WorkspaceFileSearch(),
     readChatTypography: () => readChatTypography(host.configuration.getConfiguration("chat")),
   });
-  const projectsView = (): DesktopProjectsView => ({ projects: [...projects.list()], activeProjectId: projects.selected?.id ?? null });
+  const projectsView = (): DesktopProjectsView => ({
+    ...projectState(),
+    ...(stateStore.error ? { stateError: `${stateStore.error} State file: ${stateStore.filePath}` } : {}),
+  });
   const publishProjects = (): void => {
     if (!window.isDestroyed()) window.webContents.send("frostpi:projects:view", projectsView());
     connection.refresh();
@@ -101,7 +117,12 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     registry.onDidToast((toast) => connection.post({ type: "toast", ...toast })),
     registry.onDidSetComposerText(({ sessionId, text }) => connection.queueComposerText(sessionId, text, () => undefined)),
   ];
-  const unsubscribeProjects = projects.onDidChange(publishProjects);
+  const unsubscribeProjects = projects.onDidChange(() => {
+    publishProjects();
+    // Store errors are published through projectsView; do not turn them into unhandled promises.
+    void stateStore.saveProjects(projectState()).catch(() => undefined);
+  });
+  const unsubscribeState = stateStore.onDidChange(publishProjects);
   const unsubscribeSettings = settingsStore.onDidChange(() => {
     registry.refreshConfigurationState();
     connection.post({ type: "setChatTypography", typography: readChatTypography(host.configuration.getConfiguration("chat")) });
@@ -138,31 +159,48 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   window.on("restore", () => visibility.fire(true));
 
   let disposal: Promise<void> | undefined;
+  let closeRequested = false;
   const dispose = (): Promise<void> => disposal ??= (async () => {
     interactions.dispose();
     for (const { channel, listener } of ipcListeners) ipcMain.removeListener(channel, listener);
     unsubscribeProjects();
+    unsubscribeState();
     unsubscribeSettings();
     ipcMain.removeHandler("frostpi:settings:action");
     for (const subscription of subscriptions) subscription.dispose();
     connection.dispose(); drafts.dispose(); incoming.dispose(); visibility.dispose();
     await registry.dispose();
+    // Registry queues its Memento updates before the file store sees them.
+    let metadataNotCaptured = false;
+    try { await registry.flushPersistence(); }
+    catch (error) { metadataNotCaptured = !(error instanceof DesktopStateWriteError); }
+    await stateStore.flush();
+    // File retries recover accepted writes, not rejected metadata/serialization attempts.
+    if (metadataNotCaptured) throw new Error("Session metadata could not be saved.");
+  })();
+  let closing: Promise<void> | undefined;
+  const closeWindow = (): Promise<void> => closing ??= (async () => {
+    try {
+      await dispose();
+    } catch {
+      dialog.showErrorBox("FrostPi Desktop state", `Desktop could not finish saving its application state. The existing state file was not reset. Check the file and folder permissions before reopening:\n${stateStore.filePath}`);
+    } finally {
+      if (!window.isDestroyed()) window.destroy();
+    }
   })();
   window.on("close", (event) => {
-    if (disposal) return;
     event.preventDefault();
-    void dispose().finally(() => { if (!window.isDestroyed()) window.destroy(); });
+    closeRequested = true;
+    void closeWindow();
   });
-  window.webContents.on("render-process-gone", () => {
-    void dispose().finally(() => { if (!window.isDestroyed()) window.destroy(); });
-  });
+  window.webContents.on("render-process-gone", () => { void closeWindow(); });
   try {
     await registry.ensureInitialSession();
     await window.loadFile(join(__dirname, "renderer/index.html"));
   } catch (error) {
-    await dispose();
+    await dispose().catch(() => undefined);
     if (!window.isDestroyed()) window.destroy();
-    throw error;
+    if (!closeRequested) throw error;
   }
-  return { window, registry, projects, connection, settingsStore, dispose };
+  return { window, registry, projects, connection, settingsStore, stateStore, dispose };
 }

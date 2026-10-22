@@ -1,9 +1,8 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, open, rename, stat, unlink } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { stat } from "node:fs/promises";
+import { dirname } from "node:path";
 import type { DesktopSettingsValues } from "../../shared/desktopSettings.js";
 import { validateDesktopSettings } from "./validateDesktopSettings.js";
-import { MAX_SETTINGS_BYTES, readSettingsObject } from "./readSettingsObject.js";
+import { MAX_JSON_BYTES, parseJsonObject, readJsonObject, writeFileAtomically } from "../storage/jsonFile.js";
 import { DesktopSettingsError } from "./DesktopSettingsError.js";
 const LOAD_ERROR = "Cannot read Desktop settings. Open settings.json, check its format, values, size (maximum 1 MiB), and permissions, then reload.";
 const SAVE_ERROR = "Cannot save Desktop settings. Check the settings folder permissions and available space, then try again.";
@@ -35,7 +34,7 @@ export class DesktopSettingsStore {
       try {
         let values: DesktopSettingsValues;
         try {
-          values = await readSettingsObject(this.filePath);
+          values = await readJsonObject(this.filePath);
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
           // Windows can also report ENOENT when an ancestor is a file, not a directory.
@@ -102,26 +101,16 @@ export class DesktopSettingsStore {
     let savedValues: DesktopSettingsValues;
     try {
       text = `${JSON.stringify(values, null, 2)}\n`;
-      savedValues = JSON.parse(text) as DesktopSettingsValues;
-      if (Buffer.byteLength(text, "utf8") > MAX_SETTINGS_BYTES || validateDesktopSettings(savedValues).length) throw new Error();
+      savedValues = parseJsonObject(text);
+      if (Buffer.byteLength(text, "utf8") > MAX_JSON_BYTES || validateDesktopSettings(savedValues).length) throw new Error();
     } catch {
       throw new DesktopSettingsError("Settings must contain supported JSON values and fit within 1 MiB.");
     }
 
-    const tempPath = join(dirname(this.filePath), `.settings-${randomUUID()}.tmp`);
-    let created = false;
     try {
-      await mkdir(dirname(this.filePath), { recursive: true });
-      const handle = await open(tempPath, "wx", 0o600);
-      created = true;
-      try { await handle.writeFile(text, "utf8"); }
-      finally { await handle.close(); }
-      await rename(tempPath, this.filePath);
-      created = false;
+      await writeFileAtomically(this.filePath, text);
     } catch {
       throw new DesktopSettingsError(SAVE_ERROR);
-    } finally {
-      if (created) await unlink(tempPath).catch(() => {});
     }
     this.currentValues = savedValues;
     this.isFirstRun = false;

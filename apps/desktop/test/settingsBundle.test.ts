@@ -13,12 +13,12 @@ it("reads JSONC from the bundled Node entry without unresolved UMD requires", as
     const settings = join(root, "settings.json");
     await writeFile(settings, '\uFEFF{ // user config\n "chat.fontSize": 18, }');
     await build({
-      entryPoints: [resolve(import.meta.dirname, "../src/main/settings/readSettingsObject.ts")],
+      entryPoints: [resolve(import.meta.dirname, "../src/main/storage/jsonFile.ts")],
       bundle: true, platform: "node", format: "cjs", outfile: bundle,
     });
     const result = await promisify(execFile)(process.execPath, ["-e", `
-      const {readSettingsObject} = require(${JSON.stringify(bundle)});
-      readSettingsObject(${JSON.stringify(settings)}).then(values => {
+      const {readJsonObject} = require(${JSON.stringify(bundle)});
+      readJsonObject(${JSON.stringify(settings)}).then(values => {
         if (values['chat.fontSize'] !== 18) process.exit(1);
       }).catch(() => process.exit(1));
     `]);

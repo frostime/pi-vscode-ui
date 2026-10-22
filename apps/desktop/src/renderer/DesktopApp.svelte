@@ -104,7 +104,8 @@
     {/each}
     <button type="button" class="settings-button" onclick={() => showSettings()}>Settings</button>
     {#if settingsError && !settingsOpen}<p role="alert">{settingsError}</p>{/if}
-    <p class="preview-note">Development preview. Settings are saved; Projects and open Pi lists are not restored after exit.</p>
+    {#if projects.stateError}<p class="state-warning" role="alert">{projects.stateError}</p>{/if}
+    <p class="preview-note">Projects and saved-session entries are remembered. Closing stops Pi; drafts are not restored.</p>
   </aside>
   <div class="client-region">
     <ClientApp localComposerCommands={commands} capabilities={DESKTOP_CLIENT_UI_CAPABILITIES} />
@@ -147,6 +148,7 @@
   .pi-row { display: flex; align-items: center; gap: 7px; }
   .pi-row > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .preview-note { margin-top: 20px; color: var(--frost-muted); font-size: 11px; }
+  .state-warning { margin-top: 12px; color: var(--frost-error); font-size: 11px; overflow-wrap: anywhere; }
   .client-region { min-width: 0; min-height: 0; height: 100%; }
   dialog { margin: auto; width: min(650px, calc(100vw - 30px)); max-height: 85vh; padding: 16px; border: 1px solid var(--frost-border); border-radius: 8px; color: var(--frost-text); background: var(--frost-surface-raised); font-family: var(--font-ui); }
   dialog::backdrop { background: #0008; }

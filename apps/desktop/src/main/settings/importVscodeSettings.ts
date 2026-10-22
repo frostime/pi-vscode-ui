@@ -2,7 +2,7 @@ import { posix, win32 } from "node:path";
 import { desktopSettingDefinitions, type DesktopSettingsValues } from "../../shared/desktopSettings.js";
 import { isSettingValueValid, proxyEndpointIssue, validateDesktopSettings } from "./validateDesktopSettings.js";
 
-import { readSettingsObject } from "./readSettingsObject.js";
+import { readJsonObject } from "../storage/jsonFile.js";
 import { DesktopSettingsError } from "./DesktopSettingsError.js";
 const PROXY_MODE = "frostpi.network.proxy.mode";
 const PROXY_ENDPOINT = "frostpi.network.proxy.endpoint";
@@ -22,7 +22,7 @@ export function defaultVscodeSettingsPath(
 export async function importVscodeSettings(filePath: string): Promise<{ values: DesktopSettingsValues; notices: string[] }> {
   let source: Record<string, unknown>;
   try {
-    source = await readSettingsObject(filePath);
+    source = await readJsonObject(filePath);
   } catch {
     throw new DesktopSettingsError("Cannot import VS Code settings. Check that the default user settings file is readable, valid JSONC, and at most 1 MiB.");
   }

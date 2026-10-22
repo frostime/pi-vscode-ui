@@ -26,6 +26,8 @@ export interface DesktopHostOptions {
    */
   settings?: Record<string, unknown>;
   settingsStore?: DesktopSettingsStore;
+  /** Application state storage; isolated fixtures can keep the in-memory default. */
+  storage?: HostMemento;
   clientVersion?: string;
   /** Desktop entry maps Open Folder to Project registration, not an editor or OS reveal. */
   openFolder?: (fsPath?: string) => Promise<void>;
@@ -50,7 +52,7 @@ export function createDesktopHost(options: DesktopHostOptions): ClientHost {
     capabilities: DESKTOP_CLIENT_UI_CAPABILITIES,
     createEventEmitter: <T>() => createInMemoryEventEmitter<T>(),
     clientVersion: () => options.clientVersion ?? "unknown",
-    storage: createInMemoryMemento(),
+    storage: options.storage ?? createInMemoryMemento(),
     proxyCredentials: { get: () => Promise.resolve(undefined) },
     configuration: {
       getConfiguration: (section: string): HostConfiguration => ({

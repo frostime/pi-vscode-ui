@@ -11,9 +11,32 @@ const streamRelease = streamReleaseIndex >= 0 ? process.argv[streamReleaseIndex 
 const startupMailRaceIndex = process.argv.indexOf("--startup-mail-race");
 const startupMailRaceRelease = startupMailRaceIndex >= 0 ? process.argv[startupMailRaceIndex + 1] : undefined;
 let pendingStartupModelsId = null;
+const persistSessionFixture = process.argv.includes("--persist-session-fixture");
+const resumeFileIndex = process.argv.indexOf("--session");
 const sessionFile = process.argv.includes("--no-session")
   ? undefined
-  : `${process.cwd().replaceAll("\\", "/")}/.frostpi-e2e-session.jsonl`;
+  : persistSessionFixture && resumeFileIndex >= 0
+    ? process.argv[resumeFileIndex + 1]
+    : `${process.cwd().replaceAll("\\", "/")}/.frostpi-e2e-session${persistSessionFixture ? `-${process.pid}` : ""}.jsonl`;
+let fixtureHeader = { type: "session", version: 3, id: "e2e-session", cwd: process.cwd(), timestamp: new Date().toISOString() };
+if (persistSessionFixture && sessionFile) {
+  const fs = require("node:fs");
+  if (resumeFileIndex >= 0) {
+    const saved = fs.readFileSync(sessionFile, "utf8").trim().split(/\r?\n/).map((line) => JSON.parse(line));
+    fixtureHeader = saved[0];
+    entries = saved.slice(1);
+    entrySequence = entries.length;
+    sessionName = fixtureHeader.sessionName || sessionName;
+  }
+  fs.appendFileSync(`${sessionFile}.starts`, `${process.pid}\n`);
+  persistFixtureEntries();
+}
+
+function persistFixtureEntries() {
+  if (!persistSessionFixture || !sessionFile) return;
+  const header = { ...fixtureHeader, sessionName };
+  require("node:fs").writeFileSync(sessionFile, [header, ...entries].map((entry) => JSON.stringify(entry)).join("\n") + "\n");
+}
 
 process.stdout.write(JSON.stringify({
   type: "ready",
@@ -81,7 +104,7 @@ function handle(command) {
         cost: 0,
       });
       break;
-    case "set_session_name": sessionName = command.name; respond(id); break;
+    case "set_session_name": sessionName = command.name; persistFixtureEntries(); respond(id); break;
     case "set_model":
       respond(id, { provider: command.provider, id: command.modelId, name: "E2E Model", supportsImages: true, reasoning: true });
       break;
@@ -331,7 +354,10 @@ function respond(id, data) {
 
 function event(value) {
   if (value.type === "agent_start") isStreaming = true;
-  if (value.type === "agent_settled") isStreaming = false;
+  if (value.type === "agent_settled") {
+    isStreaming = false;
+    persistFixtureEntries();
+  }
   process.stdout.write(`${JSON.stringify(value)}\n`);
 }
 

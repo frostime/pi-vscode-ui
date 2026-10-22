@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 
 const fakePiFixture = () => fileURLToPath(new URL("../fixtures/fake-pi.cjs", import.meta.url));
 
@@ -52,6 +52,7 @@ vi.mock("../../src/host/sessions/SessionWorkingDirectories.js", async (importOri
 
 
 import type { ClientHost, HostEventEmitter } from "../../src/host/clientHost.js";
+import type { RuntimeLogger } from "../../src/core/diagnostics/RuntimeLogger.js";
 
 class TestEventEmitter<T> {
   readonly listeners = new Set<(value: T) => void>();
@@ -63,8 +64,8 @@ class TestEventEmitter<T> {
   dispose(): void { this.listeners.clear(); }
 }
 
-function createTestHost(): { host: ClientHost; logger: { error: ReturnType<typeof vi.fn>; info: ReturnType<typeof vi.fn> } } {
-  const logger = { error: vi.fn(), info: vi.fn() };
+function createTestHost(): { host: ClientHost; logger: { error: Mock<RuntimeLogger["error"]>; info: Mock<RuntimeLogger["info"]> } } {
+  const logger = { error: vi.fn<RuntimeLogger["error"]>(), info: vi.fn<RuntimeLogger["info"]>() };
   const host = {
     createEventEmitter: <T>() => new TestEventEmitter<T>() as unknown as HostEventEmitter<T>,
     clientVersion: () => "test",
@@ -144,6 +145,71 @@ describe("FrostPi session collection", () => {
     treePickerMocks.confirmDraftReplacement.mockReset();
   });
 
+  it.each(["new", "resume"] as const)("cancels a late %s discovery after shutdown without new metadata or runtimes", async (operation) => {
+    const cwd = await mkdtemp(join(tmpdir(), "frostpi-registry-closed-"));
+    testEnvironment.cwd = cwd;
+    testEnvironment.quickPickCwd = cwd;
+    const { host, logger } = createTestHost();
+    // If the guard regresses, block any save before it could start an actual child process.
+    const write = vi.fn(() => new Promise<void>(() => {}));
+    host.storage.update = write;
+    const discovery = { authoritative: false, directories: [{ cwd, workspaceFolderCwd: cwd, directoryName: "Project", isCurrent: true }] };
+    let release!: (value: typeof discovery) => void;
+    const pending = new Promise<typeof discovery>((resolve) => { release = resolve; });
+    const discover = vi.fn(() => pending);
+    const registry = new SessionRegistry(host, { logger, discoverWorkingDirectories: discover });
+    registries.push(registry);
+    const action = operation === "new" ? registry.createSession() : registry.resumeSession();
+    const cancelled = expect(action).rejects.toThrow("client has closed");
+    await registry.dispose();
+    await registry.flushPersistence();
+    release(discovery);
+    await cancelled;
+    expect(registry.snapshot().sessions).toEqual([]);
+    expect(write).not.toHaveBeenCalled();
+    await expect(registry.createSession()).rejects.toThrow("client has closed");
+    expect(discover).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves the native first-session fallback while exact restoration keeps a saved null selection", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "frostpi-registry-selection-"));
+    testEnvironment.cwd = cwd;
+    const { host, logger } = createTestHost();
+    const stored = { version: 1, activeSessionId: null, sessions: [{ id: "saved-a", title: "Saved A", cwd, updatedAt: 1 }] };
+    host.storage.get = (<T>() => stored as T);
+    const native = new SessionRegistry(host, { logger });
+    const exact = new SessionRegistry(host, { logger, restoreSelection: "saved-only" });
+    registries.push(native, exact);
+    expect(native.activeSessionId).toBe("saved-a");
+    expect(exact.activeSessionId).toBeNull();
+    await exact.ensureInitialSession();
+    expect(exact.snapshot().sessions).toEqual([expect.objectContaining({ id: "saved-a", status: "stopped" })]);
+  });
+
+  it("drains queued metadata before shutdown and reports a rejected save without swallowing it", async () => {
+    testEnvironment.cwd = await mkdtemp(join(tmpdir(), "frostpi-registry-flush-"));
+    testEnvironment.quickPickCwd = testEnvironment.cwd;
+    const { host, logger } = createTestHost();
+    let beginWrite!: () => void;
+    let rejectWrite!: (error: Error) => void;
+    const started = new Promise<void>((resolve) => { beginWrite = resolve; });
+    const pendingWrite = new Promise<void>((_resolve, reject) => { rejectWrite = reject; });
+    host.storage.update = () => { beginWrite(); return pendingWrite; };
+    const registry = new SessionRegistry(host, { logger });
+    registries.push(registry);
+    const creating = registry.createSession();
+    const creationFailure = expect(creating).rejects.toThrow("Storage write failed");
+    await started;
+    let settled = false;
+    const flushing = registry.flushPersistence().finally(() => { settled = true; });
+    const flushFailure = expect(flushing).rejects.toThrow("Storage write failed");
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    rejectWrite(new Error("Storage write failed"));
+    await Promise.all([creationFailure, flushFailure]);
+    expect(logger.error).toHaveBeenCalledWith("Failed to persist session metadata", expect.any(Error));
+  });
+
   it("keeps Resume searchable by worktree/path and Browse available while filtering", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-registry-picker-"));
     testEnvironment.cwd = dir;
@@ -213,7 +279,7 @@ process.on("SIGTERM", () => process.exit(0));
     testEnvironment.piExecutable = fakePi;
     const testHost = createTestHost();
     const registry = new SessionRegistry(testHost.host, {
-      logger: testHost.logger as never,
+      logger: testHost.logger,
       sessionTreeArtifactPath: artifactPath,
     });
     registries.push(registry);
@@ -239,7 +305,7 @@ process.on("SIGTERM", () => process.exit(0));
     testEnvironment.cwd = resolve("test/fixtures");
     testEnvironment.piExecutable = fakePiFixture();
     const testHost = createTestHost();
-    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger as never });
+    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger });
     registries.push(registry);
 
     await registry.ensureInitialSession();
@@ -257,7 +323,7 @@ process.on("SIGTERM", () => process.exit(0));
       resolveInput = resolve;
     }));
     const testHost = createTestHost();
-    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger as never });
+    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger });
     registries.push(registry);
 
     const creation = registry.createSessionWithCustomArguments();
@@ -278,7 +344,7 @@ process.on("SIGTERM", () => process.exit(0));
     const registry = new SessionRegistry(
       testHost.host,
       {
-        logger: testHost.logger as never,
+        logger: testHost.logger,
         discoverWorkingDirectories: () => Promise.resolve({
         authoritative: true,
         directories: [
@@ -314,7 +380,7 @@ process.on("SIGTERM", () => process.exit(0));
     const registry = new SessionRegistry(
       testHost.host,
       {
-        logger: testHost.logger as never,
+        logger: testHost.logger,
         discoverWorkingDirectories: actual.discoverSessionWorkingDirectories,
       },
     );
@@ -347,7 +413,7 @@ process.on("SIGTERM", () => process.exit(0));
     const registry = new SessionRegistry(
       testHost.host,
       {
-        logger: logger as never,
+        logger: logger,
         discoverWorkingDirectories: () => Promise.resolve({
         authoritative: true,
         directories: [{ cwd: main, workspaceFolderCwd: main, worktreeRoot: main, directoryName: "main", branch: "main", isCurrent: true }],
@@ -377,7 +443,7 @@ process.on("SIGTERM", () => process.exit(0));
     const registry = new SessionRegistry(
       testHost.host,
       {
-        logger: testHost.logger as never,
+        logger: testHost.logger,
         discoverWorkingDirectories: () => Promise.resolve({
         authoritative: false,
         directories: [{ cwd: main, workspaceFolderCwd: main, directoryName: "main", isCurrent: true }],
@@ -409,7 +475,7 @@ process.on("SIGTERM", () => process.exit(0));
     const registry = new SessionRegistry(
       testHost.host,
       {
-        logger: testHost.logger as never,
+        logger: testHost.logger,
         discoverWorkingDirectories: () => Promise.resolve({
         authoritative: true,
         directories: [
@@ -465,7 +531,7 @@ process.on("SIGTERM", () => process.exit(0));
     testEnvironment.cwd = dir;
     testEnvironment.piExecutable = fakePi;
     const testHost = createTestHost();
-    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger as never });
+    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger });
     registries.push(registry);
 
     const sessionId = await registry.openSession({ path: sessionFile, cwd: dir, title: "Resume", updatedAt: Date.now() });
@@ -570,7 +636,7 @@ process.on("SIGTERM", () => process.exit(0));
       persisted = structuredClone(value) as typeof persisted;
       return Promise.resolve();
     };
-    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger as never });
+    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger });
     registries.push(registry);
 
     const activeId = await registry.openSession({ path: sessionFile, cwd: dir, title: "Source", updatedAt: Date.now() });
@@ -641,7 +707,7 @@ process.on("SIGTERM", () => process.exit(0));
       return Promise.resolve();
     });
     const logger = testHost.logger;
-    const registry = new SessionRegistry(testHost.host, { logger: logger as never });
+    const registry = new SessionRegistry(testHost.host, { logger: logger });
     registries.push(registry);
 
     const first = (await registry.createSession())!;
@@ -689,7 +755,7 @@ process.on("SIGTERM", () => process.exit(0));
       persisted = structuredClone(value);
       return Promise.resolve();
     });
-    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger as never });
+    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger });
     registries.push(registry);
     const toasts: string[] = [];
     registry.onDidToast((toast) => toasts.push(toast.message));
@@ -721,7 +787,7 @@ process.on("SIGTERM", () => process.exit(0));
     await registry.restartAllSessions();
     expect(toasts).toContain("There are no sessions to restart.");
 
-    const restored = new SessionRegistry(testHost.host, { logger: testHost.logger as never });
+    const restored = new SessionRegistry(testHost.host, { logger: testHost.logger });
     registries.push(restored);
     expect(restored.snapshot().sessions).toEqual([]);
 
@@ -785,7 +851,7 @@ process.on("SIGTERM", () => process.exit(0));
     hostMocks.showInformation.mockClear();
     hostMocks.showError.mockClear();
     const testHost = createTestHost();
-    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger as never });
+    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger });
     registries.push(registry);
 
     const sessionId = (await registry.createSession())!;
@@ -898,7 +964,7 @@ process.on("SIGTERM", () => process.exit(0));
     testEnvironment.piExecutable = fakePi;
 
     const testHost = createTestHost();
-    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger as never });
+    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger });
     registries.push(registry);
 
     const events: Array<{ sessionId: string; text: string }> = [];
@@ -928,7 +994,7 @@ process.on("SIGTERM", () => process.exit(0));
     testEnvironment.projectFolders = [projectA, projectB];
     testEnvironment.anchorProject = projectA;
     const testHost = createTestHost();
-    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger as never });
+    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger });
     registries.push(registry);
 
     testEnvironment.quickPickCwd = projectA;

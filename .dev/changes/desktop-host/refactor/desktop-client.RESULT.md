@@ -4,7 +4,7 @@
 
 - 原验证快照：`wip/desktop-client@7c3f671`，前一 checkpoint 为 `367d295`，包含本地 `main@2ed69c1`。产品代码现已 squash 整合进主目录 `feat/desktop-host`，后续在主目录开发；原 worktree 冻结作回退。未合并 main、未改产品版本、未发布。
 - `apps/pi-client` 的现有 UI、Runtime、Registry 和消息桥供两个产出实际消费。宿主需求集中在 `src/host/clientHost.ts`，VS Code 薄接线，Desktop 适配。
-- Desktop 是内存态开发预览：Project、设置和客户端元数据不跨应用重启保存。配置路径、Project 配置覆盖与正式关闭/恢复策略仍未定。
+- 原架构快照是内存态预览。主目录后续已实现独立设置及 Project/会话元数据文件；各批次的证据见下文。当前仍未完成独立桌面分发与真实 Pi GUI 总验收，草稿不跨应用重启保存。
 
 ## 自动与原生宿主检查
 
@@ -96,6 +96,28 @@ Svelte 保留基线中的一条可访问性警告（ExtensionUiRequestCard 的�
 
 日志：`tmp/r4-check.log`、`tmp/r4-vsix.log`、`tmp/r4-smoke-final.log`；最终 smoke 结果/截图：`C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-smoke-FHAqOT/`。临时材料不是产品依赖。
 
+## state.json 与正常关闭/重开
+
+主目录接入独立 `state.json`，与 settings.json 同目录。外层版本化保存 Project 的稳定 id/name/cwd、选中 Project 和原始键 HostMemento；既有 SessionPersistence 继续解释 `frostpi.sessions.v1`。恢复根目录先于 Registry 构造，不复制聊天正文、工具输出、草稿、图片、私有 launch args 或进程状态。Project alias 去重映射选中项，暂时缺失的目录保留元数据，新增仍需验证存在。
+
+Project/Memento 更新经过同一串行原子写队列。I/O 失败保留 desired memory，正常关闭停止 Pi、等待 Registry 队列和文件队列，文件 flush 可单次重试；校验/序列化失败不能冒充已被文件缓存接收并成功恢复。坏文件不自动重置，错误在 UI/关闭路径明确可见。JSONC/原子 IO 与设置存储共用，继续使用发布 ESM 入口；拒绝库会静默丢弃的 `__proto__` 属性，保护旧文件。
+
+初次独立复核发现两处关闭/恢复问题，已修正并补回归：
+
+- 延迟 New/Resume discovery 在 Registry dispose 后返回，不能再创建 Runtime、排入 metadata 写或启动 Pi；已关闭状态与 queued start 受同一生命周期检查约束，不靠无限循环 flush。
+- Desktop 显式使用 `restoreSelection: saved-only`，保存的 null/无效选中项不再回退启动其他历史会话。共享 Registry 默认的 Native saved-or-first 行为保留。用户在初始化中主动关闭窗口作为取消处理，不误报正常启动失败。
+
+最终验证：
+
+- `pnpm check` 明确退出 **0**：133 个测试文件 / **901 项测试**，包括插件 329、共享客户端 295、Desktop 72；lint、类型、双端构建和插件预算通过。
+- `pnpm package:vsix && pnpm verify:vsix` 明确退出 **0**，仍为 0.15.5 / 78 entries / 2.65 MB，未安装/发布。
+- 最终 Electron smoke 明确退出 **0**、`ok:true`。实际正常 close 后重开稳定 Project/会话身份，读取受控 Pi 自己的合成 JSONL；以进程启动计数验证只启动保存选中项、startOnOpen=false 不启动、最后选中临时会话而存为 null 时不启动其他项。检查原会话 entry IDs 未增加，不自动重发 prompt；Provisional/Ephemeral 不进入保存索引。此前两 Project 并行/Stop 隔离/设置入口等检查仍通过。
+- Registry 回归单独释放关闭前延迟的 New/Resume discovery，确认没有新 Runtime/metadata 写入；该用例不启动 Pi。Store 用例覆盖字段交错、读坏文件保护、写失败恢复/排空及未捕获元数据与已接收待写的区别。
+
+没有重跑 Extension Host E2E、真实 Pi GUI，也没有模拟断电、跨进程写入合并或真实 OS ACL/磁盘故障。这里的历史与进程计数来自受控 fixture，不冒充真实模型/完整首版验收。两份已有 README 暂存链接修改仍不属于此批。
+
+日志：`tmp/r5-check-final.log`、`tmp/r5-smoke-final.log`、`tmp/r5-vsix.log`；最终 smoke 结果/截图：`C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-smoke-pno9bN/`。这些临时材料不是产品依赖。
+
 ## 尚未证明
 
-用户日常操作的布局/流程满意度、完整真实 Pi GUI 路径、所有用户扩展组合、Desktop 持久化/重开恢复和其他平台尚未验收。不能把此 checkpoint 宣称为 Desktop 产品完成或发布就绪。
+用户日常操作的布局/流程满意度、包含关闭/重开的完整真实 Pi GUI、所有用户扩展组合及其他平台尚未验收。草稿跨重启恢复未实现，独立桌面分发尚未完成。不能把此 checkpoint 宣称为 Desktop 产品完成或发布就绪。

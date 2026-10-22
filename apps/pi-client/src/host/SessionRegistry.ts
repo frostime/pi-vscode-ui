@@ -52,6 +52,8 @@ export interface SessionRegistryOptions {
   sessionTreeArtifactPath?: string;
   /** Bundled question-tool adapter; hosts without one keep the question tool unavailable. */
   questionToolArtifactPath?: string;
+  /** Native VS Code keeps its historical fallback; Desktop restores only an explicitly saved selection. */
+  restoreSelection?: "saved-or-first" | "saved-only";
 }
 
 export class SessionRegistry {
@@ -74,6 +76,7 @@ export class SessionRegistry {
   readonly #discoverWorkingDirectories: DiscoverSessionWorkingDirectories;
   readonly #sessionTreeArtifactPath: string | undefined;
   readonly #questionToolArtifactPath: string | undefined;
+  readonly #restoreOnlySavedSelection: boolean;
 
   #activeSessionId: string | null = null;
   #forkOperation: ForkOperation | null = null;
@@ -98,6 +101,7 @@ export class SessionRegistry {
     this.#discoverWorkingDirectories = options.discoverWorkingDirectories ?? discoverSessionWorkingDirectories;
     this.#sessionTreeArtifactPath = options.sessionTreeArtifactPath;
     this.#questionToolArtifactPath = options.questionToolArtifactPath;
+    this.#restoreOnlySavedSelection = options.restoreSelection === "saved-only";
     this.#changeEmitter = host.createEventEmitter<void>();
     this.#toastEmitter = host.createEventEmitter<RegistryToast>();
     this.#setComposerTextEmitter = host.createEventEmitter<{ sessionId: string; text: string }>();
@@ -108,7 +112,7 @@ export class SessionRegistry {
     for (const record of stored.sessions) this.#restoreRecord(record);
     this.#activeSessionId = stored.activeSessionId && this.#runtimes.has(stored.activeSessionId)
       ? stored.activeSessionId
-      : stored.sessions[0]?.id ?? null;
+      : this.#restoreOnlySavedSelection ? null : stored.sessions[0]?.id ?? null;
   }
 
   get activeSessionId(): string | null {
@@ -116,9 +120,12 @@ export class SessionRegistry {
   }
 
   async ensureInitialSession(): Promise<void> {
+    this.#assertOpen();
     if (!this.#host.workspace.getWorkspaceFolders().length) return;
     await this.#reconcilePersistedWorkingDirectories();
+    this.#assertOpen();
     await this.#repairGeneratedTitles();
+    this.#assertOpen();
     // Never invent a new session on open. Empty workspaces stay on the onboarding home until
     // the user creates or resumes a session. Optionally start only an already-selected one.
     const active = this.#activeSessionId ? this.#runtimes.get(this.#activeSessionId) : undefined;
@@ -178,6 +185,7 @@ export class SessionRegistry {
     return this.#withSessionCreation(async () => {
       const cwd = this.#sourceWorkspaceCwd("creating a Pi session");
       const discovery = await this.#discoverWorkingDirectories(cwd);
+      this.#assertOpen();
       const directory = await this.#pickSessionWorkingDirectory(discovery.directories);
       if (!directory) return undefined;
       return this.#createSessionInDirectory(directory, ephemeral);
@@ -196,10 +204,12 @@ export class SessionRegistry {
         prompt:
           "Extra Pi CLI arguments appended to this launch as-is. Whitespace separates arguments; double quotes group one argument. Not validated.",
       });
+      this.#assertOpen();
       if (raw === undefined) return undefined;
       const customArguments = parseLaunchArguments(raw);
       if (customArguments.length === 0 || customArguments.every((argument) => argument.length === 0)) return undefined;
       const discovery = await this.#discoverWorkingDirectories(cwd);
+      this.#assertOpen();
       const directory = await this.#pickSessionWorkingDirectory(discovery.directories);
       if (!directory) return undefined;
       return this.#createSessionInDirectory(directory, false, customArguments);
@@ -207,9 +217,11 @@ export class SessionRegistry {
   }
 
   async resumeSession(): Promise<string | undefined> {
+    this.#assertOpen();
     this.#assertNoForkOperation();
     const cwd = this.#sourceWorkspaceCwd("resuming a Pi session");
     const discovery = await this.#discoverWorkingDirectories(cwd);
+    this.#assertOpen();
     const configuration = readConfiguration(this.#host, cwd);
     const entry = await pickPiSession(this.#host, discovery.directories, configuration.piArguments, configuration.runtimeCompatibility);
     if (!entry) return undefined;
@@ -226,6 +238,7 @@ export class SessionRegistry {
     workingDirectoryValidated: boolean,
     workingDirectory?: SessionWorkingDirectory,
   ): Promise<string> {
+    this.#assertOpen();
     this.#assertNoForkOperation();
     const existing = [...this.#records.values()].find((record) => record.sessionFile && samePath(record.sessionFile, entry.path));
     if (existing) {
@@ -236,6 +249,7 @@ export class SessionRegistry {
     }
 
     await this.#discardActiveTemporarySession();
+    this.#assertOpen();
     const id = randomUUID();
     const record: PersistedSessionRecord = {
       id,
@@ -260,7 +274,9 @@ export class SessionRegistry {
     ephemeral: boolean,
     customArguments?: readonly string[],
   ): Promise<string> {
+    this.#assertOpen();
     await this.#discardActiveTemporarySession();
+    this.#assertOpen();
     const id = randomUUID();
     const record: PersistedSessionRecord = {
       id,
@@ -285,6 +301,7 @@ export class SessionRegistry {
     this.#assertNoForkOperation();
     const runtime = this.#requireRuntime(sessionId);
     if (sessionId !== this.#activeSessionId) await this.#discardActiveTemporarySession();
+    this.#assertOpen();
     this.#activeSessionId = sessionId;
     await this.#persist();
     this.#emitChange();
@@ -566,6 +583,11 @@ export class SessionRegistry {
     ].join("\n");
   }
 
+  /** Wait for metadata saves already queued by Registry actions; does not wait for agent turns. */
+  async flushPersistence(): Promise<void> {
+    await this.#persistenceQueue;
+  }
+
   async dispose(): Promise<void> {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -615,7 +637,7 @@ export class SessionRegistry {
     }));
     for (const record of stale) this.#removeSession(record.id);
     if (this.#activeSessionId && !this.#runtimes.has(this.#activeSessionId)) {
-      this.#activeSessionId = [...this.#runtimes.keys()].at(-1) ?? null;
+      this.#activeSessionId = this.#restoreOnlySavedSelection ? null : [...this.#runtimes.keys()].at(-1) ?? null;
     }
     await this.#persist();
     this.#logger.info(`Removed ${stale.length} FrostPi session record(s) for deleted worktrees.`);
@@ -685,14 +707,16 @@ export class SessionRegistry {
   }
 
   async #startRuntime(runtime: SessionRuntime, workingDirectoryValidated = false): Promise<void> {
+    this.#assertOpen();
     const pending = this.#startJobs.get(runtime.id);
     if (pending) return pending;
     if (!workingDirectoryValidated && !await this.#validateRuntimeWorkingDirectory(runtime)) return;
+    this.#assertOpen();
 
     const sessionFile = this.#records.get(runtime.id)?.sessionFile;
     runtime.markWaitingToStart();
     const job = this.#startQueue.catch(() => undefined).then(async () => {
-      if (this.#runtimes.get(runtime.id) !== runtime) return;
+      if (this.#disposed || this.#runtimes.get(runtime.id) !== runtime) return;
       try {
         await runtime.start(sessionFile);
         if (sessionFile) void this.#queueHistory(runtime, false).catch(() => undefined);
@@ -791,6 +815,7 @@ export class SessionRegistry {
   }
 
   async #withSessionCreation<T>(operation: () => Promise<T>): Promise<T> {
+    this.#assertOpen();
     this.#assertNoForkOperation();
     this.#assertNoSessionCreation();
     this.#sessionCreationInProgress += 1;
@@ -914,6 +939,7 @@ export class SessionRegistry {
   }
 
   #persist(): PromiseLike<void> {
+    this.#assertOpen();
     const sessions = [...this.#records.values()].filter((record) => !record.ephemeral && !this.#temporarySessionIds.has(record.id));
     const activeRecord = this.#activeSessionId ? this.#records.get(this.#activeSessionId) : undefined;
     const activeSessionId = this.#activeSessionId && !activeRecord?.ephemeral && !this.#temporarySessionIds.has(this.#activeSessionId)
@@ -921,6 +947,8 @@ export class SessionRegistry {
       : null;
     const job = this.#persistenceQueue.catch(() => undefined).then(() => this.#persistence.save(activeSessionId, sessions));
     this.#persistenceQueue = job;
+    // Runtime-change saves can be fire-and-forget; retain rejection for callers without an unhandled promise.
+    void job.catch((error: unknown) => this.#logger.error("Failed to persist session metadata", error));
     return job;
   }
 
@@ -973,7 +1001,12 @@ export class SessionRegistry {
     this.#activeSessionId = [...this.#runtimes.keys()].at(-1) ?? null;
   }
 
+  #assertOpen(): void {
+    if (this.#disposed) throw new Error("The FrostPi client has closed.");
+  }
+
   #requireRuntime(sessionId: string): SessionRuntime {
+    this.#assertOpen();
     const runtime = this.#runtimes.get(sessionId);
     if (!runtime) throw new Error(`Unknown FrostPi session: ${sessionId}`);
     return runtime;

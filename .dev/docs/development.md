@@ -3,7 +3,7 @@ title: Development Workflow
 description: Workspace setup, independent product builds, shared-client ownership, and debugging.
 scope:
   - /**
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # Development Workflow
@@ -19,9 +19,11 @@ Install from the repository root with `pnpm install --frozen-lockfile`. The lock
 - `pnpm --dir apps/desktop build` builds the Electron main/preload and a renderer consuming the same ClientApp. `pnpm --dir apps/desktop start` launches the development preview; directories may be passed as arguments or added in the UI.
 - `pnpm --dir apps/desktop test:smoke` requires a current Desktop build. It launches real Electron with isolated fake Pi children, two temporary unrelated Projects and a temporary Electron/Pi profile; it never uses real model credentials. It prints the result and OS-temporary screenshot/log location. This is not real-Pi acceptance.
 
-Desktop is a development preview with persistent settings but memory-only Projects and client session metadata. Normal starts retain the system application-data `FrostPi` profile; set `FROSTPI_DESKTOP_USER_DATA` to an isolated directory when testing. First-run setup offers a whitelist import from the default VS Code user settings or initialization with defaults. Import is an editable preview until Save, not ongoing synchronization. Settings can be edited in the app or opened in the system editor and explicitly reloaded. See the [Desktop contract](../../apps/desktop/SPEC.md#settings-and-initial-import).
+Desktop is a development preview with persistent settings, Projects and saved-session metadata. Normal starts retain the system application-data `FrostPi` profile; set `FROSTPI_DESKTOP_USER_DATA` to an isolated directory when testing. First-run setup offers a whitelist import from the default VS Code user settings or initialization with defaults. Import is an editable preview until Save, not ongoing synchronization. Settings can be edited in the app or opened in the system editor and explicitly reloaded. See the [Desktop contract](../../apps/desktop/SPEC.md#settings-and-initial-import).
 
-Closing the preview still disposes its child processes. Persistent settings do not establish app-reopen/session/draft/background behavior; Pi-owned conversation persistence remains separate. Automated tests and smoke use temporary profiles and synthetic VS Code settings, never real user settings.
+`state.json` remembers Project roots/selection and the shared session index separately from settings. Normal close stops children and drains queued state writes. Reopen restores entries; `frostpi.session.startOnOpen` controls only the selected saved Pi, not every background entry. No prompt replay or draft/input-request recovery is implied. Pi-owned conversation files remain separate. State-file errors preserve the existing file and appear in the UI; see the [state/reopen contract](../../apps/desktop/SPEC.md#application-state-and-reopen).
+
+Automated tests and smoke use temporary profiles and synthetic VS Code settings, never real user settings. The state-reopen smoke's optional fixture mode writes Pi-owned synthetic JSONL under temporary Project roots and counts launches; it is not evidence of a real model response.
 
 Both Electron launchers remove `ELECTRON_RUN_AS_NODE` only from the launch environment. Do not modify Pi's process policy to compensate for an Electron launcher variable. Electron's executable must be available before launch; a JS package install or successful renderer build alone does not prove native launch.
 

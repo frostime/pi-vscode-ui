@@ -11,6 +11,8 @@ export interface DesktopProject {
 export interface DesktopProjectsView {
   projects: DesktopProject[];
   activeProjectId: string | null;
+  /** Transient persistence status, never part of the saved Project data. */
+  stateError?: string;
 }
 
 export type DesktopDialog =
