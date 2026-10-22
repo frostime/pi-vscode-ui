@@ -51,8 +51,9 @@ END
 
 OPEN 首版运行约定
     由 Agent 提出具体建议，用户确认影响使用的取舍，不让用户设计内部接口：
-    - 配置与 Project/会话元数据的存储位置；首版是否提供 Project 级设置覆盖。
-    - 首次从 VS Code 一次性导入的来源/范围：用户级显式设置还是当前窗口的有效配置。后续独立配置、不持续同步；范围未确认，不擅自读取用户设置。
+    - 配置与 Project/会话元数据的存储位置。
+    - 导入来源已确认：仅从 VS Code 默认用户配置一次性导入，作为 Desktop 默认配置；不再要求用户选择 Project/Profile 或当前窗口有效配置。后续独立维护、不持续同步。当前调查重点是实际依赖的设置白名单，而不是 Project 级导入策略。
+    - 字体依赖已查明：`chat.fontFamily`、`chat.fontSize`、`chat.editor.fontFamily`、`chat.editor.fontSize`，以及经 Webview 变量间接使用的 `editor.fontFamily`。其余直接依赖是 `files.exclude`、`search.exclude`，及仅在 VS Code 代理模式下使用的 `http.proxy`；后者需要明确转换，不能照抄不兼容的模式。尚未实现导入。
     - 关闭窗口/退出 App 时如何处理运行中的 Pi；重开恢复哪些元数据、会话和草稿。
     这些决定供 [日常使用闭环] 使用。跨会话恢复规则不得由当前临时实现反推。
 
