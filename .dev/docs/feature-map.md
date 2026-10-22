@@ -4,7 +4,7 @@ description: Product features, owning code, and nearest contracts.
 scope:
   - /apps/**
   - /packages/**
-updated: 2026-10-20
+updated: 2026-10-22
 ---
 
 # Feature → Code Map
@@ -59,6 +59,7 @@ Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 
 - VS Code file/selection/external Composer editor: `apps/vscode/src/extension/composer/`; file/diff navigation: `conversation/openReferencedLocation.ts` and `file-changes/`.
 - Shared setting parsing: `apps/pi-client/src/host/readConfiguration.ts`; Runtime invocation/compatibility: `src/core/configuration/`; process proxy calculation: `src/core/network/`.
+- Desktop settings storage/import/actions: `apps/desktop/src/main/settings/`; original-key schema additions and finite operations: `src/shared/desktopSettings.ts`; settings form: `src/renderer/SettingsPanel.svelte`. Contract: `apps/desktop/SPEC.md`.
 - Native proxy configuration/secrets: `apps/vscode/src/extension/network/`. Contract: `proxy-environment.SPEC.md` there; proxy changes require process restart.
 - Pi settings: `apps/pi-client/src/core/_shared/pi-settings/`; cache-miss projection: `core/conversation/cacheMissDetection.ts`.
 - VS Code diagnostics/status/notifications: `apps/vscode/src/extension/diagnostics/`, `status-bar/`, `notifications/`.

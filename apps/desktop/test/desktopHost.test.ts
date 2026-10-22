@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -15,10 +15,13 @@ import type { FrostPiConfiguration } from "@frostime/pi-client/core/configuratio
 import type { HostInputBoxOptions, HostQuickPickItem, HostQuickPickOptions, HostQuickPickSeparator } from "@frostime/pi-client/host";
 import { SessionRegistry } from "@frostime/pi-client/host/SessionRegistry";
 import { readConfiguration } from "@frostime/pi-client/host/readConfiguration";
+import { readChatTypography } from "@frostime/pi-client/host/readChatTypography";
+import { workspaceFileExcludeRules } from "@frostime/pi-client/host/file-search/mentionSearchContext";
 
 import type { DesktopInteractions } from "../src/main/dialogs.js";
 import { createDesktopHost } from "../src/main/desktopHost.js";
 import { DesktopProjects } from "../src/main/desktopProjects.js";
+import { DesktopSettingsStore } from "../src/main/settings/DesktopSettingsStore.js";
 
 /** Property-shaped structural stub; methods would trip the unbound-method lint rule on mock refs. */
 interface StubInteractions {
@@ -112,6 +115,36 @@ describe("createDesktopHost", () => {
       endpoint: "http://127.0.0.1:9000",
       noProxy: "localhost,127.0.0.1,::1",
     });
+  });
+
+  it("reads live dot-key settings, merges exclusion defaults and persists native-shaped updates", async () => {
+    const root = await mkdtemp(join(tmpdir(), "frostpi-live-settings-"));
+    try {
+      const store = await DesktopSettingsStore.open(join(root, "settings.json"));
+      await store.replace({
+        "chat.fontSize": 18,
+        "files.exclude": { "**/generated": true, "**/.svn": false },
+        "search.exclude": { "**/cache": true },
+      });
+      const host = createDesktopHost({
+        window: () => null, projects: new DesktopProjects(),
+        interactions: interactions() as unknown as DesktopInteractions, settingsStore: store,
+      });
+      const chat = host.configuration.getConfiguration("chat");
+      expect(readChatTypography(chat)).toEqual({ message: { fontSize: 18 }, composer: { fontSize: 14 } });
+      await chat.update("editor.fontSize", 17, "global");
+      expect(readChatTypography(chat).composer.fontSize).toBe(17);
+      expect((await DesktopSettingsStore.open(store.filePath)).values["chat.editor.fontSize"]).toBe(17);
+      const patterns = (respectSearch: boolean) => workspaceFileExcludeRules(host, root, respectSearch).map((rule) => rule.pattern);
+      expect(patterns(true)).toEqual(expect.arrayContaining(["**/generated", "**/cache", "**/.hg", "**/bower_components"]));
+      expect(patterns(true)).not.toContain("**/.svn");
+      expect(patterns(false)).not.toContain("**/cache");
+      await store.update("files.exclude", { "**/new-build": true });
+      expect(patterns(false)).toContain("**/new-build");
+      expect(patterns(false)).not.toContain("**/generated");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("keeps every Project root stable in workspaceFolders while the anchor switches", async () => {

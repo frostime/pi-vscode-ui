@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { app } from "electron";
 import { createDesktopApp } from "../src/main/createDesktopApp.js";
+import { DesktopSettingsStore } from "../src/main/settings/DesktopSettingsStore.js";
 
 const directory = process.env.FROSTPI_DESKTOP_SMOKE_DIR!;
 app.setPath("userData", join(directory, "electron-profile"));
@@ -19,13 +20,67 @@ async function until(check: () => boolean | Promise<boolean>, label: string): Pr
   throw new Error(`Desktop smoke timed out: ${label}`);
 }
 
+async function verifySettingsSetup(): Promise<void> {
+  const sourcePath = join(directory, "vscode-default-user-settings.json");
+  const settingsPath = join(directory, "first-run/settings.json");
+  const source = '{ // default VS Code user settings\n "chat.fontSize": 19, "chat.editor.fontSize": 17, "editor.fontFamily": "Import Mono", "files.exclude": {"**/generated": true}, "[typescript]": {"chat.fontSize": 99}, }';
+  await writeFile(sourcePath, source);
+  const store = await DesktopSettingsStore.open(settingsPath);
+  const setup = await createDesktopApp({ settingsStore: store, vscodeSettingsPath: sourcePath, show: false });
+  const browser = setup.window.webContents;
+  try {
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('#settings-title'))"), "first-run settings modal");
+    await browser.executeJavaScript("[...document.querySelectorAll('button')].find(b=>b.textContent==='Import VS Code defaults').click()");
+    await until(() => browser.executeJavaScript("document.getElementById('setting-chat.fontSize')?.value==='19'"), "default-user import populates editable form");
+    assert.equal(store.firstRun, true);
+    assert.deepEqual(store.values, {});
+    assert.doesNotMatch(await browser.executeJavaScript("document.documentElement.style.getPropertyValue('--vscode-editor-font-family')") as string, /Import Mono/);
+    await browser.executeJavaScript("document.querySelector('dialog .save').click()");
+    await until(() => !store.firstRun && store.values["chat.fontSize"] === 19, "Save commits imported dot keys");
+    await until(() => browser.executeJavaScript("document.documentElement.style.getPropertyValue('--vscode-editor-font-family')==='Import Mono'"), "Save applies imported editor font family");
+    assert.equal(await readFile(sourcePath, "utf8"), source);
+    assert.deepEqual(store.values, {
+      "chat.fontSize": 19, "chat.editor.fontSize": 17,
+      "editor.fontFamily": "Import Mono", "files.exclude": { "**/generated": true },
+    });
+    setup.window.showInactive();
+    await writeFile(join(directory, "desktop-settings.png"), (await browser.capturePage()).toPNG());
+    setup.window.setSize(280, 700);
+    await browser.executeJavaScript("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
+    const narrow: unknown = await browser.executeJavaScript("(()=>{const d=document.querySelector('dialog');const r=d.getBoundingClientRect();return {fits:r.left>=0&&r.right<=innerWidth,noHorizontalScroll:d.scrollWidth<=d.clientWidth+1};})()");
+    assert.deepEqual(narrow, { fits: true, noHorizontalScroll: true });
+    await writeFile(join(directory, "desktop-settings-280.png"), (await browser.capturePage()).toPNG());
+    await browser.executeJavaScript("document.querySelector('[aria-label=\"Reset chat.fontSize\"]').click();document.querySelector('dialog .save').click()");
+    await until(() => !("chat.fontSize" in store.values), "Reset removes override rather than storing default");
+    await until(() => browser.executeJavaScript("document.documentElement.style.getPropertyValue('--frostpi-chat-message-font-size')==='13px'"), "Reset restores shared message size");
+    await assert.rejects(browser.executeJavaScript("window.frostpiDesktop.settings({type:'save',values:{'chat.fontSize':'wrong-type'}})"));
+    assert.equal(store.values["chat.editor.fontSize"], 17);
+    await assert.rejects(browser.executeJavaScript("window.frostpiDesktop.settings({type:'arbitraryFileRead',path:'not-authorized'})"));
+  } finally {
+    await setup.dispose(); setup.window.destroy();
+  }
+  // A new app instance reads Desktop settings and must not import the changed VS Code file again.
+  await writeFile(sourcePath, '{"chat.editor.fontSize":99}');
+  const reopenedStore = await DesktopSettingsStore.open(settingsPath);
+  assert.equal(reopenedStore.values["chat.editor.fontSize"], 17);
+  const reopened = await createDesktopApp({ settingsStore: reopenedStore, vscodeSettingsPath: sourcePath, show: false });
+  try {
+    await until(() => reopened.window.webContents.executeJavaScript("document.documentElement.style.getPropertyValue('--vscode-editor-font-family')==='Import Mono'"), "reopen applies persisted settings");
+    assert.equal(await reopened.window.webContents.executeJavaScript("Boolean(document.querySelector('#settings-title'))"), false);
+    assert.equal(reopenedStore.values["chat.editor.fontSize"], 17);
+  } finally {
+    await reopened.dispose(); reopened.window.destroy();
+  }
+}
+
 void app.whenReady().then(async () => {
+  const settingsStore = await DesktopSettingsStore.open(join(directory, "electron-profile/settings.json"));
+  await settingsStore.replace({
+    "frostpi.pi.executable": process.env.FROSTPI_DESKTOP_SMOKE_PI!,
+    "frostpi.pi.arguments": ["--stream-084-release", join(directory, "release-stream")],
+  });
   const desktop = await createDesktopApp({
-    directories: [join(directory, "project-a"), join(directory, "project-b")], show: false,
-    settings: {
-      "frostpi.pi.executable": process.env.FROSTPI_DESKTOP_SMOKE_PI!,
-      "frostpi.pi.arguments": ["--stream-084-release", join(directory, "release-stream")],
-    },
+    directories: [join(directory, "project-a"), join(directory, "project-b")], show: false, settingsStore,
   });
   const browser = desktop.window.webContents;
   const text = (): Promise<string> => browser.executeJavaScript("document.body.innerText");
@@ -60,6 +115,18 @@ void app.whenReady().then(async () => {
     await resume;
     await Promise.all([desktop.registry.sendPrompt(a, "stream-084", []), desktop.registry.sendPrompt(b, "stream-084", [])]);
     await until(() => desktop.registry.sessionView(a)?.status === "running" && desktop.registry.sessionView(b)?.status === "running", "both Pi actively stream");
+    await browser.executeJavaScript(`window.frostpiDesktop.settings({type:'save',values:${JSON.stringify({
+      ...settingsStore.values,
+      "frostpi.pi.executable": join(directory, "not-a-pi-executable"),
+      "frostpi.network.proxy.mode": "direct",
+      "chat.fontFamily": "Arial",
+      "chat.fontSize": 18,
+      "chat.editor.fontFamily": "Courier New",
+      "chat.editor.fontSize": 16,
+    })}})`);
+    assert.equal(desktop.registry.sessionView(a)?.status, "running");
+    assert.equal(desktop.registry.sessionView(b)?.status, "running");
+    assert.equal(desktop.registry.sessionView(a)?.networkProxy.restartRequired, true);
     await desktop.registry.abort(a);
     await until(() => !desktop.registry.sessionView(a)?.isStreaming, "target Pi stops");
     assert.equal(desktop.registry.sessionView(b)?.status, "running");
@@ -69,6 +136,23 @@ void app.whenReady().then(async () => {
     await until(() => desktop.registry.activeSessionId === a, "foreground Pi switch");
     assert.equal(desktop.registry.sessionView(a)?.cwd, projectA!.cwd);
     assert.equal(desktop.registry.sessionView(b)?.cwd, projectB!.cwd);
+    // Changing executable/proxy above must not replace either already running child.
+    await desktop.registry.sendPrompt(a, "typography", []);
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('.markdown-body pre code'))"), "real shared Markdown code block");
+    const fonts: unknown = await browser.executeJavaScript(`(() => {
+      const style = (selector) => { const s = getComputedStyle(document.querySelector(selector)); return {family:s.fontFamily,size:s.fontSize}; };
+      return {message:style('.message-content'),composer:style('.prompt-editor .cm-scroller'),code:style('.markdown-body pre')};
+    })()`);
+    assert.deepEqual(fonts, {
+      message: { family: "Arial", size: "18px" },
+      composer: { family: '"Courier New"', size: "16px" },
+      code: { family: '"Courier New"', size: "18px" },
+    });
+    const resetFonts: Record<string, unknown> = { ...settingsStore.values, "editor.fontFamily": "Cascadia Code, monospace" };
+    delete resetFonts["chat.editor.fontFamily"];
+    await browser.executeJavaScript(`window.frostpiDesktop.settings({type:'save',values:${JSON.stringify(resetFonts)}})`);
+    await until(() => browser.executeJavaScript("getComputedStyle(document.querySelector('.markdown-body pre')).fontFamily.includes('Cascadia Code')"), "editor.fontFamily fallback reaches shared code style");
+    assert.notEqual(await browser.executeJavaScript("getComputedStyle(document.querySelector('.prompt-editor .cm-scroller')).fontFamily"), '"Cascadia Code", monospace');
     await desktop.registry.sendPrompt(a, "mermaid", []);
     await until(() => browser.executeJavaScript("Boolean(document.querySelector('.mermaid-host svg'))"), "shared Mermaid renders from packaged vendor resource");
     const diagramText: unknown = await browser.executeJavaScript("document.querySelector('.mermaid-host svg').textContent");
@@ -81,11 +165,12 @@ void app.whenReady().then(async () => {
     desktop.window.showInactive();
     await browser.executeJavaScript("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
     await writeFile(join(directory, "desktop.png"), (await browser.capturePage()).toPNG());
-    await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true }));
   } finally {
     await desktop.dispose();
     desktop.window.destroy();
   }
+  await verifySettingsSetup();
+  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true }));
   app.exit(0);
 }).catch((error: unknown) => {
   writeFileSync(join(directory, "result.json"), JSON.stringify({ ok: false, error: error instanceof Error ? error.message : "Smoke failure" }));

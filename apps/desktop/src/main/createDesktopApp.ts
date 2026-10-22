@@ -1,20 +1,38 @@
 import { join } from "node:path";
+import { homedir } from "node:os";
 
-import { BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { ComposerDraftCache, SessionRegistry, WebviewActionDispatcher, WebviewConnection, WorkspaceFileSearch, readChatTypography } from "@frostime/pi-client/host";
 import type { RuntimeLogger } from "@frostime/pi-client/core/diagnostics/RuntimeLogger";
 import { DesktopDialogs } from "./dialogs.js";
 import { createDesktopHost } from "./desktopHost.js";
 import { DesktopProjects } from "./desktopProjects.js";
 import type { DesktopProjectsView } from "../shared/desktopBridge.js";
+import { DesktopSettingsStore } from "./settings/DesktopSettingsStore.js";
+import { DesktopSettingsController } from "./settings/DesktopSettingsController.js";
+import { defaultVscodeSettingsPath, importVscodeSettings } from "./settings/importVscodeSettings.js";
+import { DesktopSettingsError, settingsErrorMessage } from "./settings/DesktopSettingsError.js";
+import type { DesktopSettingsResult } from "../shared/desktopSettings.js";
 
 export interface DesktopAppOptions {
   directories?: readonly string[];
-  settings?: Record<string, unknown>;
+  settingsStore?: DesktopSettingsStore;
+  /** Trusted main-process test input, never accepted over IPC. */
+  vscodeSettingsPath?: string;
   show?: boolean;
 }
 
 export async function createDesktopApp(options: DesktopAppOptions = {}) {
+  const settingsStore = options.settingsStore ?? await DesktopSettingsStore.open(join(app.getPath("userData"), "settings.json"));
+  const settings = new DesktopSettingsController(settingsStore, {
+    importDefaults: () => importVscodeSettings(options.vscodeSettingsPath ?? defaultVscodeSettingsPath(
+      process.platform, homedir(), process.env.APPDATA, process.env.XDG_CONFIG_HOME,
+    )),
+    openFile: async (path) => {
+      const error = await shell.openPath(path);
+      if (error) throw new DesktopSettingsError("Could not open Desktop settings.json with the system editor.");
+    },
+  });
   const projects = new DesktopProjects();
   for (const directory of options.directories ?? []) await projects.addProject(directory);
   const window = new BrowserWindow({
@@ -37,7 +55,7 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     const result = await dialog.showOpenDialog(window, { title: "Add Project", properties: ["openDirectory"] });
     if (!result.canceled && result.filePaths[0]) await projects.addProject(result.filePaths[0]);
   };
-  const host = createDesktopHost({ window, projects, interactions, openFolder: addProject, ...(options.settings ? { settings: options.settings } : {}) });
+  const host = createDesktopHost({ window, projects, interactions, openFolder: addProject, settingsStore });
   const registry = new SessionRegistry(host, {
     logger,
     sessionTreeArtifactPath: join(__dirname, "pi-extensions/session-tree.js"),
@@ -77,6 +95,22 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     registry.onDidSetComposerText(({ sessionId, text }) => connection.queueComposerText(sessionId, text, () => undefined)),
   ];
   const unsubscribeProjects = projects.onDidChange(publishProjects);
+  const unsubscribeSettings = settingsStore.onDidChange(() => {
+    registry.refreshConfigurationState();
+    connection.post({ type: "setChatTypography", typography: readChatTypography(host.configuration.getConfiguration("chat")) });
+    connection.refresh();
+    if (!window.isDestroyed()) window.webContents.send("frostpi:settings:view", settings.view());
+  });
+  ipcMain.handle("frostpi:settings:action", async (event, action: unknown): Promise<DesktopSettingsResult> => {
+    if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
+      throw new Error("Unauthorized Desktop settings request.");
+    }
+    try {
+      return { ok: true, view: await settings.handle(action) };
+    } catch (error) {
+      return { ok: false, error: settingsErrorMessage(error) };
+    }
+  });
   const ipcListeners: Array<{ channel: string; listener: (event: Electron.IpcMainEvent, ...values: unknown[]) => void }> = [];
   const listen = (channel: string, action: (...values: unknown[]) => void | Promise<void>): void => {
     const listener = (event: Electron.IpcMainEvent, ...values: unknown[]): void => {
@@ -101,6 +135,8 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     interactions.dispose();
     for (const { channel, listener } of ipcListeners) ipcMain.removeListener(channel, listener);
     unsubscribeProjects();
+    unsubscribeSettings();
+    ipcMain.removeHandler("frostpi:settings:action");
     for (const subscription of subscriptions) subscription.dispose();
     connection.dispose(); drafts.dispose(); incoming.dispose(); visibility.dispose();
     await registry.dispose();
@@ -121,5 +157,5 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     if (!window.isDestroyed()) window.destroy();
     throw error;
   }
-  return { window, registry, projects, connection, dispose };
+  return { window, registry, projects, connection, settingsStore, dispose };
 }

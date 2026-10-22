@@ -163,7 +163,7 @@ function handle(command) {
           role: "assistant",
           timestamp: timestamp + 1,
           stopReason: "stop",
-          content: [{ type: "text", text: command.message === "mermaid" ? "```mermaid\nflowchart LR\nA[Shared] --> B[Desktop]\n```" : "E2E response" }],
+          content: [{ type: "text", text: command.message === "mermaid" ? "```mermaid\nflowchart LR\nA[Shared] --> B[Desktop]\n```" : command.message === "typography" ? "Typography text\n\n```ts\nconst shared = true;\n```" : "E2E response" }],
         };
         event({ type: "message_start", message: assistantMessage });
         event({ type: "message_end", message: assistantMessage });

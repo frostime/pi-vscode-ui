@@ -18,7 +18,7 @@
 
 这是当前选定的推进顺序，不是所有工作的硬依赖。主插件验证和维护检查可提前开展；每个节点的 `REQUIRES` 才表示必须已有的结果。自动验证贯穿后续变更，不是最后才测试。
 
-**当前是“技术路线已打通的开发预览”，不是“Desktop 首版完成”。** 用户尚未确认预览的日常使用形态；持久 Project、设置入口、关闭/重开恢复和独立桌面分发尚未完成。
+**当前是“技术路线已打通的开发预览”，不是“Desktop 首版完成”。** 用户尚未确认预览的日常使用形态；设置子批次已完成；持久 Project、关闭/重开恢复和独立桌面分发尚未完成。
 
 ## 执行路线
 
@@ -30,7 +30,7 @@
 证据：checkpoint `7c3f671`；824 项测试、双端构建、VSIX 校验、受控 Extension Host E2E、两个无关 Project 的 Electron smoke 通过。一次共享 UI 文案修改已进入双产出。真实本机 Pi 1.1.0 的共享 Runtime 发送、Abort、历史恢复、阻塞输入通过。后续主目录修复 checkpoint `d0dbc29` 的完整检查为 828 项测试，增强的 Electron smoke 连续 3 次通过；新增主目录插件 E2E 尝试被系统 VS Code 更新锁阻塞，未算通过。GUI 自动化使用受控子进程，不能混称为完整真实 Pi GUI 验收。快照与证据限制见 [验证记录](refactor/desktop-client.RESULT.md)。
 
 [预览体验与持久化取舍] << CURRENT
-#IN PROGRESS: 用户反馈两端最基础功能似乎可用。主目录已修图标/搜索语义、Mermaid、共同样式入口、字体解析及 fixture 状态；设置默认值已从 VS Code manifest 生成共享模块，构建/测试检查防止分叉。该改动通过 829 项测试、双端构建及默认值变更反例检查，见 [验证记录](refactor/desktop-client.RESULT.md#设置默认值权威来源)。当前需确认首次导入/持久化约定，尚未读取真实 VS Code 设置或实现持久配置。
+#IN PROGRESS: 用户反馈两端最基础功能似乎可用。主目录的基础兼容修复与设置默认值权威来源已收齐。独立 settings.json、默认用户配置的一次性白名单导入预览、原始 dot keys、设置入口、实时字体/排除规则及保存不重启 Pi 已实现；见 [验证记录](refactor/desktop-client.RESULT.md)。当前继续其余日常使用闭环；Project/会话列表和草稿仍不跨应用重启保存，正式退出/重开约定尚需确认。
 REQUIRES [双端共享架构验证]: 有真实可运行的候选，而非假页面。
 
 基础体验反馈已收到，不要求用户重复技术检查。后续从主目录启动/复测：
@@ -41,7 +41,7 @@ pnpm --dir apps/desktop start
 
 添加两个熟悉的目录，各 New 或 Resume 一个 Pi，切换查看。只判断：现有聊天/Header/输入框是否保持顺手；Project 与全部 Pi 导航是否适合替代终端多开；有没有缺少的关键操作或会话切换问题。不要求用户重跑技术检查或判断代码架构。
 
-当前预览的 Project、设置和客户端元数据仅在内存，退出会停止子进程；设置入口和恢复功能未补齐。不要将它当作可依赖自动恢复的正式工作台。Pi 的会话文件仍由 Pi 保存。
+当前预览的设置已持久保存，首次导入后独立维护；Project 和客户端会话元数据仍仅在内存，退出会停止子进程。不要将它当作可依赖自动恢复的正式工作台。Pi 的会话文件仍由 Pi 保存。
 
 IF 反馈是局部缺陷或布局组合问题
     在现有实现上修正并重验；不重新设计聊天客户端。
@@ -51,9 +51,9 @@ END
 
 OPEN 首版运行约定
     由 Agent 提出具体建议，用户确认影响使用的取舍，不让用户设计内部接口：
-    - 配置与 Project/会话元数据的存储位置。
-    - 导入来源已确认：仅从 VS Code 默认用户配置一次性导入，作为 Desktop 默认配置；不再要求用户选择 Project/Profile 或当前窗口有效配置。后续独立维护、不持续同步。当前调查重点是实际依赖的设置白名单，而不是 Project 级导入策略。
-    - 字体依赖已查明：`chat.fontFamily`、`chat.fontSize`、`chat.editor.fontFamily`、`chat.editor.fontSize`，以及经 Webview 变量间接使用的 `editor.fontFamily`。其余直接依赖是 `files.exclude`、`search.exclude`，及仅在 VS Code 代理模式下使用的 `http.proxy`；后者需要明确转换，不能照抄不兼容的模式。尚未实现导入。
+    - 配置已使用系统应用数据目录的 FrostPi/settings.json，原始键名不翻译；Desktop 专属设置预留 desktop.*。Project/会话元数据的保存与恢复仍待下一批处理。
+    - 导入已实现：仅从 VS Code 默认用户配置一次性导入，作为 Desktop 默认配置；不要求选择 Project/Profile 或当前窗口有效配置。首次设置页展示可编辑预览，Save 后生效；后续独立维护、不持续同步。
+    - 白名单已接线：FrostPi schema、`chat.fontFamily`/`chat.fontSize`/`chat.editor.fontFamily`/`chat.editor.fontSize`、`editor.fontFamily`、`files.exclude`/`search.exclude`。`http.proxy` 仅用于原 vscode 代理模式的显式转换；旧 FrostPi 代理 endpoint 同样明确迁移，未解决的转换阻止 Save。
     - 关闭窗口/退出 App 时如何处理运行中的 Pi；重开恢复哪些元数据、会话和草稿。
     这些决定供 [日常使用闭环] 使用。跨会话恢复规则不得由当前临时实现反推。
 
@@ -64,7 +64,7 @@ OPEN 首版运行约定
 REQUIRES [预览体验与持久化取舍]: 已确认使用方向与运行约定。
 
 - 按已确认约定保存/恢复 Projects、必要会话元数据及草稿，不另建对话数据库。
-- 提供本机 Pi、通用设置与代理等必要设置入口；沿用 VS Code 键和共享默认值，明确不兼容项。配置改变不静默打断运行中的 Pi。
+- 已完成设置子批次：本机 Pi、字体、通用设置、代理及排除规则可在设置页修改/Reset，或打开 settings.json 修改后 Reload；沿用原键与共享默认值，不兼容项明确报错。配置改变不静默打断运行中的 Pi。其余日常使用闭环尚未完成。
 - 补齐日常 New/Resume、多 Pi 切换、待输入提示、错误恢复与关闭/重开流程；同一通用实现不分叉。
 - 保留主题语言和窄窗可用性，明确首版主题支持范围；不将完整 VS Code 主题导入器变成本阶段前置任务。
 

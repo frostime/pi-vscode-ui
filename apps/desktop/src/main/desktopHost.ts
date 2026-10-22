@@ -11,6 +11,8 @@ import type {
 
 import type { DesktopInteractions } from "./dialogs.js";
 import type { DesktopProjects } from "./desktopProjects.js";
+import type { DesktopSettingsStore } from "./settings/DesktopSettingsStore.js";
+import { relatedVscodeSettingDefinitions } from "../shared/desktopSettings.js";
 
 export interface DesktopHostOptions {
   /** Current window for native dialogs and focus; a getter is allowed (windows are created lazily). */
@@ -19,10 +21,10 @@ export interface DesktopHostOptions {
   /** Renderer-bridge quick pick/input (DesktopDialogs). */
   interactions: DesktopInteractions;
   /**
-   * Flat settings for the preview, either section-prefixed (`"frostpi.pi.executable"`) or
-   * bare (`"pi.executable"`). In memory only; shared readConfiguration owns keys/defaults.
+   * Explicit in-memory settings for isolated fixtures. The application uses settingsStore.
    */
   settings?: Record<string, unknown>;
+  settingsStore?: DesktopSettingsStore;
   clientVersion?: string;
   /** Desktop entry maps Open Folder to Project registration, not an editor or OS reveal. */
   openFolder?: (fsPath?: string) => Promise<void>;
@@ -34,8 +36,8 @@ export interface DesktopHostOptions {
  * out so the shared dispatcher fails those actions explicitly.
  */
 export function createDesktopHost(options: DesktopHostOptions): ClientHost {
-  const settings = options.settings ?? {};
-  rejectUnsupportedProxyMode(settings);
+  const readSettings = (): Record<string, unknown> => options.settingsStore?.values ?? options.settings ?? {};
+  rejectUnsupportedProxyMode(readSettings());
   const resolveWindow = (): BrowserWindow | undefined => {
     const value = typeof options.window === "function" ? options.window() : options.window;
     return value && !value.isDestroyed() ? value : undefined;
@@ -49,13 +51,21 @@ export function createDesktopHost(options: DesktopHostOptions): ClientHost {
     configuration: {
       getConfiguration: (section: string): HostConfiguration => ({
         get: (<T>(key: string, fallback: T): T => {
-          const override = settings[`${section}.${key}`] ?? settings[key];
+          const settings = readSettings();
+          const fullKey = `${section}.${key}`;
+          const override = settings[fullKey];
+          const definition = relatedVscodeSettingDefinitions[fullKey];
+          // VS Code merges object settings with their defaults; false overrides disable a pattern.
+          if (definition?.type === "object" && override && typeof override === "object") {
+            return { ...(definition.default as object), ...override } as T;
+          }
           if (override !== undefined) return override as T;
-          return fallback;
+          return definition ? structuredClone(definition.default) as T : fallback;
         }) as HostConfiguration["get"],
-        update: () => {
-          // The preview intentionally has no settings writes and no repair framework.
-          throw new Error("Desktop settings are fixed for this preview; configuration updates are not supported.");
+        update: (key, value, target) => {
+          if (target && target !== "global") throw new Error("Desktop settings are application-wide.");
+          if (!options.settingsStore) throw new Error("This isolated Desktop host does not support settings writes.");
+          return options.settingsStore.update(`${section}.${key}`, value);
         },
       }),
     },

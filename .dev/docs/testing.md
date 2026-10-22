@@ -4,7 +4,7 @@ description: Behavior checks, environment isolation, dual-client evidence, and r
 scope:
   - /apps/**/test/**
   - /packages/**/test/**
-updated: 2026-10-20
+updated: 2026-10-22
 ---
 
 # Testing Strategy
@@ -20,8 +20,8 @@ Test observable behavior and contracts, not implementation call order. Run the n
 ## Evidence boundaries
 
 - Source/type/import checks protect the Node/shared/UI boundaries and expose missing adapter capabilities.
-- Unit/DOM tests protect lifecycle, persistence, history, projection, message authorization, draft ownership, UI interactions and explicit unsupported operations.
-- Controlled Desktop smoke protects two unrelated Project roots, shared New/conversation rendering, concurrent child execution, foreground/cwd separation, Stop isolation and renderer Node/IPC isolation. It is not evidence of real model responses or real saved-history resume.
+- Unit/DOM tests protect lifecycle, persistence, history, projection, message authorization, draft ownership, UI interactions and explicit unsupported operations. Desktop settings tests cover whitelist import, atomic storage, invalid-file protection, proxy conversion, original key names, and executing the bundled JSONC reader (source-only tests cannot detect unresolved UMD requires).
+- Controlled Desktop smoke protects two unrelated Project roots, shared New/conversation rendering, concurrent child execution, foreground/cwd separation, Stop isolation and renderer Node/IPC isolation. It also checks first-run import preview/Save/Reset/reopen, actual shared message/composer/code typography, 280px settings layout, and no implicit child restart on executable/proxy changes. A bootstrap reports even pre-import startup exceptions as failed artifacts instead of leaving a native error dialog. It is not evidence of real model responses or real saved-history resume.
 - Real-Pi acceptance must separately exercise send, Stop, saved-history recovery and a blocking input. A shared UI change must be observed in both product outputs; a copied/mock page does not satisfy this requirement.
 - Preserve plugin light/dark/high-contrast and 280px behavior; inspect Desktop navigation at narrow widths without shrinking the shared client below its usable layout.
 

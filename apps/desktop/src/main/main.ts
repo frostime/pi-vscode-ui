@@ -1,9 +1,11 @@
+import { join } from "node:path";
 import { app, dialog } from "electron";
 import { createDesktopApp } from "./createDesktopApp.js";
 
-if (process.env.FROSTPI_DESKTOP_PREVIEW_USER_DATA) app.setPath("userData", process.env.FROSTPI_DESKTOP_PREVIEW_USER_DATA);
+app.setName("FrostPi");
+app.setPath("userData", process.env.FROSTPI_DESKTOP_USER_DATA ?? join(app.getPath("appData"), "FrostPi"));
 app.on("window-all-closed", () => app.quit());
 void app.whenReady().then(() => createDesktopApp({ directories: process.argv.slice(2).filter((argument) => !argument.startsWith("--")) })).catch(() => {
-  dialog.showErrorBox("FrostPi Desktop", "The development preview could not start. No desktop configuration was changed.");
+  dialog.showErrorBox("FrostPi Desktop", "FrostPi Desktop could not start. Existing settings were not reset.");
   app.exit(1);
 });

@@ -58,6 +58,23 @@ Svelte 保留基线中的一条可访问性警告（ExtensionUiRequestCard 的�
 
 日志：`tmp/r3-setting-check.log`；隔离反例：`tmp/r3-settings-parity-43y8la9i/`。这些是临时验证材料，不是产品依赖。
 
+## 独立配置与首次导入
+
+主目录新增持久 `settings.json`、首次设置页及 schema 驱动设置表单。普通启动使用系统应用数据目录的 `FrostPi` profile；测试可用 `FROSTPI_DESKTOP_USER_DATA` 隔离。存储保留原始 dot keys，`desktop.*` 仅预留真实 Desktop 专属设置，不把 Project/窗口/会话状态混入设置。
+
+首次导入只读标准 VS Code 默认用户文件，以白名单产生可编辑预览，Save 才写入 Desktop 并生效；后续不再导入或同步。白名单为 manifest 生成的 FrostPi schema、4 个 Chat 字体键、`editor.fontFamily` 与 `files.exclude`/`search.exclude`。Proxy 的 vscode 模式和旧 endpoint 键明确转换，未解决的转换阻止 Save；不导入代理凭据。设置存储使用 JSONC 读取、串行原子写入；损坏文件不覆盖，修复后 Reload。相关设置错误由主进程显式分类，未知异常内容不跨 IPC。
+
+- `pnpm check` 两轮取得退出码 0（最近一轮为 131 个测试文件 / **859 项测试**）；最后统一字体默认值常量的 dot keys 后，补跑的完整日志再次记录全部 859 项测试、类型、lint、双端构建及 budget 完成。该组合命令触及工具 300 秒超时，后续确认日志已到 `[check] complete`，不另声称该次工具捕获了退出码 0。
+- 修复后 Electron smoke 多次通过；最终独立补跑明确取得 **退出码 0** 和 `ok: true`。新增证据包括真实共享 Markdown/Composer 的字体 family/size、代码后备字体、首次导入预览不生效、Save/Reset/新 App 实例重开、280px 设置布局、非法设置拒绝及修改 executable/proxy 不重启两个运行中的受控 Pi。
+- VSIX 打包/校验通过，仍为 0.15.5 / 78 entries / 2.65 MB；未安装或发布。最终候选的 Extension Host E2E 与真实 Pi GUI 本轮未重跑，此前限制不变。
+- 独立只读审查后收齐了错误消息边界、旧代理键迁移和无效 exclusion map 的明确提示。未扩展为逐条修复坏配置或掉电持久性保证。
+
+首次 GUI 尝试因 `jsonc-parser` 默认 UMD 入口留下动态 `require('./impl/format')`，触发用户看到的主进程弹窗，未记为通过。已改用该包发布的 ESM 入口，并增加执行打包后 JSONC reader 的回归测试。smoke 还增加先于静态应用 import 的失败 bootstrap；隔离负向实验确认启动异常写失败结果并退出 1，不再阻塞于原生弹窗。
+
+本轮未读取真实用户的 VS Code 设置。Project/会话列表、草稿跨重启恢复与最终退出规则仍未实现/确认，不能把设置持久化称为 Desktop 首版完成。
+
+日志：`tmp/r3-settings-check-final.log`、`tmp/r3-settings-accepted-check.log`、`tmp/r3-settings-vsix-final.log`、`tmp/r3-settings-smoke-exit.log`；最终 smoke 结果/截图：`C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-smoke-rldOhC/`；启动失败负向实验：`C:/Users/EEG/AppData/Local/Temp/frostpi-smoke-bootstrap-negative-icaezG/`。均为临时证据，不是产品依赖。
+
 ## 尚未证明
 
 用户日常操作的布局/流程满意度、完整真实 Pi GUI 路径、所有用户扩展组合、Desktop 持久化/重开恢复和其他平台尚未验收。不能把此 checkpoint 宣称为 Desktop 产品完成或发布就绪。

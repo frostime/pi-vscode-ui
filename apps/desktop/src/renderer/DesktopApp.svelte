@@ -8,6 +8,13 @@
   import type { DesktopDialog, DesktopProjectsView } from "../shared/desktopBridge.js";
   import VscodeLabel from "./VscodeLabel.svelte";
   import { quickPickMatches } from "./quickPick.js";
+  import SettingsPanel from "./SettingsPanel.svelte";
+  import { desktopSettingDefinitions, type DesktopSettingsAction, type DesktopSettingsView } from "../shared/desktopSettings.js";
+
+  let settingsView = $state<DesktopSettingsView | null>(null);
+  let settingsOpen = $state(false);
+  let settingsBusy = $state(false);
+  let settingsError = $state("");
 
   let projects = $state<DesktopProjectsView>({ projects: [], activeProjectId: null });
   let request = $state<DesktopDialog | null>(null);
@@ -31,9 +38,37 @@
       request = value;
       if (changed) input = value?.kind === "input" ? value.value : "";
     });
+    const unsubscribeSettings = window.frostpiDesktop.onSettings(applySettings);
+    void window.frostpiDesktop.settings({ type: "read" }).then((view) => {
+      applySettings(view);
+      settingsOpen = view.firstRun || Boolean(view.error);
+    }).catch(() => { settingsError = "Could not load Desktop settings."; });
     window.frostpiDesktop.requestProjects();
-    return () => { unsubscribeProjects(); unsubscribeDialog(); };
+    return () => { unsubscribeProjects(); unsubscribeDialog(); unsubscribeSettings(); };
   });
+
+  function applySettings(view: DesktopSettingsView): void {
+    settingsView = view;
+    const family = view.values["editor.fontFamily"];
+    const fallback = String(desktopSettingDefinitions["editor.fontFamily"]!.default);
+    document.documentElement.style.setProperty("--vscode-editor-font-family", typeof family === "string" && family.trim() ? family : fallback);
+  }
+
+  async function settingsAction(action: DesktopSettingsAction): Promise<void> {
+    settingsBusy = true;
+    settingsError = "";
+    try {
+      const view = await window.frostpiDesktop.settings(action);
+      // Import returns an editable preview; it must not change live typography before Save.
+      if (action.type === "importVscode") settingsView = view;
+      else applySettings(view);
+      if (action.type === "useDefaults") settingsOpen = false;
+    } catch (error) {
+      settingsError = error instanceof Error ? error.message : "The settings operation failed.";
+    } finally {
+      settingsBusy = false;
+    }
+  }
 
   function respond(value: string | null): void {
     if (request) window.frostpiDesktop.respondDialog(request.id, value);
@@ -58,12 +93,18 @@
         <StatusDot status={session.status} /><span>{session.title}</span>{#if session.requiresUserInput}<span aria-label="Needs input">!</span>{/if}
       </button>
     {/each}
-    <p class="preview-note">Development preview. Projects and settings are kept in memory in this build.</p>
+    <button type="button" class="settings-button" onclick={() => { settingsOpen = true; void settingsAction({ type: "read" }); }}>Settings</button>
+    {#if settingsError && !settingsOpen}<p role="alert">{settingsError}</p>{/if}
+    <p class="preview-note">Development preview. Settings are saved; Projects and open Pi lists are not restored after exit.</p>
   </aside>
   <div class="client-region">
     <ClientApp localComposerCommands={commands} capabilities={{ sessionEditorTabs: false, editorMentionSpecials: false }} />
   </div>
 </div>
+
+{#if settingsOpen && settingsView}
+  <SettingsPanel view={settingsView} busy={settingsBusy} error={settingsError} onaction={settingsAction} onclose={() => settingsOpen = false} />
+{/if}
 
 {#if request}
   <dialog use:openDialog aria-labelledby="desktop-dialog-title" oncancel={(event) => { event.preventDefault(); respond(null); }}>

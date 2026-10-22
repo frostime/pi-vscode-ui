@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import type { DesktopApi, DesktopDialog, DesktopProjectsView } from "./shared/desktopBridge.js";
 import type { HostToWebviewMessage } from "@frostime/pi-client/shared/bridge/hostToWebview";
+import type { DesktopSettingsResult, DesktopSettingsView } from "./shared/desktopSettings.js";
 
 function subscribe<T>(channel: string, listener: (value: T) => void): () => void {
   const handler = (_event: Electron.IpcRendererEvent, value: T): void => listener(value);
@@ -18,6 +19,18 @@ const api: DesktopApi = {
   onProjects: (listener) => subscribe<DesktopProjectsView>("frostpi:projects:view", listener),
   onDialog: (listener) => subscribe<DesktopDialog | null>("frostpi:dialog:view", listener),
   respondDialog: (id, value) => ipcRenderer.send("frostpi:dialog:response", id, value),
+  settings: async (action) => {
+    let result: DesktopSettingsResult;
+    try {
+      result = await ipcRenderer.invoke("frostpi:settings:action", action) as DesktopSettingsResult;
+    } catch {
+      throw new Error("Could not reach the Desktop settings service.");
+    }
+    // Business errors have already been sanitized by the main process, not Electron's exception wrapper.
+    if (!result.ok) throw new Error(result.error);
+    return result.view;
+  },
+  onSettings: (listener) => subscribe<DesktopSettingsView>("frostpi:settings:view", listener),
 };
 
 contextBridge.exposeInMainWorld("frostpiDesktop", api);

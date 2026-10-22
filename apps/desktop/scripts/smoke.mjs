@@ -17,7 +17,7 @@ const environment = {
   PI_CODING_AGENT_DIR: join(directory, "pi-agent"),
 };
 delete environment.ELECTRON_RUN_AS_NODE;
-const child = spawn(require("electron"), [resolve("dist/smoke-main.cjs")], { env: environment, stdio: ["ignore", "pipe", "pipe"] });
+const child = spawn(require("electron"), [resolve("scripts/smoke-bootstrap.cjs"), resolve("dist/smoke-main.cjs")], { env: environment, stdio: ["ignore", "pipe", "pipe"] });
 const logs = [];
 child.stdout.on("data", (chunk) => logs.push(chunk));
 child.stderr.on("data", (chunk) => logs.push(chunk));

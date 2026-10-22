@@ -1,5 +1,6 @@
 import type { HostToWebviewMessage } from "@frostime/pi-client/shared/bridge/hostToWebview";
 import type { WebviewToHostMessage } from "@frostime/pi-client/shared/bridge/webviewToHost";
+import type { DesktopSettingsAction, DesktopSettingsView } from "./desktopSettings.js";
 
 export interface DesktopProject {
   id: string;
@@ -26,6 +27,8 @@ export interface DesktopApi {
   onProjects(listener: (view: DesktopProjectsView) => void): () => void;
   onDialog(listener: (request: DesktopDialog | null) => void): () => void;
   respondDialog(id: string, value: string | null): void;
+  settings(action: DesktopSettingsAction): Promise<DesktopSettingsView>;
+  onSettings(listener: (view: DesktopSettingsView) => void): () => void;
 }
 
 declare global {

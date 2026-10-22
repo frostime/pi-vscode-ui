@@ -19,13 +19,15 @@ Install from the repository root with `pnpm install --frozen-lockfile`. The lock
 - `pnpm --dir apps/desktop build` builds the Electron main/preload and a renderer consuming the same ClientApp. `pnpm --dir apps/desktop start` launches the development preview; directories may be passed as arguments or added in the UI.
 - `pnpm --dir apps/desktop test:smoke` requires a current Desktop build. It launches real Electron with isolated fake Pi children, two temporary unrelated Projects and a temporary Electron/Pi profile; it never uses real model credentials. It prints the result and OS-temporary screenshot/log location. This is not real-Pi acceptance.
 
-Desktop is currently an explicitly labelled development preview: Projects, settings and client session metadata are in-memory, the launcher uses a temporary Electron profile, and closing the preview disposes its child processes. This does not settle the future persistent configuration path or app-reopen/background policy. Pi-owned conversation persistence is separate.
+Desktop is a development preview with persistent settings but memory-only Projects and client session metadata. Normal starts retain the system application-data `FrostPi` profile; set `FROSTPI_DESKTOP_USER_DATA` to an isolated directory when testing. First-run setup offers a whitelist import from the default VS Code user settings or initialization with defaults. Import is an editable preview until Save, not ongoing synchronization. Settings can be edited in the app or opened in the system editor and explicitly reloaded. See the [Desktop contract](../../apps/desktop/SPEC.md#settings-and-initial-import).
+
+Closing the preview still disposes its child processes. Persistent settings do not establish app-reopen/session/draft/background behavior; Pi-owned conversation persistence remains separate. Automated tests and smoke use temporary profiles and synthetic VS Code settings, never real user settings.
 
 Both Electron launchers remove `ELECTRON_RUN_AS_NODE` only from the launch environment. Do not modify Pi's process policy to compensate for an Electron launcher variable. Electron's executable must be available before launch; a JS package install or successful renderer build alone does not prove native launch.
 
 ## Setting definitions
 
-Edit FrostPi setting schemas/defaults in [`apps/vscode/package.json`](../../apps/vscode/package.json) under `contributes.configuration`. Run `pnpm --dir apps/pi-client settings:generate` and commit the generated runtime defaults with that change. Do not edit generated defaults or add host-local fallback tables. Shared code consumes the generated module, not the product manifest at runtime.
+Edit FrostPi setting schemas/defaults in [`apps/vscode/package.json`](../../apps/vscode/package.json) under `contributes.configuration`. Run `pnpm --dir apps/pi-client settings:generate` and commit the generated runtime defaults and browser-safe setting definitions with that change. Do not edit generated defaults or add host-local fallback tables. Shared code consumes the generated module, not the product manifest at runtime.
 
 `pnpm --dir apps/pi-client settings:check` rejects stale output; both product builds reach this check through the shared-client build. The shared configuration test also checks schema/default parity. New keys still need their behavior wired into shared parsing and applicable host support; generating defaults does not implement a setting or establish Desktop compatibility.
 

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { frostPiSettingDefaults } from "../../src/core/configuration/frostPiSettingDefaults.generated.js";
+import { frostPiSettingDefinitions } from "../../src/shared/configuration/frostPiSettingDefinitions.generated.js";
 import type { ClientHost } from "../../src/host/clientHost.js";
 import { readConfiguration } from "../../src/host/readConfiguration.js";
 
@@ -48,6 +49,7 @@ describe("FrostPi configuration reading", () => {
       .map(([key, definition]) => [key.slice("frostpi.".length), definition.default]));
 
     // Covers every contributed setting, including additions not yet parsed by the client.
+    expect(frostPiSettingDefinitions).toEqual(manifest.contributes.configuration.properties);
     expect(frostPiSettingDefaults).toEqual(nativeDefaults);
     expect(readConfiguration(hostWithConfiguration({})))
       .toEqual(readConfiguration(hostWithConfiguration(nativeDefaults)));
