@@ -8,6 +8,7 @@ import { createDesktopApp } from "../src/main/createDesktopApp.js";
 import { DesktopSettingsStore } from "../src/main/settings/DesktopSettingsStore.js";
 import { DesktopStateStore } from "../src/main/storage/DesktopStateStore.js";
 import { verifyDesktopStateReopen } from "./statePersistenceSmoke.js";
+import { verifyDesktopResume } from "./resumeSmoke.js";
 
 const directory = process.env.FROSTPI_DESKTOP_SMOKE_DIR!;
 app.setPath("userData", join(directory, "electron-profile"));
@@ -25,6 +26,13 @@ async function until(check: () => boolean | Promise<boolean>, label: string): Pr
 async function closeSettings(browser: WebContents): Promise<void> {
   await browser.executeJavaScript("document.querySelector('dialog[aria-labelledby=\"settings-title\"] header button').click()");
   await until(() => browser.executeJavaScript("!document.querySelector('#settings-title')"), "settings modal closes");
+}
+
+async function openResumeFromHeader(browser: WebContents): Promise<void> {
+  await browser.executeJavaScript("document.querySelector('[aria-label=\"New or resume session\"]').click()");
+  await until(() => browser.executeJavaScript("Boolean(document.querySelector('.session-launcher-menu'))"), "Resume launcher opens");
+  await browser.executeJavaScript("[...document.querySelectorAll('.session-launcher-menu button')].find(b=>b.textContent.includes('Resume')).click()");
+  await until(() => browser.executeJavaScript("Boolean(document.querySelector('.resume-choice'))"), "Resume session choices appear");
 }
 
 async function verifySettingsSetup(): Promise<void> {
@@ -151,12 +159,51 @@ void app.whenReady().then(async () => {
     await browser.executeJavaScript("[...document.querySelectorAll('.session-menu button')].find(b=>b.textContent.includes('Question tool')).click()");
     await until(() => browser.executeJavaScript("Boolean(document.querySelector('#settings-title'))"), "shared Question tool menu opens Desktop settings");
     await closeSettings(browser);
-    const resume = desktop.registry.resumeSession();
-    await until(() => browser.executeJavaScript("Boolean(document.querySelector('dialog .codicon-folder-opened'))"), "native QuickPick icon-label rendering");
-    const labelRendering: unknown = await browser.executeJavaScript("({rawMarker:document.querySelector('dialog').textContent.includes('$('),glyph:getComputedStyle(document.querySelector('dialog .codicon-folder-opened'),'::before').content!=='none'})");
+    await browser.executeJavaScript("window.__resumeConversation=document.querySelector('.conversation-frame')");
+    await openResumeFromHeader(browser);
+    const labelRendering: unknown = await browser.executeJavaScript("({rawMarker:document.querySelector('.resume-card').textContent.includes('$('),glyph:getComputedStyle(document.querySelector('.resume-choice .codicon-folder-opened'),'::before').content!=='none'})");
     assert.deepEqual(labelRendering, { rawMarker: false, glyph: true });
-    await browser.executeJavaScript("document.querySelector('dialog footer button').click()");
-    await resume;
+    assert.equal(await browser.executeJavaScript("window.__resumeConversation===document.querySelector('.conversation-frame') && window.__resumeConversation.inert"), true);
+    assert.equal(await browser.executeJavaScript("Boolean(document.querySelector('.resume-activity'))"), false);
+    assert.deepEqual(await browser.executeJavaScript(`(() => {
+      const o=document.querySelector('.resume-overlay').getBoundingClientRect();
+      const c=document.querySelector('.conversation-frame').getBoundingClientRect();
+      const p=document.querySelector('.composer-region').getBoundingClientRect();
+      return {sameRegion:Math.abs(o.top-c.top)<1&&Math.abs(o.height-c.height)<1,composerClear:o.bottom<=p.top+1};
+    })()`), { sameRegion: true, composerClear: true });
+    desktop.window.showInactive();
+    await browser.executeJavaScript("Promise.all(document.querySelector('.resume-card').getAnimations().map(animation=>animation.finished)).then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))");
+    assert.equal(await browser.executeJavaScript("getComputedStyle(document.querySelector('.resume-card')).opacity"), "1");
+    await writeFile(join(directory, "desktop-resume.png"), (await browser.capturePage()).toPNG());
+    await browser.executeJavaScript("document.querySelector('aside .pi-row').click()");
+    await until(() => desktop.registry.activeSessionId === a, "other Pi remains selectable during Resume");
+    await until(() => browser.executeJavaScript("!document.querySelector('.resume-overlay') && Boolean(document.querySelector('.resume-return'))"), "switching Pi hides Resume without cancelling its picker");
+    await desktop.registry.sendPrompt(b, "background while choosing resume", []);
+    await until(() => desktop.registry.sessionView(b)?.status === "ready", "background Pi works while Resume waits for selection");
+    await browser.executeJavaScript("document.querySelector('.resume-return').click()");
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('.resume-choice'))"), "Return to Resume restores its pending picker");
+    await browser.executeJavaScript("document.querySelector('.resume-card footer button').click()");
+    await until(() => browser.executeJavaScript("!document.querySelector('.resume-overlay')"), "Resume picker cancellation removes its overlay");
+
+    await browser.executeJavaScript("document.querySelector('.prompt-editor .cm-content').focus()");
+    await browser.insertText("Synthetic Resume draft — do not send");
+    await until(() => browser.executeJavaScript("document.querySelector('.prompt-editor .cm-content').textContent.includes('Synthetic Resume draft')"), "real CodeMirror draft is present");
+    await browser.executeJavaScript("window.__resumeDraft=document.querySelector('.prompt-editor .cm-content').textContent;window.__resumeComposer=document.querySelector('.composer-shell');document.querySelector('[aria-label=\"Expand composer\"]').click()");
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('.composer-expanded')) && document.querySelector('.conversation-frame').getBoundingClientRect().height<1"), "expanded Composer leaves no conversation area");
+    await openResumeFromHeader(browser);
+    await until(() => browser.executeJavaScript(`(() => {
+      const o=document.querySelector('.resume-overlay').getBoundingClientRect();
+      const p=document.querySelector('.composer-region').getBoundingClientRect();
+      return Math.abs(o.top-p.top)<1&&Math.abs(o.height-p.height)<1&&o.height>200;
+    })()`), "Resume overlays the expanded input region instead of the zero-height conversation");
+    assert.equal(await browser.executeJavaScript("window.__resumeComposer===document.querySelector('.composer-expanded') && document.querySelector('.composer-region').inert && document.querySelector('.prompt-editor .cm-content').textContent===window.__resumeDraft"), true);
+    await browser.executeJavaScript("Promise.all(document.querySelector('.resume-card').getAnimations().map(animation=>animation.finished))");
+    await writeFile(join(directory, "desktop-resume-expanded.png"), (await browser.capturePage()).toPNG());
+    await browser.executeJavaScript("document.querySelector('.resume-search input').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))");
+    await until(() => browser.executeJavaScript("!document.querySelector('.resume-overlay')"), "Escape cancels only the Resume selection");
+    assert.equal(await browser.executeJavaScript("window.__resumeComposer===document.querySelector('.composer-expanded') && !document.querySelector('.composer-region').inert && document.querySelector('.prompt-editor .cm-content').textContent===window.__resumeDraft"), true);
+    // Fixture cleanup is explicit: Resume itself must not minimize or rewrite the draft.
+    await browser.executeJavaScript("document.querySelector('[aria-label=\"Minimize composer\"]').click()");
     await Promise.all([desktop.registry.sendPrompt(a, "stream-084", []), desktop.registry.sendPrompt(b, "stream-084", [])]);
     await until(() => desktop.registry.sessionView(a)?.status === "running" && desktop.registry.sessionView(b)?.status === "running", "both Pi actively stream");
     await browser.executeJavaScript(`window.frostpiDesktop.settings({type:'save',values:${JSON.stringify({
@@ -217,7 +264,8 @@ void app.whenReady().then(async () => {
   await verifySettingsSetup();
   await verifyStartupSettingsEntries();
   await verifyDesktopStateReopen(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
-  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true, sharedSettingsEntryPoints: true, actualDesktopCapabilities: true, stateReopen: true, selectedOnlyAutoStart: true, savedNullSelection: true, shutdownFlush: true }));
+  await verifyDesktopResume(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
+  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true, sharedSettingsEntryPoints: true, actualDesktopCapabilities: true, stateReopen: true, selectedOnlyAutoStart: true, savedNullSelection: true, shutdownFlush: true, resumeOverlay: true, resumeWithoutRuntime: true, resumeFailureCleanup: true, resumePiSwitch: true, resumeExpandedComposer: true }));
   app.exit(0);
 }).catch((error: unknown) => {
   writeFileSync(join(directory, "result.json"), JSON.stringify({ ok: false, error: error instanceof Error ? error.message : "Smoke failure" }));

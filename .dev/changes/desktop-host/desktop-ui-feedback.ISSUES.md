@@ -1,17 +1,22 @@
 # Desktop UI 使用反馈
 
-基线：`feat/desktop-host@dd40c9d`，Windows x64 独立包。此文件记录验收反馈与当前决定，不代替 TARGET-SPEC 或实现计划。**UI-02、UI-05 已完成源码修复与针对性验证；其余项仍待处理或讨论。现有独立 ZIP 尚未更新。**
+基线：`feat/desktop-host@dd40c9d`，Windows x64 独立包。此文件记录验收反馈与当前决定，不代替 TARGET-SPEC 或实现计划。**UI-01、UI-02、UI-05 已完成源码修复与针对性验证；设置页仍待讨论调整，主题与侧栏继续延期。现有独立 ZIP 尚未更新。**
 
 来源：本会话用户反馈 `401ade66`、确认/延期决定 `65ee08a1`；原话读取方法见 `.dev/changes/desktop-host/handover/R5-desktop-ui-continuation.HANDOVER.md`。
 
 ## UI-01：Resume 等待期间缺少状态反馈
 
-**状态：已确认需要修复。**
+**状态：Desktop 专用 Resume overlay 已实现，受控 Electron 验证通过；独立 ZIP 尚未更新。**
 
 - 表现：点击 Resume 后长时间没有可见反馈，像卡住；插件版有进度提示。用户建议悬浮 status bubble，未要求阻塞式弹窗。
 - 已查证：`apps/desktop/src/main/desktopHost.ts` 的 `withProgress: (_title, work) => work()` 丢弃了进度呈现；VS Code adapter 调用真实 `window.withProgress`。`apps/pi-client/src/host/catalog/SessionCatalogPicker.ts` 的会话扫描已有 `Finding Pi sessions…` 进度调用。
 - 期望：开始查找时尽快给出可见等待反馈，完成/失败后结束；保持界面可操作，不编造百分比、不改变异步结果和错误行为。
-- 注意：Resume 在目录 discovery、扫描列表、选中后启动/加载历史间有不同阶段，不能只在已有 Runtime 开始后才显示状态，也不能在用户选择期间谎称正在恢复进程。具体位置/样式可采用轻量气泡，不需重造通用任务框架。
+- 用户已确认新方向：采用 DeepSeek 独立原型的卡片视觉，改为右侧对话区半透明 overlay，旧对话保留在下层，不再直接隐藏；侧栏、标题和输入区不被正常对话遮罩覆盖。原型在 `tmp/resume-feedback-desktop-overlay.html`（可丢弃，不是运行依赖）。
+- 用户已确认展开输入的例外：全屏 Composer 将对话区收起时，遮罩改为覆盖输入区，不改变展开状态或草稿。结束或取消后露出原输入；Escape 只取消 Resume 的选择，不联动折叠输入框。
+- 用户明确收窄：这是 **Desktop 专用的 Resume 流程 UI**，不是原先设想的通用 status/stats bubble。实现、样式与有限 main/preload/renderer 传输均在 `apps/desktop`，不修改共享 ClientApp、共享 Registry 或插件进度 UI。
+- 实际阶段由 Resume 调用、Host 选择和返回 Session 的投影驱动；查找不等 Runtime，选择期间无忙碌动画，启动排队不冒称已读历史。原型的定时子步骤未带入产品。选择器保留原 Host 项目、分组、搜索与响应 id；Browse/确认仍用原生界面。
+- 切换其他 Pi 只隐藏本次遮罩，`Return to Resume` 可回到原请求，不另扫一份列表，也不阻止其他 Pi 执行。重复点击只返回现有 Resume。失败可读且可关闭/重试；取消只在真实选择器生效，关闭窗口不留下晚到的可见状态。
+- 验证：Desktop 11 文件 / 88 测试（含新增 12 项 Resume controller/dispatcher 测试）、类型/lint/build 与受控 Electron smoke 通过；覆盖无 Runtime 的 discovery 等待、真实 Host 选择、键盘取消、280px、共享树不重挂载、普通布局不覆盖 Composer、展开布局覆盖输入但保留真实 CodeMirror 节点/草稿/展开状态、后台 Pi 工作、切换/返回、失败清理、无效 bridge version 拒绝，以及合成 Pi 文件的实际启动/历史加载。不是用户真实 Pi 模型体验验收。
 
 ## UI-02：代码块真正的文字元素没有使用配置字体
 
@@ -64,9 +69,9 @@
 
 ## 本批验证与暂停边界
 
-- 仅修 UI-02 与 UI-05；Resume、设置页、UI 字体、主题、侧栏均未修改，后续 UI/UX 先讨论。
+- 第一批仅修 UI-02 与 UI-05，checkpoint `9db7943`；其后经原型评审单独实现 UI-01。设置页、UI 字体、主题与侧栏布局仍未修改。
 - 通过：Context DOM 3 项、字体设置解析 3 项、共享客户端 typecheck（0 errors，1 项既有 Svelte warning）、修改文件 ESLint、双端构建、受控 Desktop Electron smoke（明确 `ok: true`）。
-- 未运行全仓 check、插件 GUI 验收或独立包重打包/验证；旧 ZIP 不包含本批修复，不将开发构建的通过当作包验收。
+- Resume 的验证范围见 UI-01；本次没有改 `apps/pi-client` 或 `apps/vscode`。未运行全仓 check、插件 GUI 验收或独立包重打包/验证；旧 ZIP 不包含上述修复，不将开发构建的通过当作包验收。
 
 ## 参考截图
 

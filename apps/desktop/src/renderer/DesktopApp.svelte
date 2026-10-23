@@ -5,10 +5,11 @@
   import { postToHost } from "@frostime/pi-client/ui/bridge/hostBridge";
   import { presentationStore } from "@frostime/pi-client/ui/state/sessionViewStore.svelte";
   import { withFrostPiCommands, type LocalComposerCommands } from "@frostime/pi-client/ui/features/composer/frostPiCommands";
-  import type { DesktopDialog, DesktopProjectsView } from "../shared/desktopBridge.js";
+  import type { DesktopDialog, DesktopProjectsView, DesktopResumeView } from "../shared/desktopBridge.js";
   import VscodeLabel from "./VscodeLabel.svelte";
   import { quickPickMatches } from "./quickPick.js";
   import SettingsPanel from "./SettingsPanel.svelte";
+  import ResumeOverlay from "./ResumeOverlay.svelte";
   import { desktopSettingDefinitions, type DesktopSettingsAction, type DesktopSettingsTarget, type DesktopSettingsView } from "../shared/desktopSettings.js";
   import { DESKTOP_CLIENT_UI_CAPABILITIES } from "../shared/desktopCapabilities.js";
 
@@ -20,6 +21,8 @@
 
   let projects = $state<DesktopProjectsView>({ projects: [], activeProjectId: null });
   let request = $state<DesktopDialog | null>(null);
+  let resume = $state<DesktopResumeView | null>(null);
+  const resumePicker = $derived(request?.kind === "pick" && request.id === resume?.pickerId ? request : null);
   let input = $state("");
   const visibleItems = $derived.by(() => {
     const pick = request;
@@ -40,6 +43,7 @@
       request = value;
       if (changed) input = value?.kind === "input" ? value.value : "";
     });
+    const unsubscribeResume = window.frostpiDesktop.onResume((value) => resume = value);
     const unsubscribeSettings = window.frostpiDesktop.onSettings(applySettings);
     const unsubscribeOpenSettings = window.frostpiDesktop.onOpenSettings(showSettings);
     void window.frostpiDesktop.settings({ type: "read" }).then((view) => {
@@ -47,7 +51,8 @@
       settingsOpen = view.firstRun || Boolean(view.error);
     }).catch(() => { settingsError = "Could not load Desktop settings."; });
     window.frostpiDesktop.requestProjects();
-    return () => { unsubscribeProjects(); unsubscribeDialog(); unsubscribeSettings(); unsubscribeOpenSettings(); };
+    window.frostpiDesktop.requestResume();
+    return () => { unsubscribeProjects(); unsubscribeDialog(); unsubscribeResume(); unsubscribeSettings(); unsubscribeOpenSettings(); };
   });
 
   function showSettings(target: DesktopSettingsTarget = "all"): void {
@@ -102,6 +107,9 @@
         <StatusDot status={session.status} /><span>{session.title}</span>{#if session.requiresUserInput}<span aria-label="Needs input">!</span>{/if}
       </button>
     {/each}
+    {#if resume && !resume.visible}
+      <button type="button" class="resume-return" onclick={() => resume && window.frostpiDesktop.showResume(resume.id)}>Return to Resume{#if resume.phase === "failed"} · Needs attention{/if}</button>
+    {/if}
     <button type="button" class="settings-button" onclick={() => showSettings()}>Settings</button>
     {#if settingsError && !settingsOpen}<p role="alert">{settingsError}</p>{/if}
     {#if projects.stateError}<p class="state-warning" role="alert">{projects.stateError}</p>{/if}
@@ -109,6 +117,12 @@
   </aside>
   <div class="client-region">
     <ClientApp localComposerCommands={commands} capabilities={DESKTOP_CLIENT_UI_CAPABILITIES} />
+    {#if resume?.visible}
+      <ResumeOverlay view={resume} picker={resumePicker}
+        onrespond={(id, value) => window.frostpiDesktop.respondDialog(id, value)}
+        onretry={() => postToHost({ type: "resumeSession" })}
+        ondismiss={() => resume && window.frostpiDesktop.dismissResume(resume.id)} />
+    {/if}
   </div>
 </div>
 
@@ -116,7 +130,7 @@
   <SettingsPanel view={settingsView} target={settingsTarget} busy={settingsBusy} error={settingsError} onaction={settingsAction} onclose={() => settingsOpen = false} />
 {/if}
 
-{#if request}
+{#if request && request.id !== resume?.pickerId}
   <dialog use:openDialog aria-labelledby="desktop-dialog-title" oncancel={(event) => { event.preventDefault(); respond(null); }}>
     <h2 id="desktop-dialog-title">{request.title}</h2>
     {#if request.kind === "input"}<p>{request.prompt}</p>{/if}
@@ -149,7 +163,8 @@
   .pi-row > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .preview-note { margin-top: 20px; color: var(--frost-muted); font-size: 11px; }
   .state-warning { margin-top: 12px; color: var(--frost-error); font-size: 11px; overflow-wrap: anywhere; }
-  .client-region { min-width: 0; min-height: 0; height: 100%; }
+  .client-region { position: relative; min-width: 0; min-height: 0; height: 100%; }
+  aside .resume-return { margin-top: 10px; color: var(--frost-link); border: 1px solid var(--frost-border); }
   dialog { margin: auto; width: min(650px, calc(100vw - 30px)); max-height: 85vh; padding: 16px; border: 1px solid var(--frost-border); border-radius: 8px; color: var(--frost-text); background: var(--frost-surface-raised); font-family: var(--font-ui); }
   dialog::backdrop { background: #0008; }
   dialog h2 { margin: 0 0 12px; }

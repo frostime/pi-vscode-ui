@@ -10,6 +10,7 @@ import type {
 } from "@frostime/pi-client/host";
 
 import type { DesktopInteractions } from "./dialogs.js";
+import type { DesktopResume } from "./DesktopResume.js";
 import type { DesktopProjects } from "./desktopProjects.js";
 import type { DesktopSettingsStore } from "./settings/DesktopSettingsStore.js";
 import { relatedVscodeSettingDefinitions, type DesktopSettingsTarget } from "../shared/desktopSettings.js";
@@ -21,6 +22,8 @@ export interface DesktopHostOptions {
   projects: DesktopProjects;
   /** Renderer-bridge quick pick/input (DesktopDialogs). */
   interactions: DesktopInteractions;
+  /** Tracks only interactions inside the Desktop Resume action's async scope. */
+  resume?: DesktopResume;
   /**
    * Explicit in-memory settings for isolated fixtures. The application uses settingsStore.
    */
@@ -42,6 +45,8 @@ export interface DesktopHostOptions {
 export function createDesktopHost(options: DesktopHostOptions): ClientHost {
   const readSettings = (): Record<string, unknown> => options.settingsStore?.values ?? options.settings ?? {};
   const openSettings = options.openSettings;
+  const resumeSelection = <T>(selection: "session" | "file" | "confirmation", work: () => Promise<T>): Promise<T> =>
+    options.resume ? options.resume.choose(selection, work) : work();
   rejectUnsupportedProxyMode(readSettings());
   const resolveWindow = (): BrowserWindow | undefined => {
     const value = typeof options.window === "function" ? options.window() : options.window;
@@ -89,12 +94,12 @@ export function createDesktopHost(options: DesktopHostOptions): ClientHost {
       showInformation: (message) => void showMessageBox(resolveWindow(), { type: "info", message }),
       showWarning: (message) => void showMessageBox(resolveWindow(), { type: "warning", message }),
       showError: (message) => void showMessageBox(resolveWindow(), { type: "error", message }),
-      showWarningDialog: (message, actions) => showActionsMessageBox(resolveWindow(), "warning", message, actions),
-      showActionsDialog: (message, actions) => showActionsMessageBox(resolveWindow(), "info", message, actions),
+      showWarningDialog: (message, actions) => resumeSelection("confirmation", () => showActionsMessageBox(resolveWindow(), "warning", message, actions)),
+      showActionsDialog: (message, actions) => resumeSelection("confirmation", () => showActionsMessageBox(resolveWindow(), "info", message, actions)),
       withProgress: (_title, work) => work(),
-      showQuickPick: (items, pickOptions) => options.interactions.showQuickPick(items, pickOptions),
+      showQuickPick: (items, pickOptions) => resumeSelection("session", () => options.interactions.showQuickPick(items, pickOptions)),
       showInputBox: (inputOptions) => options.interactions.showInputBox(inputOptions),
-      showOpenFileDialog: async (dialogOptions) => {
+      showOpenFileDialog: (dialogOptions) => resumeSelection("file", async () => {
         const window = resolveWindow();
         if (!window) return undefined;
         const openOptions: OpenDialogOptions = { properties: ["openFile"] };
@@ -106,7 +111,7 @@ export function createDesktopHost(options: DesktopHostOptions): ClientHost {
         const result = await dialog.showOpenDialog(window, openOptions);
         if (result.canceled) return undefined;
         return result.filePaths?.map((fsPath) => desktopUri(fsPath));
-      },
+      }),
     },
     editor: {
       writeClipboard: async (text) => {

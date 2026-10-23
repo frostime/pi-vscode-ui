@@ -2,9 +2,11 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { ComposerDraftCache, SessionRegistry, WebviewActionDispatcher, WebviewConnection, WorkspaceFileSearch, readChatTypography } from "@frostime/pi-client/host";
+import { ComposerDraftCache, SessionRegistry, WebviewConnection, WorkspaceFileSearch, readChatTypography } from "@frostime/pi-client/host";
+import type { SessionRegistryOptions } from "@frostime/pi-client/host";
 import type { RuntimeLogger } from "@frostime/pi-client/core/diagnostics/RuntimeLogger";
 import { DesktopDialogs } from "./dialogs.js";
+import { DesktopResume, DesktopResumeDispatcher } from "./DesktopResume.js";
 import { createDesktopHost } from "./desktopHost.js";
 import { DesktopProjects } from "./desktopProjects.js";
 import type { DesktopProjectsView } from "../shared/desktopBridge.js";
@@ -21,6 +23,8 @@ export interface DesktopAppOptions {
   stateStore?: DesktopStateStore;
   /** Trusted main-process test input, never accepted over IPC. */
   vscodeSettingsPath?: string;
+  /** Trusted main-process seam for controlled discovery delays/failures. */
+  discoverWorkingDirectories?: SessionRegistryOptions["discoverWorkingDirectories"];
   show?: boolean;
 }
 
@@ -59,7 +63,15 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     info: () => undefined,
     error: () => console.error("FrostPi Desktop client operation failed."),
   };
+  const resume = new DesktopResume({
+    project: () => projects.selected,
+    session: (id) => registry.sessionView(id),
+    publish: (view) => {
+      if (!window.isDestroyed()) window.webContents.send("frostpi:resume:view", view);
+    },
+  });
   const interactions = new DesktopDialogs((request) => {
+    resume.dialogShown(request);
     if (!window.isDestroyed()) window.webContents.send("frostpi:dialog:view", request);
   });
   const addProject = async (directory?: string): Promise<void> => {
@@ -68,7 +80,7 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     if (!result.canceled && result.filePaths[0]) await projects.addProject(result.filePaths[0]);
   };
   const host = createDesktopHost({
-    window, projects, interactions, openFolder: addProject, settingsStore, storage: stateStore,
+    window, projects, interactions, resume, openFolder: addProject, settingsStore, storage: stateStore,
     // app.getVersion() is the packaged manifest version; in development it reports Electron's version instead.
     clientVersion: app.isPackaged ? app.getVersion() : "unknown",
     openSettings: (target) => {
@@ -80,16 +92,17 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   const registry = new SessionRegistry(host, {
     logger,
     restoreSelection: "saved-only",
+    ...(options.discoverWorkingDirectories ? { discoverWorkingDirectories: options.discoverWorkingDirectories } : {}),
     sessionTreeArtifactPath: join(__dirname, "pi-extensions/session-tree.js"),
     questionToolArtifactPath: join(__dirname, "pi-extensions/question-tool.js"),
   });
   const drafts = new ComposerDraftCache(host);
   const unsupportedEditor = (): never => { throw new Error("Editor tabs are not supported in Desktop."); };
-  const dispatcher = new WebviewActionDispatcher({
+  const dispatcher = new DesktopResumeDispatcher({
     host, registry, logger, drafts,
     getProxyCredentials: () => host.proxyCredentials.get(),
     openPanel: unsupportedEditor, revealPanel: unsupportedEditor, openComposerEditor: unsupportedEditor,
-  });
+  }, resume);
   const incoming = host.createEventEmitter<unknown>();
   const visibility = host.createEventEmitter<boolean>();
   const connection = new WebviewConnection(registry, {
@@ -115,7 +128,7 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     connection.refresh();
   };
   const subscriptions = [
-    registry.onDidChange(() => connection.refresh()),
+    registry.onDidChange(() => { resume.refresh(); connection.refresh(); }),
     registry.onDidToast((toast) => connection.post({ type: "toast", ...toast })),
     registry.onDidSetComposerText(({ sessionId, text }) => connection.queueComposerText(sessionId, text, () => undefined)),
   ];
@@ -157,12 +170,16 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   listen("frostpi:projects:add", () => addProject());
   listen("frostpi:projects:select", (id) => { if (typeof id === "string" && id.length < 4096) projects.selectProject(id); });
   listen("frostpi:dialog:response", (id, value) => interactions.respond(id, value));
+  listen("frostpi:resume:request", () => resume.publish());
+  listen("frostpi:resume:show", (id) => resume.show(id));
+  listen("frostpi:resume:dismiss", (id) => resume.dismiss(id));
   window.on("minimize", () => visibility.fire(false));
   window.on("restore", () => visibility.fire(true));
 
   let disposal: Promise<void> | undefined;
   let closeRequested = false;
   const dispose = (): Promise<void> => disposal ??= (async () => {
+    resume.dispose();
     interactions.dispose();
     for (const { channel, listener } of ipcListeners) ipcMain.removeListener(channel, listener);
     unsubscribeProjects();

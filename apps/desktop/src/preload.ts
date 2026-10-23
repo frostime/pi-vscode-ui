@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-import type { DesktopApi, DesktopDialog, DesktopProjectsView } from "./shared/desktopBridge.js";
+import type { DesktopApi, DesktopDialog, DesktopProjectsView, DesktopResumeView } from "./shared/desktopBridge.js";
 import type { HostToWebviewMessage } from "@frostime/pi-client/shared/bridge/hostToWebview";
 import type { DesktopSettingsResult, DesktopSettingsTarget, DesktopSettingsView } from "./shared/desktopSettings.js";
 
@@ -19,6 +19,10 @@ const api: DesktopApi = {
   onProjects: (listener) => subscribe<DesktopProjectsView>("frostpi:projects:view", listener),
   onDialog: (listener) => subscribe<DesktopDialog | null>("frostpi:dialog:view", listener),
   respondDialog: (id, value) => ipcRenderer.send("frostpi:dialog:response", id, value),
+  onResume: (listener) => subscribe<DesktopResumeView | null>("frostpi:resume:view", listener),
+  requestResume: () => ipcRenderer.send("frostpi:resume:request"),
+  showResume: (id) => ipcRenderer.send("frostpi:resume:show", id),
+  dismissResume: (id) => ipcRenderer.send("frostpi:resume:dismiss", id),
   settings: async (action) => {
     let result: DesktopSettingsResult;
     try {

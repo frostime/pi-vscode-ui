@@ -132,6 +132,19 @@ Project/Memento 更新经过同一串行原子写队列。I/O 失败保留 desir
 
 最终日志：`tmp/r6-package-final.log`、`tmp/r6-package-verify-final.log`、`tmp/r6-check-final.log`、`tmp/r6-smoke-final.log`、`tmp/r6-e2e-final.log`、`tmp/r6-vsix-final.log`。主 Agent 的打包结果目录为 `C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-verify-YkRkpI/fixtures/`；PATH helper 末次复验为 `.../frostpi-desktop-verify-YeNLkf/fixtures/`，二者验证的 ZIP SHA 相同。E2E 完成证据为 `.../FrostPi extension E2E RzJFZw/result.json`。这些都是临时验证材料。
 
+## UI 验收修正：字体、K/M 与 Desktop Resume
+
+代码字体与 K/M 修复已 checkpoint 为 `9db7943`：共享 `pre code` 显式继承 family，围栏代码字号规则不变；紧凑数字固定英文单位。修复前回归分别暴露 `monospace` 与中文万单位，修复后 Context DOM 3 项、字体解析 3 项、双构建及开发 Electron smoke 通过。旧 ZIP 未更新。
+
+Resume 经用户原型评审后采用 Desktop 专用的对话区半透明 overlay。用户明确反对将本方案当作通用 status/stats bubble：新增代码与传输仅在 `apps/desktop`，不修改共享客户端或插件源代码，不增加共享桥字段。共享 Registry 仍拥有启动、会话与历史，Desktop 只观察一次 Resume 和其真实 Host 选择/返回投影；原型中的定时子步骤未进入实现。
+
+- `pnpm --dir apps/desktop test`：11 文件 / 88 项通过，其中 12 项新增 Resume/controller dispatcher 回归；覆盖原 Promise 结果/异常、独立异步选择归属、无 Runtime 的即时反馈、按返回 id 跟踪历史而非前台 Pi、失败展示/过期响应、重复 Resume 和关闭后晚到结果。
+- Desktop typecheck 0 errors（共享 `ExtensionUiRequestCard.svelte` 原有 1 warning）、lint、构建及增强后的 `test:smoke` 退出 0，结果显式含 `ok: true` 与 Resume 专项标记。
+- 受控实际 Electron 检查：发现目录前有提示、列表出现后无忙碌、选择器键盘取消、280px 不横溢、旧对话节点仍挂载、普通布局遮罩不盖输入区、展开布局按用户确认的例外覆盖输入且保留 CodeMirror 节点/草稿/展开状态（Escape 只取消 Resume）、切换其他 Pi 后继续执行并返回同一选择请求、失败关闭，以及实际合成 Pi JSONL 的启动/历史加载到共享 UI；无效 bridge version 不触发 Resume。
+- 没有使用真实凭据/模型。未重跑全仓 check 或插件 GUI；源码范围隔离不冒称完整插件体验验收。未重打包/验证新 ZIP，不把上面的开发 smoke 当作独立 exe 的通过证据。设置页、UI 字体、主题和侧栏布局仍未在本批改动。
+
+本批日志：`tmp/desktop-resume-tests.log`、`tmp/desktop-resume-types.log`、`tmp/desktop-resume-lint.log`、`tmp/desktop-resume-build.log`、`tmp/desktop-resume-smoke.log`。截图/结果由 smoke 打印的系统临时目录保存，均为合成会话，不依赖这些临时文件继续维护。
+
 ## 尚未证明
 
 用户日常操作的布局/流程满意度、包含关闭/重开的完整真实 Pi GUI、所有用户扩展组合及其他平台尚未验收。草稿跨重启恢复未实现；独立桌面候选已交付，但公开发布与签名未进行。不能把此 checkpoint 宣称为 Desktop 产品完成或发布就绪。

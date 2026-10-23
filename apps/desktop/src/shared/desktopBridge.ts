@@ -19,6 +19,19 @@ export type DesktopDialog =
   | { id: string; kind: "pick"; title: string; placeholder: string; matchOnDescription: boolean; matchOnDetail: boolean; items: Array<{ id: string; label: string; description?: string; detail?: string; alwaysShow?: boolean; separator?: boolean }> }
   | { id: string; kind: "input"; title: string; prompt: string; placeholder: string; value: string; error?: string };
 
+export interface DesktopResumeView {
+  id: string;
+  phase: "finding" | "choosing" | "opening" | "loading" | "failed";
+  visible: boolean;
+  project: string;
+  cwd: string;
+  selection?: "session" | "file" | "confirmation";
+  pickerId?: string;
+  sessionId?: string;
+  sessionTitle?: string;
+  error?: string;
+}
+
 /** The renderer gets this finite bridge, never ipcRenderer or Node access. */
 export interface DesktopApi {
   postClientMessage(message: WebviewToHostMessage): void;
@@ -29,6 +42,10 @@ export interface DesktopApi {
   onProjects(listener: (view: DesktopProjectsView) => void): () => void;
   onDialog(listener: (request: DesktopDialog | null) => void): () => void;
   respondDialog(id: string, value: string | null): void;
+  onResume(listener: (view: DesktopResumeView | null) => void): () => void;
+  requestResume(): void;
+  showResume(id: string): void;
+  dismissResume(id: string): void;
   settings(action: DesktopSettingsAction): Promise<DesktopSettingsView>;
   onSettings(listener: (view: DesktopSettingsView) => void): () => void;
   onOpenSettings(listener: (target: DesktopSettingsTarget) => void): () => void;
