@@ -69,6 +69,8 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   };
   const host = createDesktopHost({
     window, projects, interactions, openFolder: addProject, settingsStore, storage: stateStore,
+    // app.getVersion() is the packaged manifest version; in development it reports Electron's version instead.
+    clientVersion: app.isPackaged ? app.getVersion() : "unknown",
     openSettings: (target) => {
       if (window.isDestroyed()) return Promise.reject(new DesktopSettingsError("The Desktop settings window is closed."));
       window.webContents.send("frostpi:settings:open", target);

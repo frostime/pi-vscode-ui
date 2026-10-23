@@ -66,5 +66,6 @@ Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 
 ## Verification and packaging
 
+- Desktop distribution staging/version/target: `apps/desktop/scripts/packaging.mjs` and `package-app.mjs`; actual extracted-executable verification: `verify-package.mjs` with the CDP test client and configured-Windows-PATH helper. These are explicit delivery tools, not the renderer transport or a second application.
 - Package-local scripts and tests: `apps/pi-client/`, `apps/vscode/`, `apps/desktop/`, `packages/pi-rpc/`, `packages/provider-usage/`.
 - Workflows: `development.md`, `testing.md`, `release.md`. Root scripts orchestrate packages; plugin-local build must not require Desktop.

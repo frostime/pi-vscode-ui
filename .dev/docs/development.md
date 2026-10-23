@@ -8,7 +8,7 @@ updated: 2026-10-23
 
 # Development Workflow
 
-Use Node 20.19+ and pnpm 10. The Electron development host and a manually tested Pi executable can have newer Node requirements than the extension build runtime.
+Use Node 20.19+ and pnpm 10. Windows Desktop packaging requires Node 22.12+ (Node 24 is currently verified); this does not raise the VS Code extension build minimum. Pi can have its own newer Node requirement.
 
 Install from the repository root with `pnpm install --frozen-lockfile`. The lockfile covers all workspaces; never install independently inside an app. Root `check`/`build` orchestrate the client, both products, RPC and provider-usage packages. Each package owns its local scripts.
 
@@ -17,6 +17,7 @@ Install from the repository root with `pnpm install --frozen-lockfile`. The lock
 - `pnpm --dir apps/vscode build` builds the shared client/RPC/provider dependencies and the extension only. It does not build or launch Desktop; the existing VS Code debug task remains sufficient.
 - `pnpm --dir apps/pi-client <typecheck|lint|test>` checks shared application behavior, concentrated host contracts and browser UI. Core/shared/UI have separate environment checks. Host-independent tests isolate Pi settings and use explicit fake host services, not VS Code mocks.
 - `pnpm --dir apps/desktop build` builds the Electron main/preload and a renderer consuming the same ClientApp. `pnpm --dir apps/desktop start` launches the development preview; directories may be passed as arguments or added in the UI.
+- `pnpm package:desktop` builds and creates the Windows x64 ZIP under `artifacts/`; `pnpm verify:desktop` extracts that ZIP outside the repository and exercises the actual executable with an isolated profile. Packaging is explicit, not part of normal plugin development or `pnpm check`; see [Desktop candidate packaging](release.md#desktop-candidate-packaging-windows-x64).
 - `pnpm --dir apps/desktop test:smoke` requires a current Desktop build. It launches real Electron with isolated fake Pi children, two temporary unrelated Projects and a temporary Electron/Pi profile; it never uses real model credentials. It prints the result and OS-temporary screenshot/log location. This is not real-Pi acceptance.
 
 Desktop is a development preview with persistent settings, Projects and saved-session metadata. Normal starts retain the system application-data `FrostPi` profile; set `FROSTPI_DESKTOP_USER_DATA` to an isolated directory when testing. First-run setup offers a whitelist import from the default VS Code user settings or initialization with defaults. Import is an editable preview until Save, not ongoing synchronization. Settings can be edited in the app or opened in the system editor and explicitly reloaded. See the [Desktop contract](../../apps/desktop/SPEC.md#settings-and-initial-import).

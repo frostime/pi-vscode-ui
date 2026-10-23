@@ -8,9 +8,11 @@
     "clean": "node ../../scripts/clean-dir.mjs dist coverage",
     "start": "node scripts/start.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && svelte-check --tsconfig ./tsconfig.renderer.json",
-    "lint": "eslint src test --max-warnings 0",
+    "lint": "eslint src test scripts --max-warnings 0",
     "test": "vitest run",
-    "test:smoke": "node scripts/smoke.mjs"
+    "test:smoke": "node scripts/smoke.mjs",
+    "package:app": "node scripts/package-app.mjs",
+    "verify:package": "node scripts/verify-package.mjs"
   },
   "dependencies": {
     "@frostime/pi-client": "workspace:*",
@@ -20,10 +22,13 @@
     "svelte": "^5.56.5"
   },
   "devDependencies": {
+    "@electron/packager": "^20.3.0",
     "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@types/node": "^24.1.0",
+    "adm-zip": "^0.6.0",
     "electron": "44.9.0",
     "esbuild": "^0.28.0",
+    "png-to-ico": "^3.0.2",
     "svelte-check": "^4.3.1",
     "vite": "^8.1.5",
     "vitest": "^4.1.10"

@@ -17,6 +17,7 @@ Paths and commands below are repository-root-relative. Replace test placeholders
 | Shared Runtime, Registry, bridge, or message contracts | `apps/pi-client/src/core`, `src/host`, `src/shared` | `pnpm --dir apps/pi-client exec vitest run <affected-test>`; affected product typechecks when the contract changes |
 | VS Code editor/native integration | `apps/vscode` | Focused plugin tests, `pnpm --dir apps/vscode typecheck` and plugin build; Desktop need not run unless a shared contract changed |
 | Desktop window, Projects, native interaction, settings | `apps/desktop` | Focused Desktop tests and typecheck; build/smoke for renderer, IPC, launch or native dependency changes |
+| Desktop distribution, packaged launch or resources | `apps/desktop/scripts`, Desktop main assembly | `pnpm package:desktop` then `pnpm verify:desktop`; optional `--real-pi` checks the installed SDK command/UI path without model calls; see release/testing boundaries |
 | Pi transport/runtime dialect | `packages/pi-rpc` plus affected client consumer | Package-local tests and the [compatibility guide](../../../.dev/docs/protocol/pi-rpc-compatibility.md) |
 
 Use [development.md](../../../.dev/docs/development.md) for exact package scripts and [testing.md](../../../.dev/docs/testing.md) for test ownership and broader verification. Shared UI tests currently use the plugin's DOM test infrastructure; their location does not make the implementation plugin-only.

@@ -50,7 +50,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["**/*.cjs"],
+    files: ["**/*.cjs", "apps/desktop/scripts/**/*.mjs"],
     languageOptions: { globals: { ...globals.node } },
   },
   {

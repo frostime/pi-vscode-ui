@@ -4,7 +4,7 @@
 
 - 原验证快照：`wip/desktop-client@7c3f671`，前一 checkpoint 为 `367d295`，包含本地 `main@2ed69c1`。产品代码现已 squash 整合进主目录 `feat/desktop-host`，后续在主目录开发；原 worktree 冻结作回退。未合并 main、未改产品版本、未发布。
 - `apps/pi-client` 的现有 UI、Runtime、Registry 和消息桥供两个产出实际消费。宿主需求集中在 `src/host/clientHost.ts`，VS Code 薄接线，Desktop 适配。
-- 原架构快照是内存态预览。主目录后续已实现独立设置及 Project/会话元数据文件；各批次的证据见下文。当前仍未完成独立桌面分发与真实 Pi GUI 总验收，草稿不跨应用重启保存。
+- 原架构快照是内存态预览。主目录后续已实现独立设置及 Project/会话元数据文件；各批次的证据见下文。当前已有 Windows x64 独立 ZIP 及本机技术交付验证；未公开发布，真实模型下的最终体验仍需验收，草稿不跨应用重启保存。
 
 ## 自动与原生宿主检查
 
@@ -118,6 +118,20 @@ Project/Memento 更新经过同一串行原子写队列。I/O 失败保留 desir
 
 日志：`tmp/r5-check-final.log`、`tmp/r5-smoke-final.log`、`tmp/r5-vsix.log`；最终 smoke 结果/截图：`C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-smoke-pno9bN/`。这些临时材料不是产品依赖。
 
+## Windows x64 独立交付候选
+
+已生成 `artifacts/FrostPi-0.15.5-win32-x64.zip`：161,470,583 B（154.0 MiB），解压运行 `FrostPi/FrostPi.exe`。SHA-256：`2ca463a6561188a10f17a4cc62072f61ae226ff31b17ae2a5121faade97dccc2`。版本未改、未签名、未合 main、未公开发布。
+
+- 使用标准 Electron packager、白名单 staging、真实磁盘上的 private Pi artifacts、中文 README 与运行许可声明；Node/Pi 不安装升级，数据仍在现有 FrostPi profile。补齐打包形态的启动 argv，防止丢掉首个目录参数。ZIP/本工具缓存先完整生成再发布，不破坏旧产物。
+- `pnpm package:desktop` 退出 0；主 Agent 再跑 `pnpm verify:desktop --real-pi` 退出 0、20 checks。归档在仓库外带空格目录启动，覆盖实际资源/字体、设置、两 Project、受控 Pi 发送/Stop 隔离/历史重开。归档身份由结果中的 SHA 标识，不冒充任意后续源码状态；主 Agent 另比对 69 个 runtime 文件与最终 dist，逐文件字节一致。
+- 真实 Pi 1.1.0 使用全新临时 agent/profile、显式离线配置和扩展命令，经实际 exe 的 Composer、确认卡与 custom-message 交互；没有提供凭据或请求模型。该阶段使用 ephemeral，不把内存 custom entry 当成物理 JSONL 历史；真实模型完成/流式 Stop 不由这个阶段证明。
+- GUI 式 PATH 来自 Registry 原值和 Windows KnownFolder/被引用的注册表变量，不借开发 shell 自动展开，也不注入当前 Node 目录。本机发现 Node 24.12.0 / Pi 1.1.0；helper 修正后又通过完整 20 checks。它不声称复现某次 Explorer 的旧环境。
+- 最终 `pnpm check` 退出 0：134 文件 / 905 测试，双端构建、类型、含 Desktop scripts 的 lint 和原预算通过。VSIX 打包/校验退出 0，仍为 78 entries / 2.65 MB；开发 Electron smoke 同时退出 0。
+- 当前插件 E2E 使用缓存 VS Code 1.143.0、独立临时数据和软件渲染，退出 0 且套件完成 marker 为真，覆盖激活、注册和 New/Stop 命令；不是完整 Webview/远程/真实模型验收。runner 添加有界等待与仅停止 owned 进程树的超时处理，1ms 负向实验正确失败。先前宿主失败原因仍未归因，本轮通过不反推旧失败为环境问题。
+- 打包实现和有界 API/静态复核使用显式指定的 cheap DeepSeek worker/reader/reviewer；主 Agent 核对实际产物并完成最终回归。采纳了下载代理作用域、依赖归属与证据表述的具体修正，没有增加 ZIP 与随时变化的 checkout 的 mtime 强耦合。
+
+最终日志：`tmp/r6-package-final.log`、`tmp/r6-package-verify-final.log`、`tmp/r6-check-final.log`、`tmp/r6-smoke-final.log`、`tmp/r6-e2e-final.log`、`tmp/r6-vsix-final.log`。主 Agent 的打包结果目录为 `C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-verify-YkRkpI/fixtures/`；PATH helper 末次复验为 `.../frostpi-desktop-verify-YeNLkf/fixtures/`，二者验证的 ZIP SHA 相同。E2E 完成证据为 `.../FrostPi extension E2E RzJFZw/result.json`。这些都是临时验证材料。
+
 ## 尚未证明
 
-用户日常操作的布局/流程满意度、包含关闭/重开的完整真实 Pi GUI、所有用户扩展组合及其他平台尚未验收。草稿跨重启恢复未实现，独立桌面分发尚未完成。不能把此 checkpoint 宣称为 Desktop 产品完成或发布就绪。
+用户日常操作的布局/流程满意度、包含关闭/重开的完整真实 Pi GUI、所有用户扩展组合及其他平台尚未验收。草稿跨重启恢复未实现；独立桌面候选已交付，但公开发布与签名未进行。不能把此 checkpoint 宣称为 Desktop 产品完成或发布就绪。
