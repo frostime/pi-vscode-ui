@@ -13,7 +13,7 @@ await build({ entryPoints: ["test/smokeMain.ts"], bundle: true, platform: "node"
 const environment = {
   ...process.env,
   FROSTPI_DESKTOP_SMOKE_DIR: directory,
-  FROSTPI_DESKTOP_SMOKE_PI: resolve("../pi-client/test/fixtures/fake-pi.cjs"),
+  FROSTPI_DESKTOP_SMOKE_PI: resolve("test/fixtures/navigation-pi.cjs"),
   PI_CODING_AGENT_DIR: join(directory, "pi-agent"),
 };
 delete environment.ELECTRON_RUN_AS_NODE;

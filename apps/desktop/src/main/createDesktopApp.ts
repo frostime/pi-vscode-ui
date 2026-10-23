@@ -6,7 +6,9 @@ import { ComposerDraftCache, SessionRegistry, WebviewConnection, WorkspaceFileSe
 import type { SessionRegistryOptions } from "@frostime/pi-client/host";
 import type { RuntimeLogger } from "@frostime/pi-client/core/diagnostics/RuntimeLogger";
 import { DesktopDialogs } from "./dialogs.js";
-import { DesktopResume, DesktopResumeDispatcher } from "./DesktopResume.js";
+import { DesktopResume } from "./DesktopResume.js";
+import { DesktopActionDispatcher } from "./DesktopActionDispatcher.js";
+import { DesktopProjectNavigation } from "./DesktopProjectNavigation.js";
 import { createDesktopHost } from "./desktopHost.js";
 import { DesktopProjects } from "./desktopProjects.js";
 import type { DesktopProjectsView } from "../shared/desktopBridge.js";
@@ -75,9 +77,14 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     if (!window.isDestroyed()) window.webContents.send("frostpi:dialog:view", request);
   });
   const addProject = async (directory?: string): Promise<void> => {
-    if (directory) { await projects.addProject(directory); return; }
-    const result = await dialog.showOpenDialog(window, { title: "Add Project", properties: ["openDirectory"] });
-    if (!result.canceled && result.filePaths[0]) await projects.addProject(result.filePaths[0]);
+    if (!directory) {
+      const result = await dialog.showOpenDialog(window, { title: "Add Project", properties: ["openDirectory"] });
+      if (result.canceled || !result.filePaths[0]) return;
+      directory = result.filePaths[0];
+    }
+    const project = await projects.addProject(directory);
+    await navigation.selectProject(project.id);
+    resume.hide();
   };
   const host = createDesktopHost({
     window, projects, interactions, resume, openFolder: addProject, settingsStore, storage: stateStore,
@@ -92,17 +99,26 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   const registry = new SessionRegistry(host, {
     logger,
     restoreSelection: "saved-only",
+    onSessionOpened: (id, sourceId) => navigation.sessionOpened(id, sourceId),
     ...(options.discoverWorkingDirectories ? { discoverWorkingDirectories: options.discoverWorkingDirectories } : {}),
     sessionTreeArtifactPath: join(__dirname, "pi-extensions/session-tree.js"),
     questionToolArtifactPath: join(__dirname, "pi-extensions/question-tool.js"),
   });
+  const navigation = new DesktopProjectNavigation({
+    projects, registry, storage: stateStore,
+    publish: () => publishProjects(),
+    reportError: (error) => {
+      logger.error("Desktop navigation could not be saved or restored.", error);
+      connection.post({ type: "toast", level: "error", message: "Could not save or restore Desktop navigation. Check the Project directory and state.json." });
+    },
+  });
   const drafts = new ComposerDraftCache(host);
   const unsupportedEditor = (): never => { throw new Error("Editor tabs are not supported in Desktop."); };
-  const dispatcher = new DesktopResumeDispatcher({
+  const dispatcher = new DesktopActionDispatcher({
     host, registry, logger, drafts,
     getProxyCredentials: () => host.proxyCredentials.get(),
     openPanel: unsupportedEditor, revealPanel: unsupportedEditor, openComposerEditor: unsupportedEditor,
-  }, resume);
+  }, resume, navigation);
   const incoming = host.createEventEmitter<unknown>();
   const visibility = host.createEventEmitter<boolean>();
   const connection = new WebviewConnection(registry, {
@@ -121,6 +137,7 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   });
   const projectsView = (): DesktopProjectsView => ({
     ...projectState(),
+    navigation: navigation.view,
     ...(stateStore.error ? { stateError: `${stateStore.error} State file: ${stateStore.filePath}` } : {}),
   });
   const publishProjects = (): void => {
@@ -128,7 +145,7 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     connection.refresh();
   };
   const subscriptions = [
-    registry.onDidChange(() => { resume.refresh(); connection.refresh(); }),
+    registry.onDidChange(() => { navigation.refresh(); resume.refresh(); }),
     registry.onDidToast((toast) => connection.post({ type: "toast", ...toast })),
     registry.onDidSetComposerText(({ sessionId, text }) => connection.queueComposerText(sessionId, text, () => undefined)),
   ];
@@ -168,10 +185,18 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   listen("frostpi:client:in", (message) => incoming.fire(message));
   listen("frostpi:projects:request", publishProjects);
   listen("frostpi:projects:add", () => addProject());
-  listen("frostpi:projects:select", (id) => { if (typeof id === "string" && id.length < 4096) projects.selectProject(id); });
+  listen("frostpi:projects:select", async (id) => {
+    if (typeof id === "string" && id.length < 4096) { await navigation.selectProject(id); resume.hide(); }
+  });
+  listen("frostpi:sidebar:set", (layout) => navigation.setSidebar(layout));
   listen("frostpi:dialog:response", (id, value) => interactions.respond(id, value));
   listen("frostpi:resume:request", () => resume.publish());
-  listen("frostpi:resume:show", (id) => resume.show(id));
+  listen("frostpi:resume:show", async (id) => {
+    const view = resume.view;
+    if (typeof id !== "string" || view?.id !== id) return;
+    if (view.projectId && view.projectId !== projects.selected?.id) await navigation.selectProject(view.projectId);
+    resume.show(id);
+  });
   listen("frostpi:resume:dismiss", (id) => resume.dismiss(id));
   window.on("minimize", () => visibility.fire(false));
   window.on("restore", () => visibility.fire(true));
@@ -180,6 +205,7 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   let closeRequested = false;
   const dispose = (): Promise<void> => disposal ??= (async () => {
     resume.dispose();
+    navigation.dispose();
     interactions.dispose();
     for (const { channel, listener } of ipcListeners) ipcMain.removeListener(channel, listener);
     unsubscribeProjects();
@@ -193,6 +219,7 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     let metadataNotCaptured = false;
     try { await registry.flushPersistence(); }
     catch (error) { metadataNotCaptured = !(error instanceof DesktopStateWriteError); }
+    await navigation.flush();
     await stateStore.flush();
     // File retries recover accepted writes, not rejected metadata/serialization attempts.
     if (metadataNotCaptured) throw new Error("Session metadata could not be saved.");
@@ -214,6 +241,7 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   });
   window.webContents.on("render-process-gone", () => { void closeWindow(); });
   try {
+    await navigation.initialize({ explicitProjectSelection: Boolean(firstStartupProject) });
     await registry.ensureInitialSession();
     await window.loadFile(join(__dirname, "renderer/index.html"));
   } catch (error) {
@@ -221,5 +249,5 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     if (!window.isDestroyed()) window.destroy();
     if (!closeRequested) throw error;
   }
-  return { window, registry, projects, connection, settingsStore, stateStore, dispose };
+  return { window, registry, projects, connection, settingsStore, stateStore, navigation, dispose };
 }

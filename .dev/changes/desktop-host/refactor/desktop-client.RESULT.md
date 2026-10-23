@@ -120,7 +120,7 @@ Project/Memento 更新经过同一串行原子写队列。I/O 失败保留 desir
 
 ## Windows x64 独立交付候选
 
-已生成 `artifacts/FrostPi-0.15.5-win32-x64.zip`：161,470,583 B（154.0 MiB），解压运行 `FrostPi/FrostPi.exe`。SHA-256：`2ca463a6561188a10f17a4cc62072f61ae226ff31b17ae2a5121faade97dccc2`。版本未改、未签名、未合 main、未公开发布。
+首次候选曾生成 `artifacts/FrostPi-0.15.5-win32-x64.zip`：161,470,583 B（154.0 MiB），SHA-256：`2ca463a6561188a10f17a4cc62072f61ae226ff31b17ae2a5121faade97dccc2`。以下记录只标识首次候选；同名归档现已由后面的 Project/侧栏修正版更新。解压运行 `FrostPi/FrostPi.exe`；版本未改、未签名、未合 main、未公开发布。
 
 - 使用标准 Electron packager、白名单 staging、真实磁盘上的 private Pi artifacts、中文 README 与运行许可声明；Node/Pi 不安装升级，数据仍在现有 FrostPi profile。补齐打包形态的启动 argv，防止丢掉首个目录参数。ZIP/本工具缓存先完整生成再发布，不破坏旧产物。
 - `pnpm package:desktop` 退出 0；主 Agent 再跑 `pnpm verify:desktop --real-pi` 退出 0、20 checks。归档在仓库外带空格目录启动，覆盖实际资源/字体、设置、两 Project、受控 Pi 发送/Stop 隔离/历史重开。归档身份由结果中的 SHA 标识，不冒充任意后续源码状态；主 Agent 另比对 69 个 runtime 文件与最终 dist，逐文件字节一致。
@@ -134,7 +134,7 @@ Project/Memento 更新经过同一串行原子写队列。I/O 失败保留 desir
 
 ## UI 验收修正：字体、K/M 与 Desktop Resume
 
-代码字体与 K/M 修复已 checkpoint 为 `9db7943`：共享 `pre code` 显式继承 family，围栏代码字号规则不变；紧凑数字固定英文单位。修复前回归分别暴露 `monospace` 与中文万单位，修复后 Context DOM 3 项、字体解析 3 项、双构建及开发 Electron smoke 通过。旧 ZIP 未更新。
+代码字体与 K/M 修复已 checkpoint 为 `9db7943`：共享 `pre code` 显式继承 family，围栏代码字号规则不变；紧凑数字固定英文单位。修复前回归分别暴露 `monospace` 与中文万单位，修复后 Context DOM 3 项、字体解析 3 项、双构建及开发 Electron smoke 通过。该小批次当时未更新 ZIP；当前归档见下一节。
 
 Resume 经用户原型评审后采用 Desktop 专用的对话区半透明 overlay。用户明确反对将本方案当作通用 status/stats bubble：新增代码与传输仅在 `apps/desktop`，不修改共享客户端或插件源代码，不增加共享桥字段。共享 Registry 仍拥有启动、会话与历史，Desktop 只观察一次 Resume 和其真实 Host 选择/返回投影；原型中的定时子步骤未进入实现。
 
@@ -144,6 +144,23 @@ Resume 经用户原型评审后采用 Desktop 专用的对话区半透明 overla
 - 没有使用真实凭据/模型。未重跑全仓 check 或插件 GUI；源码范围隔离不冒称完整插件体验验收。未重打包/验证新 ZIP，不把上面的开发 smoke 当作独立 exe 的通过证据。设置页、UI 字体、主题和侧栏布局仍未在本批改动。
 
 本批日志：`tmp/desktop-resume-tests.log`、`tmp/desktop-resume-types.log`、`tmp/desktop-resume-lint.log`、`tmp/desktop-resume-build.log`、`tmp/desktop-resume-smoke.log`。截图/结果由 smoke 打印的系统临时目录保存，均为合成会话，不依赖这些临时文件继续维护。
+
+## Project 浏览上下文与侧栏
+
+用户确认 Project-first 原型，并要求生产实现的复杂度内聚在 Desktop。New/Resume 归属于发起 Project，即使 cwd 在其他 git worktree；归属不靠路径推断。新增 Project 立即选中且不启动 Pi，空 Project 真正清空前台；已有 Project 回到上次会话。顶部会话列表按 Project 过滤，侧栏只列 Project 与运行/待输入聚合，支持隐藏/恢复、180–340px 调宽、280px 抽屉和底部 Settings。临时草稿与后台进程保留，草稿仍不跨应用重启保存。
+
+维护边界：一个 Registry 和 ClientApp 不变。Desktop 的 `DesktopProjectNavigation` 负责归属/last-viewed/Memento 布局，`DesktopShell.svelte` 负责外壳；原型没有作为生产组件复制。共享产品源码只涉及两个文件：Registry 增加真实空前台和可选打开身份通知（包括 Resume 已存在身份与 Fork 源），ClientApp 增加可选 Header roster。完整 presentation 仍保留所有存活身份，不拦截快照或复制聊天生命周期。插件入口/适配器/配置未改，默认完整会话列表和 Provisional 生命周期由回归保护。
+
+验证（2026-10-24）：
+
+- `pnpm check` 退出 0：137 文件 / 935 测试，其中 Desktop 13 文件 / 102 测试；类型、lint、双端构建和插件 bundle budget 通过。保留共享 `ExtensionUiRequestCard.svelte` 原有 1 条 Svelte warning。完整类型检查另发现前一批 K/M 测试 shim 的 Intl 构造/调用签名不兼容，已仅在测试中用 Proxy 修正，产品数字格式不变。
+- 真实开发 Electron smoke 显式 `ok: true`。新增场景从真实 Host New 选择受控 worktree cwd：会话仍属于发起 Project，点击 cwd 对应的另一个空 Project 不会借显示旧对话；实际 CodeMirror 草稿在 Project 切换后保留，隐藏与指针调宽不重挂载 ClientApp/editor。合成阻塞输入通过 Project/隐藏入口回到原 Runtime，280px 抽屉 Escape 不联动折叠 Composer，关闭/重开恢复宽度、隐藏、归属与选中项。原有并行执行、Stop 隔离、Resume、设置和资源回归仍通过。
+- `pnpm package:desktop` 与 `pnpm verify:desktop` 退出 0。新 ZIP 在仓库外带空格路径解压，以隔离 profile 和受控 Pi 驱动实际 exe，通过 16 checks；主 Agent 另逐字节比对了归档内 69 个 runtime 文件与当前构建，全部一致。验证脚本按新 Project 导航定位，并用受控 Pi `.starts` 计数确认切 Project 不重启原进程、重开只启动所选保存会话，而非用新的 UI 聚合标签替代进程证据。
+- 本次未跑 `--real-pi` 或插件 GUI E2E，没有使用模型/凭据。首次候选的 20 checks/真实 Pi 离线探针不能冒充当前归档的证据。设置页和主题仍待讨论；未改版本、合 main、签名或发布。
+
+**当前归档**：`artifacts/FrostPi-0.15.5-win32-x64.zip`，161,481,059 B，145 个归档文件。SHA-256：`4c59c7d18b5111634950e170da72595aaea20899d5961a6e7fad29df1b87dd47`。再次独立计算与验证结果匹配。该包包含本次 Project/侧栏及之前的 Resume、代码字体、K/M 修复；已有 `artifacts/FrostPi/` 展开目录不会自动更新，试用时应关闭旧 Desktop，把新 ZIP 解压到新目录。
+
+日志：`tmp/project-nav-check.log`、`tmp/project-nav-smoke.log`、`tmp/project-nav-package.log`、`tmp/project-nav-package-verify.log`。实际 exe 验证结果：`C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-verify-o2fgxm/fixtures/result.json`；开发 smoke 截图位于 `C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-smoke-zeJJU5/`。这些临时文件不是继续维护的依赖。
 
 ## 尚未证明
 

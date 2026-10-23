@@ -16,6 +16,7 @@ const api: DesktopApi = {
   requestProjects: () => ipcRenderer.send("frostpi:projects:request"),
   addProject: () => ipcRenderer.send("frostpi:projects:add"),
   selectProject: (id) => ipcRenderer.send("frostpi:projects:select", id),
+  setSidebar: (layout) => ipcRenderer.send("frostpi:sidebar:set", layout),
   onProjects: (listener) => subscribe<DesktopProjectsView>("frostpi:projects:view", listener),
   onDialog: (listener) => subscribe<DesktopDialog | null>("frostpi:dialog:view", listener),
   respondDialog: (id, value) => ipcRenderer.send("frostpi:dialog:response", id, value),

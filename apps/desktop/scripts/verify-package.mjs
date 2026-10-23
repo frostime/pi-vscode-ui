@@ -225,21 +225,28 @@ function conversationText(client) {
   return client.evaluate("document.querySelector('.client-region')?.innerText ?? ''");
 }
 
-/** A saved-session row, matched by its Project cwd rather than by list position. */
+/** Project navigation is scoped; the shared Header describes its foreground Pi. */
 function projectRow(directory) {
-  return `[...document.querySelectorAll('.pi-row')].find((row) => row.title.startsWith(${JSON.stringify(directory)}))`;
+  return `[...document.querySelectorAll('.project-select')].find((row) => row.title === ${JSON.stringify(directory)})`;
 }
 
 function projectRowStatus(directory) {
-  return `${projectRow(directory)}?.querySelector('.status-dot')?.getAttribute('aria-label') ?? null`;
+  return `(${projectRow(directory)}?.getAttribute('aria-current') === 'true' ? (${activeRowStatus()}) : null)`;
 }
 
 function activeRowStatus() {
-  return "document.querySelector('.pi-row.chosen')?.querySelector('.status-dot')?.getAttribute('aria-label') ?? null";
+  return "document.querySelector('.session-heading .status-dot')?.getAttribute('aria-label') ?? null";
 }
 
 function projectButtons() {
-  return `[...document.querySelectorAll('aside button:not(.pi-row):not(.settings-button):not([aria-label])')]`;
+  return `[...document.querySelectorAll('.project-select')]`;
+}
+
+function fixtureStarts(directory) {
+  const state = JSON.parse(readFileSync(resolve(profile, 'state.json'), 'utf8'));
+  const session = state.workspaceState['frostpi.sessions.v1'].sessions.find((entry) => resolve(entry.cwd) === resolve(directory));
+  assert.ok(session?.sessionFile, 'The controlled Pi must have persisted its own session path.');
+  return readFileSync(`${session.sessionFile}.starts`, 'utf8').trim().split(/\r?\n/).length;
 }
 
 async function sendPrompt(client, text) {
@@ -276,7 +283,7 @@ async function runFirstSession(client) {
 
   await client.evaluate("document.querySelector('.onboarding-actions .primary').click()");
   await until(() => client.evaluate(`${projectRowStatus(projects[0])} === 'ready'`), "first Pi ready in project one");
-  assert.equal(await client.evaluate("document.querySelectorAll('.pi-row').length"), 1);
+  assert.ok(await client.evaluate(`${projectRow(projects[0])}.closest('.project-row').querySelector('.project-meta').textContent.startsWith('1 session')`));
   pass("controlled Pi starts in the first Project");
 
   await sendPrompt(client, promptMarker);
@@ -302,22 +309,24 @@ async function runFirstSession(client) {
 async function runSecondProject(client) {
   const secondProject = `${projectButtons()}[1]`;
   await client.evaluate(`${secondProject}.click()`);
-  await until(() => client.evaluate(`${secondProject}.classList.contains('chosen')`), "Project two selection");
-  await client.evaluate("document.querySelector('[aria-label=\"New or resume session\"]').click()");
-  await until(() => client.evaluate("Boolean(document.querySelector('.launcher-create'))"), "New menu");
-  await client.evaluate("document.querySelector('.launcher-create').click()");
+  await until(() => client.evaluate(`${secondProject}.getAttribute('aria-current') === 'true' && Boolean(document.querySelector('.onboarding-actions .primary'))`), "Project two empty state");
+  assert.equal(await client.evaluate("Boolean(document.querySelector('.session-heading'))"), false, 'An empty Project must not retain the previous Project conversation.');
+  await client.evaluate("document.querySelector('.onboarding-actions .primary').click()");
   await until(() => client.evaluate(`${projectRowStatus(projects[1])} === 'ready'`), "second Pi ready in project two");
-  assert.equal(await client.evaluate("document.querySelectorAll('.pi-row').length"), 2);
+  assert.ok(await client.evaluate(`${projectButtons()}.every(button => button.closest('.project-row').querySelector('.project-meta').textContent.startsWith('1 session'))`));
   pass("two unrelated Projects host independent Pi sessions");
 }
 
 async function stopStreamingSession(client) {
+  const firstStarts = fixtureStarts(projects[0]);
   await sendPrompt(client, "stream-084");
   await until(() => client.evaluate(`${projectRowStatus(projects[1])} === 'running'`), "second Pi starts streaming");
   await until(() => client.evaluate("Boolean(document.querySelector('.stop-button'))"), "composer offers Stop");
   await client.evaluate("document.querySelector('.stop-button').click()");
   await until(() => client.evaluate(`${projectRowStatus(projects[1])} !== 'running'`), "Stop ends the streaming Pi");
-  assert.equal(await client.evaluate(projectRowStatus(projects[0])), "ready", "Stop must not cancel work in the other session.");
+  await client.evaluate(`${projectRow(projects[0])}.click()`);
+  await until(() => client.evaluate(`${projectRowStatus(projects[0])} === 'ready'`), "other Project remains usable after Stop");
+  assert.equal(fixtureStarts(projects[0]), firstStarts, 'Selecting the other Project must reuse its live Pi, not restart a process killed by Stop.');
   writeFileSync(releaseFile, "finish");
   pass("Stop cancels only the targeted turn");
 }
@@ -340,7 +349,7 @@ async function runRestoredSession(client, expectedProjects) {
   await until(() => client.evaluate(`${projectButtons()}.length === 2`), "restored Projects", 20_000);
   const restored = await client.evaluate(`${projectButtons()}.map((button) => button.title)`);
   assert.deepEqual(restored.map((path) => resolve(path)), expectedProjects.map((path) => resolve(path)));
-  await until(() => client.evaluate("document.querySelectorAll('.pi-row').length === 2"), "restored saved sessions");
+  await until(() => client.evaluate(`${projectButtons()}.every(button => button.closest('.project-row').querySelector('.project-meta').textContent.startsWith('1 session'))`), "restored scoped session counts");
   pass("reopen restores both Projects and saved-session entries");
 
   await until(() => client.evaluate(`${projectRowStatus(expectedProjects[0])} === 'ready'`), "selected saved Pi resumes", 30_000);
@@ -349,6 +358,8 @@ async function runRestoredSession(client, expectedProjects) {
     return text.includes(conversationMarker) && text.includes(promptMarker) ? text : undefined;
   }, "restored history reaches the shared conversation", 30_000);
   assert.equal((restoredText.match(new RegExp(promptMarker, "g")) ?? []).length, 1, "Reopen must not replay prompts.");
+  assert.equal(fixtureStarts(expectedProjects[0]), 2, 'Only the selected saved Pi is restarted on reopen.');
+  assert.equal(fixtureStarts(expectedProjects[1]), 1, 'The background Project must remain dormant on reopen.');
   pass("selected saved Pi reloads its Pi-owned history without prompt replay");
 }
 
@@ -363,7 +374,7 @@ async function phaseOne(application, seededSettings, guiPath) {
     await stopStreamingSession(client);
     // The newest session would be the saved selection; choose the first Pi so reopen resumes it.
     await client.evaluate(`${projectRow(projects[0])}.click()`);
-    await until(() => client.evaluate(`${projectRow(projects[0])}.classList.contains('chosen')`), "first Pi becomes the saved selection");
+    await until(() => client.evaluate(`${projectRow(projects[0])}.getAttribute('aria-current') === 'true'`), "first Project becomes the saved selection");
     await closeWindow(client);
     await waitForExit(child, "packaged app closes normally");
     assertProfileState(seededSettings);

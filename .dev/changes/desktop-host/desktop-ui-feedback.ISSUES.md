@@ -1,12 +1,12 @@
 # Desktop UI 使用反馈
 
-基线：`feat/desktop-host@dd40c9d`，Windows x64 独立包。此文件记录验收反馈与当前决定，不代替 TARGET-SPEC 或实现计划。**UI-01、UI-02、UI-05 已完成源码修复与针对性验证；设置页仍待讨论调整，主题与侧栏继续延期。现有独立 ZIP 尚未更新。**
+最初反馈基线：`feat/desktop-host@dd40c9d`，Windows x64 独立包。此文件记录验收反馈与当前决定，不代替 TARGET-SPEC 或实现计划。**UI-01、UI-02、UI-05、UI-06 已实现并进入更新的 Windows 候选包；设置页与主题仍待讨论。最新 ZIP 身份和验证范围见 [RESULT](refactor/desktop-client.RESULT.md#project-浏览上下文与侧栏)。**
 
 来源：本会话用户反馈 `401ade66`、确认/延期决定 `65ee08a1`；原话读取方法见 `.dev/changes/desktop-host/handover/R5-desktop-ui-continuation.HANDOVER.md`。
 
 ## UI-01：Resume 等待期间缺少状态反馈
 
-**状态：Desktop 专用 Resume overlay 已实现，受控 Electron 验证通过；独立 ZIP 尚未更新。**
+**状态：Desktop 专用 Resume overlay 已实现，受控 Electron 验证通过，已进入新候选 ZIP。**
 
 - 表现：点击 Resume 后长时间没有可见反馈，像卡住；插件版有进度提示。用户建议悬浮 status bubble，未要求阻塞式弹窗。
 - 已查证：`apps/desktop/src/main/desktopHost.ts` 的 `withProgress: (_title, work) => work()` 丢弃了进度呈现；VS Code adapter 调用真实 `window.withProgress`。`apps/pi-client/src/host/catalog/SessionCatalogPicker.ts` 的会话扫描已有 `Finding Pi sessions…` 进度调用。
@@ -20,7 +20,7 @@
 
 ## UI-02：代码块真正的文字元素没有使用配置字体
 
-**状态：已修复共享 CSS，并通过受控 Electron 回归；独立 ZIP 尚未更新。**
+**状态：已修复共享 CSS，并通过受控 Electron 回归，已进入新候选 ZIP。**
 
 - 用户看到代码块仍像宋体。原 `markdown.css` 把字体设置在 `<pre>` 上，但 `.markdown-body pre code` 没有覆盖 Chromium 给 `<code>` 的默认 `font-family: monospace`。现已让该元素显式继承 family，不修改行内 code 或字号规则。
 - 回归：`apps/desktop/test/smokeMain.ts` 直接检查 `pre code`；修复前实际 family 为 `monospace` 并失败，修复后配置字体与 `editor.fontFamily` 后备均通过，字号仍为 `chat.fontSize`。
@@ -58,20 +58,23 @@
 - 回归：`apps/vscode/test/unit/contextUsagePopover.dom.test.ts` 在组件初始化前将未指定 locale 的 Intl formatter 默认设为 zh-CN，并确认其确实输出 `100万`；真实组件仍须显示 `292K / 1M`、`302.5K`、`10K` 和精确的 `500`。修复前失败，修复后 3 项 DOM 测试通过。
 - 期望：Token 数量紧凑单位保持 K/M，不因系统或 UI 语言变成万/亿；不改变实际数值。共享呈现修一处进入两端，覆盖中文 locale 的回归，避免只在英文机器上证明通过。
 
-## UI-06：侧栏折叠、宽度与栏目布局
+## UI-06：Project 浏览上下文与侧栏
 
-**状态：记录，需后续讨论，不在下一轮直接重做。**
+**状态：原型已获用户确认，已实现并通过开发/独立包验证。**
 
-- 用户期望可折叠隐藏、拖动调宽；Projects / Open Sessions / Settings 挤在一起，缺少设计层次。
-- 当前事实：`DesktopApp.svelte` 固定 180px，窄窗口改为顶部 100px 区域；Settings 和说明文字直接跟在会话列表后。
-- 用户决定：**“侧栏我们放到后面也需要讨论”。**
-- Agent 的三段布局、Settings 固定底部、窄窗覆盖式导航、宽度保存等均只是提议，未形成定稿。后续讨论需保持聊天为主体、隐藏后可恢复并能发现待输入会话；折叠/调宽不能重建 ClientApp、停止后台 Pi 或混淆 Project anchor 与当前会话。
+- 原问题不只是排版：添加非首个 Project 不会选中它；点击 Project 也只改变 New/Resume anchor，右侧仍显示另一个 Project 的对话。固定 180px 的侧栏又重复列出全部 Pi，无法隐藏或拖宽。
+- 新约定：Project 是浏览上下文。新增 Project 立即选中且不自动创建 Pi；已有 Project 回到上次查看的 Session，空 Project 显示真实空状态。Header 下拉只列当前 Project 的已打开/恢复会话，磁盘历史走 Resume。侧栏仅列 Projects 与运行/待输入聚合，Settings 固定底部。
+- 用户明确归属：**“归属当前这个 project，这个行为和 extension 是一致的”。** New/Resume 捕获发起时的 Project；实际 cwd 即使在其他 git worktree，也不自动搬到另一 Project。已打开文件再次 Resume 复用原 Runtime 并归到请求 Project，不复制进程或聊天。Fork 继承源归属；晚到的 New/Resume 不抢走新 Project 的前台。
+- 原型不是产品代码：生产采用 Desktop 独立外壳与薄 Project 上下文条，继续使用同一个 ClientApp、Registry 和共享 Header。侧栏支持 180–340px 指针/键盘调宽、真正隐藏/恢复、隐藏后的待输入入口和 280px 临时抽屉；各 Session 草稿、后台进程和输入请求不随导航迁移。
+- 维护边界：归属、last-viewed、侧栏和持久化在 Desktop。共享产品源码只改 `SessionRegistry.ts` 的清空前台/打开身份通知，以及 `ClientApp.svelte` 的可选导航 roster；不在共享模块添加 Project 模型或 Desktop 分支，不伪造快照，也不修改 VS Code 入口/适配器。完整 presentation 继续保留所有存活身份，过滤只影响 Header 导航。
+- 旧元数据迁移：精确 cwd 对应注册 Project，否则保留在旧 anchor；首次启动对齐真正保存的前台会话。新导航元数据沿用 `state.json` 的 Memento 通道，保存显式归属、last-viewed 和布局；Provisional/Ephemeral 身份按共享 SessionPersistence 过滤，草稿不跨重启保存。
+- 验证：全仓 137 文件 / 935 测试、双端构建与预算、增强 Electron smoke 均通过；独立 ZIP 解压后的 exe 通过 16 项受控检查。详见 RESULT，不能把这些证据称为真实模型日常验收。
 
 ## 本批验证与暂停边界
 
-- 第一批仅修 UI-02 与 UI-05，checkpoint `9db7943`；其后经原型评审单独实现 UI-01。设置页、UI 字体、主题与侧栏布局仍未修改。
+- 第一批 UI-02/UI-05 的 checkpoint 为 `9db7943`；Resume checkpoint 为 `7dfa671`；随后按本轮批准的 Project/侧栏模型实现 UI-06。设置页、独立 UI 字体设置与主题尚未修改。
 - 通过：Context DOM 3 项、字体设置解析 3 项、共享客户端 typecheck（0 errors，1 项既有 Svelte warning）、修改文件 ESLint、双端构建、受控 Desktop Electron smoke（明确 `ok: true`）。
-- Resume 的验证范围见 UI-01；本次没有改 `apps/pi-client` 或 `apps/vscode`。未运行全仓 check、插件 GUI 验收或独立包重打包/验证；旧 ZIP 不包含上述修复，不将开发构建的通过当作包验收。
+- 早期 Resume 批次只改 Desktop；Project 批次增加上述两个共享小接缝及回归，没有修改插件入口/适配器。当前完整 check 和新 ZIP 验证已通过；未重跑插件 GUI E2E 或真实模型流程。旧展开目录不会被打包命令自动更新，试用时应关闭旧 Desktop，再将新 ZIP 解压到新目录运行。
 
 ## 参考截图
 

@@ -636,10 +636,15 @@ process.on("SIGTERM", () => process.exit(0));
       persisted = structuredClone(value) as typeof persisted;
       return Promise.resolve();
     };
-    const registry = new SessionRegistry(testHost.host, { logger: testHost.logger });
+    const created: Array<{ id: string; sourceId: string | undefined }> = [];
+    const registry = new SessionRegistry(testHost.host, {
+      logger: testHost.logger,
+      onSessionOpened: (id, sourceId) => created.push({ id, sourceId }),
+    });
     registries.push(registry);
 
     const activeId = await registry.openSession({ path: sessionFile, cwd: dir, title: "Source", updatedAt: Date.now() });
+    expect(created).toContainEqual({ id: activeId, sourceId: undefined });
     await waitForForkableHistory(registry, "preserve-entry");
 
     const unrelatedSidebarId = (await registry.createSession())!;
@@ -654,6 +659,7 @@ process.on("SIGTERM", () => process.exit(0));
     expect(typeof preservedResult.forkSessionId).toBe("string");
     expect(registry.activeSessionId).toBe(activeId);
     expect(registry.snapshot().sessions.some((session) => session.id === preservedResult.forkSessionId)).toBe(true);
+    expect(created).toContainEqual({ id: preservedResult.forkSessionId, sourceId: activeId });
     await registry.closeSession(preservedResult.forkSessionId!);
     await registry.activateSession(activeId);
     await waitForForkableHistory(registry, "preserve-entry");
@@ -678,6 +684,7 @@ process.on("SIGTERM", () => process.exit(0));
     expect(result.cancelled).toBe(false);
     expect(typeof result.forkSessionId).toBe("string");
     expect(result.forkSessionId).not.toBe(activeId);
+    expect(created).toContainEqual({ id: result.forkSessionId, sourceId: activeId });
     expect(registry.snapshot().activeSession).toMatchObject({
       id: result.forkSessionId,
       title: "Fork: Source",
@@ -743,6 +750,37 @@ process.on("SIGTERM", () => process.exit(0));
     const fourth = (await registry.createSession())!;
     expect(new Set(registry.snapshot().sessions.map((session) => session.id))).toEqual(new Set([second, third, fourth]));
     expect((persisted as { sessions: Array<{ id: string }> }).sessions.map((session) => session.id)).toEqual([second]);
+  });
+
+  it("clears the foreground without discarding or stopping either a saved or provisional Runtime", async () => {
+    testEnvironment.cwd = resolve("test/fixtures");
+    testEnvironment.piExecutable = fakePiFixture();
+    let persisted: unknown;
+    const { host, logger } = createTestHost();
+    host.storage.update = (_key, value) => { persisted = structuredClone(value); return Promise.resolve(); };
+    const created: Array<{ id: string; visibleBeforePublication: boolean }> = [];
+    const registry = new SessionRegistry(host, {
+      logger,
+      onSessionOpened: (id) => created.push({ id, visibleBeforePublication: registry.hasSession(id) && registry.activeSessionId === id }),
+    });
+    registries.push(registry);
+    const saved = (await registry.createSession())!;
+    await registry.sendPrompt(saved, "Commit the first session", []);
+    await waitFor(() => registry.sessionView(saved)?.status === "ready");
+    const provisional = (await registry.createSession())!;
+    expect(created).toEqual([{ id: saved, visibleBeforePublication: true }, { id: provisional, visibleBeforePublication: true }]);
+
+    await registry.clearActiveSession();
+    expect(registry.activeSessionId).toBeNull();
+    expect(registry.snapshot().activeSession).toBeNull();
+    expect(registry.snapshot().sessions).toEqual([
+      expect.objectContaining({ id: saved, status: "ready" }),
+      expect.objectContaining({ id: provisional, status: "ready" }),
+    ]);
+    expect(persisted).toMatchObject({ activeSessionId: null, sessions: [expect.objectContaining({ id: saved })] });
+    await registry.sendPrompt(saved, "The background process is still usable", []);
+    expect(registry.activeSessionId).toBeNull();
+    expect(registry.hasSession(provisional)).toBe(true);
   });
 
   it("keeps temporary sessions in memory and disables persistence, Fork, and restart", async () => {

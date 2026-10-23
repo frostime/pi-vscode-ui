@@ -9,6 +9,7 @@ import { DesktopSettingsStore } from "../src/main/settings/DesktopSettingsStore.
 import { DesktopStateStore } from "../src/main/storage/DesktopStateStore.js";
 import { verifyDesktopStateReopen } from "./statePersistenceSmoke.js";
 import { verifyDesktopResume } from "./resumeSmoke.js";
+import { verifyProjectNavigation } from "./projectNavigationSmoke.js";
 
 const directory = process.env.FROSTPI_DESKTOP_SMOKE_DIR!;
 app.setPath("userData", join(directory, "electron-profile"));
@@ -134,17 +135,23 @@ void app.whenReady().then(async () => {
     await desktop.registry.sendPrompt(a, "commit project A", []);
     await until(async () => (await text()).includes("E2E response"), "shared conversation rendering");
     const [projectA, projectB] = desktop.projects.list();
-    await browser.executeJavaScript(`window.frostpiDesktop.selectProject(${JSON.stringify(projectB!.id)})`);
-    await until(() => desktop.projects.selected?.id === projectB!.id, "Project B selection");
+    await browser.executeJavaScript(`window.__clientRoot=document.querySelector('.frostpi-root');window.frostpiDesktop.selectProject(${JSON.stringify(projectB!.id)})`);
+    await until(() => desktop.projects.selected?.id === projectB!.id && desktop.registry.activeSessionId === null, "empty Project B has no foreground Session");
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('.onboarding-actions .primary')) && !document.querySelector('.session-heading')"), "Project B shows its empty state, not Project A's conversation");
+    assert.equal(await browser.executeJavaScript("window.__clientRoot===document.querySelector('.frostpi-root')"), true);
     assert.equal(desktop.registry.sessionView(a)?.cwd, projectA!.cwd);
-    await browser.executeJavaScript("document.querySelector('[aria-label=\"New or resume session\"]').click()");
-    await until(() => browser.executeJavaScript("!!document.querySelector('.launcher-create')"), "New menu opens");
-    await browser.executeJavaScript("document.querySelector('.launcher-create').click()");
-    await until(() => desktop.registry.activeSessionId !== a && desktop.registry.snapshot().activeSession?.status === "ready", "Project B New through shared Header");
+    assert.equal(desktop.registry.sessionView(a)?.status, "ready");
+    assert.equal(desktop.registry.snapshot().sessions.length, 1);
+    await browser.executeJavaScript("document.querySelector('.onboarding-actions .primary').click()");
+    await until(() => desktop.registry.activeSessionId !== a && desktop.registry.snapshot().activeSession?.status === "ready", "Project B New through shared empty state");
     const b = desktop.registry.activeSessionId!;
     await desktop.registry.sendPrompt(b, "commit project B", []);
     await until(() => desktop.registry.sessionView(b)?.status === "ready", "Project B committed");
     assert.equal(desktop.registry.snapshot().sessions.length, 2);
+    await browser.executeJavaScript("document.querySelector('.session-heading').click()");
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('.session-list-panel'))"), "Project B session dropdown opens");
+    assert.deepEqual(await browser.executeJavaScript("[...document.querySelectorAll('.session-list-select')].map(button=>button.title)"), [projectB!.cwd]);
+    await browser.executeJavaScript("document.querySelector('.session-heading').click()");
     await browser.executeJavaScript("document.querySelector('[aria-label=\"Session actions\"]').click()");
     await until(() => browser.executeJavaScript("Boolean(document.querySelector('.session-menu'))"), "session actions menu opens");
     const actions = await browser.executeJavaScript("document.querySelector('.session-menu').textContent") as string;
@@ -175,7 +182,7 @@ void app.whenReady().then(async () => {
     await browser.executeJavaScript("Promise.all(document.querySelector('.resume-card').getAnimations().map(animation=>animation.finished)).then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))");
     assert.equal(await browser.executeJavaScript("getComputedStyle(document.querySelector('.resume-card')).opacity"), "1");
     await writeFile(join(directory, "desktop-resume.png"), (await browser.capturePage()).toPNG());
-    await browser.executeJavaScript("document.querySelector('aside .pi-row').click()");
+    await browser.executeJavaScript(`[...document.querySelectorAll('.project-select')].find(button=>button.title===${JSON.stringify(projectA!.cwd)}).click()`);
     await until(() => desktop.registry.activeSessionId === a, "other Pi remains selectable during Resume");
     await until(() => browser.executeJavaScript("!document.querySelector('.resume-overlay') && Boolean(document.querySelector('.resume-return'))"), "switching Pi hides Resume without cancelling its picker");
     await desktop.registry.sendPrompt(b, "background while choosing resume", []);
@@ -253,7 +260,7 @@ void app.whenReady().then(async () => {
     assert.match(String(diagramText), /Desktop/);
     const security: unknown = await browser.executeJavaScript("({node:typeof window.require,process:typeof window.process,rawIpc:typeof window.frostpiDesktop.ipcRenderer,editorButtons:[...document.querySelectorAll('button')].filter(b=>b.textContent.includes('Open in editor tab')).length})");
     assert.deepEqual(security, { node: "undefined", process: "undefined", rawIpc: "undefined", editorButtons: 0 });
-    await until(() => browser.executeJavaScript("document.querySelectorAll('aside .pi-row').length === 2 && Boolean(document.querySelector('.mermaid-host svg'))"), "both Pi and active conversation reach the renderer");
+    await until(() => browser.executeJavaScript("document.querySelectorAll('.project-select').length === 2 && Boolean(document.querySelector('.mermaid-host svg'))"), "Project navigation and active conversation reach the renderer");
     desktop.window.showInactive();
     await browser.executeJavaScript("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
     await writeFile(join(directory, "desktop.png"), (await browser.capturePage()).toPNG());
@@ -265,7 +272,8 @@ void app.whenReady().then(async () => {
   await verifyStartupSettingsEntries();
   await verifyDesktopStateReopen(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
   await verifyDesktopResume(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
-  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true, sharedSettingsEntryPoints: true, actualDesktopCapabilities: true, stateReopen: true, selectedOnlyAutoStart: true, savedNullSelection: true, shutdownFlush: true, resumeOverlay: true, resumeWithoutRuntime: true, resumeFailureCleanup: true, resumePiSwitch: true, resumeExpandedComposer: true }));
+  await verifyProjectNavigation(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
+  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true, sharedSettingsEntryPoints: true, actualDesktopCapabilities: true, stateReopen: true, selectedOnlyAutoStart: true, savedNullSelection: true, shutdownFlush: true, resumeOverlay: true, resumeWithoutRuntime: true, resumeFailureCleanup: true, resumePiSwitch: true, resumeExpandedComposer: true, projectNavigation: true, worktreeProjectOwnership: true, sidebarLayoutReopen: true }));
   app.exit(0);
 }).catch((error: unknown) => {
   writeFileSync(join(directory, "result.json"), JSON.stringify({ ok: false, error: error instanceof Error ? error.message : "Smoke failure" }));

@@ -54,6 +54,8 @@ export interface SessionRegistryOptions {
   questionToolArtifactPath?: string;
   /** Native VS Code keeps its historical fallback; Desktop restores only an explicitly saved selection. */
   restoreSelection?: "saved-or-first" | "saved-only";
+  /** Host metadata may associate New/Resume identities before presentation; forks name their source. */
+  onSessionOpened?: (sessionId: string, sourceSessionId?: string) => void;
 }
 
 export class SessionRegistry {
@@ -77,6 +79,7 @@ export class SessionRegistry {
   readonly #sessionTreeArtifactPath: string | undefined;
   readonly #questionToolArtifactPath: string | undefined;
   readonly #restoreOnlySavedSelection: boolean;
+  readonly #onSessionOpened: SessionRegistryOptions["onSessionOpened"];
 
   #activeSessionId: string | null = null;
   #forkOperation: ForkOperation | null = null;
@@ -102,6 +105,7 @@ export class SessionRegistry {
     this.#sessionTreeArtifactPath = options.sessionTreeArtifactPath;
     this.#questionToolArtifactPath = options.questionToolArtifactPath;
     this.#restoreOnlySavedSelection = options.restoreSelection === "saved-only";
+    this.#onSessionOpened = options.onSessionOpened;
     this.#changeEmitter = host.createEventEmitter<void>();
     this.#toastEmitter = host.createEventEmitter<RegistryToast>();
     this.#setComposerTextEmitter = host.createEventEmitter<{ sessionId: string; text: string }>();
@@ -242,6 +246,7 @@ export class SessionRegistry {
     this.#assertNoForkOperation();
     const existing = [...this.#records.values()].find((record) => record.sessionFile && samePath(record.sessionFile, entry.path));
     if (existing) {
+      this.#onSessionOpened?.(existing.id);
       if (workingDirectory) this.#rememberWorkingDirectory(workingDirectory, existing.cwd);
       if (existing.id !== this.#activeSessionId) await this.#discardActiveTemporarySession();
       await this.activateSession(existing.id);
@@ -263,6 +268,7 @@ export class SessionRegistry {
     const runtime = this.#createRuntime(record);
     this.#runtimes.set(id, runtime);
     this.#activeSessionId = id;
+    this.#onSessionOpened?.(id);
     await this.#persist();
     this.#emitChange();
     await this.#startRuntime(runtime, workingDirectoryValidated);
@@ -291,6 +297,7 @@ export class SessionRegistry {
     const runtime = this.#createRuntime(record, customArguments);
     this.#runtimes.set(id, runtime);
     this.#activeSessionId = id;
+    this.#onSessionOpened?.(id);
     await this.#persist();
     this.#emitChange();
     await this.#startRuntime(runtime, true);
@@ -306,6 +313,16 @@ export class SessionRegistry {
     await this.#persist();
     this.#emitChange();
     if (runtime.view.status === "stopped" && !runtime.isEphemeral) await this.#startRuntime(runtime);
+  }
+
+  /** Clear the foreground without closing, discarding or starting any Runtime. */
+  async clearActiveSession(): Promise<void> {
+    this.#assertOpen();
+    this.#assertNoForkOperation();
+    if (this.#activeSessionId === null) return;
+    this.#activeSessionId = null;
+    await this.#persist();
+    this.#emitChange();
   }
 
   async closeSession(sessionId: string): Promise<void> {
@@ -766,6 +783,7 @@ export class SessionRegistry {
     this.#lastPendingUiCounts.set(operation.sourceId, 0);
     if (operation.resultSelection === "select-result") this.#activeSessionId = operation.forkId;
     else this.#ensureValidActiveSelection();
+    this.#onSessionOpened?.(operation.forkId, operation.sourceId);
   }
 
   async #restoreOriginalAfterFork(operation: ForkOperation): Promise<void> {

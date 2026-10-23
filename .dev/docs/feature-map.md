@@ -15,7 +15,7 @@ Read [architecture overview](architecture/overview.md) for process and dependenc
 
 - Shared collection: `apps/pi-client/src/host/SessionRegistry.ts`; metadata: `host/sessions/SessionPersistence.ts`; single-session execution/state: `src/core/sessions/`.
 - VS Code assembly: `apps/vscode/src/extension/activate.ts` and `clientHost.ts`.
-- Desktop Project roots/anchor: `apps/desktop/src/main/desktopProjects.ts`; versioned Project/client Memento file: `main/storage/DesktopStateStore.ts`; adaptation and assembly: `desktopHost.ts` and `createDesktopApp.ts`. Both JSON stores use the bounded/atomic `main/storage/jsonFile.ts` helper.
+- Desktop Project roots: `apps/desktop/src/main/desktopProjects.ts`; Project ownership/last Session/sidebar state: `main/DesktopProjectNavigation.ts`; action adaptation: `main/DesktopActionDispatcher.ts`; sidebar/drawer/resize: `renderer/DesktopShell.svelte`. `main/createDesktopApp.ts` assembles the shared Registry/client with `desktopHost.ts`. Versioned Project/client Memento data lives in `main/storage/DesktopStateStore.ts`; both JSON stores use the bounded/atomic `main/storage/jsonFile.ts` helper.
 - Contract: `apps/pi-client/SPEC.md` and `apps/vscode/src/extension/sessions/session-lifecycle.SPEC.md`.
 
 ## Working directories, history catalog, and session tree

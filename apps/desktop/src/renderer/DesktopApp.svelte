@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import ClientApp from "@frostime/pi-client/ui";
-  import StatusDot from "@frostime/pi-client/ui/features/sessions/StatusDot.svelte";
   import { postToHost } from "@frostime/pi-client/ui/bridge/hostBridge";
   import { presentationStore } from "@frostime/pi-client/ui/state/sessionViewStore.svelte";
   import { withFrostPiCommands, type LocalComposerCommands } from "@frostime/pi-client/ui/features/composer/frostPiCommands";
@@ -10,6 +9,7 @@
   import { quickPickMatches } from "./quickPick.js";
   import SettingsPanel from "./SettingsPanel.svelte";
   import ResumeOverlay from "./ResumeOverlay.svelte";
+  import DesktopShell from "./DesktopShell.svelte";
   import { desktopSettingDefinitions, type DesktopSettingsAction, type DesktopSettingsTarget, type DesktopSettingsView } from "../shared/desktopSettings.js";
   import { DESKTOP_CLIENT_UI_CAPABILITIES } from "../shared/desktopCapabilities.js";
 
@@ -20,6 +20,8 @@
   let settingsError = $state("");
 
   let projects = $state<DesktopProjectsView>({ projects: [], activeProjectId: null });
+  const projectSessions = $derived($presentationStore.sessions.filter((session) =>
+    projects.navigation?.sessionProjects[session.id] === projects.activeProjectId));
   let request = $state<DesktopDialog | null>(null);
   let resume = $state<DesktopResumeView | null>(null);
   const resumePicker = $derived(request?.kind === "pick" && request.id === resume?.pickerId ? request : null);
@@ -95,36 +97,22 @@
   }
 </script>
 
-<div class="desktop-shell">
-  <aside aria-label="Projects and open Pi sessions">
-    <div class="project-heading"><strong>Projects</strong><button type="button" aria-label="Add Project" onclick={() => window.frostpiDesktop.addProject()}>＋</button></div>
-    {#each projects.projects as project (project.id)}
-      <button type="button" class:chosen={project.id === projects.activeProjectId} title={project.cwd} onclick={() => window.frostpiDesktop.selectProject(project.id)}>{project.name}</button>
-    {/each}
-    <h2>All open Pi</h2>
-    {#each $presentationStore.sessions as session (session.id)}
-      <button type="button" class="pi-row" class:chosen={session.id === $presentationStore.activeSessionId} title={session.cwd} onclick={() => postToHost({ type: "activateSession", sessionId: session.id })}>
-        <StatusDot status={session.status} /><span>{session.title}</span>{#if session.requiresUserInput}<span aria-label="Needs input">!</span>{/if}
-      </button>
-    {/each}
-    {#if resume && !resume.visible}
-      <button type="button" class="resume-return" onclick={() => resume && window.frostpiDesktop.showResume(resume.id)}>Return to Resume{#if resume.phase === "failed"} · Needs attention{/if}</button>
-    {/if}
-    <button type="button" class="settings-button" onclick={() => showSettings()}>Settings</button>
-    {#if settingsError && !settingsOpen}<p role="alert">{settingsError}</p>{/if}
-    {#if projects.stateError}<p class="state-warning" role="alert">{projects.stateError}</p>{/if}
-    <p class="preview-note">Projects and saved-session entries are remembered. Closing stops Pi; drafts are not restored.</p>
-  </aside>
-  <div class="client-region">
-    <ClientApp localComposerCommands={commands} capabilities={DESKTOP_CLIENT_UI_CAPABILITIES} />
-    {#if resume?.visible}
-      <ResumeOverlay view={resume} picker={resumePicker}
-        onrespond={(id, value) => window.frostpiDesktop.respondDialog(id, value)}
-        onretry={() => postToHost({ type: "resumeSession" })}
-        ondismiss={() => resume && window.frostpiDesktop.dismissResume(resume.id)} />
-    {/if}
-  </div>
-</div>
+<DesktopShell view={projects} sessions={projectSessions} activeSessionId={$presentationStore.activeSessionId} {resume}
+  error={!settingsOpen ? settingsError : ""}
+  onproject={(id) => window.frostpiDesktop.selectProject(id)}
+  onadd={() => window.frostpiDesktop.addProject()}
+  onsettings={() => showSettings()}
+  onsidebar={(layout) => window.frostpiDesktop.setSidebar(layout)}
+  onsession={(id) => postToHost({ type: "activateSession", sessionId: id })}
+  onresume={(id) => window.frostpiDesktop.showResume(id)}>
+  <ClientApp localComposerCommands={commands} capabilities={DESKTOP_CLIENT_UI_CAPABILITIES} sidebarSessions={projectSessions} />
+  {#if resume?.visible}
+    <ResumeOverlay view={resume} picker={resumePicker}
+      onrespond={(id, value) => window.frostpiDesktop.respondDialog(id, value)}
+      onretry={() => postToHost({ type: "resumeSession" })}
+      ondismiss={() => resume && window.frostpiDesktop.dismissResume(resume.id)} />
+  {/if}
+</DesktopShell>
 
 {#if settingsOpen && settingsView}
   <SettingsPanel view={settingsView} target={settingsTarget} busy={settingsBusy} error={settingsError} onaction={settingsAction} onclose={() => settingsOpen = false} />
@@ -152,19 +140,6 @@
 {/if}
 
 <style>
-  .desktop-shell { height: 100%; display: grid; grid-template-columns: 180px minmax(0, 1fr); color: var(--frost-text); font: var(--font-size) var(--font-ui); background: var(--frost-bg); }
-  aside { min-width: 0; padding: 10px; overflow: auto; border-right: 1px solid var(--frost-border); }
-  .project-heading { display: flex; align-items: center; justify-content: space-between; }
-  aside button { width: 100%; padding: 7px; border-radius: 4px; text-align: left; background: transparent; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
-  .project-heading button { width: auto; }
-  aside button:hover, aside button.chosen { background: var(--frost-hover); }
-  h2 { margin: 15px 0 6px; font-size: 12px; }
-  .pi-row { display: flex; align-items: center; gap: 7px; }
-  .pi-row > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .preview-note { margin-top: 20px; color: var(--frost-muted); font-size: 11px; }
-  .state-warning { margin-top: 12px; color: var(--frost-error); font-size: 11px; overflow-wrap: anywhere; }
-  .client-region { position: relative; min-width: 0; min-height: 0; height: 100%; }
-  aside .resume-return { margin-top: 10px; color: var(--frost-link); border: 1px solid var(--frost-border); }
   dialog { margin: auto; width: min(650px, calc(100vw - 30px)); max-height: 85vh; padding: 16px; border: 1px solid var(--frost-border); border-radius: 8px; color: var(--frost-text); background: var(--frost-surface-raised); font-family: var(--font-ui); }
   dialog::backdrop { background: #0008; }
   dialog h2 { margin: 0 0 12px; }
@@ -177,5 +152,4 @@
   .choices span, .choices small { color: var(--frost-muted); overflow-wrap: anywhere; }
   footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
   footer button { padding: 7px 12px; background: var(--frost-secondary-bg); cursor: pointer; }
-  @media (max-width: 600px) { .desktop-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: 100px minmax(0, 1fr); } aside { padding: 5px; border-right: 0; border-bottom: 1px solid var(--frost-border); } }
 </style>

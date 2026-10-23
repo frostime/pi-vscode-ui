@@ -18,14 +18,14 @@
 
 这是当前选定的推进顺序，不是所有工作的硬依赖。主插件验证和维护检查可提前开展；每个节点的 `REQUIRES` 才表示必须已有的结果。自动验证贯穿后续变更，不是最后才测试。
 
-**当前已备齐可独立运行的 Windows x64 开发候选，不等于已发布或用户总验收通过。** 设置、持久 Project、会话索引及正常关闭/重开已实现；独立 ZIP、实际 exe 验证及插件受控 E2E 已完成。最终真实模型下的日常体验、主题/远程宿主体验仍需验收。草稿不跨应用重启恢复。
+**当前已备齐可独立运行的 Windows x64 开发候选，不等于已发布或用户总验收通过。** 设置、持久 Project、会话索引及正常关闭/重开已实现；基础候选已完成独立 ZIP、实际 exe 和插件受控 E2E；Project/侧栏更新后的当前归档已重新通过完整 check、开发 smoke 和 16 项实际 exe 检查，未重跑插件 GUI E2E。最终真实模型下的日常体验、主题/远程宿主体验仍需验收。草稿不跨应用重启恢复。
 
 ## 执行路线
 
 [双端共享架构验证]
 #DONE: 共享实现和两种宿主已经跑通，技术验收完成；不代表用户体验已验收。
 
-客户端主体已迁入 `apps/pi-client`，同一份 UI、Runtime、Registry 和消息桥供两端使用。`src/host/clientHost.ts` 集中声明有限能力，VS Code 薄接线，Desktop 适配；原 CSS/class/Codicons/主题映射保留。Electron 已有多 Project/全部 Pi 导航，未另写聊天或会话管理器。
+客户端主体已迁入 `apps/pi-client`，同一份 UI、Runtime、Registry 和消息桥供两端使用。`src/host/clientHost.ts` 集中声明有限能力，VS Code 薄接线，Desktop 适配；原 CSS/class/Codicons/主题映射保留。Electron 已复用多 Project/多 Pi 能力，后续 UI 反馈将导航改为按 Project 浏览，未另写聊天或会话管理器。
 
 证据：checkpoint `7c3f671`；824 项测试、双端构建、VSIX 校验、受控 Extension Host E2E、两个无关 Project 的 Electron smoke 通过。一次共享 UI 文案修改已进入双产出。真实本机 Pi 1.1.0 的共享 Runtime 发送、Abort、历史恢复、阻塞输入通过。后续主目录修复 checkpoint `d0dbc29` 的完整检查为 828 项测试，增强的 Electron smoke 连续 3 次通过；新增主目录插件 E2E 尝试被系统 VS Code 更新锁阻塞，未算通过。GUI 自动化使用受控子进程，不能混称为完整真实 Pi GUI 验收。快照与证据限制见 [验证记录](refactor/desktop-client.RESULT.md)。
 
@@ -61,7 +61,7 @@ END
 本节点的结果：用户认可基本使用方向，首版运行约定明确；不是要求预览已有全部首版功能。
 
 [日常使用闭环]
-#IN PROGRESS: 设置及元数据保存/重开已实现，当前 905 项测试、双端构建、VSIX 及受控 Electron 验证通过，见 [状态保存验证记录](refactor/desktop-client.RESULT.md#statejson-与正常关闭重开)。仍需完整真实 Pi GUI 使用检查及日常体验验收，不以受控子进程结果替代总验收。
+#IN PROGRESS: 设置及元数据保存/重开已实现；当前 935 项测试、双端构建、受控 Electron 和更新 ZIP 的 16 checks 通过，先前 VSIX 证据见 [状态保存验证记录](refactor/desktop-client.RESULT.md#statejson-与正常关闭重开)。仍需完整真实 Pi GUI 使用检查及日常体验验收，不以受控子进程结果替代总验收。
 REQUIRES [预览体验与持久化取舍]: 已确认使用方向与运行约定。
 
 - 已实现 state.json：保存/恢复 Projects、选中项与既有会话索引，不另建对话数据库；正常关闭等待 Registry 和文件队列落盘。草稿继续只保证前台切换保留，不跨应用重启保存。
@@ -72,7 +72,7 @@ REQUIRES [预览体验与持久化取舍]: 已确认使用方向与运行约定�
 验收：两个无关 Project 中真实 Pi 经常规 GUI 路径可并行使用；切换不丢草稿/串输入；退出及重开符合已确认规则；用户无需编辑源码才能完成必要配置。Agent 准备技术证据，用户只判断日常操作是否顺手。
 
 [主插件兼容与双产出维护验收]
-#IN PROGRESS: 维护接线与导航已落地，完整自动检查、VSIX、Desktop smoke 和当前候选的插件受控 E2E 已通过；E2E 有宿主 exit 0 和实际 suite-completion 双证据。最终主题/工作区/远程使用体验仍需验收，不把命令级 E2E 称为完整 Webview/模型验收。
+#IN PROGRESS: 维护接线与导航已落地。当前 Project 更新已过完整自动检查、双构建、Desktop smoke 和独立包验证；VSIX 与插件受控 E2E 为基础候选证据，本批未重跑。基础 E2E 有宿主 exit 0 和实际 suite-completion 双证据。最终主题/工作区/远程使用体验仍需验收，不把命令级 E2E 称为完整 Webview/模型验收。
 REQUIRES [双端共享架构验证]: 两端确实消费同一实现。本节点可在 Desktop 补全期间提前开展。
 
 - 由 Agent 维护依赖/类型/兼容检查：通用 UI 改一处进入双端；客户端新增宿主依赖必须经过集中 interface；不兼容项显式暴露。
@@ -90,10 +90,14 @@ REQUIRES [双端共享架构验证]: 以及已实现的设置/状态基础。用
 
 当前目标为未签名的 Windows x64 ZIP；Electron 随包，外部 Node/Pi 仍由机器提供，不安装升级。数据继续存系统应用数据目录，不是随 exe 携带数据的 USB 模式。打包/验证命令及许可要求见 [release](../../docs/release.md#desktop-candidate-packaging-windows-x64)。
 
-实际 exe 从仓库外带空格目录启动；验证字体/Codicons/Mermaid、必要设置、两 Project、Stop 隔离和 profile 重开。PATH 来自机器/用户配置而不是注入开发 Node 目录；不声称复现某次 Explorer 的旧环境。可选 --real-pi 已验证本机 Pi 1.1 的离线扩展命令、真实确认卡和自定义消息显示，不提供凭据、不请求模型，也不冒充真实模型历史/Stop。归档 SHA 与证据见 RESULT。没有自动更新、托盘或公开发布。
+实际 exe 从仓库外带空格目录启动；验证字体/Codicons/Mermaid、必要设置、两 Project、Stop 隔离和 profile 重开。PATH 来自机器/用户配置而不是注入开发 Node 目录；不声称复现某次 Explorer 的旧环境。基础候选曾以可选 --real-pi 验证本机 Pi 1.1 的离线扩展命令、真实确认卡和自定义消息显示；当前 Project 修正版只做受控 Pi 的 16 checks，不能借用旧归档的真实 Pi 证据。不提供凭据、不请求模型，也不冒充真实模型历史/Stop。归档 SHA 与证据见 RESULT。没有自动更新、托盘或公开发布。
 
 [首版总验收] << CURRENT
-#IN PROGRESS: `dd40c9d` 已完成本地技术交付，905 测试、双构建、VSIX、开发 smoke、打包后 20 checks（含真实 Pi 离线命令/UI）及插件 E2E 通过。用户现已给出 [UI 验收反馈](desktop-ui-feedback.ISSUES.md)：Resume 反馈、代码字体和 Token 的 K/M 单位需修复，设置页需调整；主题与侧栏先记录，后续讨论。接续见 [R5 执行交接](handover/R5-desktop-ui-continuation.HANDOVER.md)，其正文包含继续工作的必要状态、因果和验证边界，不要求先读 session；R4 保留为旧快照。字体与 K/M 已修复并 checkpoint 为 `9db7943`；之后用户通过独立原型确认 Desktop 专用 Resume overlay，并明确它不是通用状态气泡。Resume 现已实现并通过 Desktop 88 测试、类型/lint/build 与增强的受控 Electron smoke，代码仅限 `apps/desktop`，见 [UI 修正结果](refactor/desktop-client.RESULT.md#ui-验收修正字体km-与-desktop-resume)。设置页的下一轮 UI/UX 仍需讨论，主题与侧栏继续延期。旧 ZIP 仍含这些问题；后续交付时需重新打包并按新归档验证，不无端扩展技术改造，也不代替用户总验收或取得发布授权。
+#IN PROGRESS: 原始候选 `dd40c9d` 的技术交付后，用户已通过原型确认 Resume 专用 overlay 和按 Project 浏览的侧栏；代码字体与 K/M 也已修复。当前 137 文件 / 935 测试、双构建、插件预算及增强开发 Electron smoke 通过，新 ZIP 的实际 exe 通过 16 checks。最新归档 SHA 和范围见 [Project/侧栏结果](refactor/desktop-client.RESULT.md#project-浏览上下文与侧栏)。
+
+Project 分组、last-viewed、侧栏/持久化均在 Desktop；New/Resume 属于发起 Project，包括其他 git worktree。共享产品源码只补 Registry 的清空选择/打开身份通知和 ClientApp 的可选 Header roster，插件入口/适配器不变。一个 Registry、一个 ClientApp 保持不变，不伪造快照。详情见 [UI-06](desktop-ui-feedback.ISSUES.md#ui-06project-浏览上下文与侧栏) 和 TARGET-SPEC。
+
+此前字体/KM checkpoint 为 `9db7943`，Resume 为 `7dfa671`；R5 交接已是这些修复前的历史快照。设置页、独立 UI 字体设置和主题仍待讨论；不因 UI 原型获批扩大为完整主题或另一套客户端。新包仍是本地未签名开发候选，不代表真实模型总验收、主线合并或发布授权。
 REQUIRES [双端共享架构验证] and [独立桌面产物]: 日常闭环及主插件的自动技术检查已就绪；这两个节点余下的真实使用/主题体验在本节点汇总验收。
 
 Agent 对照 TARGET-SPEC 汇总可执行证据和明确限制；用户判断它能否替代实际终端多开的用法、插件是否仍然顺手。缺陷返回其所属节点修复。通过后再单独获得主线合并/发布授权，遵循版本与分支规范；checkpoint 不等于发布许可。

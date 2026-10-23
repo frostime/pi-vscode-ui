@@ -1,5 +1,7 @@
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { get } from "svelte/store";
+import ClientApp from "$ui/ClientApp.svelte";
 import type { HostToWebviewMessage } from "$shared/bridge/hostToWebview";
 import type { SessionSummaryView } from "$shared/model/sessionViewModel";
 
@@ -15,7 +17,7 @@ import SidebarShell from "$ui/shell/SidebarShell.svelte";
 import type { SessionViewModel } from "$shared/model/sessionViewModel";
 import type { ProviderUsageSource } from "$ui/features/provider-usage/providerUsageSource";
 import { composerDrafts } from "$ui/features/composer/composerDraftStore.svelte";
-import { toastStore } from "$ui/state/sessionViewStore.svelte";
+import { EMPTY_PRESENTATION, presentationStore, toastStore } from "$ui/state/sessionViewStore.svelte";
 import { VSCODE_CLIENT_UI_CAPABILITIES } from "$shared/model/clientUiCapabilities";
 import type * as FileSuggestionClient from "$ui/features/composer/fileSuggestionClient";
 
@@ -82,6 +84,30 @@ function sidebarShell(providerUsageSource: ProviderUsageSource | undefined) {
     },
   });
 }
+
+describe("optional sidebar navigation roster", () => {
+  it.each([false, true])("keeps the complete session lifetime while a filtered roster is enabled=%s", async (filtered) => {
+    const current = { ...summary(), title: "Current Project session" };
+    const background = { ...summary("background"), title: "Other Project session", isActive: false };
+    const all = [current, background];
+    presentationStore.set({
+      ...EMPTY_PRESENTATION, workspaceName: "Project", workspacePath: "/synthetic",
+      sessions: all, activeSessionId: current.id, displayedSession: activeSession(),
+    });
+    try {
+      const view = render(ClientApp, { props: {
+        localComposerCommands: stubCommands,
+        ...(filtered ? { sidebarSessions: [current] } : {}),
+      } });
+      await fireEvent.click(view.container.querySelector(".session-heading")!);
+      const menu = view.getByRole("dialog", { name: "FrostPi sessions" });
+      expect(menu.textContent).toContain(current.title);
+      expect(menu.textContent?.includes(background.title)).toBe(!filtered);
+      expect(get(presentationStore).sessions).toEqual(all);
+      view.unmount();
+    } finally { presentationStore.set(EMPTY_PRESENTATION); }
+  });
+});
 
 describe("injected provider usage source", () => {
   it("threads the ClientApp-injected source into session metrics instead of forcing the bridge source", async () => {

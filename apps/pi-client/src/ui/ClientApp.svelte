@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
 import type { LocalComposerCommands } from "./features/composer/frostPiCommands";
+  import type { SessionSummaryView } from "$shared/model/sessionViewModel";
   import type { ProviderUsageSource } from "./features/provider-usage/providerUsageSource";
   import { bridgeProviderUsageSource } from "./features/provider-usage/bridgeProviderUsageSource";
   import { clientCapabilities } from "./state/clientCapabilities.svelte";
@@ -15,12 +16,15 @@ import type { LocalComposerCommands } from "./features/composer/frostPiCommands"
     localComposerCommands,
     providerUsageSource = bridgeProviderUsageSource,
     capabilities = VSCODE_CLIENT_UI_CAPABILITIES,
+    sidebarSessions,
   }: {
     localComposerCommands: LocalComposerCommands;
     /** Defaults to the host bridge request/response source; hosts with another provider backend inject it here. */
     providerUsageSource?: ProviderUsageSource | undefined;
     /** Defaults to the full VS Code capability set; hosts without editor integration must pass reduced capabilities. */
     capabilities?: ClientUiCapabilities | undefined;
+    /** Optional navigation roster; the complete presentation still owns session lifetime. */
+    sidebarSessions?: SessionSummaryView[] | undefined;
   } = $props();
 
   // One ClientApp root per document: set synchronously at mount (intentionally
@@ -56,7 +60,7 @@ import type { LocalComposerCommands } from "./features/composer/frostPiCommands"
     <OnboardingView />
   {:else}
     <SidebarShell
-      sessions={$presentationStore.sessions}
+      sessions={sidebarSessions ?? $presentationStore.sessions}
       session={$presentationStore.displayedSession}
       externalized={$presentationStore.sidebarSessionExternalized}
       draftAuthority={$presentationStore.composerDraftAuthority}

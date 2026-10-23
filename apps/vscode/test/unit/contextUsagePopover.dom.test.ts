@@ -6,11 +6,14 @@ import ContextUsagePopover from "$ui/features/usage/ContextUsagePopover.svelte";
 vi.hoisted(() => {
   const NativeNumberFormat = Intl.NumberFormat;
   const chineseIntl = Object.create(Intl) as typeof Intl;
-  chineseIntl.NumberFormat = class extends NativeNumberFormat {
-    constructor(locales?: Intl.LocalesArgument, options?: Intl.NumberFormatOptions) {
-      super(locales ?? "zh-CN", options);
-    }
-  };
+  chineseIntl.NumberFormat = new Proxy(NativeNumberFormat, {
+    construct(target, args: ConstructorParameters<typeof NativeNumberFormat>) {
+      return new target(args[0] ?? "zh-CN", args[1]);
+    },
+    apply(target, _this, args: Parameters<typeof NativeNumberFormat>) {
+      return target(args[0] ?? "zh-CN", args[1]);
+    },
+  });
   vi.stubGlobal("Intl", chineseIntl);
 });
 

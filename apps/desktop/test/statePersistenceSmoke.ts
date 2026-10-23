@@ -66,7 +66,8 @@ export async function verifyDesktopStateReopen(directory: string, executable: st
     await first.registry.sendPrompt(ephemeral, "state-ephemeral", []);
     await waitFor(() => first.registry.sessionView(ephemeral)?.status === "ready", "ephemeral fixture settles");
     await first.registry.createSession();
-    await first.registry.activateSession(a);
+    await first.navigation.activateSession(a);
+    selectedProject = projectA!.id;
     aFile = first.registry.sessionView(a)!.sessionFile!;
     bFile = first.registry.sessionView(b)!.sessionFile!;
     originalEntries = await entryIds(aFile);
@@ -78,13 +79,17 @@ export async function verifyDesktopStateReopen(directory: string, executable: st
     const saved = JSON.parse(await readFile(statePath, "utf8")) as {
       projects: Array<{ id: string }>;
       activeProjectId: string;
-      workspaceState: Record<string, { activeSessionId: string; sessions: Array<Record<string, unknown>> }>;
+      workspaceState: {
+        "frostpi.sessions.v1": { activeSessionId: string; sessions: Array<Record<string, unknown>> };
+        "frostpi.desktop.navigation.v1": { sessionProjects: Record<string, string> };
+      };
     };
     assert.deepEqual(Object.keys(saved).sort(), ["activeProjectId", "projects", "version", "workspaceState"]);
     assert.deepEqual(saved.projects.map((project) => project.id), projectIds);
     assert.equal(saved.activeProjectId, selectedProject);
-    assert.deepEqual(Object.keys(saved.workspaceState), ["frostpi.sessions.v1"]);
-    const registry = saved.workspaceState["frostpi.sessions.v1"]!;
+    assert.deepEqual(Object.keys(saved.workspaceState).sort(), ["frostpi.desktop.navigation.v1", "frostpi.sessions.v1"]);
+    assert.deepEqual(saved.workspaceState["frostpi.desktop.navigation.v1"].sessionProjects, { [a]: projectIds[0], [b]: projectIds[1] });
+    const registry = saved.workspaceState["frostpi.sessions.v1"];
     assert.equal(registry.activeSessionId, a);
     assert.deepEqual(registry.sessions.map((session) => session.id), [a, b]);
     for (const session of registry.sessions) {
@@ -129,7 +134,7 @@ export async function verifyDesktopStateReopen(directory: string, executable: st
     assert.equal(await starts(aFile), 2);
     assert.equal(await starts(bFile), 1);
     await unselected.settingsStore.update("frostpi.session.startOnOpen", false);
-    await unselected.registry.activateSession(a); // Explicit activation remains allowed.
+    await unselected.navigation.activateSession(a); // Explicit activation remains allowed.
     await waitFor(() => unselected.registry.sessionView(a)?.status === "ready", "explicit activation of a dormant saved Pi");
     await closeNormally(unselected);
   } finally { await cleanup(unselected); }

@@ -1,9 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 
-import { WebviewActionDispatcher } from "@frostime/pi-client/host";
-import type { DispatchConnection, WebviewActionDispatcherDependencies } from "@frostime/pi-client/host";
-import type { WebviewToHostMessage } from "@frostime/pi-client/shared/bridge/webviewToHost";
 import type { SessionViewModel } from "@frostime/pi-client/shared/model/sessionViewModel";
 import type { DesktopDialog, DesktopProject, DesktopResumeView } from "../shared/desktopBridge.js";
 
@@ -36,7 +33,10 @@ export class DesktopResume {
     }
     const project = this.#inputs.project();
     const id = randomUUID();
-    this.#set({ id, phase: "finding", visible: true, project: project?.name ?? "Workspace", cwd: project?.cwd ?? "" });
+    this.#set({
+      id, phase: "finding", visible: true, project: project?.name ?? "Workspace", cwd: project?.cwd ?? "",
+      ...(project ? { projectId: project.id } : {}),
+    });
     const pending = this.#scope.run(id, async () => {
       // Publish before discovery begins, including when no Runtime exists yet.
       await Promise.resolve();
@@ -124,30 +124,5 @@ export class DesktopResume {
     if (this.#disposed) return;
     this.#view = view;
     this.#inputs.publish(view);
-  }
-}
-
-/** Receives already schema-validated sidebar actions from the shared Connection. */
-export class DesktopResumeDispatcher extends WebviewActionDispatcher {
-  readonly #registry: WebviewActionDispatcherDependencies["registry"];
-  readonly #resume: DesktopResume;
-
-  constructor(inputs: WebviewActionDispatcherDependencies, resume: DesktopResume) {
-    super(inputs);
-    this.#registry = inputs.registry;
-    this.#resume = resume;
-  }
-
-  override async dispatch(message: WebviewToHostMessage, connection: DispatchConnection): Promise<void> {
-    if (connection.surface.kind === "sidebar" && message.type === "resumeSession") {
-      // Resume has no session target. Panel rejection and all other authorization
-      // remain in the shared dispatcher; Resume errors render in its own overlay.
-      await this.#resume.run(() => this.#registry.resumeSession()).catch(() => undefined);
-      return;
-    }
-    await super.dispatch(message, connection);
-    if (message.type === "activateSession" || message.type === "createSession" || message.type === "createSessionWithArguments") {
-      this.#resume.hide();
-    }
   }
 }

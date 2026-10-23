@@ -1,10 +1,7 @@
-import type { DispatchConnection, WebviewActionDispatcherDependencies } from "@frostime/pi-client/host";
-import { BRIDGE_VERSION } from "@frostime/pi-client/shared";
 import type { SessionViewModel } from "@frostime/pi-client/shared/model/sessionViewModel";
-import type { WebviewSurface } from "@frostime/pi-client/shared/model/webviewPresentationModel";
 import { describe, expect, it, vi } from "vitest";
 
-import { DesktopResume, DesktopResumeDispatcher } from "../src/main/DesktopResume.js";
+import { DesktopResume } from "../src/main/DesktopResume.js";
 import type { DesktopDialog, DesktopResumeView } from "../src/shared/desktopBridge.js";
 
 type SessionProjectionOverrides = Partial<Pick<SessionViewModel, "status" | "historyStatus" | "title" | "error">>;
@@ -301,67 +298,5 @@ describe("DesktopResume", () => {
     expect(harness.published).toHaveLength(publishedAtDispose);
     expect(harness.resume.view).toBeNull();
     await expect(harness.resume.run(() => Promise.resolve("saved-1"))).rejects.toThrow("The Desktop window is closed.");
-  });
-});
-
-interface RegistryStub {
-  hasSession: (id: string) => boolean;
-  resumeSession: () => Promise<string | undefined>;
-  activateSession: (id: string) => Promise<void>;
-}
-
-/** Only registry is reached by the Resume and session-activation actions under test. */
-function createDispatcher(resume: DesktopResume, registry: RegistryStub): DesktopResumeDispatcher {
-  return new DesktopResumeDispatcher(
-    { registry: registry as unknown as WebviewActionDispatcherDependencies["registry"] } as unknown as WebviewActionDispatcherDependencies,
-    resume,
-  );
-}
-
-/** Resume and session-target authorization read only the surface from the connection. */
-function dispatchConnection(surface: WebviewSurface): DispatchConnection {
-  return { surface, sessionId: null } as unknown as DispatchConnection;
-}
-
-describe("DesktopResumeDispatcher", () => {
-  it("presents a sidebar resume failure in the overlay instead of rejecting the connection", async () => {
-    const harness = createResume();
-    const resumeSession = vi.fn(() => Promise.reject(new Error("No saved sessions were found.")));
-    const dispatcher = createDispatcher(harness.resume, {
-      hasSession: () => true,
-      resumeSession,
-      activateSession: () => Promise.resolve(undefined),
-    });
-
-    await expect(dispatcher.dispatch({ type: "resumeSession", bridgeVersion: BRIDGE_VERSION }, dispatchConnection({ kind: "sidebar" }))).resolves.toBeUndefined();
-    expect(resumeSession).toHaveBeenCalledTimes(1);
-    expect(harness.resume.view).toMatchObject({ phase: "failed", error: "No saved sessions were found." });
-  });
-
-  it("leaves panel resume to the shared dispatcher and hides the overlay only after a successful navigation", async () => {
-    const harness = createResume();
-    harness.sessions.set("saved-1", sessionView("saved-1"));
-    await harness.resume.run(() => Promise.resolve("saved-1"));
-    const resumeView = currentView(harness.resume);
-    const resumeSession = vi.fn(() => Promise.resolve<string | undefined>("saved-1"));
-    const activateSession = vi.fn(() => Promise.resolve(undefined));
-    const dispatcher = createDispatcher(harness.resume, {
-      hasSession: (id) => id === "saved-1",
-      resumeSession,
-      activateSession,
-    });
-
-    await expect(dispatcher.dispatch({ type: "resumeSession", bridgeVersion: BRIDGE_VERSION }, dispatchConnection({ kind: "panel", sessionId: "saved-1" })))
-      .rejects.toThrow("Open the FrostPi sidebar to resume a session.");
-    expect(resumeSession).not.toHaveBeenCalled();
-    expect(harness.resume.view).toMatchObject({ id: resumeView.id, visible: true });
-
-    await expect(dispatcher.dispatch({ type: "activateSession", sessionId: "missing", bridgeVersion: BRIDGE_VERSION }, dispatchConnection({ kind: "sidebar" })))
-      .rejects.toThrow("This FrostPi Session no longer exists.");
-    expect(harness.resume.view).toMatchObject({ id: resumeView.id, visible: true });
-
-    await dispatcher.dispatch({ type: "activateSession", sessionId: "saved-1", bridgeVersion: BRIDGE_VERSION }, dispatchConnection({ kind: "sidebar" }));
-    expect(activateSession).toHaveBeenCalledWith("saved-1");
-    expect(harness.resume.view).toMatchObject({ id: resumeView.id, visible: false, phase: "loading" });
   });
 });

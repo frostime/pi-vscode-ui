@@ -8,9 +8,30 @@ export interface DesktopProject {
   cwd: string;
 }
 
+export const DESKTOP_SIDEBAR_WIDTH = { default: 252, min: 180, max: 340 } as const;
+
+export interface DesktopSidebarLayout {
+  hidden: boolean;
+  width: number;
+}
+
+export interface DesktopProjectActivity {
+  total: number;
+  running: number;
+  waitingSessionIds: string[];
+}
+
+export interface DesktopProjectNavigationView {
+  sidebar: DesktopSidebarLayout;
+  sessionProjects: Record<string, string>;
+  activity: Record<string, DesktopProjectActivity>;
+}
+
 export interface DesktopProjectsView {
   projects: DesktopProject[];
   activeProjectId: string | null;
+  /** Desktop-only navigation metadata; never copied into the shared Session model. */
+  navigation?: DesktopProjectNavigationView;
   /** Transient persistence status, never part of the saved Project data. */
   stateError?: string;
 }
@@ -24,6 +45,7 @@ export interface DesktopResumeView {
   phase: "finding" | "choosing" | "opening" | "loading" | "failed";
   visible: boolean;
   project: string;
+  projectId?: string;
   cwd: string;
   selection?: "session" | "file" | "confirmation";
   pickerId?: string;
@@ -39,6 +61,7 @@ export interface DesktopApi {
   requestProjects(): void;
   addProject(): void;
   selectProject(id: string): void;
+  setSidebar(layout: DesktopSidebarLayout): void;
   onProjects(listener: (view: DesktopProjectsView) => void): () => void;
   onDialog(listener: (request: DesktopDialog | null) => void): () => void;
   respondDialog(id: string, value: string | null): void;
