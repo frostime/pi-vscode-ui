@@ -81,7 +81,7 @@
 
 <script lang="ts" module>
   const full = new Intl.NumberFormat();
-  const compact = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
+  const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 
   function compactNumber(value: number): string {
     if (!Number.isFinite(value)) return "—";

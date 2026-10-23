@@ -185,7 +185,7 @@ void app.whenReady().then(async () => {
     await until(() => browser.executeJavaScript("Boolean(document.querySelector('.markdown-body pre code'))"), "real shared Markdown code block");
     const fonts: unknown = await browser.executeJavaScript(`(() => {
       const style = (selector) => { const s = getComputedStyle(document.querySelector(selector)); return {family:s.fontFamily,size:s.fontSize}; };
-      return {message:style('.message-content'),composer:style('.prompt-editor .cm-scroller'),code:style('.markdown-body pre')};
+      return {message:style('.message-content'),composer:style('.prompt-editor .cm-scroller'),code:style('.markdown-body pre code')};
     })()`);
     assert.deepEqual(fonts, {
       message: { family: "Arial", size: "18px" },
@@ -195,7 +195,8 @@ void app.whenReady().then(async () => {
     const resetFonts: Record<string, unknown> = { ...settingsStore.values, "editor.fontFamily": "Cascadia Code, monospace" };
     delete resetFonts["chat.editor.fontFamily"];
     await browser.executeJavaScript(`window.frostpiDesktop.settings({type:'save',values:${JSON.stringify(resetFonts)}})`);
-    await until(() => browser.executeJavaScript("getComputedStyle(document.querySelector('.markdown-body pre')).fontFamily.includes('Cascadia Code')"), "editor.fontFamily fallback reaches shared code style");
+    await until(() => browser.executeJavaScript("getComputedStyle(document.querySelector('.markdown-body pre code')).fontFamily.includes('Cascadia Code')"), "editor.fontFamily fallback reaches shared code text");
+    assert.equal(await browser.executeJavaScript("getComputedStyle(document.querySelector('.markdown-body pre code')).fontSize"), "18px");
     assert.notEqual(await browser.executeJavaScript("getComputedStyle(document.querySelector('.prompt-editor .cm-scroller')).fontFamily"), '"Cascadia Code", monospace');
     await desktop.registry.sendPrompt(a, "mermaid", []);
     await until(() => browser.executeJavaScript("Boolean(document.querySelector('.mermaid-host svg'))"), "shared Mermaid renders from packaged vendor resource");

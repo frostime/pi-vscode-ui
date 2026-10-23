@@ -1,7 +1,7 @@
 ---
 title: Desktop UI 验收修正接续
 created: 2026-10-23T16:37:31+08:00
-consumed: false # Reader: set to true once you have read this. Questions about missing context go under "Clarifications".
+consumed: true # Reader: set to true once you have read this. Questions about missing context go under "Clarifications".
 ---
 
 ## Assume Reader

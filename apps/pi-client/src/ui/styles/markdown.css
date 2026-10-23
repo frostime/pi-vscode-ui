@@ -38,7 +38,7 @@
 }
 /* Inner scroller keeps hover chrome (copy button) fixed while the code scrolls. */
 .markdown-body pre .code-scroll { display: block; overflow: auto; padding: 10px 11px; }
-.markdown-body pre code { background: transparent; display: block; }
+.markdown-body pre code { background: transparent; display: block; font-family: inherit; }
 /* Prose-like fences wrap; other and untagged fences scroll horizontally. */
 .markdown-body pre.wrap .code-scroll { overflow-x: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 .markdown-body pre .code-actions {

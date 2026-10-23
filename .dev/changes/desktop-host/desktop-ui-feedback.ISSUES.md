@@ -1,6 +1,6 @@
 # Desktop UI 使用反馈
 
-基线：`feat/desktop-host@dd40c9d`，Windows x64 独立包。此文件记录验收反馈与当前决定，不代替 TARGET-SPEC 或实现计划。**下面各项尚未修复；本轮只做调查与交接。**
+基线：`feat/desktop-host@dd40c9d`，Windows x64 独立包。此文件记录验收反馈与当前决定，不代替 TARGET-SPEC 或实现计划。**UI-02、UI-05 已完成源码修复与针对性验证；其余项仍待处理或讨论。现有独立 ZIP 尚未更新。**
 
 来源：本会话用户反馈 `401ade66`、确认/延期决定 `65ee08a1`；原话读取方法见 `.dev/changes/desktop-host/handover/R5-desktop-ui-continuation.HANDOVER.md`。
 
@@ -15,9 +15,10 @@
 
 ## UI-02：代码块真正的文字元素没有使用配置字体
 
-**状态：根因已复现，用户确认需要修复；尚未修改产品代码。**
+**状态：已修复共享 CSS，并通过受控 Electron 回归；独立 ZIP 尚未更新。**
 
-- 用户看到代码块仍像宋体。当前 `markdown.css` 把字体设置在 `<pre>` 上，但 `.markdown-body pre code` 没有覆盖 Chromium 给 `<code>` 的默认 `font-family: monospace`。
+- 用户看到代码块仍像宋体。原 `markdown.css` 把字体设置在 `<pre>` 上，但 `.markdown-body pre code` 没有覆盖 Chromium 给 `<code>` 的默认 `font-family: monospace`。现已让该元素显式继承 family，不修改行内 code 或字号规则。
+- 回归：`apps/desktop/test/smokeMain.ts` 直接检查 `pre code`；修复前实际 family 为 `monospace` 并失败，修复后配置字体与 `editor.fontFamily` 后备均通过，字号仍为 `chat.fontSize`。
 - 实验使用现有打包 exe、隔离 profile 和合成文本，不读取用户真实设置。设置 `editor.fontFamily = Consolas, "Microsoft YaHei", monospace`；实际 DOM 样式和 CDP platform-font 结果：
   - 修正前：`pre` 是配置字体，`code` 是 `monospace`，实际文字使用 **NSimSun（新宋体）**。
   - 仅在临时页面让 `code` 的 `font-family` 继承后：实际变为 **Consolas（英文）+ Microsoft YaHei（中文）**。
@@ -44,11 +45,12 @@
 
 ## UI-05：Token 单位固定 K/M，不随语言本地化
 
-**状态：用户已明确规则，待修正。**
+**状态：已固定紧凑 formatter 的 en-US locale；中文默认 locale 的 DOM 回归通过。**
 
 - 表现：Context window 显示 `29.2万 / 100万`，用户期望 `1M` 等标准紧凑记法。
 - 用户原话：**“NO, 保持 1M；这不是应该翻译的东西”。** 这里的 NO 不是要求保留中文单位，更不是要求翻译 UI。
-- 已查证：`apps/pi-client/src/ui/features/usage/ContextUsagePopover.svelte` 使用 `Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 })`，取系统 locale；相同数字在 zh-CN 为 `29.2万 / 100万`，en-US 为 `292K / 1M`。
+- 已查证：`apps/pi-client/src/ui/features/usage/ContextUsagePopover.svelte` 原使用 `Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 })`，取系统 locale；相同数字在 zh-CN 为 `29.2万 / 100万`，en-US 为 `292K / 1M`。现仅将紧凑 formatter 固定为 en-US，不修改原始数值或小计数的精确显示规则。
+- 回归：`apps/vscode/test/unit/contextUsagePopover.dom.test.ts` 在组件初始化前将未指定 locale 的 Intl formatter 默认设为 zh-CN，并确认其确实输出 `100万`；真实组件仍须显示 `292K / 1M`、`302.5K`、`10K` 和精确的 `500`。修复前失败，修复后 3 项 DOM 测试通过。
 - 期望：Token 数量紧凑单位保持 K/M，不因系统或 UI 语言变成万/亿；不改变实际数值。共享呈现修一处进入两端，覆盖中文 locale 的回归，避免只在英文机器上证明通过。
 
 ## UI-06：侧栏折叠、宽度与栏目布局
@@ -59,6 +61,12 @@
 - 当前事实：`DesktopApp.svelte` 固定 180px，窄窗口改为顶部 100px 区域；Settings 和说明文字直接跟在会话列表后。
 - 用户决定：**“侧栏我们放到后面也需要讨论”。**
 - Agent 的三段布局、Settings 固定底部、窄窗覆盖式导航、宽度保存等均只是提议，未形成定稿。后续讨论需保持聊天为主体、隐藏后可恢复并能发现待输入会话；折叠/调宽不能重建 ClientApp、停止后台 Pi 或混淆 Project anchor 与当前会话。
+
+## 本批验证与暂停边界
+
+- 仅修 UI-02 与 UI-05；Resume、设置页、UI 字体、主题、侧栏均未修改，后续 UI/UX 先讨论。
+- 通过：Context DOM 3 项、字体设置解析 3 项、共享客户端 typecheck（0 errors，1 项既有 Svelte warning）、修改文件 ESLint、双端构建、受控 Desktop Electron smoke（明确 `ok: true`）。
+- 未运行全仓 check、插件 GUI 验收或独立包重打包/验证；旧 ZIP 不包含本批修复，不将开发构建的通过当作包验收。
 
 ## 参考截图
 
