@@ -157,7 +157,7 @@ Paste PNG, JPEG, or WebP images directly into the composer.
 
 Use `/` completion for Pi extension commands, prompt templates, skills, and FrostPi-local actions.
 
-For rendering details such as streaming Mermaid behavior, image loading rules, and diff emphasis, see [`apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md`](apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md).
+For rendering details such as streaming Mermaid behavior, image loading rules, and diff emphasis, see [`apps/pi-client/src/ui/features/conversation/markdown/markdown.SPEC.md`](apps/pi-client/src/ui/features/conversation/markdown/markdown.SPEC.md).
 
 Use `@Selection`, `@CurrentFile`, or `@path/to/file` for workspace references. FrostPi inserts path and line information into the prompt; Pi remains responsible for deciding whether and how to read the file.
 

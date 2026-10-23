@@ -154,7 +154,7 @@ Remote SSH、WSL 和 Dev Container 工作区会在远程工作区 Extension Host
 
 使用 `/` 补全来查找 Pi 扩展命令、提示词模板、技能和 FrostPi 本地操作。
 
-流式 Mermaid 行为、图片加载规则、diff 强调等渲染细节见 [`apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md`](apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md)。
+流式 Mermaid 行为、图片加载规则、diff 强调等渲染细节见 [`apps/pi-client/src/ui/features/conversation/markdown/markdown.SPEC.md`](apps/pi-client/src/ui/features/conversation/markdown/markdown.SPEC.md)。
 
 使用 `@Selection`、`@CurrentFile` 或 `@path/to/file` 引用工作区内容。FrostPi 会将路径和行号信息插入提示词；至于是否读取文件以及如何读取，仍由 Pi 决定。
 
