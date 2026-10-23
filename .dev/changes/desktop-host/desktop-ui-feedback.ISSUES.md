@@ -2,7 +2,7 @@
 
 基线：`feat/desktop-host@dd40c9d`，Windows x64 独立包。此文件记录验收反馈与当前决定，不代替 TARGET-SPEC 或实现计划。**下面各项尚未修复；本轮只做调查与交接。**
 
-来源：本会话用户反馈 `401ade66`、确认/延期决定 `65ee08a1`；原话读取方法见 `handover/R4-desktop-ui-acceptance.HANDOVER.md`。
+来源：本会话用户反馈 `401ade66`、确认/延期决定 `65ee08a1`；原话读取方法见 `.dev/changes/desktop-host/handover/R5-desktop-ui-continuation.HANDOVER.md`。
 
 ## UI-01：Resume 等待期间缺少状态反馈
 
@@ -15,7 +15,7 @@
 
 ## UI-02：代码块真正的文字元素没有使用配置字体
 
-**状态：根因已复现，已确认修复。**
+**状态：根因已复现，用户确认需要修复；尚未修改产品代码。**
 
 - 用户看到代码块仍像宋体。当前 `markdown.css` 把字体设置在 `<pre>` 上，但 `.markdown-body pre code` 没有覆盖 Chromium 给 `<code>` 的默认 `font-family: monospace`。
 - 实验使用现有打包 exe、隔离 profile 和合成文本，不读取用户真实设置。设置 `editor.fontFamily = Consolas, "Microsoft YaHei", monospace`；实际 DOM 样式和 CDP platform-font 结果：

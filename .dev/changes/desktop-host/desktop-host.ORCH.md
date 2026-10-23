@@ -93,7 +93,7 @@ REQUIRES [双端共享架构验证]: 以及已实现的设置/状态基础。用
 实际 exe 从仓库外带空格目录启动；验证字体/Codicons/Mermaid、必要设置、两 Project、Stop 隔离和 profile 重开。PATH 来自机器/用户配置而不是注入开发 Node 目录；不声称复现某次 Explorer 的旧环境。可选 --real-pi 已验证本机 Pi 1.1 的离线扩展命令、真实确认卡和自定义消息显示，不提供凭据、不请求模型，也不冒充真实模型历史/Stop。归档 SHA 与证据见 RESULT。没有自动更新、托盘或公开发布。
 
 [首版总验收] << CURRENT
-#IN PROGRESS: `dd40c9d` 已完成本地技术交付，905 测试、双构建、VSIX、开发 smoke、打包后 20 checks（含真实 Pi 离线命令/UI）及插件 E2E 通过。用户现已给出 [UI 验收反馈](desktop-ui-feedback.ISSUES.md)：Resume 反馈、代码字体和 Token 的 K/M 单位需修复，设置页需调整；主题与侧栏先记录，后续讨论。接续见 [R4 交接](handover/R4-desktop-ui-acceptance.HANDOVER.md)。本轮尚未修改产品代码，旧 ZIP 仍含这些问题；修复后需重新打包并按新归档验证，不无端扩展技术改造，也不代替用户总验收或取得发布授权。
+#IN PROGRESS: `dd40c9d` 已完成本地技术交付，905 测试、双构建、VSIX、开发 smoke、打包后 20 checks（含真实 Pi 离线命令/UI）及插件 E2E 通过。用户现已给出 [UI 验收反馈](desktop-ui-feedback.ISSUES.md)：Resume 反馈、代码字体和 Token 的 K/M 单位需修复，设置页需调整；主题与侧栏先记录，后续讨论。接续见 [R5 执行交接](handover/R5-desktop-ui-continuation.HANDOVER.md)，其正文包含继续工作的必要状态、因果和验证边界，不要求先读 session；R4 保留为旧快照。本轮尚未修改产品代码，旧 ZIP 仍含这些问题；修复后需重新打包并按新归档验证，不无端扩展技术改造，也不代替用户总验收或取得发布授权。
 REQUIRES [双端共享架构验证] and [独立桌面产物]: 日常闭环及主插件的自动技术检查已就绪；这两个节点余下的真实使用/主题体验在本节点汇总验收。
 
 Agent 对照 TARGET-SPEC 汇总可执行证据和明确限制；用户判断它能否替代实际终端多开的用法、插件是否仍然顺手。缺陷返回其所属节点修复。通过后再单独获得主线合并/发布授权，遵循版本与分支规范；checkpoint 不等于发布许可。
