@@ -199,7 +199,13 @@ try {
   const temporaryOutput = resolve(artifactsRoot, `${basename(output, ".zip")}.partial-${process.pid}.zip`);
   try {
     compressArchive(portableRoot, temporaryOutput);
-    const entries = new AdmZip(temporaryOutput).getEntries().map((entry) => entry.entryName);
+    const archive = new AdmZip(temporaryOutput);
+    // Compress-Archive can emit Windows separators; ZIP entry names use forward slashes.
+    if (archive.getEntries().some((entry) => entry.entryName.includes("\\"))) {
+      for (const entry of archive.getEntries()) entry.entryName = entry.entryName.replaceAll("\\", "/");
+      archive.writeZip(temporaryOutput);
+    }
+    const entries = archive.getEntries().map((entry) => entry.entryName);
     const required = [`${productName}/${productName}.exe`, `${productName}/resources/app/dist/main.cjs`, ...distributionFiles.map((file) => `${productName}/${file}`)];
     if (required.some((file) => !entries.includes(file)) || entries.some((file) => !file.startsWith(`${productName}/`))) {
       throw new Error("The completed Desktop archive has an unexpected layout; the previous artifact was preserved.");
