@@ -1,49 +1,60 @@
 ---
 title: Development Workflow
-description: Workspace setup, independent product builds, shared-client ownership, and debugging.
+description: Workspace setup, independent product builds, shared-source resolution and setting generation.
 scope:
   - /**
-updated: 2026-10-23
+updated: 2026-10-24
 ---
 
 # Development Workflow
 
-Use Node 20.19+ and pnpm 10. Windows Desktop packaging requires Node 22.12+ (Node 24 is currently verified); this does not raise the VS Code extension build minimum. Pi can have its own newer Node requirement.
+## Workspace setup
 
-Install from the repository root with `pnpm install --frozen-lockfile`. The lockfile covers all workspaces; never install independently inside an app. Root `check`/`build` orchestrate the client, both products, RPC and provider-usage packages. Each package owns its local scripts.
+Use Node 20.19+ and the repository's pnpm 10 version. Windows Desktop packaging requires Node 22.12+; this does not raise the extension build minimum. The installed Pi runtime can have a newer Node requirement of its own.
+
+Install once from the repository root:
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+The root lockfile covers all workspaces. Do not create app-local installations or lockfiles. Packages own their local scripts; root `build`, `typecheck`, `lint`, `test` and `check` orchestrate the workspaces. Root quality checks run packages serially; a package-local command is the normal starting point for an affected feature.
 
 ## Product-local work
 
-- `pnpm --dir apps/vscode build` builds the shared client/RPC/provider dependencies and the extension only. It does not build or launch Desktop; the existing VS Code debug task remains sufficient.
-- `pnpm --dir apps/pi-client <typecheck|lint|test>` checks shared application behavior, concentrated host contracts and browser UI. Core/shared/UI have separate environment checks. Host-independent tests isolate Pi settings and use explicit fake host services, not VS Code mocks.
-- `pnpm --dir apps/desktop build` builds the Electron main/preload and a renderer consuming the same ClientApp. `pnpm --dir apps/desktop start` launches the development preview; directories may be passed as arguments or added in the UI.
-- `pnpm package:desktop` builds and creates the Windows x64 ZIP under `artifacts/`; `pnpm verify:desktop` extracts that ZIP outside the repository and exercises the actual executable with an isolated profile. Packaging is explicit, not part of normal plugin development or `pnpm check`; see [Desktop candidate packaging](release.md#desktop-candidate-packaging-windows-x64).
-- `pnpm --dir apps/desktop test:smoke` requires a current Desktop build. It launches real Electron with isolated fake Pi children, two temporary unrelated Projects and a temporary Electron/Pi profile; it never uses real model credentials. It prints the result and OS-temporary screenshot/log location. This is not real-Pi acceptance.
+| Work | Entry | What it includes |
+|---|---|---|
+| Build the VS Code extension | `pnpm --dir apps/vscode build` | Shared dependencies and extension outputs, not Desktop |
+| Debug the extension | `.vscode/launch.json` | The `build:debug` pre-launch task uses the extension-local build and sets `FROSTPI_SOURCEMAP=1` for Host source maps/unminified output; production output stays minified for the bundle budget |
+| Check shared types | `pnpm --dir apps/pi-client typecheck` | Separate core/shared/UI environment checks. Package-local `test` covers backend/host behavior; shared UI component tests use the vscode package's DOM infrastructure, as described in testing.md |
+| Build Desktop | `pnpm --dir apps/desktop build` | Electron main/preload and a renderer consuming the same ClientApp |
+| Run Desktop | `pnpm --dir apps/desktop start` | Development launch; pass directory arguments or add Projects through its native directory picker |
 
-Desktop is a development preview with persistent settings, Projects and saved-session metadata. Normal starts retain the system application-data `FrostPi` profile; set `FROSTPI_DESKTOP_USER_DATA` to an isolated directory when testing. First-run setup offers a whitelist import from the default VS Code user settings or initialization with defaults. Import is an editable preview until Save, not ongoing synchronization. Settings can be edited in the app or opened in the system editor and explicitly reloaded. See the [Desktop contract](../../apps/desktop/SPEC.md#settings-and-initial-import).
+VS Code remains in its workspace Extension Host, including remote workspaces. Do not move its process placement or require a Desktop launch to develop an editor integration. Use `.agents/skills/dual-maintenance/SKILL.md` to decide whether a shared change needs Desktop adaptation, and `.dev/docs/testing.md` to select verification.
 
-`state.json` remembers Project roots/selection and the shared session index separately from settings. Normal close stops children and drains queued state writes. Reopen restores entries; `frostpi.session.startOnOpen` controls only the selected saved Pi, not every background entry. No prompt replay or draft/input-request recovery is implied. Pi-owned conversation files remain separate. State-file errors preserve the existing file and appear in the UI; see the [state/reopen contract](../../apps/desktop/SPEC.md#application-state-and-reopen).
+For Desktop experiments, set `FROSTPI_DESKTOP_USER_DATA` in the launched process's environment to an isolated directory. Ordinary launches keep the system application-data FrostPi profile. Automated tests use temporary profiles and synthetic settings, not real user configuration. Settings import and state/reopen behavior are contracts in `apps/desktop/SPEC.md`, not extra development steps.
 
-Automated tests and smoke use temporary profiles and synthetic VS Code settings, never real user settings. The state-reopen smoke's optional fixture mode writes Pi-owned synthetic JSONL under temporary Project roots and counts launches; it is not evidence of a real model response.
+Desktop launchers remove `ELECTRON_RUN_AS_NODE` from their own launch environment. Do not change Pi runtime policy or global environment variables to compensate for it. Electron's native executable must be available: a successful dependency install or renderer build alone does not prove it can launch.
 
-Both Electron launchers remove `ELECTRON_RUN_AS_NODE` only from the launch environment. Do not modify Pi's process policy to compensate for an Electron launcher variable. Electron's executable must be available before launch; a JS package install or successful renderer build alone does not prove native launch.
+`pnpm --dir apps/desktop test:smoke` requires a current build and runs actual Electron with controlled Pi children. It reports an explicit result and temporary artifact directory; it does not use model credentials. Creating and validating an independent ZIP is a separate delivery flow in `.dev/docs/release.md`, not part of normal plugin development.
 
 ## Setting definitions
 
-Edit FrostPi setting schemas/defaults in [`apps/vscode/package.json`](../../apps/vscode/package.json) under `contributes.configuration`. Run `pnpm --dir apps/pi-client settings:generate` and commit the generated runtime defaults and browser-safe setting definitions with that change. Do not edit generated defaults or add host-local fallback tables. Shared code consumes the generated module, not the product manifest at runtime.
+FrostPi schemas/defaults are authored in `apps/vscode/package.json` under `contributes.configuration`. Shared runtime defaults and browser-safe setting definitions are generated from that source:
 
-`pnpm --dir apps/pi-client settings:check` rejects stale output; both product builds reach this check through the shared-client build. The shared configuration test also checks schema/default parity. New keys still need their behavior wired into shared parsing and applicable host support; generating defaults does not implement a setting or establish Desktop compatibility.
+```bash
+pnpm --dir apps/pi-client settings:generate
+pnpm --dir apps/pi-client settings:check
+```
 
-## Ownership and source resolution
+Include generated changes with the schema edit. Both product builds reach the stale-output check through the shared-client build. Runtime code consumes the generated modules, not the product manifest; do not hand-edit generated values or add host-local fallback tables.
 
-- `apps/pi-client/src/core`: one-session Runtime/state/projection and Pi/OMP policy.
-- `src/host`: shared Registry, history discovery/pickers, bridge and finite `clientHost.ts` interface.
-- `src/shared`: serializable models and messages; `src/ui`: shared Svelte/browser implementation.
-- `apps/vscode`: real VS Code adapter/editor integration and native browser startup. `apps/desktop`: Electron adapter, Project navigation and finite preload.
-- `apps/pi-client/pi-extensions`: shared Pi-side tree/Question artifact sources; both products bundle them into their own output.
+Generation does not implement a new setting. Wire its parsing, behavior and applicable host support, then verify the affected path. Native VS Code settings such as `chat.*`, `editor.*` and exclusion maps are not FrostPi manifest definitions. Desktop's import whitelist and original-key storage are owned by its settings contract.
 
-Product TypeScript/Vite/Vitest/esbuild mappings resolve the same shared sources. Core/shared/host default package exports refer to built JS/declarations; UI exports Svelte/CSS source for the consuming browser build. Shared code declares its own runtime/type dependencies. Do not introduce stale copied implementations or a shared root barrel mixing browser and Node modules.
+## Shared source resolution
 
-Launch the extension with `.vscode/launch.json`. `build:debug` sets `FROSTPI_SOURCEMAP=1` for source maps/unminified Host output; regular production bundles stay minified for the bundle budget. Preserve remote workspace Extension Host placement.
+Product TypeScript, Vite, Vitest and esbuild mappings must select the same `apps/pi-client` implementation. Backend exports use built JS/declarations; browser builds consume exported Svelte/CSS source. Preserve the separate environment entries rather than introducing a root barrel that mixes browser and Node modules. Shared code declares its own runtime/type dependencies.
 
-`packages/provider-usage` retains its independent credential/query engine; run its package-local scripts for changes there. Product versions still change only through the root version workflow; see [release](release.md).
+Both products bundle the common `apps/pi-client/pi-extensions` sources into their outputs. Shared styles use one common entry, and vendor/font URLs must retain their entry-relative layout. A copied implementation or separately maintained asset list would require manual propagation and defeat the shared-source maintenance model. Source ownership is mapped in `.dev/docs/feature-map.md`; environment constraints are in `apps/pi-client/SPEC.md`.
+
+The independent `packages/provider-usage` engine has its own package-local checks. Versioning and publication are handled by `.dev/docs/release.md`, not by editing package versions during ordinary development.

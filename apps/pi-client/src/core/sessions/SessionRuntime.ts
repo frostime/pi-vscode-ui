@@ -608,7 +608,7 @@ export class SessionRuntime {
       ...(this.isEphemeral ? ["--no-session"] : sessionFile ? ["--session", sessionFile] : []),
       ...(compatibilityProfile.capabilities.sessionTree ? this.#sessionTreeBridge?.launchArguments() ?? [] : []),
       ...(configuration.questionToolEnabled && compatibilityProfile.capabilities.questionTool ? this.#questionToolBridge?.launchArguments() ?? [] : []),
-      // Verbatim by contract — never validate or reorder here (session-lifecycle.SPEC.md).
+      // Keep per-launch tokens last and verbatim; the Pi CLI owns their interpretation.
       ...this.customLaunchArguments,
     ];
     const cacheMissNotices = compatibilityProfile.usesPiSettings
@@ -767,6 +767,8 @@ export class SessionRuntime {
       const bufferedEvents = this.#takeHistoryEvents();
       if (this.#disposed || api !== this.#api) return;
       this.#replacePersistedEntries(entryData.entries, entryData.leafId);
+      // The quiet capture covers these custom deliveries; replay would duplicate them.
+      // Other buffered events still need their normal lifecycle/projection handling.
       for (const event of bufferedEvents) {
         if (!isCustomMessageEnd(event)) this.#applyConnectionEvent(event);
       }
@@ -962,8 +964,8 @@ export class SessionRuntime {
 
   /**
    * Extension commands execute inside prompt() and often never emit agent_start/agent_settled.
-   * After the prompt RPC returns, close the turn opened for this command once Pi looks idle
-   * (same pattern as pi-acp's multi-delay reconcile; PiDeck uses a single delayed get_state).
+   * After the prompt RPC returns, reconcile this command's optimistic turn against Pi state;
+   * do not wait indefinitely for agent-turn events the command may never emit.
    */
   async #finishImmediateExtensionCommand(turnId: string): Promise<void> {
     if (this.#disposed || this.view.isStreaming) return;

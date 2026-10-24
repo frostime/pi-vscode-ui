@@ -11,7 +11,7 @@
     {
       "label": "build:debug",
       "type": "shell",
-      "command": "pnpm build",
+      "command": "pnpm --dir apps/vscode build",
       "options": {
         "env": { "FROSTPI_SOURCEMAP": "1" }
       },

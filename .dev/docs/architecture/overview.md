@@ -1,60 +1,77 @@
 ---
 title: Architecture Overview
-description: Product entries, shared client, process topology, state authority, and trust boundaries.
+description: How the two products share Pi application behavior, where state lives, and which boundaries adapters must preserve.
 scope:
   - /apps/**
   - /packages/pi-rpc/**
-updated: 2026-10-20
+  - /packages/provider-usage/**
+updated: 2026-10-24
 ---
 
 # Architecture Overview
 
-## Product and process boundary
+## Pi GUI, shared application, separate products
 
-FrostPi is a VS Code-first GUI over Pi's native RPC surface, with Desktop as an adapted second output. `apps/pi-client` owns the common application implementation, not a general-purpose SDK. Both products consume the same source; they do not share a background service or automatically synchronize their running Pi processes.
+FrostPi provides a GUI for Pi through its native RPC mode. Pi executes agent work, communicates with model providers and owns conversation files. FrostPi presents that work and provides session interaction; it does not replace Pi's execution engine.
+
+The project has two parts: a VS Code extension as the primary product, and a Desktop App maintained alongside it. `apps/pi-client` contains their common UI, session behavior and message contracts. It is FrostPi application code, not a general-purpose host SDK. The products share source, not a background service or running session state.
 
 ```text
-VS Code product                         Desktop product
-Svelte Webview                          Electron renderer
-       │                                       │
-VS Code message endpoint                finite isolated preload / IPC
-       │                                       │
+VS Code Webview                         Electron renderer
+       |                                       |
+VS Code message endpoint                finite preload bridge
+       |                                       |
 Workspace Extension Host                Electron main process
-       └──── same client host/Runtime code ────┘
-                         │
-                  Pi RPC child × N
+       +------- shared Registry / Runtime -----+
+                         |
+                    Pi children
 ```
 
-The finite [ClientHost](../../../apps/pi-client/src/host/clientHost.ts) concentrates the services actually consumed by the client. VS Code is the reference environment: `apps/vscode/src/extension/clientHost.ts` binds real workspace/configuration/native interaction/editor APIs; `apps/desktop` adapts those needs and adds Project navigation. No client runtime module imports `vscode` or Electron. An absent optional editor service fails explicitly; it is not a successful no-op or a requirement to emulate the whole SDK.
+Each product has its own Registry and Pi processes. VS Code sessions run in the workspace Extension Host, including SSH, WSL and Dev Containers; Desktop runs locally. There is no local-to-remote relay. Untrusted and virtual VS Code workspaces remain unsupported.
 
-One `SessionRuntime` owns one child. Agent execution is independent; there is no global execution/file-write lock or file-write interception. Local, SSH, WSL and Dev Container plugin sessions still run in their workspace Extension Host, without a local-to-remote bridge. Desktop runs locally. Untrusted and virtual VS Code workspaces remain unsupported.
+VS Code is the reference environment and vocabulary. Its adapter binds real services; Desktop translates the finite capabilities declared in `apps/pi-client/src/host/clientHost.ts`. Unsupported editor services are hidden or rejected, not successful no-ops. Desktop does not constrain plugin development to a lowest common denominator or emulate the whole VS Code SDK.
 
-## Shared state and presentations
+## Session authority and presentation
 
-The shared `SessionRegistry` owns open Runtime identities, active Pi selection, metadata lifecycle, Fork recovery, startup/history queues and default VS Code session policy. Injected workspace/configuration/storage/interaction services supply the environment; they do not duplicate lifecycle algorithms. [Session lifecycle](../../../apps/vscode/src/extension/sessions/session-lifecycle.SPEC.md) remains the behavior reference.
+A `SessionRuntime` owns one Pi child and its recorded cwd. `SessionRegistry` owns the live collection, selection, metadata lifecycle and startup/history queues. Starts and history loads have separate queues; agent execution is concurrent. Switching presentation does not stop another Pi, change its configuration scope or take ownership of its files. The lifecycle contract is `apps/pi-client/src/host/session-lifecycle.SPEC.md`.
 
-Each Runtime owns its cwd. `SessionEntryState` owns persisted entry/tree identity, `ConversationProjection` owns persisted/live conversation order, and `SessionViewState` owns scalar state. Pi owns JSONL, provider credentials/model state and file writes. The Host sends projected conversation order and turn identity, never raw Pi events or entries.
+Within a Runtime, `SessionEntryState` retains entry/tree identity, `ConversationProjection` builds persisted/live conversation order, and `SessionViewState` holds scalar status. The Host sends projected models to the UI, not raw Pi events. These owners live under `apps/pi-client/src/core/`; the conversation projection SPEC governs their reconciliation.
 
-One shared ClientApp and document-scoped UI store serve one presentation document. The VS Code sidebar follows the Registry selection; editor tabs are independently pinned projections. `SessionWebviewCoordinator` owns native panel placement and Composer handoff, not Runtime lifetime. Scroll/disclosure/form state is presentation-local. Revisioned drafts are transient, not conversation storage; see the [Bridge contract](../../../apps/pi-client/src/shared/bridge/webview-bridge.SPEC.md).
+One ClientApp/store/transport serves each browser document. VS Code's sidebar follows Registry selection; editor tabs are pinned projections. `SessionWebviewCoordinator` handles native panel placement and draft handoff, not Runtime lifetime. Scroll, disclosure and form state belong to the presentation. Revisioned Composer drafts are transient; their handoff and authorization rules are in `apps/pi-client/src/shared/bridge/webview-bridge.SPEC.md`.
 
-Desktop Project selection is a new/resume anchor, not a mutation of existing Runtime context. All registered Project roots remain available when the foreground changes. The outer Project navigation and shared Header consume the same open-Pi collection. Filtering/navigation must never be interpreted as session deletion and release another Pi's drafts or pending input.
+Desktop adds Project ownership and navigation around the same client. A Project is both the browsing context and the New/Resume target. Its last Session or empty state is shown; an opened identity belongs to the initiating Project even when its cwd is a linked worktree. This grouping is Desktop metadata, not a second session lifecycle. The optional Header roster filters navigation only: the complete presentation still carries all live identities so grouping cannot accidentally release another Session's drafts or review state. Read `apps/desktop/SPEC.md` before changing this policy.
 
-## Configuration, theme, and compatibility
+## Settings and compatibility have distinct owners
 
-Shared setting parsing uses VS Code keys/defaults and scope terminology. The plugin reads real VS Code configuration; Desktop provides a separate source and explicitly rejects unsupported environment-specific values such as proxy mode `vscode`. No automatic read/write/synchronization of real VS Code settings is implied. Configuration and credential changes affect Pi only on explicit start/restart, never by silently interrupting a turn.
+VS Code reads its real configuration; Desktop has independent settings and an explicit first-run import preview. Both use the existing setting keys and generated FrostPi definitions. They do not continuously synchronize settings. Environment-specific values such as proxy mode `vscode` require Desktop adaptation rather than a new meaning in shared parsing. Process invocation and proxy changes take effect on start/restart, not by interrupting a turn.
 
-Shared styles preserve `--vscode-*`, existing `--frost-*` mappings, component classes and Codicons. VS Code supplies its real Webview theme environment; Desktop supplies corresponding variables/resources. VS Code Workbench internal DOM/SCSS and complete theme-extension/grammar execution are not compatibility surfaces. [UI constraints](../design/ui-spec.md) remain applicable to the shared UI.
+Shared UI retains VS Code theme variables, FrostPi's semantic mappings and Codicons. VS Code supplies the Webview environment; Desktop supplies corresponding variables and resources. This is not compatibility with Workbench internals or every theme extension. See `.dev/docs/design/ui-spec.md` for cross-feature rules.
 
-`core/configuration/runtimeCompatibility.ts` owns Pi/OMP defaults, settings projection rules and product capabilities; dialects in `packages/pi-rpc` own isomorphic runtime vocabulary. Host capability adaptation is separate from Pi/OMP compatibility. See [OMP maintenance](omp-compatibility.md) before extending it.
+Host adaptation is separate from Pi/OMP runtime compatibility. `apps/pi-client/src/core/configuration/runtimeCompatibility.ts` owns runtime defaults, setting projection and product capabilities; `packages/pi-rpc` owns protocol mechanics and dialects. Read `.dev/docs/architecture/omp-compatibility.md` before moving a runtime difference between those layers.
+
+## Data ownership and lifetime
+
+FrostPi has no telemetry endpoint or hosted account service. Pi/model-provider traffic and explicit Provider Usage queries are external data flows, not a claim that the GUI never uses the network.
+
+| Data | Owner and location | Lifetime and boundary |
+|---|---|---|
+| Session index and selection | Shared SessionPersistence through VS Code workspace state or Desktop `state.json` | Metadata only; Provisional/Ephemeral exclusions remain in the lifecycle contract |
+| Desktop Projects and navigation | Desktop `state.json` in the application profile | Includes ownership, last-viewed selection and sidebar layout, not conversation bodies or running-task snapshots |
+| User settings | VS Code configuration or Desktop `settings.json` | Original keys; Desktop import is a preview until Save and is not ongoing sync |
+| Conversation and runtime state | Pi process and its configured session files | Pi owns writes, migration and restoration; storage paths vary with runtime and session-directory settings |
+| Composer text and images | Browser state and Host draft cache | In-memory interaction state, not a cross-restart draft store |
+| File-mention candidates | Host-side search/cache | Path metadata; mentions do not inject file contents. Explicit file/image operations have separate validated Host paths |
+| Credentials | Pi configuration/environment; VS Code proxy authentication separately uses SecretStorage | Provider Usage may read credentials in the Host to query official APIs, but does not refresh/write them or bridge them to UI. Desktop rejects credentials in persisted proxy URLs |
+| Provider Usage reports | Browser cache keyed by provider | Safe reports only; no disk persistence. Cache/source lifetime is defined by the Provider Usage and bridge SPECs |
+| Logs and diagnostics | Host logging; diagnostic export where the product supports it | No conversation/image payloads; redact common credentials and URL authentication. Paths and third-party stderr still require review before sharing |
+
+These are storage boundaries, not another conversation database or credential manager. Product-specific persistence and error handling belong in the product SPECs; query/credential behavior belongs in `packages/provider-usage/SPEC.md`.
 
 ## Dependency and trust boundaries
 
-- `packages/pi-rpc`: child processes, framing, request mechanics and runtime dialects. No product host dependency.
-- `apps/pi-client/src/core`: single-session execution/projection and Pi/OMP policy; `src/host`: shared application/bridge behavior and concentrated injected host interface. Neither imports a product entry, renderer, VS Code or Electron.
-- `src/shared`: serializable contracts, bounded validation and pure helpers; no Node/core/host runtime dependency.
-- `src/ui`: browser/Svelte implementation; no Node, backend or host API imports. Product browser entries explicitly install a transport before mounting and sending ready.
-- Product entries own process placement, native capability implementations and packaging. Desktop renderer receives only the finite preload API, never Node or raw IPC. Main verifies sender/frame identity before actions; common messages still pass version/schema/session-target validation.
+- `packages/pi-rpc` owns child processes, JSONL framing, correlation and runtime dialects, with no product host dependency.
+- Shared `core` and `host` modules must not import product entries, renderers, VS Code or Electron. Inject host services rather than duplicating shared algorithms in adapters.
+- `src/shared` contains serializable contracts and pure helpers; `src/ui` contains browser code. Neither may import Node/backend runtime code.
+- Product browser entries install transport before mounting and sending ready. Desktop exposes finite preload operations, not Node or raw IPC. Main validates the sender/frame; common messages also pass version/schema and session-target authorization.
 
-Messages carry bounded correlated inputs. File and Markdown-image operations resolve against the originating displayed session, not the selected Project; filesystem reads and returned image bytes remain Host-mediated and transient. Proxy/configuration URLs and child stderr must not leak credentials. Diagnostic exports omit prompt/response/image content and redact common credentials.
-
-The read-only Provider Usage engine remains in `packages/provider-usage`: it reads Pi provider configuration and queries official APIs, while Pi retains token refresh/credential writes. Only safe reports cross the common bridge. Its browser cache is provider-scoped, not tied to the selected Project/Pi; detailed cancellation and authorization rules remain in the Bridge SPEC.
+File references, Markdown images and interaction responses resolve against their originating Session, not a later foreground Project. Filesystem reads and returned image bytes remain Host-mediated and transient. Changing navigation cannot grant filesystem authority or redirect a pending request to another Pi.

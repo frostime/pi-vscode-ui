@@ -1,43 +1,50 @@
 ---
 title: UI Design Specification
-description: Cross-feature visual, layout, accessibility, theme, and user-owned interaction constraints.
+description: Cross-feature layout, stylesheet ownership, accessibility and user-owned interaction state.
 scope:
   - /apps/pi-client/src/ui/**
   - /apps/desktop/src/renderer/**
-updated: 2026-10-02
+updated: 2026-10-24
 ---
 
 # UI Design Specification
 
-FrostPi uses a first-party VS Code visual language: compact, low-noise, keyboard-usable, and native to the active theme.
+FrostPi's GUI keeps conversation and Composer central. Shared components use the established VS Code visual language rather than a separate Desktop design system. This document governs rules that span features; exact component dimensions and behavior belong in their code and nearest SPEC.
 
 ## Layout and theming
 
-- In VS Code, the FrostPi sidebar is the sole Session-management surface. Editor Session Tabs are restricted conversation projections: they omit the Session list, New/Resume, rename, close/restart, configuration, and diagnostics controls.
-- Externalizing the sidebar-selected Session keeps its sidebar header/navigation and replaces only conversation/Composer with a tab-reveal placeholder. Closing the tab restores conversation eligibility without affecting the Session process.
-- The complete shell remains usable at 280px width and under VS Code light, dark, and high-contrast themes; committed capabilities may wrap or move, but must not require horizontal scrolling.
-- Use semantic FrostPi variables mapped from VS Code variables. Respect editor zoom; avoid fixed widths, large shadows, gradients, and pill-heavy chrome.
-- The session shell may narrow or hide. Conversation space expands when hidden, while a keyboard-reachable restore control and required-background-input indication remain available.
-- Conversation owns the scrollable transcript region. Composer remains bottom-anchored and may temporarily take the panel while preserving a clear restore path.
-- The metrics toolbar uses a chart icon plus Usage and a context-progress ring plus Context, with matched compact transparent buttons. Both triggers inherit the metrics row’s font family, size, weight and line height so they match extension-provided status labels; icons scale with that font. Do not repeat the percentage beside the ring or show session cost in the toolbar; precise percentage and cost remain in the Context popover. Unknown context usage is visually distinct from zero, and accessible labels/tooltips retain the numeric reading.
-- Context popover compact counts use stable English units (for example, `292K / 1M`), not locale-dependent units such as 万/亿. Formatting does not change token values.
-- Context and Provider Usage popovers share a 256px target width through `--metrics-popover-width`, a viewport-clamped width, 8px corners, 10px padding, the same raised surface/border/shadow and 11px base typography. Both use natural height capped at `min(480px, 70vh)` with internal overflow. Do not force equal heights or aspect ratios for short states. Usage adapts quota, balance and text results through normalized field semantics, not Provider-specific browser branches.
-- Provider Usage sits immediately left of Context in the sidebar metrics row and opens a compact non-modal popover above it without unmounting conversation or Composer. The supported active provider queries automatically; successful snapshots survive reopening, keep their capture time, and update on explicit Refresh. Results scroll independently; reset availability has no redemption action. Outside pointer actions dismiss without stealing focus. Temporary mock results must be explicitly labelled.
-- Response annotation temporarily replaces conversation and Composer only after an explicit action on finalized assistant text. Its source and notes scroll independently when side by side, while the stacked narrow layout uses one bounded workspace scroller. It remains usable at 280px and returns only an ordinary editable Composer draft; required Extension UI requests remain reachable during review.
-- The Question panel and `select`, `confirm`, `input`, and `editor` extension-request UI sit between conversation and Composer, use bounded independent scrolling, and must not take ownership of conversation scrolling. A blocking request's action controls remain reachable while its content scrolls.
-- Tool-call cards for shell/code tools (`bash`, `powershell`, `codemode`) replace the breathing status dot with a ticking elapsed readout while the call runs, and keep the final duration beside the status icon or diffstat once it ends; cancelled calls have no end time and show no duration. The final duration reads Pi's recorded per-call execution time when the session has one and falls back to the timestamp span otherwise, so it may settle slightly below the last tick, which counts hooks and dispatch time. The readout stays whole-second and coarse by design; it is a progress reassurance, not a stopwatch. Tools outside that list keep the quiet dot-and-icon presentation.
+Shared UI must remain usable at 280px width and in VS Code light, dark and high-contrast themes. Necessary controls may wrap or move, but must not require horizontal scrolling. Desktop supplies the same variable/resource interface; its palette and product navigation are governed by `apps/desktop/SPEC.md`, not by an assumption that it inherits the user's current VS Code theme.
+
+Use semantic FrostPi variables mapped from `--vscode-*`, existing font settings and Codicons. Respect editor zoom and keep chrome compact and low-noise. Do not rename theme vocabulary or duplicate shared styles to adapt a product. Workbench internals are not a supported styling API.
+
+Conversation owns transcript scrolling; Composer stays bottom-anchored and may explicitly expand with a clear restore action. Interaction panels and popovers need their own bounded overflow so long content does not steal the conversation's scroll ownership or make required actions unreachable. The Usage and Context surfaces share metrics primitives and typography; their feature contract owns detailed layout and data presentation.
+
+Navigation may narrow or hide, giving space back to the conversation. Keep a keyboard-reachable restore entry and background-input attention available. Hiding a surface changes presentation, not Session lifetime or pending work.
+
+### VS Code presentations
+
+The sidebar owns Session management. Session Tabs are pinned conversation projections, not another place to expose the whole collection or its New/Resume and administrative controls. When the selected Session is externalized, keep sidebar navigation and show its tab-reveal placeholder rather than a second editable conversation. Native placement and handoff rules are in `apps/pi-client/src/shared/bridge/webview-bridge.SPEC.md`.
+
+Desktop's Project navigation is a product-owned outer shell around the same client. Do not apply the Session-Tab model to it or recreate ClientApp when hiding/resizing its sidebar.
+
+## Stylesheet ownership
+
+Component-private chrome belongs in that Svelte component's scoped style. Keep shared primitives and tokens, cross-tree shell/layout selectors, and body-mounted surfaces such as CodeMirror tooltips in `apps/pi-client/src/ui/styles/`. A feature-only rule should not be appended to a global sheet just because one already exists.
+
+Both browser entries consume the common style entry. Product-specific palettes and outer-shell styling stay product-owned; adding a shared sheet must not require maintaining a parallel import list in each product. Generated Markdown and other content outside a component's scoped tree still need the appropriate shared styles; scope ownership is not a blanket ban on global selectors.
 
 ## User-owned interaction state
 
-- Disclosure and conversation scroll position are user-owned. Live or persisted updates do not reopen collapsed content, resume paused following, or otherwise replace those choices.
-- Initial/session-switch/new-turn navigation may follow output; after the user scrolls away, projected conversation-content updates preserve the viewport and expose a jump-to-latest control. Stats and other scalar session updates do not count as conversation updates.
-- Collapsing a Question request or hiding the session shell does not cancel Host-owned work or pending input.
-- An unfinished response annotation review is presentation-local and may survive displayed-Session switches within that Webview. It is not persisted or transferred between Sidebar and Session Tab presentations.
+Disclosure, form input and conversation scroll position belong to the user. Live content and scalar status updates must not reopen collapsed sections, discard unfinished input or reset those choices. On initial display, Session switch or a new turn, the conversation may follow output; once the user scrolls away, preserve the viewport and offer a jump-to-latest action. A stats refresh is not a new conversation item.
+
+An explicit annotation review may temporarily replace conversation/Composer, but remains presentation-local and produces an editable draft rather than another persisted conversation. Required extension input must remain reachable. Reviews may survive Session switches inside that document without being transferred between Sidebar and Session Tab presentations; the annotation and bridge SPECs own the details.
+
+Collapsing or hiding an input panel does not cancel its Host-owned request. Keep the request bound to its Session and retain a visible route to required input. Do not auto-confirm it or answer through whichever Pi became foreground later.
 
 ## Accessibility
 
-- Every action is keyboard reachable with visible focus. Icon-only controls have accessible names; status is never conveyed by color alone.
-- Transient status uses an `aria-live` region. Blocking requests remain in document order; attachment images use filename-based alt text, Markdown images preserve their authored alt text, and removal controls identify the affected image.
-- Markdown HTTPS images require an explicit load action. Loaded transcript images preserve aspect ratio, stay within 92% of message width and a 640px maximum, and use a bounded viewport-relative height. They open a keyboard-accessible Lightbox unless wrapped by a Markdown link. Explicit titles, or concise alt text when no title exists, appear as centered captions without card chrome; load failures and SVG script-removal warnings remain inline and perceivable without color.
-- Controls, text, focus, and status indicators remain perceivable in high-contrast themes.
-- Motion is a visual supplement only: animations stay small-element, low-cost, and low-stimulation (fades, pulses, brief reveals); never introduce large-scale or spatial motion.
+Actions must be keyboard reachable, with visible focus and accessible names for icon-only controls. Status must not rely only on color. Expose transient status through appropriate live text, and keep blocking requests in a meaningful document order with reachable actions.
+
+Maintain contrast across supported themes and honor reduced-motion preferences. Activity feedback should use small, low-stimulation motion rather than animating large content regions; navigation transitions must also respect reduced motion.
+
+Read the feature's code and local SPEC comments or adjacent feature SPEC for detailed interaction rules. A separate Markdown SPEC is not required when the constraint already lives beside the implementation. Do not duplicate those contracts or their CSS constants in this global guide.

@@ -20,7 +20,7 @@ Paths and commands below are repository-root-relative. Replace test placeholders
 | Desktop distribution, packaged launch or resources | `apps/desktop/scripts`, Desktop main assembly | `pnpm package:desktop` then `pnpm verify:desktop`; optional `--real-pi` checks the installed SDK command/UI path without model calls; see release/testing boundaries |
 | Pi transport/runtime dialect | `packages/pi-rpc` plus affected client consumer | Package-local tests and the [compatibility guide](../../../.dev/docs/protocol/pi-rpc-compatibility.md) |
 
-Use [development.md](../../../.dev/docs/development.md) for exact package scripts and [testing.md](../../../.dev/docs/testing.md) for test ownership and broader verification. Shared UI tests currently use the plugin's DOM test infrastructure; their location does not make the implementation plugin-only.
+Use [development.md](../../../.dev/docs/development.md) for setup, independent builds and generated settings. [testing.md](../../../.dev/docs/testing.md) owns test locations, broader checks and evidence limits. This table selects a first check, not a fixed gate for every task; shared UI tests using the plugin's DOM infrastructure still protect both products.
 
 ## When shared UI needs a host operation
 
@@ -39,7 +39,7 @@ Do not add a flag to every common action merely for symmetry. Do not promise to 
 
 - Local Composer commands enter through the product's `LocalComposerCommands`. Reuse common descriptors/behavior; register product-only commands in that product. Completion merging reserves only names the product handles, including intentionally hidden panel commands. Do not remove a Pi command merely because another product owns a same-named local command.
 - FrostPi definitions/defaults come from `apps/vscode/package.json`; follow the [generation workflow](../../../.dev/docs/development.md#setting-definitions). Native VS Code settings have a different source; do not require `chat.*`, `editor.*` or `files/search.exclude` to exist in the FrostPi manifest. Desktop import and original-key storage follow its [settings contract](../../../apps/desktop/SPEC.md#settings-and-initial-import).
-- Preserve the existing VS Code CSS language and scoped/global ownership in [AGENTS.md](../../../AGENTS.md) and the [UI spec](../../../.dev/docs/design/ui-spec.md). Check actual variable/fallback/theme behavior; do not add a blanket ban on `--vscode-*`.
+- Preserve the existing VS Code CSS language and scoped/global ownership in the [UI spec](../../../.dev/docs/design/ui-spec.md#stylesheet-ownership). Check actual variable/fallback/theme behavior; do not add a blanket ban on `--vscode-*`.
 
 ## Finish at the appropriate boundary
 

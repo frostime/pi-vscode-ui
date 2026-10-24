@@ -7,7 +7,7 @@ scope:
   - /apps/pi-client/src/ui/bridge/**
   - /apps/vscode/src/extension/webview-host/**
   - /apps/desktop/src/**
-updated: 2026-10-20
+updated: 2026-10-24
 ---
 
 # Webview Bridge Compatibility Contract
@@ -33,6 +33,8 @@ Host `WebviewConnection` consumes a structural message/visibility endpoint, not 
 The Host authorizes actions from immutable Connection context. Panel messages may target only the pinned Session, regardless of any client-supplied id. Sidebar collection-management actions may target any listed Session, while sidebar conversation actions remain scoped to the Session displayed by that Connection. New, Resume, selection, rename, close/restart, externalization, configuration, diagnostics, and other Session-management actions are sidebar-only and are rejected from panels even if manually posted. `/resume` is Host-local and is rejected from a panel with sidebar guidance.
 
 Registry/global Host toasts preserve the former single-Webview behavior and are delivered best-effort to the Sidebar Connection only. Action results, failures, and contention notices return only to their originating Connection.
+
+Fork is a conversation action scoped to that originating Connection. Sidebar-origin Fork selects the result. Session-Tab-origin Fork preserves the sidebar selection and keeps the source tab pinned to the original Session id; the result opens in a distinct Session Tab. Do not retarget the original pinned Connection merely because the live Runtime follows the fork. These placement choices do not change Registry's commit/recovery boundary.
 
 File actions carry validated locations only; relative paths resolve from the Session displayed by the originating Connection. Markdown local-image requests are correlated, bounded, authorized against that same displayed Session, and return only to their originating Connection. The Host reads only ordinary files, identifies supported content independently of its extension, and returns structured inline failures rather than global toasts. Returned image bytes are transient presentation resources: they do not enter conversation projection, drafts, or persistence, and paths/image bytes must not be logged.
 

@@ -12,7 +12,11 @@ export interface OmpPromptResult {
   error?: string;
 }
 
-/** Product semantics that cannot be reduced to an OMP wire-name translation. */
+/**
+ * Product semantics that cannot be reduced to an OMP wire-name translation.
+ * Command discovery is admission metadata, not an atomic registration lock or security sandbox.
+ * Submit the original invocation; command-file expansion and execution remain runtime-owned.
+ */
 export class OmpPromptCompatibility {
   readonly #submissions = new Map<string, OmpSubmissionTarget>();
 

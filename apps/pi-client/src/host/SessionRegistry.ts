@@ -199,9 +199,8 @@ export class SessionRegistry {
   async createSessionWithCustomArguments(): Promise<string | undefined> {
     return this.#withSessionCreation(async () => {
       const cwd = this.#sourceWorkspaceCwd("creating a Pi session");
-      // Deliberately no validation or sanitization of these arguments anywhere in FrostPi;
-      // the Pi CLI owns interpretation and failures surface via the startup-failure path.
-      // See the custom-launch-arguments paragraph in session-lifecycle.SPEC.md.
+      // Tokenization handles input syntax only; the Pi CLI owns option semantics.
+      // Do not reinterpret, sanitize or log these per-launch flag values.
       const raw = await this.#host.window.showInputBox({
         title: "New Pi session · custom arguments",
         placeHolder: 'e.g. --model sonnet --system-prompt "focus on tests"',
@@ -891,6 +890,7 @@ export class SessionRegistry {
     this.#lastStatuses.set(runtime.id, view.status);
     const previousPendingUiCount = this.#lastPendingUiCounts.get(runtime.id) ?? 0;
     this.#lastPendingUiCounts.set(runtime.id, view.pendingExtensionUi.length);
+    // Notify on entering input-required/failed state, not on every subsequent view update.
     const inputRequired = previousPendingUiCount === 0 && view.pendingExtensionUi.length > 0;
     if (runtime.id !== this.#activeSessionId && inputRequired) {
       this.#toastEmitter.fire({ level: "info", message: "A background FrostPi session is waiting for input." });

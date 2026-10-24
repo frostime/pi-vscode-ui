@@ -2,8 +2,8 @@
 title: Existing-session discovery and resume
 description: Session roots, bounded discovery, metadata recovery, worktree ownership, and browse constraints.
 scope:
-  - /apps/vscode/src/extension/sessions/catalog/**
-updated: 2026-10-07
+  - /apps/pi-client/src/host/catalog/**
+updated: 2026-10-24
 ---
 
 # Existing-session discovery and resume
@@ -22,7 +22,7 @@ Runtime extension hooks that rewrite storage are not discoverable; **Browse for 
 
 Discovery is globally bounded to 2,000 JSONL files. Linked-worktree-only roots precede current-workspace-only roots, with shared roots last. Invalid, truncated, inaccessible, and non-session files are skipped.
 
-When `rg` is available at Extension Host startup, the catalog scans the resolved roots for top-level `session` and `session_info` records. A complete scan supplies headers and the latest `session_info` by file offset without reading transcript messages; these fast-path entries intentionally omit the optional user-message preview. Files without a title use the bounded metadata reader for preview fallback. If `rg` is unavailable or its scan is incomplete, every discovered file uses that reader instead.
+When `rg` is available in the Host environment, the catalog scans the resolved roots for top-level `session` and `session_info` records. A complete scan supplies headers and the latest `session_info` by file offset without reading transcript messages; these fast-path entries intentionally omit the optional user-message preview. Files without a title use the bounded metadata reader for preview fallback. If `rg` is unavailable or its scan is incomplete, every discovered file uses that reader instead.
 
 The bounded reader examines the 64 KiB head and 384 KiB tail. The latest visible `session_info`, including an empty value that clears the title, wins before the latest tail user-message preview and file basename. A complete `rg` result is authoritative over an older title visible in those windows; an empty latest name still falls back to preview or basename rather than restoring the older title.
 
