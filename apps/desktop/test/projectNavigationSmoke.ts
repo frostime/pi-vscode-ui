@@ -36,6 +36,24 @@ export async function verifyProjectNavigation(directory: string, executable: str
     await browser.executeJavaScript(`[...document.querySelectorAll('.project-select')].find(button=>button.title===${JSON.stringify(cwd)}).click()`);
   };
   const frames = () => browser.executeJavaScript("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
+  const checkProjectBar = async (): Promise<void> => {
+    await frames();
+    assert.deepEqual(await browser.executeJavaScript(`(() => {
+      const bar=document.querySelector('.project-bar');
+      const b=bar.getBoundingClientRect();
+      const context=document.querySelector('.project-context').getBoundingClientRect();
+      const name=document.querySelector('.context-name').getBoundingClientRect();
+      const path=document.querySelector('.context-path').getBoundingClientRect();
+      const icon=document.querySelector('.context-heading .codicon').getBoundingClientRect();
+      const toggle=document.querySelector('.project-bar > .bar-button').getBoundingClientRect();
+      return {
+        rightAligned:Math.abs(context.right-(b.right-parseFloat(getComputedStyle(bar).paddingRight)))<1,
+        textAligned:Math.abs(name.right-path.right)<1,
+        iconCentered:Math.abs((icon.top+icon.bottom-name.top-name.bottom)/2)<1,
+        fits:context.left>=toggle.right&&bar.scrollWidth<=bar.clientWidth+1,
+      };
+    })()`), { rightAligned: true, textAligned: true, iconCentered: true, fits: true });
+  };
   try {
     await waitFor(() => browser.executeJavaScript("Boolean(document.querySelector('.onboarding-actions .primary'))"), "Project navigation's initial empty state");
     await browser.executeJavaScript("window.__navigationRoot=document.querySelector('.frostpi-root');document.querySelector('.onboarding-actions .primary').click()");
@@ -48,6 +66,7 @@ export async function verifyProjectNavigation(directory: string, executable: str
     assert.equal(desktop.registry.sessionView(session)?.cwd, b!.cwd);
     assert.equal(desktop.navigation.view.sessionProjects[session], a!.id);
     await waitFor(() => browser.executeJavaScript(`document.querySelector('.context-path')?.textContent.includes(${JSON.stringify(b!.cwd)})`), "Desktop names the actual worktree directory without changing Project ownership");
+    await checkProjectBar();
     await browser.executeJavaScript("document.querySelector('.prompt-editor .cm-content').focus()");
     await browser.insertText("Unsent Project A draft");
     await waitFor(() => browser.executeJavaScript("document.querySelector('.cm-content').textContent.includes('Unsent Project A draft')"), "real Project A draft");
@@ -104,6 +123,19 @@ export async function verifyProjectNavigation(directory: string, executable: str
     await chooseProject(a!.cwd);
     await waitFor(() => browser.executeJavaScript("document.querySelector('.cm-content')?.textContent==='Unsent Project A draft'"), "Project return retains its last Session draft");
     assert.equal(await browser.executeJavaScript("document.documentElement.scrollWidth<=document.documentElement.clientWidth"), true);
+    await checkProjectBar();
+    await desktop.registry.clearActiveSession();
+    await waitFor(() => browser.executeJavaScript("Boolean(document.querySelector('.choose-trigger'))"), "unselected Project keeps its session chooser on the left");
+    await browser.executeJavaScript("document.querySelector('.choose-trigger').click()");
+    await frames();
+    assert.equal(await browser.executeJavaScript(`(() => {
+      const menu=document.querySelector('.choose-popover').getBoundingClientRect();
+      const bar=document.querySelector('.project-bar').getBoundingClientRect();
+      return menu.left>=bar.left&&menu.right<=bar.right&&menu.right<=innerWidth;
+    })()`), true);
+    await checkProjectBar();
+    await browser.executeJavaScript("document.querySelector('.choose-item').click()");
+    await waitFor(() => browser.executeJavaScript("document.querySelector('.cm-content')?.textContent==='Unsent Project A draft'"), "left-side session chooser restores the same draft");
     await frames();
     await writeFile(join(directory, "desktop-project-navigation-280.png"), (await browser.capturePage()).toPNG());
     desktop.window.setSize(1100, 800);

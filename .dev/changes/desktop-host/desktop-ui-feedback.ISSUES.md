@@ -1,6 +1,6 @@
 # Desktop UI 使用反馈
 
-最初反馈基线：`feat/desktop-host@dd40c9d`，Windows x64 独立包。此文件记录验收反馈与当前决定，不代替 TARGET-SPEC 或实现计划。**UI-01、UI-02、UI-05、UI-06 已实现并进入更新的 Windows 候选包；设置页与主题仍待讨论。最新 ZIP 身份和验证范围见 [RESULT](refactor/desktop-client.RESULT.md#project-浏览上下文与侧栏)。**
+最初反馈基线：`feat/desktop-host@dd40c9d`，Windows x64 独立包。此文件记录验收反馈与当前决定，不代替 TARGET-SPEC 或实现计划。**UI-01、UI-02、UI-05、UI-06 已实现并进入更新的 Windows 候选包；设置页与主题仍待讨论。最新 ZIP 身份和验证范围见 [RESULT](refactor/desktop-client.RESULT.md#project-上下文条对齐微调)。**
 
 来源：本会话用户反馈 `401ade66`、确认/延期决定 `65ee08a1`；原话读取方法见 `.dev/changes/desktop-host/handover/R5-desktop-ui-continuation.HANDOVER.md`。
 
@@ -65,6 +65,7 @@
 - 原问题不只是排版：添加非首个 Project 不会选中它；点击 Project 也只改变 New/Resume anchor，右侧仍显示另一个 Project 的对话。固定 180px 的侧栏又重复列出全部 Pi，无法隐藏或拖宽。
 - 新约定：Project 是浏览上下文。新增 Project 立即选中且不自动创建 Pi；已有 Project 回到上次查看的 Session，空 Project 显示真实空状态。Header 下拉只列当前 Project 的已打开/恢复会话，磁盘历史走 Resume。侧栏仅列 Projects 与运行/待输入聚合，Settings 固定底部。
 - 用户明确归属：**“归属当前这个 project，这个行为和 extension 是一致的”。** New/Resume 捕获发起时的 Project；实际 cwd 即使在其他 git worktree，也不自动搬到另一 Project。已打开文件再次 Resume 复用原 Runtime 并归到请求 Project，不复制进程或聊天。Fork 继承源归属；晚到的 New/Resume 不抢走新 Project 的前台。
+- 顶部微调：开关/待输入/选择操作在左，Project 图标和名称在右，路径在其下右对齐；长路径省略并保留 tooltip。宽屏与 280px 几何/选择菜单回归及更新 ZIP 的 16 项实际 exe 检查通过；不改变 Project 导航或共享源码。
 - 原型不是产品代码：生产采用 Desktop 独立外壳与薄 Project 上下文条，继续使用同一个 ClientApp、Registry 和共享 Header。侧栏支持 180–340px 指针/键盘调宽、真正隐藏/恢复、隐藏后的待输入入口和 280px 临时抽屉；各 Session 草稿、后台进程和输入请求不随导航迁移。
 - 维护边界：归属、last-viewed、侧栏和持久化在 Desktop。共享产品源码只改 `SessionRegistry.ts` 的清空前台/打开身份通知，以及 `ClientApp.svelte` 的可选导航 roster；不在共享模块添加 Project 模型或 Desktop 分支，不伪造快照，也不修改 VS Code 入口/适配器。完整 presentation 继续保留所有存活身份，过滤只影响 Header 导航。
 - 旧元数据迁移：精确 cwd 对应注册 Project，否则保留在旧 anchor；首次启动对齐真正保存的前台会话。新导航元数据沿用 `state.json` 的 Memento 通道，保存显式归属、last-viewed 和布局；Provisional/Ephemeral 身份按共享 SessionPersistence 过滤，草稿不跨重启保存。
@@ -74,7 +75,7 @@
 
 - 第一批 UI-02/UI-05 的 checkpoint 为 `9db7943`；Resume checkpoint 为 `7dfa671`；随后按本轮批准的 Project/侧栏模型实现 UI-06。设置页、独立 UI 字体设置与主题尚未修改。
 - 通过：Context DOM 3 项、字体设置解析 3 项、共享客户端 typecheck（0 errors，1 项既有 Svelte warning）、修改文件 ESLint、双端构建、受控 Desktop Electron smoke（明确 `ok: true`）。
-- 早期 Resume 批次只改 Desktop；Project 批次增加上述两个共享小接缝及回归，没有修改插件入口/适配器。当前完整 check 和新 ZIP 验证已通过；未重跑插件 GUI E2E 或真实模型流程。旧展开目录不会被打包命令自动更新，试用时应关闭旧 Desktop，再将新 ZIP 解压到新目录运行。
+- 早期 Resume 批次只改 Desktop；Project 批次增加上述两个共享小接缝及回归，没有修改插件入口/适配器。Project 导航批次的完整 check 已通过；顶部排版微调另通过 Desktop 定向检查和新 ZIP 验证，没有重跑全仓 check、插件 GUI E2E 或真实模型流程。旧展开目录不会被打包命令自动更新，试用时应关闭旧 Desktop，再将新 ZIP 解压到新目录运行。
 
 ## 参考截图
 

@@ -158,9 +158,19 @@ Resume 经用户原型评审后采用 Desktop 专用的对话区半透明 overla
 - `pnpm package:desktop` 与 `pnpm verify:desktop` 退出 0。新 ZIP 在仓库外带空格路径解压，以隔离 profile 和受控 Pi 驱动实际 exe，通过 16 checks；主 Agent 另逐字节比对了归档内 69 个 runtime 文件与当前构建，全部一致。验证脚本按新 Project 导航定位，并用受控 Pi `.starts` 计数确认切 Project 不重启原进程、重开只启动所选保存会话，而非用新的 UI 聚合标签替代进程证据。
 - 本次未跑 `--real-pi` 或插件 GUI E2E，没有使用模型/凭据。首次候选的 20 checks/真实 Pi 离线探针不能冒充当前归档的证据。设置页和主题仍待讨论；未改版本、合 main、签名或发布。
 
-**当前归档**：`artifacts/FrostPi-0.15.5-win32-x64.zip`，161,481,059 B，145 个归档文件。SHA-256：`4c59c7d18b5111634950e170da72595aaea20899d5961a6e7fad29df1b87dd47`。再次独立计算与验证结果匹配。该包包含本次 Project/侧栏及之前的 Resume、代码字体、K/M 修复；已有 `artifacts/FrostPi/` 展开目录不会自动更新，试用时应关闭旧 Desktop，把新 ZIP 解压到新目录。
+**Project 导航首个修正版**：`artifacts/FrostPi-0.15.5-win32-x64.zip`，161,481,059 B，145 个归档文件。同名归档现已由下一节的上下文条对齐版更新。SHA-256：`4c59c7d18b5111634950e170da72595aaea20899d5961a6e7fad29df1b87dd47`。再次独立计算与验证结果匹配。该包包含本次 Project/侧栏及之前的 Resume、代码字体、K/M 修复；已有 `artifacts/FrostPi/` 展开目录不会自动更新，试用时应关闭旧 Desktop，把新 ZIP 解压到新目录。
 
 日志：`tmp/project-nav-check.log`、`tmp/project-nav-smoke.log`、`tmp/project-nav-package.log`、`tmp/project-nav-package-verify.log`。实际 exe 验证结果：`C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-verify-o2fgxm/fixtures/result.json`；开发 smoke 截图位于 `C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-smoke-zeJJU5/`。这些临时文件不是继续维护的依赖。
+
+## Project 上下文条对齐微调
+
+用户认可 Project 导航主体后，要求将顶部 Project 图标/名称移到右侧，与左侧 sidebar 开关分开。仅调整 DesktopShell 的呈现：图标紧贴名称，名称与路径右对齐，统一行高/间距，长路径省略但保留完整 tooltip。无前台会话时的选择菜单留在左侧，并以整条栏为边界避免窄窗越界。导航、归属、进程和共享/插件源码均未改。
+
+- Desktop typecheck、修改文件 ESLint、构建、真实开发 Electron smoke 通过。新增宽屏/280px 的右侧位置、两行右对齐、图标垂直对齐、不横溢及窄窗会话菜单边界断言；选择后仍恢复原 CodeMirror 草稿。未重跑全仓 `pnpm check` 或插件 GUI/真实模型流程，前一节 935 测试是 Project 导航批次的证据。
+- 本机 `Compress-Archive` 本次生成了反斜杠 ZIP 条目名，导致原有布局校验拒绝归档并保留旧 ZIP。用现有 AdmZip 在校验/发布前规范条目分隔符，不改变载荷白名单或失败保护。合成 ZIP 往返探针确认名称规范化后数据不变；重新运行标准打包与验证命令均退出 0，实际 exe 通过 16 项受控检查。
+- **当前归档**：`artifacts/FrostPi-0.15.5-win32-x64.zip`，161,481,099 B。SHA-256：`ac343b08e9d758e17e15b4353ed4684cc115597a70e0763e12f0fcc296472b64`。独立核对全部条目使用 `/`，并逐字节比对 69 个 runtime 文件与本批构建一致。旧展开目录不会自动更新；试用新 UI 应将新 ZIP 解压到新目录。
+
+日志：`tmp/project-bar-typecheck.log`、`tmp/project-bar-lint.log`、`tmp/project-bar-build.log`、`tmp/project-bar-smoke.log`、`tmp/project-bar-package-probe.log`、`tmp/project-bar-package.log`、`tmp/project-bar-package-verify.log`。开发截图在 `C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-smoke-NEOuHl/`，归档验证在 `C:/Users/EEG/AppData/Local/Temp/frostpi-desktop-verify-c3pAGx/fixtures/`；均是合成数据和可丢弃证据。
 
 ## 尚未证明
 

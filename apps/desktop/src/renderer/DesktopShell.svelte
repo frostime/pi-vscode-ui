@@ -358,14 +358,6 @@
         </button>
       {/if}
 
-      <div class="project-context" title={contextTitle}>
-        <span class="codicon codicon-folder" aria-hidden="true"></span>
-        <span class="context-copy">
-          <span class="context-name">{activeProject?.name ?? "No Project"}</span>
-          {#if activeProject}<span class="context-path">{differentDirectory ? `Pi: ${differentDirectory}` : activeProject.cwd}</span>{/if}
-        </span>
-      </div>
-
       {#if showChoose}
         <details class="choose" bind:this={chooseDetails}>
           <summary class="bar-button choose-trigger" aria-label="Choose a session" title="Choose a session">
@@ -386,6 +378,14 @@
           </div>
         </details>
       {/if}
+
+      <div class="project-context" title={contextTitle}>
+        <span class="context-heading">
+          <span class="codicon codicon-folder" aria-hidden="true"></span>
+          <span class="context-name">{activeProject?.name ?? "No Project"}</span>
+        </span>
+        {#if activeProject}<span class="context-path">{differentDirectory ? `Pi: ${differentDirectory}` : activeProject.cwd}</span>{/if}
+      </div>
     </div>
 
     <div class="client-region">{@render children()}</div>
@@ -488,8 +488,8 @@
     display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--frost-bg);
   }
   .project-bar {
-    position: relative; z-index: 30; display: flex; align-items: center; gap: 6px;
-    min-width: 0; min-height: 32px; padding: 3px 8px;
+    position: relative; z-index: 30; display: flex; align-items: center; gap: 8px;
+    min-width: 0; min-height: 36px; padding: 4px 10px;
     border-bottom: 1px solid var(--frost-border-soft);
     background: color-mix(in srgb, var(--frost-bg) 94%, var(--frost-surface)); font-size: 11.5px;
   }
@@ -510,26 +510,29 @@
   .attention-button:hover { background: color-mix(in srgb, var(--frost-warning) 20%, transparent); }
   .attention-button .codicon { font-size: 12px; }
   .attention-label { font-weight: 500; }
-  .project-context { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 6px; }
-  .project-context > .codicon { flex: none; color: var(--frost-muted); font-size: 14px; }
-  .context-copy { min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.25; }
+  .project-context {
+    flex: 0 1 auto; min-width: 0; max-width: min(60%, 480px); margin-left: auto;
+    display: flex; flex-direction: column; align-items: flex-end; justify-content: center; text-align: right;
+  }
+  .context-heading { min-width: 0; max-width: 100%; display: flex; align-items: center; gap: 6px; }
+  .context-heading > .codicon { flex: none; color: var(--frost-muted); font-size: 14px; line-height: 1; }
   .context-name {
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: var(--frost-text); font-size: 11.5px; font-weight: 600;
+    color: var(--frost-text); font-size: 11.5px; font-weight: 600; line-height: 16px;
   }
   .context-path {
-    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: var(--frost-faint); font-family: var(--font-mono); font-size: 9px;
+    min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--frost-faint); font-family: var(--font-mono); font-size: 9.5px; line-height: 12px;
   }
-  .choose { position: relative; flex: none; }
+  .choose { flex: none; }
   .choose summary { list-style: none; }
   .choose summary::-webkit-details-marker { display: none; }
   .choose-trigger { gap: 4px; padding-inline: 5px; font-size: 11px; }
   .choose-trigger .codicon { font-size: 13px; }
   .choose[open] .choose-trigger { color: var(--frost-text); background: var(--frost-hover); }
   .choose-popover {
-    position: absolute; top: calc(100% + 4px); right: 0; z-index: 10;
-    width: min(320px, calc(100vw - 24px)); max-height: min(360px, calc(100vh - 80px));
+    position: absolute; top: calc(100% + 4px); left: 8px; z-index: 10;
+    width: min(320px, calc(100% - 16px)); max-height: min(360px, calc(100vh - 80px));
     overflow-y: auto; padding: 4px; border: 1px solid var(--frost-border); border-radius: 6px;
     background: var(--frost-surface-raised); box-shadow: var(--frost-shadow);
   }
@@ -551,6 +554,7 @@
   }
   @media (max-width: 640px) {
     .project-bar { gap: 4px; padding-inline: 6px; }
+    .project-context { flex: 1 1 0; max-width: none; }
     .bar-button, .choose-trigger { padding-inline: 5px; }
   }
   @media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }

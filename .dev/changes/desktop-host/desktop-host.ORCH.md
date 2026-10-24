@@ -93,7 +93,7 @@ REQUIRES [双端共享架构验证]: 以及已实现的设置/状态基础。用
 实际 exe 从仓库外带空格目录启动；验证字体/Codicons/Mermaid、必要设置、两 Project、Stop 隔离和 profile 重开。PATH 来自机器/用户配置而不是注入开发 Node 目录；不声称复现某次 Explorer 的旧环境。基础候选曾以可选 --real-pi 验证本机 Pi 1.1 的离线扩展命令、真实确认卡和自定义消息显示；当前 Project 修正版只做受控 Pi 的 16 checks，不能借用旧归档的真实 Pi 证据。不提供凭据、不请求模型，也不冒充真实模型历史/Stop。归档 SHA 与证据见 RESULT。没有自动更新、托盘或公开发布。
 
 [首版总验收] << CURRENT
-#IN PROGRESS: 原始候选 `dd40c9d` 的技术交付后，用户已通过原型确认 Resume 专用 overlay 和按 Project 浏览的侧栏；代码字体与 K/M 也已修复。当前 137 文件 / 935 测试、双构建、插件预算及增强开发 Electron smoke 通过，新 ZIP 的实际 exe 通过 16 checks。最新归档 SHA 和范围见 [Project/侧栏结果](refactor/desktop-client.RESULT.md#project-浏览上下文与侧栏)。
+#IN PROGRESS: 原始候选 `dd40c9d` 的技术交付后，用户已通过原型确认 Resume 专用 overlay 和按 Project 浏览的侧栏；代码字体与 K/M 也已修复。当前 137 文件 / 935 测试、双构建、插件预算及增强开发 Electron smoke 通过，新 ZIP 的实际 exe 通过 16 checks。随后按用户微调将顶部 Project 信息移至右侧并整理对齐，Desktop 定向检查、开发 smoke 和重打包后的 16 项 exe 检查通过；这次排版未重跑全仓 check。最新归档 SHA 和范围见 [顶部对齐结果](refactor/desktop-client.RESULT.md#project-上下文条对齐微调)。
 
 Project 分组、last-viewed、侧栏/持久化均在 Desktop；New/Resume 属于发起 Project，包括其他 git worktree。共享产品源码只补 Registry 的清空选择/打开身份通知和 ClientApp 的可选 Header roster，插件入口/适配器不变。一个 Registry、一个 ClientApp 保持不变，不伪造快照。详情见 [UI-06](desktop-ui-feedback.ISSUES.md#ui-06project-浏览上下文与侧栏) 和 TARGET-SPEC。
 
