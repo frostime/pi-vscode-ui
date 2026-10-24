@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dialog } from "electron";
 import { createDesktopApp } from "../src/main/createDesktopApp.js";
@@ -163,8 +163,79 @@ export async function verifyProjectNavigation(directory: string, executable: str
     assert.equal(reopened.registry.activeSessionId, session);
     assert.equal(reopened.navigation.view.sessionProjects[session], a!.id);
     assert.equal(reopened.registry.sessionView(session)?.cwd, b!.cwd);
+
+    const renderer = reopened.window.webContents;
+    await renderer.executeJavaScript("window.frostpiDesktop.setSidebar({hidden:false,width:292})");
+    const removeProject = (name: string) => renderer.executeJavaScript(`document.querySelector('[aria-label="Remove Project ${name}"]').click()`);
+    await waitFor(() => renderer.executeJavaScript("Boolean(document.querySelector('[aria-label=\"Remove Project new-project\"]'))"), "Project removal buttons mount");
+    await removeProject("new-project");
+    await waitFor(() => reopened.projects.list().length === 2, "an empty Project is removed through the real button and IPC");
+    assert.equal(reopened.registry.activeSessionId, session);
+    await access(cRoot);
+
+    await renderer.executeJavaScript(`window.frostpiDesktop.selectProject(${JSON.stringify(b!.id)})`);
+    await waitFor(() => renderer.executeJavaScript("Boolean(document.querySelector('.onboarding-actions .primary'))"), "Project B is empty before its own New");
+    await renderer.executeJavaScript("document.querySelector('.onboarding-actions .primary').click()");
+    await waitFor(() => renderer.executeJavaScript("Boolean(document.querySelector('dialog .choices button'))"), "Project B New selects its working directory");
+    await renderer.executeJavaScript(`[...document.querySelectorAll('dialog .choices button')].find(button=>button.textContent.includes(${JSON.stringify(bRoot)})).click()`);
+    await waitFor(() => reopened.registry.snapshot().activeSession?.status === "ready", "Project B Pi starts");
+    const bSession = reopened.registry.activeSessionId;
+    await reopened.registry.sendPrompt(bSession, "Commit Project removal fixture", []);
+    await waitFor(() => reopened.registry.sessionView(bSession)?.status === "ready", "Project B history commits");
+    await waitFor(() => renderer.executeJavaScript("Boolean(document.querySelector('.prompt-editor .cm-content'))"), "Project B Composer mounts");
+    await renderer.executeJavaScript("document.querySelector('.prompt-editor .cm-content').focus();window.__removalRoot=document.querySelector('.frostpi-root');window.__removalEditor=document.querySelector('.cm-editor')");
+    await renderer.insertText("Keep Project B draft");
+    await reopened.registry.sendPrompt(session, "navigation-needs-input", []);
+    await waitFor(() => reopened.registry.sessionView(session)?.pendingExtensionUi.length === 1, "Project A has a background pending request before removal");
+    const aHistory = reopened.registry.sessionView(session)!.sessionFile!;
+    const bHistory = reopened.registry.sessionView(bSession)!.sessionFile!;
+    const originalConfirmation = Object.getOwnPropertyDescriptor(dialog, "showMessageBox")!;
+    let allowRemoval = false;
+    let confirmations = 0;
+    Object.defineProperty(dialog, "showMessageBox", {
+      ...originalConfirmation,
+      value: (_window: unknown, options: Electron.MessageBoxOptions) => {
+        confirmations++;
+        return Promise.resolve({ response: allowRemoval ? 0 : options.cancelId, checkboxChecked: false });
+      },
+    });
+    try {
+      await removeProject("repository");
+      await waitFor(() => confirmations === 1, "removing an occupied Project asks for confirmation");
+      assert.equal(reopened.projects.list().length, 2);
+      assert.equal(reopened.registry.hasSession(session), true);
+      assert.equal(reopened.registry.activeSessionId, bSession);
+      allowRemoval = true;
+      await removeProject("repository");
+      await waitFor(() => reopened.projects.list().length === 1 && !reopened.registry.hasSession(session), "Project A and its owned worktree Session close without removing Project B");
+      assert.equal(reopened.registry.activeSessionId, bSession);
+      await waitFor(() => renderer.executeJavaScript("document.querySelectorAll('.project-select').length===1"), "removed Project disappears from the sidebar");
+      assert.equal(await renderer.executeJavaScript("window.__removalRoot===document.querySelector('.frostpi-root')&&window.__removalEditor===document.querySelector('.cm-editor')&&document.querySelector('.cm-content').textContent==='Keep Project B draft'"), true);
+      await removeProject("linked-worktree");
+      await waitFor(() => reopened.projects.list().length === 0 && reopened.registry.snapshot().sessions.length === 0, "removing the foreground Project closes its own Session");
+      assert.equal(reopened.projects.selected, null);
+      assert.equal(reopened.registry.activeSessionId, null);
+      await waitFor(() => renderer.executeJavaScript("Boolean(document.querySelector('.empty-projects'))&&!document.querySelector('.cm-content')"), "the last Project leaves an empty application without remounting ClientApp");
+      assert.equal(await renderer.executeJavaScript("window.__removalRoot===document.querySelector('.frostpi-root')"), true);
+      await Promise.all([aRoot, bRoot, aHistory, bHistory].map((path) => access(path)));
+    } finally {
+      Object.defineProperty(dialog, "showMessageBox", originalConfirmation);
+    }
   } finally {
     await reopened.dispose();
     if (!reopened.window.isDestroyed()) reopened.window.destroy();
+  }
+
+  const empty = await createDesktopApp({
+    settingsStore: await DesktopSettingsStore.open(settingsPath),
+    stateStore: await DesktopStateStore.open(statePath), show: false,
+  });
+  try {
+    assert.deepEqual(empty.projects.list(), []);
+    assert.equal(empty.projects.selected, null);
+    assert.equal(empty.registry.snapshot().sessions.length, 0);
+  } finally {
+    await empty.dispose();
+    if (!empty.window.isDestroyed()) empty.window.destroy();
   }
 }

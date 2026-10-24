@@ -185,6 +185,21 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   listen("frostpi:client:in", (message) => incoming.fire(message));
   listen("frostpi:projects:request", publishProjects);
   listen("frostpi:projects:add", () => addProject());
+  listen("frostpi:projects:remove", async (id) => {
+    if (typeof id !== "string" || id.length >= 4096) return;
+    const project = projects.list().find((candidate) => candidate.id === id);
+    if (!project) throw new Error("This Desktop Project is no longer available.");
+    const sessions = registry.snapshot().sessions.filter((session) => navigation.view.sessionProjects[session.id] === id);
+    try {
+      await navigation.removeProject(id, async () => await host.window.showWarningDialog(
+        `Remove Project "${project.name}" and close its open sessions? Unsent drafts and temporary conversations will be discarded. Running tasks will stop and pending input will be cancelled. The directory and saved Pi history will not be deleted.`,
+        ["Remove Project"],
+      ) === "Remove Project");
+      if (!projects.list().some((candidate) => candidate.id === id) && resume.view?.projectId === id) resume.hide();
+    } finally {
+      for (const session of sessions) if (!registry.hasSession(session.id)) drafts.release(session.id);
+    }
+  });
   listen("frostpi:projects:select", async (id) => {
     if (typeof id === "string" && id.length < 4096) { await navigation.selectProject(id); resume.hide(); }
   });

@@ -29,6 +29,8 @@ export class DesktopProjectNavigation {
   readonly #owners = new Map<string, string>();
   readonly #last = new Map<string, string>();
   readonly #scope = new AsyncLocalStorage<string>();
+  readonly #opening = new Map<string, number>();
+  readonly #removing = new Set<string>();
   readonly #persistence: SessionPersistence;
   readonly #restored: boolean;
   #sidebar: DesktopSidebarLayout;
@@ -93,6 +95,7 @@ export class DesktopProjectNavigation {
     if (this.#disposed) return;
     const { projects, registry } = this.#inputs;
     if (!projects.list().some((project) => project.id === projectId)) throw new Error("This Desktop Project is no longer available.");
+    if (this.#removing.has(projectId)) throw new Error("This Project is being removed.");
     if (sessionId && (this.#owners.get(sessionId) !== projectId || !registry.hasSession(sessionId))) throw new Error("This session is no longer in the selected Project.");
     const active = registry.activeSessionId;
     if (projects.selected?.id === projectId && active && this.#owners.get(active) === projectId && (!sessionId || sessionId === active)) return;
@@ -110,22 +113,56 @@ export class DesktopProjectNavigation {
     this.refresh();
   }
 
+  async removeProject(projectId: string, confirm: () => Promise<boolean>): Promise<void> {
+    if (this.#disposed || this.#removing.has(projectId)) return;
+    const { projects, registry } = this.#inputs;
+    if (!projects.list().some((project) => project.id === projectId)) throw new Error("This Desktop Project is no longer available.");
+    // New/Resume may still be in a picker or discovery, without a Session id to close.
+    if (this.#opening.has(projectId)) throw new Error("Finish or cancel New/Resume in this Project before removing it.");
+    this.#removing.add(projectId);
+    try {
+      if ([...this.#owners.values()].includes(projectId) && !await confirm()) return;
+      if (this.#disposed) return;
+      ++this.#selectionRevision;
+      for (const id of [...this.#owners.keys()]) {
+        if (this.#owners.get(id) !== projectId || !registry.hasSession(id)) continue;
+        await registry.closeSession(id);
+        // Shared close can be cancelled (or reject a Fork); never hide a surviving Runtime.
+        if (registry.hasSession(id)) return;
+      }
+      if (this.#disposed) return;
+      if (projects.selected?.id === projectId) await registry.clearActiveSession();
+      projects.removeProject(projectId);
+      this.refresh();
+      await this.#save();
+    } finally {
+      this.#removing.delete(projectId);
+    }
+  }
+
   async activateSession(sessionId: string): Promise<void> {
     const owner = this.#owners.get(sessionId);
     if (!owner || !this.#inputs.registry.hasSession(sessionId)) throw new Error("This FrostPi Session no longer exists.");
     await this.selectProject(owner, sessionId);
   }
 
-  run(work: () => Promise<string | undefined>): Promise<string | undefined> {
+  async run(work: () => Promise<string | undefined>): Promise<string | undefined> {
     const projectId = this.#inputs.projects.selected?.id;
     if (!projectId) return work();
+    if (this.#removing.has(projectId)) throw new Error("This Project is being removed.");
     this.#rememberActive();
+    this.#opening.set(projectId, (this.#opening.get(projectId) ?? 0) + 1);
     return this.#scope.run(projectId, async () => {
       try {
         const id = await work();
         if (!this.#disposed && id) this.#claim(id, projectId);
         return id;
-      } finally { this.refresh(); }
+      } finally {
+        const remaining = this.#opening.get(projectId)! - 1;
+        if (remaining) this.#opening.set(projectId, remaining);
+        else this.#opening.delete(projectId);
+        this.refresh();
+      }
     });
   }
 

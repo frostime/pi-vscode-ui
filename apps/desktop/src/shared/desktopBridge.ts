@@ -60,6 +60,7 @@ export interface DesktopApi {
   onClientMessage(listener: (message: HostToWebviewMessage) => void): () => void;
   requestProjects(): void;
   addProject(): void;
+  removeProject(id: string): void;
   selectProject(id: string): void;
   setSidebar(layout: DesktopSidebarLayout): void;
   onProjects(listener: (view: DesktopProjectsView) => void): () => void;

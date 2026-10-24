@@ -27,6 +27,7 @@
     children,
     onproject,
     onadd,
+    onremove,
     onsettings,
     onsidebar,
     onsession,
@@ -40,6 +41,7 @@
     children: Snippet;
     onproject: (id: string) => void;
     onadd: () => void;
+    onremove: (id: string) => void;
     onsettings: () => void;
     onsidebar: (layout: DesktopSidebarLayout) => void;
     onsession: (id: string) => void;
@@ -300,15 +302,21 @@
               <span class="project-meta">{countsLabel(activity)}</span>
             </span>
           </button>
-          {#if activity.waitingSessionIds.length > 0}
-            <button type="button" class="waiting-button"
-              title={`${activity.waitingSessionIds.length} session${activity.waitingSessionIds.length === 1 ? "" : "s"} waiting for input`}
-              aria-label={`${activity.waitingSessionIds.length} session${activity.waitingSessionIds.length === 1 ? "" : "s"} waiting for input; open the first`}
-              onclick={() => openWaitingSession(activity.waitingSessionIds)}>
-              <span class="codicon codicon-warning" aria-hidden="true"></span>
-              <span>{activity.waitingSessionIds.length}</span>
+          <div class="project-actions">
+            {#if activity.waitingSessionIds.length > 0}
+              <button type="button" class="waiting-button"
+                title={`${activity.waitingSessionIds.length} session${activity.waitingSessionIds.length === 1 ? "" : "s"} waiting for input`}
+                aria-label={`${activity.waitingSessionIds.length} session${activity.waitingSessionIds.length === 1 ? "" : "s"} waiting for input; open the first`}
+                onclick={() => openWaitingSession(activity.waitingSessionIds)}>
+                <span class="codicon codicon-warning" aria-hidden="true"></span>
+                <span>{activity.waitingSessionIds.length}</span>
+              </button>
+            {/if}
+            <button type="button" class="icon-button remove-project" title="Remove Project"
+              aria-label={`Remove Project ${project.name}`} onclick={() => onremove(project.id)}>
+              <span class="codicon codicon-trash" aria-hidden="true"></span>
             </button>
-          {/if}
+          </div>
         </div>
       {:else}
         <p class="empty-projects">No Projects yet.</p>
@@ -449,6 +457,11 @@
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     color: var(--frost-faint); font-size: 9.5px; line-height: 1.3;
   }
+  .project-actions { display: flex; align-items: center; padding-right: 3px; }
+  .remove-project { color: var(--frost-faint); opacity: 0; pointer-events: none; }
+  .project-row:hover .remove-project,
+  .remove-project:focus-visible { opacity: 1; pointer-events: auto; }
+  .remove-project:hover { color: var(--frost-error); }
   .waiting-button {
     align-self: center; display: inline-flex; align-items: center; gap: 3px; height: 20px;
     margin: 0 4px 0 1px; padding: 0 4px; border-radius: 3px;

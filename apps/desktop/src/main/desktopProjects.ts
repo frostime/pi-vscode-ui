@@ -76,6 +76,13 @@ export class DesktopProjects {
     this.#emitChange();
   }
 
+  /** Unregisters metadata only; the caller must close owned Sessions before removing their root. */
+  removeProject(id: string): void {
+    if (!this.#projects.delete(id)) throw new Error(`Unknown FrostPi Project: ${id}`);
+    if (this.#selectedId === id) this.#selectedId = null;
+    this.#emitChange();
+  }
+
   get selected(): DesktopProject | null {
     return this.#selectedId ? this.#projects.get(this.#selectedId) ?? null : null;
   }

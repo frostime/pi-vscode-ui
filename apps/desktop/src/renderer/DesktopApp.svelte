@@ -101,6 +101,7 @@
   error={!settingsOpen ? settingsError : ""}
   onproject={(id) => window.frostpiDesktop.selectProject(id)}
   onadd={() => window.frostpiDesktop.addProject()}
+  onremove={(id) => window.frostpiDesktop.removeProject(id)}
   onsettings={() => showSettings()}
   onsidebar={(layout) => window.frostpiDesktop.setSidebar(layout)}
   onsession={(id) => postToHost({ type: "activateSession", sessionId: id })}

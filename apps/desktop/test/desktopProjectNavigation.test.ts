@@ -102,6 +102,7 @@ class FakeRegistry {
   readonly temporary = new Set<string>();
   readonly retained = new Set<string>();
   readonly activations: string[] = [];
+  readonly cancelledCloses = new Set<string>();
   activeSessionId: string | null = null;
   resume: () => Promise<string | undefined> = () => Promise.resolve(undefined);
   opened: ((sessionId: string) => void) | undefined;
@@ -152,6 +153,15 @@ class FakeRegistry {
     this.#discardActiveTemporarySession();
     this.activeSessionId = sessionId;
     this.activations.push(sessionId);
+    this.onChange?.();
+    return Promise.resolve();
+  }
+
+  closeSession(sessionId: string): Promise<void> {
+    if (this.cancelledCloses.has(sessionId)) return Promise.resolve();
+    this.sessions.delete(sessionId);
+    this.temporary.delete(sessionId);
+    if (this.activeSessionId === sessionId) this.activeSessionId = [...this.sessions.keys()].at(-1) ?? null;
     this.onChange?.();
     return Promise.resolve();
   }
@@ -505,6 +515,97 @@ describe("DesktopProjectNavigation", () => {
       expect(projects.selected?.id).toBe(roots.c.id);
       expect(registry.activeSessionId).toBeNull();
       expect(registry.activations).toEqual([]);
+    });
+  });
+
+  it.each([true, false])("removes a Project and its owned Sessions without affecting other Projects (selected: %s)", async (selected) => {
+    await withWorkspace(async ({ projects, roots }) => {
+      const storage = memoryMemento();
+      const registry = new FakeRegistry([fakeSession("a1", roots.a.cwd), fakeSession("worktree", roots.a.cwd), fakeSession("b1", roots.b.cwd)]);
+      await new SessionPersistence(storage).save(null, [persistedSession("a1", roots.a.cwd), persistedSession("b1", roots.b.cwd)]);
+      registry.activeSessionId = selected ? "a1" : "b1";
+      projects.selectProject(selected ? roots.a.id : roots.b.id);
+      const { navigation } = createNavigation(projects, registry, storage);
+      await navigation.initialize();
+      // Ownership, not cwd, decides which Sessions removal closes.
+      registry.sessions.get("worktree")!.cwd = roots.b.cwd;
+      registry.temporary.add("worktree");
+      await navigation.removeProject(roots.a.id, () => Promise.resolve(true));
+      await navigation.flush();
+
+      expect(projects.list().map((project) => project.id)).toEqual([roots.b.id, roots.c.id]);
+      expect(projects.selected?.id ?? null).toBe(selected ? null : roots.b.id);
+      expect([...registry.sessions.keys()]).toEqual(["b1"]);
+      expect(registry.activeSessionId).toBe(selected ? null : "b1");
+      expect(registry.activations).toEqual([]);
+      expect(navigation.view.sessionProjects).toEqual({ b1: roots.b.id });
+      const saved = storage.get<{ sessionProjects: Record<string, string>; lastSessions: Record<string, string> }>(NAVIGATION_STORAGE_KEY)!;
+      expect(saved.sessionProjects).toEqual({ b1: roots.b.id });
+      expect(saved.lastSessions[roots.a.id]).toBeUndefined();
+    });
+  });
+
+  it("keeps the Project on removal cancellation, including a shared Session close cancellation", async () => {
+    await withWorkspace(async ({ projects, roots }) => {
+      const registry = new FakeRegistry([fakeSession("a1", roots.a.cwd)]);
+      registry.activeSessionId = "a1";
+      const { navigation } = createNavigation(projects, registry);
+      await navigation.initialize();
+      await navigation.removeProject(roots.a.id, () => Promise.resolve(false));
+      expect(registry.activeSessionId).toBe("a1");
+      expect(registry.hasSession("a1")).toBe(true);
+
+      registry.cancelledCloses.add("a1");
+      await navigation.removeProject(roots.a.id, () => Promise.resolve(true));
+      expect(projects.list()).toContainEqual(roots.a);
+      expect(navigation.view.sessionProjects.a1).toBe(roots.a.id);
+      expect(registry.hasSession("a1")).toBe(true);
+      expect(registry.activeSessionId).toBe("a1");
+    });
+  });
+
+  it("preserves a Session resumed into another Project while removal confirmation is open", async () => {
+    await withWorkspace(async ({ projects, roots }) => {
+      const registry = new FakeRegistry([fakeSession("a1", roots.a.cwd), fakeSession("b1", roots.b.cwd)]);
+      registry.activeSessionId = "b1";
+      projects.selectProject(roots.b.id);
+      const { navigation } = createNavigation(projects, registry);
+      await navigation.initialize();
+      const confirmation = deferred<boolean>();
+      const removing = navigation.removeProject(roots.a.id, () => confirmation.promise);
+      await navigation.run(() => Promise.resolve("a1"));
+      confirmation.resolve(true);
+      await removing;
+      expect(registry.hasSession("a1")).toBe(true);
+      expect(navigation.view.sessionProjects.a1).toBe(roots.b.id);
+      expect(registry.activeSessionId).toBe("b1");
+      expect(projects.list()).not.toContainEqual(roots.a);
+    });
+  });
+
+  it("does not allow New/Resume and Project removal to leave orphaned Sessions", async () => {
+    await withWorkspace(async ({ projects, roots }) => {
+      const registry = new FakeRegistry([fakeSession("a1", roots.a.cwd)]);
+      const { navigation } = createNavigation(projects, registry);
+      await navigation.initialize();
+      const discovery = deferred<void>();
+      const opening = navigation.run(async () => {
+        await discovery.promise;
+        return registry.create(roots.a.cwd);
+      });
+      await expect(navigation.removeProject(roots.a.id, () => Promise.resolve(true))).rejects.toThrow("Finish or cancel New/Resume");
+      discovery.resolve();
+      const opened = expectationOfSessionId(await opening);
+      expect(navigation.view.sessionProjects[opened]).toBe(roots.a.id);
+
+      const confirmation = deferred<boolean>();
+      const removing = navigation.removeProject(roots.a.id, () => confirmation.promise);
+      await expect(navigation.run(() => Promise.resolve("a1"))).rejects.toThrow("being removed");
+      await expect(navigation.selectProject(roots.a.id)).rejects.toThrow("being removed");
+      confirmation.resolve(true);
+      await removing;
+      expect(registry.sessions.size).toBe(0);
+      expect(projects.list()).not.toContainEqual(roots.a);
     });
   });
 

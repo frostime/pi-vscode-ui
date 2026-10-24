@@ -15,6 +15,7 @@ const api: DesktopApi = {
   onClientMessage: (listener) => subscribe<HostToWebviewMessage>("frostpi:client:out", listener),
   requestProjects: () => ipcRenderer.send("frostpi:projects:request"),
   addProject: () => ipcRenderer.send("frostpi:projects:add"),
+  removeProject: (id) => ipcRenderer.send("frostpi:projects:remove", id),
   selectProject: (id) => ipcRenderer.send("frostpi:projects:select", id),
   setSidebar: (layout) => ipcRenderer.send("frostpi:sidebar:set", layout),
   onProjects: (listener) => subscribe<DesktopProjectsView>("frostpi:projects:view", listener),
