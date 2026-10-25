@@ -11,6 +11,7 @@ import { verifyDesktopStateReopen } from "./statePersistenceSmoke.js";
 import { verifyDesktopResume } from "./resumeSmoke.js";
 import { verifyProjectNavigation } from "./projectNavigationSmoke.js";
 import { verifyDesktopThemes, verifyDesktopThemeReopen } from "./themeSmoke.js";
+import { verifySettingsPanel } from "./settingsPanelSmoke.js";
 
 const directory = process.env.FROSTPI_DESKTOP_SMOKE_DIR!;
 app.setPath("userData", join(directory, "electron-profile"));
@@ -55,6 +56,7 @@ async function verifySettingsSetup(): Promise<void> {
     await browser.executeJavaScript("document.querySelector('dialog .save').click()");
     await until(() => !store.firstRun && store.values["chat.fontSize"] === 19, "Save commits imported dot keys");
     await until(() => browser.executeJavaScript("document.documentElement.style.getPropertyValue('--vscode-editor-font-family')==='Import Mono'"), "Save applies imported editor font family");
+    await until(() => browser.executeJavaScript("document.querySelector('.save-status').textContent.includes('No unsaved') && !document.querySelector('#first-run-title')"), "Save updates the settings form baseline");
     assert.equal(await readFile(sourcePath, "utf8"), source);
     assert.deepEqual(store.values, {
       "chat.fontSize": 19, "chat.editor.fontSize": 17,
@@ -67,7 +69,9 @@ async function verifySettingsSetup(): Promise<void> {
     const narrow: unknown = await browser.executeJavaScript("(()=>{const d=document.querySelector('dialog');const r=d.getBoundingClientRect();return {fits:r.left>=0&&r.right<=innerWidth,noHorizontalScroll:d.scrollWidth<=d.clientWidth+1};})()");
     assert.deepEqual(narrow, { fits: true, noHorizontalScroll: true });
     await writeFile(join(directory, "desktop-settings-280.png"), (await browser.capturePage()).toPNG());
-    await browser.executeJavaScript("document.querySelector('[aria-label=\"Reset chat.fontSize\"]').click();document.querySelector('dialog .save').click()");
+    await browser.executeJavaScript("document.querySelector('[aria-label=\"Reset Conversation text size\"]').click()");
+    await until(() => browser.executeJavaScript("!document.querySelector('dialog .save').disabled"), "Reset marks the settings draft as changed");
+    await browser.executeJavaScript("document.querySelector('dialog .save').click()");
     await until(() => !("chat.fontSize" in store.values), "Reset removes override rather than storing default");
     await until(() => browser.executeJavaScript("document.documentElement.style.getPropertyValue('--frostpi-chat-message-font-size')==='13px'"), "Reset restores shared message size");
     await assert.rejects(browser.executeJavaScript("window.frostpiDesktop.settings({type:'save',values:{'chat.fontSize':'wrong-type'}})"));
@@ -272,11 +276,12 @@ void app.whenReady().then(async () => {
   }
   await verifyDesktopThemeReopen(directory, until);
   await verifySettingsSetup();
+  await verifySettingsPanel(directory, until);
   await verifyStartupSettingsEntries();
   await verifyDesktopStateReopen(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
   await verifyDesktopResume(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
   await verifyProjectNavigation(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
-  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true, sharedSettingsEntryPoints: true, actualDesktopCapabilities: true, stateReopen: true, selectedOnlyAutoStart: true, savedNullSelection: true, shutdownFlush: true, resumeOverlay: true, resumeWithoutRuntime: true, resumeFailureCleanup: true, resumePiSwitch: true, resumeExpandedComposer: true, projectNavigation: true, projectRemoval: true, themeSwitching: true, themeReopen: true, worktreeProjectOwnership: true, sidebarLayoutReopen: true }));
+  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true, groupedSettingsPanel: true, settingsDraftRecovery: true, sharedSettingsEntryPoints: true, actualDesktopCapabilities: true, stateReopen: true, selectedOnlyAutoStart: true, savedNullSelection: true, shutdownFlush: true, resumeOverlay: true, resumeWithoutRuntime: true, resumeFailureCleanup: true, resumePiSwitch: true, resumeExpandedComposer: true, projectNavigation: true, projectRemoval: true, themeSwitching: true, themeReopen: true, worktreeProjectOwnership: true, sidebarLayoutReopen: true }));
   app.exit(0);
 }).catch((error: unknown) => {
   writeFileSync(join(directory, "result.json"), JSON.stringify({ ok: false, error: error instanceof Error ? error.message : "Smoke failure" }));

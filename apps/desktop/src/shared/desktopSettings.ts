@@ -43,6 +43,8 @@ export const relatedVscodeSettingDefinitions: Record<string, SettingDefinition> 
   "search.exclude": { type: "object", default: { "**/node_modules": true, "**/bower_components": true, "**/*.code-search": true }, additionalProperties: excludeRule, description: "Additional @ file exclusions when respectSearchExclude is enabled. Entries override the built-in exclusion map." },
 };
 
+// Add actual Desktop-only preferences here under desktop.*. Their renderer
+// labels and groups are separate from this schema and do not rename the keys.
 export const desktopOnlySettingDefinitions: Record<string, SettingDefinition> = {
   "desktop.theme": { type: "string", default: "dark", enum: Object.keys(desktopThemes), description: "Desktop color theme: dark uses Dark Modern; light uses Light Modern. Changes apply immediately without restarting Pi." },
 };

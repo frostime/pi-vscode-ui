@@ -74,7 +74,7 @@
     document.documentElement.style.setProperty("--vscode-editor-font-family", typeof family === "string" && family.trim() ? family : fallback);
   }
 
-  async function settingsAction(action: DesktopSettingsAction): Promise<void> {
+  async function settingsAction(action: DesktopSettingsAction): Promise<DesktopSettingsView | null> {
     settingsBusy = true;
     settingsError = "";
     try {
@@ -83,8 +83,10 @@
       if (action.type === "importVscode") settingsView = view;
       else applySettings(view);
       if (action.type === "useDefaults") settingsOpen = false;
+      return view;
     } catch (error) {
       settingsError = error instanceof Error ? error.message : "The settings operation failed.";
+      return null;
     } finally {
       settingsBusy = false;
     }
