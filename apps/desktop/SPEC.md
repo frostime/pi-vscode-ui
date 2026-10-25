@@ -52,7 +52,9 @@ Adding a Project requires a main-process native directory choice (or an explicit
 
 Desktop pick/input responses correlate to one Host-owned request; unknown/stale ids have no effect. Only listed non-separator choices are selectable. QuickPick labels retain VS Code's `$(icon~modifier)` syntax, rendered as Codicons and text nodes rather than HTML; filtering excludes icon names and respects the caller's description/detail matching options. Separator labels remain plain text. Window disposal cancels pending interactions rather than approving them. Main owns native confirmation/file/clipboard/external-link operations; shared external links retain the http(s) check.
 
-The renderer consumes the common client style entry and a Desktop-supplied VS Code variable palette. Packaged entry scripts and their `vendor/` resources share the VS Code Webview's entry-relative URL layout. Theme import, VS Code Workbench internals and TextMate grammar execution are not implied by that palette.
+The renderer consumes the common client style entry. Desktop's built-in Dark Modern and Light Modern palettes supply VS Code variables, including the shared code-highlight colors; `desktop.theme` defaults to `dark` and persists the manual choice independently of VS Code and the OS. The sidebar toggle waits until first-run settings are saved or defaults are chosen, so appearance changes cannot consume the one-time import offer. Apply the saved scheme before mounting the client. Live switching updates native controls, dialogs and mounted diagrams without remounting ClientApp or discarding drafts, disclosure or scroll state. It never restarts Pi. Theme import, VS Code Workbench internals and TextMate grammar execution remain out of scope.
+
+Packaged entry scripts and their `vendor/` resources share the VS Code Webview's entry-relative URL layout.
 
 ## Packaged distribution
 

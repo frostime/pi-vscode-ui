@@ -1,5 +1,5 @@
 import { posix, win32 } from "node:path";
-import { desktopSettingDefinitions, type DesktopSettingsValues } from "../../shared/desktopSettings.js";
+import { desktopOnlySettingDefinitions, desktopSettingDefinitions, type DesktopSettingsValues } from "../../shared/desktopSettings.js";
 import { isSettingValueValid, proxyEndpointIssue, validateDesktopSettings } from "./validateDesktopSettings.js";
 
 import { readJsonObject } from "../storage/jsonFile.js";
@@ -30,7 +30,7 @@ export async function importVscodeSettings(filePath: string): Promise<{ values: 
   const values: DesktopSettingsValues = {};
   const notices: string[] = [];
   for (const [key, value] of Object.entries(source)) {
-    if (!Object.hasOwn(desktopSettingDefinitions, key)) continue;
+    if (!Object.hasOwn(desktopSettingDefinitions, key) || Object.hasOwn(desktopOnlySettingDefinitions, key)) continue;
     if (!isSettingValueValid(key, value)
       || (key === "frostpi.notifications.experimental.enabled" && value === true)
       || (key === PROXY_ENDPOINT && typeof value === "string" && value.trim() && proxyEndpointIssue(value))) {

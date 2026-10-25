@@ -2,6 +2,7 @@
   import { onMount, untrack } from "svelte";
   import type { Snippet } from "svelte";
   import { DESKTOP_SIDEBAR_WIDTH } from "../shared/desktopBridge.js";
+  import { desktopThemes, type DesktopTheme } from "../shared/desktopSettings.js";
   import type {
     DesktopProjectActivity,
     DesktopProjectsView,
@@ -29,6 +30,10 @@
     onadd,
     onremove,
     onsettings,
+    theme,
+    themeBusy,
+    themeSetupRequired,
+    ontheme,
     onsidebar,
     onsession,
     onresume,
@@ -43,6 +48,10 @@
     onadd: () => void;
     onremove: (id: string) => void;
     onsettings: () => void;
+    theme: DesktopTheme;
+    themeBusy: boolean;
+    themeSetupRequired: boolean;
+    ontheme: () => void;
     onsidebar: (layout: DesktopSidebarLayout) => void;
     onsession: (id: string) => void;
     onresume: (id: string) => void;
@@ -61,6 +70,10 @@
   let resizeStart: { x: number; width: number } | null = null;
   let keyboardDirty = false;
 
+  const nextTheme = $derived(theme === "dark" ? "light" : "dark");
+  const themeAction = $derived(themeSetupRequired
+    ? "Finish Desktop settings setup before changing the theme"
+    : `Switch to ${desktopThemes[nextTheme].label}`);
   const activeProject = $derived(view.projects.find((project) => project.id === view.activeProjectId) ?? null);
   const activeSession = $derived(sessions.find((session) => session.id === activeSessionId));
   const differentDirectory = $derived(activeSession && activeProject && activeSession.cwd !== activeProject.cwd ? activeSession.cwd : null);
@@ -332,9 +345,14 @@
           <span>Return to Resume{#if resume.phase === "failed"} · Needs attention{/if}</span>
         </button>
       {/if}
-      <button type="button" class="settings-button" onclick={onsettings}>
-        <span class="codicon codicon-settings-gear" aria-hidden="true"></span><span>Settings</span>
-      </button>
+      <div class="footer-actions">
+        <button type="button" class="settings-button" onclick={onsettings}>
+          <span class="codicon codicon-settings-gear" aria-hidden="true"></span><span>Settings</span>
+        </button>
+        <button type="button" class="theme-button" title={themeAction} aria-label={themeAction} disabled={themeBusy || themeSetupRequired} onclick={ontheme}>
+          <span class="codicon codicon-color-mode" aria-hidden="true"></span>
+        </button>
+      </div>
     </div>
   </aside>
 
@@ -482,8 +500,11 @@
   }
   .resume-return { border: 1px solid var(--frost-border); color: var(--frost-link); font-size: 10.5px; }
   .resume-return:hover { background: var(--frost-hover); }
-  .settings-button { color: var(--frost-muted); font-size: 11.5px; }
-  .settings-button:hover { background: var(--frost-hover); color: var(--frost-text); }
+  .footer-actions { display: flex; align-items: center; gap: 4px; }
+  .settings-button { flex: 1; color: var(--frost-muted); font-size: 11.5px; }
+  .theme-button { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 4px; color: var(--frost-muted); background: transparent; cursor: pointer; }
+  .settings-button:hover, .theme-button:hover:not(:disabled) { background: var(--frost-hover); color: var(--frost-text); }
+  .theme-button:disabled { opacity: .5; cursor: default; }
   .resume-return .codicon, .settings-button .codicon { flex: none; font-size: 13px; }
 
   .resize-handle { position: relative; z-index: 1; min-height: 0; cursor: col-resize; touch-action: none; }
@@ -560,7 +581,7 @@
   .choose-status { flex: none; color: var(--frost-faint); font-size: 9.5px; }
   .choose-item > .codicon-warning { flex: none; color: var(--frost-warning); font-size: 12px; }
 
-  .client-region { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+  .client-region { --frost-bg: var(--vscode-editor-background); position: relative; min-width: 0; min-height: 0; overflow: hidden; }
   .drawer-scrim {
     position: absolute; inset: 0; z-index: 40; padding: 0; border: 0;
     background: rgba(0, 0, 0, .45); cursor: pointer;

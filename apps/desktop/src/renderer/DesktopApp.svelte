@@ -10,14 +10,17 @@
   import SettingsPanel from "./SettingsPanel.svelte";
   import ResumeOverlay from "./ResumeOverlay.svelte";
   import DesktopShell from "./DesktopShell.svelte";
-  import { desktopSettingDefinitions, type DesktopSettingsAction, type DesktopSettingsTarget, type DesktopSettingsView } from "../shared/desktopSettings.js";
+  import { desktopSettingDefinitions, readDesktopTheme, type DesktopSettingsAction, type DesktopSettingsTarget, type DesktopSettingsView } from "../shared/desktopSettings.js";
+  import { applyDesktopTheme } from "./theme.js";
   import { DESKTOP_CLIENT_UI_CAPABILITIES } from "../shared/desktopCapabilities.js";
 
+  let { initialSettings }: { initialSettings: DesktopSettingsView | null } = $props();
   let settingsView = $state<DesktopSettingsView | null>(null);
   let settingsOpen = $state(false);
   let settingsTarget = $state<DesktopSettingsTarget>("all");
   let settingsBusy = $state(false);
   let settingsError = $state("");
+  const theme = $derived(readDesktopTheme(settingsView?.values ?? {}));
 
   let projects = $state<DesktopProjectsView>({ projects: [], activeProjectId: null });
   const projectSessions = $derived($presentationStore.sessions.filter((session) =>
@@ -48,10 +51,10 @@
     const unsubscribeResume = window.frostpiDesktop.onResume((value) => resume = value);
     const unsubscribeSettings = window.frostpiDesktop.onSettings(applySettings);
     const unsubscribeOpenSettings = window.frostpiDesktop.onOpenSettings(showSettings);
-    void window.frostpiDesktop.settings({ type: "read" }).then((view) => {
-      applySettings(view);
-      settingsOpen = view.firstRun || Boolean(view.error);
-    }).catch(() => { settingsError = "Could not load Desktop settings."; });
+    if (initialSettings) {
+      applySettings(initialSettings);
+      settingsOpen = initialSettings.firstRun || Boolean(initialSettings.error);
+    } else settingsError = "Could not load Desktop settings.";
     window.frostpiDesktop.requestProjects();
     window.frostpiDesktop.requestResume();
     return () => { unsubscribeProjects(); unsubscribeDialog(); unsubscribeResume(); unsubscribeSettings(); unsubscribeOpenSettings(); };
@@ -65,6 +68,7 @@
 
   function applySettings(view: DesktopSettingsView): void {
     settingsView = view;
+    applyDesktopTheme(readDesktopTheme(view.values));
     const family = view.values["editor.fontFamily"];
     const fallback = String(desktopSettingDefinitions["editor.fontFamily"]!.default);
     document.documentElement.style.setProperty("--vscode-editor-font-family", typeof family === "string" && family.trim() ? family : fallback);
@@ -103,6 +107,8 @@
   onadd={() => window.frostpiDesktop.addProject()}
   onremove={(id) => window.frostpiDesktop.removeProject(id)}
   onsettings={() => showSettings()}
+  {theme} themeBusy={settingsBusy} themeSetupRequired={settingsView?.firstRun ?? true}
+  ontheme={() => settingsAction({ type: "setTheme", theme: theme === "dark" ? "light" : "dark" })}
   onsidebar={(layout) => window.frostpiDesktop.setSidebar(layout)}
   onsession={(id) => postToHost({ type: "activateSession", sessionId: id })}
   onresume={(id) => window.frostpiDesktop.showResume(id)}>

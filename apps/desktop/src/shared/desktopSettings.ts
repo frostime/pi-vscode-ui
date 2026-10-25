@@ -4,6 +4,16 @@ import { chatTypographyDefaults } from "@frostime/pi-client/shared/model/chatTyp
 /** Original VS Code names are the storage and UI keys. Desktop-only keys belong under desktop.*. */
 export type DesktopSettingsValues = Record<string, unknown>;
 
+export const desktopThemes = {
+  dark: { label: "Dark Modern", background: "#181818" },
+  light: { label: "Light Modern", background: "#f8f8f8" },
+} as const;
+export type DesktopTheme = keyof typeof desktopThemes;
+
+export function readDesktopTheme(values: DesktopSettingsValues): DesktopTheme {
+  return values["desktop.theme"] === "light" ? "light" : "dark";
+}
+
 export interface SettingDefinition {
   type: "string" | "number" | "boolean" | "array" | "object";
   default: unknown;
@@ -33,8 +43,9 @@ export const relatedVscodeSettingDefinitions: Record<string, SettingDefinition> 
   "search.exclude": { type: "object", default: { "**/node_modules": true, "**/bower_components": true, "**/*.code-search": true }, additionalProperties: excludeRule, description: "Additional @ file exclusions when respectSearchExclude is enabled. Entries override the built-in exclusion map." },
 };
 
-// Reserved for real Desktop-only controls. Do not put Projects or other application state here.
-export const desktopOnlySettingDefinitions: Record<string, SettingDefinition> = {};
+export const desktopOnlySettingDefinitions: Record<string, SettingDefinition> = {
+  "desktop.theme": { type: "string", default: "dark", enum: Object.keys(desktopThemes), description: "Desktop color theme: dark uses Dark Modern; light uses Light Modern. Changes apply immediately without restarting Pi." },
+};
 
 export const desktopSettingDefinitions: Record<string, SettingDefinition> = {
   ...frostPiSettingDefinitions,
@@ -60,6 +71,7 @@ export type DesktopSettingsResult =
 export type DesktopSettingsAction =
   | { type: "read" }
   | { type: "save"; values: DesktopSettingsValues }
+  | { type: "setTheme"; theme: DesktopTheme }
   | { type: "importVscode" }
   | { type: "useDefaults" }
   | { type: "openFile" }

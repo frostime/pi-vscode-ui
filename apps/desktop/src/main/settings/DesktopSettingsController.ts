@@ -1,6 +1,7 @@
 import type { DesktopSettingsAction, DesktopSettingsView } from "../../shared/desktopSettings.js";
 import type { DesktopSettingsStore } from "./DesktopSettingsStore.js";
 import { DesktopSettingsError } from "./DesktopSettingsError.js";
+import { isSettingValueValid } from "./validateDesktopSettings.js";
 
 interface SettingsActions {
   importDefaults(): Promise<{ values: Record<string, unknown>; notices: string[] }>;
@@ -29,6 +30,11 @@ export class DesktopSettingsController {
       case "save":
         await this.store.replace(action.values);
         return { ...this.view(), notices: ["Settings saved. Running Pi processes were not restarted."] };
+      case "setTheme":
+        if (this.store.firstRun) throw new DesktopSettingsError("Save settings or choose Use defaults before changing the Desktop theme.");
+        if (!isSettingValueValid("desktop.theme", action.theme)) throw new DesktopSettingsError("Invalid value for desktop.theme.");
+        await this.store.update("desktop.theme", action.theme);
+        return this.view();
       case "importVscode": {
         if (!this.store.firstRun || this.store.error) throw new DesktopSettingsError("VS Code import is only available before Desktop settings have been initialized.");
         const imported = await this.actions.importDefaults();

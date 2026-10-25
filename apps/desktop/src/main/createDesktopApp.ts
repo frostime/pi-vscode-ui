@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import { ComposerDraftCache, SessionRegistry, WebviewConnection, WorkspaceFileSearch, readChatTypography } from "@frostime/pi-client/host";
 import type { SessionRegistryOptions } from "@frostime/pi-client/host";
 import type { RuntimeLogger } from "@frostime/pi-client/core/diagnostics/RuntimeLogger";
@@ -16,7 +16,7 @@ import { DesktopSettingsStore } from "./settings/DesktopSettingsStore.js";
 import { DesktopSettingsController } from "./settings/DesktopSettingsController.js";
 import { defaultVscodeSettingsPath, importVscodeSettings } from "./settings/importVscodeSettings.js";
 import { DesktopSettingsError, settingsErrorMessage } from "./settings/DesktopSettingsError.js";
-import type { DesktopSettingsResult } from "../shared/desktopSettings.js";
+import { desktopThemes, readDesktopTheme, type DesktopSettingsResult } from "../shared/desktopSettings.js";
 import { DesktopStateStore, DesktopStateWriteError } from "./storage/DesktopStateStore.js";
 
 export interface DesktopAppOptions {
@@ -53,10 +53,11 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   const projectState = (): DesktopProjectsView => ({ projects: [...projects.list()], activeProjectId: projects.selected?.id ?? null });
   // Preserve loaded client metadata while registering roots before Registry construction.
   await stateStore.saveProjects(projectState()).catch(() => undefined);
+  nativeTheme.themeSource = readDesktopTheme(settingsStore.values);
   const window = new BrowserWindow({
     width: 1100, height: 800, minWidth: 280, minHeight: 400, show: options.show ?? true,
     title: "FrostPi Desktop — development preview",
-    backgroundColor: "#181a1f",
+    backgroundColor: desktopThemes[readDesktopTheme(settingsStore.values)].background,
     webPreferences: { preload: join(__dirname, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -156,6 +157,9 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   });
   const unsubscribeState = stateStore.onDidChange(publishProjects);
   const unsubscribeSettings = settingsStore.onDidChange(() => {
+    const theme = readDesktopTheme(settingsStore.values);
+    nativeTheme.themeSource = theme;
+    if (!window.isDestroyed()) window.setBackgroundColor(desktopThemes[theme].background);
     registry.refreshConfigurationState();
     connection.post({ type: "setChatTypography", typography: readChatTypography(host.configuration.getConfiguration("chat")) });
     connection.refresh();

@@ -203,3 +203,11 @@ SOFTWARE.
 Copyright (c) Matteo Collina and Undici contributors.
 
 Undici is distributed under the same MIT license text above.
+
+## Visual Studio Code theme palettes
+
+Desktop's built-in Dark Modern and Light Modern palettes adapt colors from the [VS Code default themes](https://github.com/microsoft/vscode/tree/211a00dbedf7a224e0da0a2db3cf9cb6cb7a4bfb/extensions/theme-defaults/themes).
+
+Copyright (c) 2015 - present Microsoft Corporation
+
+These theme palettes are distributed under the same MIT license text above.

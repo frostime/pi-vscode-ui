@@ -13,14 +13,18 @@ declare global {
   }
 }
 
+export type MermaidTheme = "dark" | "default";
+
 let mermaidPromise: Promise<MermaidApi> | null = null;
+let initializedTheme: MermaidTheme | undefined;
 let diagramSeq = 0;
 let renderChain: Promise<void> = Promise.resolve();
 const svgCache = new Map<string, string>();
 const SVG_CACHE_LIMIT = 64;
 
-function detectTheme(): "dark" | "default" {
+export function detectMermaidTheme(): MermaidTheme {
   const kind = document.body?.getAttribute("data-vscode-theme-kind") ?? "";
+  if (kind.includes("light")) return "default";
   if (kind.includes("high-contrast") || kind.includes("dark")) return "dark";
   const bg = getComputedStyle(document.documentElement).getPropertyValue("--vscode-editor-background").trim();
   if (bg.startsWith("#") && bg.length >= 7) {
@@ -74,12 +78,6 @@ function loadMermaid(): Promise<MermaidApi> {
         reject(new Error("Mermaid loaded without global export"));
         return;
       }
-      window.mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: "strict",
-        theme: detectTheme(),
-        fontFamily: "var(--font-ui, sans-serif)",
-      });
       resolve(window.mermaid);
     };
     script.onerror = () => reject(new Error(`Failed to load Mermaid script: ${script.src}`));
@@ -94,12 +92,12 @@ function nextDiagramId(): string {
   return `frost-mermaid-${diagramSeq}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function cacheSvg(source: string, svg: string): void {
+function cacheSvg(key: string, svg: string): void {
   if (svgCache.size >= SVG_CACHE_LIMIT) {
     const first = svgCache.keys().next().value;
     if (first !== undefined) svgCache.delete(first);
   }
-  svgCache.set(source, svg);
+  svgCache.set(key, svg);
 }
 
 function enqueueRender<T>(task: () => Promise<T>): Promise<T> {
@@ -111,23 +109,30 @@ function enqueueRender<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
-export function getCachedMermaidSvg(source: string): string | undefined {
-  return svgCache.get(source);
+export function getCachedMermaidSvg(source: string, theme: MermaidTheme): string | undefined {
+  return svgCache.get(`${theme}:${source}`);
 }
 
-export async function renderMermaidSvg(source: string): Promise<string> {
-  const cached = svgCache.get(source);
+export async function renderMermaidSvg(source: string, theme: MermaidTheme): Promise<string> {
+  const key = `${theme}:${source}`;
+  const cached = svgCache.get(key);
   if (cached !== undefined) return cached;
 
   return enqueueRender(async () => {
-    const again = svgCache.get(source);
+    const again = svgCache.get(key);
     if (again !== undefined) return again;
 
     const mermaid = await loadMermaid();
+    // Mermaid configuration is global: configure and render in the same queue,
+    // and never reuse an SVG from the other color scheme.
+    if (initializedTheme !== theme) {
+      mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme, fontFamily: "var(--font-ui, sans-serif)" });
+      initializedTheme = theme;
+    }
     const { svg } = await mermaid.render(nextDiagramId(), source);
     const cleaned = sanitizeMermaidSvg(svg);
     if (!cleaned) throw new Error("Diagram SVG failed sanitization");
-    cacheSvg(source, cleaned);
+    cacheSvg(key, cleaned);
     return cleaned;
   });
 }

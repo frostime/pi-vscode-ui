@@ -29,7 +29,7 @@ describe("VS Code default-user settings import", () => {
   });
 
   it("previews JSONC dot keys only, without language or Project overrides and without writing", async () => {
-    const text = '{ // user settings\n "chat.fontSize": 17, "files.exclude": {"**/build": true}, "[typescript]": {"chat.fontSize": 90}, "fontSize": 80, "workbench.colorTheme": "secret", }';
+    const text = '{ // user settings\n "chat.fontSize": 17, "files.exclude": {"**/build": true}, "[typescript]": {"chat.fontSize": 90}, "fontSize": 80, "workbench.colorTheme": "secret", "desktop.theme": "light", }';
     await writeFile(file, text);
     await mkdir(join(root, ".vscode"));
     await writeFile(join(root, ".vscode", "settings.json"), '{"chat.fontSize":99}');

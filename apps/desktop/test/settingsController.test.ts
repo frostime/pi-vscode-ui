@@ -61,11 +61,30 @@ describe("Desktop settings actions", () => {
     expect(store.values).toEqual({});
   });
 
+  it("persists theme changes without replacing other settings and rejects unsupported themes", async () => {
+    const { controller, store } = await fixture();
+    await expect(controller.handle({ type: "setTheme", theme: "light" })).rejects.toThrow("Use defaults");
+    expect(store.firstRun).toBe(true);
+    await controller.handle({ type: "save", values: { "chat.fontSize": 18 } });
+    await Promise.all([
+      store.update("chat.editor.fontSize", 19),
+      controller.handle({ type: "setTheme", theme: "light" }),
+    ]);
+    expect((await DesktopSettingsStore.open(store.filePath)).values).toEqual({
+      "chat.fontSize": 18, "chat.editor.fontSize": 19, "desktop.theme": "light",
+    });
+    await expect(controller.handle({ type: "setTheme", theme: "arbitrary-file.json" })).rejects.toThrow("desktop.theme");
+    await expect(controller.handle({ type: "setTheme" })).rejects.toThrow("desktop.theme");
+    expect(store.values["desktop.theme"]).toBe("light");
+    expect((await controller.handle({ type: "setTheme", theme: "dark" })).values["desktop.theme"]).toBe("dark");
+  });
+
   it("reports a damaged file without permitting import/reset/Save over it, then reloads a repair", async () => {
     const { controller, store, actions } = await fixture();
     await writeFile(store.filePath, "{ broken }");
     expect((await controller.handle({ type: "reload" })).error).toContain("Cannot read");
     await expect(controller.handle({ type: "save", values: {} })).rejects.toThrow("reload");
+    await expect(controller.handle({ type: "setTheme", theme: "light" })).rejects.toThrow("reload");
     await expect(controller.handle({ type: "importVscode" })).rejects.toThrow("only available before");
     await expect(controller.handle({ type: "useDefaults" })).rejects.toThrow("already been initialized");
     expect(actions.importDefaults).not.toHaveBeenCalled();

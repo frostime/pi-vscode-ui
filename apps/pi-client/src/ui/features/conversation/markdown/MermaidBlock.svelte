@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { getCachedMermaidSvg, renderMermaidSvg } from "./mermaidRenderer";
+  import { onMount } from "svelte";
+  import { detectMermaidTheme, getCachedMermaidSvg, renderMermaidSvg, type MermaidTheme } from "./mermaidRenderer";
 
   let { source }: { source: string } = $props();
 
@@ -7,10 +8,22 @@
   let svgHtml = $state("");
   let errorText = $state<string | null>(null);
   let requestId = 0;
+  let theme = $state<MermaidTheme | null>(null);
+
+  onMount(() => {
+    const updateTheme = (): void => { theme = detectMermaidTheme(); };
+    updateTheme();
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["data-vscode-theme-kind"] });
+    return () => observer.disconnect();
+  });
 
   $effect(() => {
     const text = source;
-    const cached = getCachedMermaidSvg(text);
+    const currentTheme = theme;
+    if (!currentTheme) return;
+    const id = ++requestId;
+    const cached = getCachedMermaidSvg(text, currentTheme);
     if (cached) {
       svgHtml = cached;
       status = "ready";
@@ -18,13 +31,12 @@
       return;
     }
 
-    const id = ++requestId;
     // Do not write reactive fields that this effect reads before the async work;
     // only bump the local request token and status for UI.
     status = "loading";
     errorText = null;
 
-    void renderMermaidSvg(text).then(
+    void renderMermaidSvg(text, currentTheme).then(
       (svg) => {
         if (id !== requestId) return;
         svgHtml = svg;
@@ -37,6 +49,7 @@
         svgHtml = "";
       },
     );
+    return () => { requestId++; };
   });
 </script>
 
