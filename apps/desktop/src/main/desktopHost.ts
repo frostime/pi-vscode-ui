@@ -15,6 +15,7 @@ import type { DesktopProjects } from "./desktopProjects.js";
 import type { DesktopSettingsStore } from "./settings/DesktopSettingsStore.js";
 import { relatedVscodeSettingDefinitions, type DesktopSettingsTarget } from "../shared/desktopSettings.js";
 import { DESKTOP_CLIENT_UI_CAPABILITIES } from "../shared/desktopCapabilities.js";
+import { openReferencedLocation } from "./openReferencedLocation.js";
 
 export interface DesktopHostOptions {
   /** Current window for native dialogs and focus; a getter is allowed (windows are created lazily). */
@@ -39,8 +40,8 @@ export interface DesktopHostOptions {
 
 /**
  * Desktop adapter for the shared client backend's ClientHost.
- * Native Electron capabilities are bound where they exist; editor integrations are left
- * out so the shared dispatcher fails those actions explicitly.
+ * Native Electron capabilities and external file opening are bound here; IDE-only
+ * integrations stay absent so the shared dispatcher fails those actions explicitly.
  */
 export function createDesktopHost(options: DesktopHostOptions): ClientHost {
   const readSettings = (): Record<string, unknown> => options.settingsStore?.values ?? options.settings ?? {};
@@ -120,6 +121,7 @@ export function createDesktopHost(options: DesktopHostOptions): ClientHost {
       openExternalUrl: async (url) => {
         await shell.openExternal(url);
       },
+      openReferencedLocation,
       ...(options.openFolder ? { openFolder: options.openFolder } : {}),
       ...(openSettings ? {
         openSettings: (query: string) => {

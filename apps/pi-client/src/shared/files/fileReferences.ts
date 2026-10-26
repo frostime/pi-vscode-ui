@@ -187,7 +187,8 @@ function isRecognizableFilePath(path: string): boolean {
   return FILE_NAME.test(path) || ALLOWED_FILE_BASENAMES.has(fileBasename(path).toLowerCase());
 }
 
-function hasAllowedFileSuffix(path: string): boolean {
+/** Shared recognition policy; native openers must still validate the target and choose a non-executing handler. */
+export function isAllowedFileReferencePath(path: string): boolean {
   const basename = fileBasename(path);
   const lowerBasename = basename.toLowerCase();
   if (ALLOWED_FILE_BASENAMES.has(lowerBasename)) return true;
@@ -227,7 +228,7 @@ export function parseFileReference(
   if (!path || /\s/.test(path)) return null;
   if (URI_SCHEME.test(path) && !WINDOWS_ABSOLUTE_PATH.test(path)) return null;
   if (!ABSOLUTE_PATH.test(path) && !EXPLICIT_RELATIVE_PATH.test(path) && !isRecognizableFilePath(path)) return null;
-  if (options.requireKnownExtension !== false && !hasAllowedFileSuffix(path)) return null;
+  if (options.requireKnownExtension !== false && !isAllowedFileReferencePath(path)) return null;
 
   return {
     path,

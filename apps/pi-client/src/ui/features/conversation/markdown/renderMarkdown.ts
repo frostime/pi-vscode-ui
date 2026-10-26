@@ -7,7 +7,7 @@ import type StateBlock from "markdown-it/lib/rules_block/state_block.mjs";
 import imageRule from "markdown-it/lib/rules_inline/image.mjs";
 import type StateInline from "markdown-it/lib/rules_inline/state_inline.mjs";
 
-import { parseFileHref, parseFileReference, type FileReference } from "./fileReferences.js";
+import { parseFileHref, parseFileReference, type FileReference } from "../../../../shared/files/fileReferences.js";
 import { renderDiffHtml } from "../diffPresentation.js";
 
 const katexCache = new Map<string, string>();

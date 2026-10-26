@@ -12,6 +12,7 @@ import { verifyDesktopResume } from "./resumeSmoke.js";
 import { verifyProjectNavigation } from "./projectNavigationSmoke.js";
 import { verifyDesktopThemes, verifyDesktopThemeReopen } from "./themeSmoke.js";
 import { verifySettingsPanel } from "./settingsPanelSmoke.js";
+import { verifyDesktopFileLinks } from "./fileLinksSmoke.js";
 
 const directory = process.env.FROSTPI_DESKTOP_SMOKE_DIR!;
 app.setPath("userData", join(directory, "electron-profile"));
@@ -270,6 +271,7 @@ void app.whenReady().then(async () => {
     await browser.executeJavaScript("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
     await writeFile(join(directory, "desktop.png"), (await browser.capturePage()).toPNG());
     await verifyDesktopThemes(desktop, directory, until);
+    await verifyDesktopFileLinks(desktop, until);
   } finally {
     await desktop.dispose();
     desktop.window.destroy();
@@ -281,7 +283,7 @@ void app.whenReady().then(async () => {
   await verifyDesktopStateReopen(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
   await verifyDesktopResume(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
   await verifyProjectNavigation(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
-  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true, groupedSettingsPanel: true, settingsDraftRecovery: true, sharedSettingsEntryPoints: true, actualDesktopCapabilities: true, stateReopen: true, selectedOnlyAutoStart: true, savedNullSelection: true, shutdownFlush: true, resumeOverlay: true, resumeWithoutRuntime: true, resumeFailureCleanup: true, resumePiSwitch: true, resumeExpandedComposer: true, projectNavigation: true, projectRemoval: true, themeSwitching: true, themeReopen: true, worktreeProjectOwnership: true, sidebarLayoutReopen: true }));
+  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true, groupedSettingsPanel: true, settingsDraftRecovery: true, sharedSettingsEntryPoints: true, actualDesktopCapabilities: true, fileLinks: true, stateReopen: true, selectedOnlyAutoStart: true, savedNullSelection: true, shutdownFlush: true, resumeOverlay: true, resumeWithoutRuntime: true, resumeFailureCleanup: true, resumePiSwitch: true, resumeExpandedComposer: true, projectNavigation: true, projectRemoval: true, themeSwitching: true, themeReopen: true, worktreeProjectOwnership: true, sidebarLayoutReopen: true }));
   app.exit(0);
 }).catch((error: unknown) => {
   writeFileSync(join(directory, "result.json"), JSON.stringify({ ok: false, error: error instanceof Error ? error.message : "Smoke failure" }));

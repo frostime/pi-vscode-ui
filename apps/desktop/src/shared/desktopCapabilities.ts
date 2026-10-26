@@ -4,6 +4,6 @@ import type { ClientUiCapabilities } from "@frostime/pi-client/shared/model/clie
 export const DESKTOP_CLIENT_UI_CAPABILITIES = {
   sessionEditorTabs: false, // Desktop has no editor-tab presentation.
   editorMentionSpecials: false, // There is no active IDE selection/current file.
-  openReferencedLocation: false, // Native editor/file-reference integration is not provided.
+  openReferencedLocation: true, // Code opens in VS Code; documents and directories use the system handler.
   exportDiagnostics: false, // Desktop diagnostics export is not implemented in this preview.
 } satisfies ClientUiCapabilities;

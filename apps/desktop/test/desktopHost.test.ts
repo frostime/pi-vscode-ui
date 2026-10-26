@@ -54,8 +54,8 @@ describe("createDesktopHost", () => {
     const host = createDesktopHost({ window: () => null, projects: new DesktopProjects(), interactions: interactions() as unknown as DesktopInteractions });
     // Independent of synthetic all-false DOM tests: this checks the actual Desktop assembly.
     expect(host.capabilities).toBe(DESKTOP_CLIENT_UI_CAPABILITIES);
-    expect(host.capabilities).toEqual({ sessionEditorTabs: false, editorMentionSpecials: false, openReferencedLocation: false, exportDiagnostics: false });
-    expect("openReferencedLocation" in host.editor).toBe(false);
+    expect(host.capabilities).toEqual({ sessionEditorTabs: false, editorMentionSpecials: false, openReferencedLocation: true, exportDiagnostics: false });
+    expect(typeof host.editor.openReferencedLocation).toBe("function");
     expect("exportDiagnostics" in host).toBe(false);
   });
 

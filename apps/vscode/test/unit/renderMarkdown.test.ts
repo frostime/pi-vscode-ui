@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { parseFileReference } from "$ui/features/conversation/markdown/fileReferences.js";
+import { parseFileReference } from "$shared/files/fileReferences.js";
 import {
   ensureKatex,
   renderMarkdownHtml,

@@ -57,7 +57,7 @@ Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 
 ## Editor, configuration, network, and diagnostics
 
-- VS Code file/selection/external Composer editor: `apps/vscode/src/extension/composer/`; file/diff navigation: `apps/vscode/src/extension/conversation/openReferencedLocation.ts` and `apps/vscode/src/extension/file-changes/`.
+- VS Code file/selection/external Composer editor: `apps/vscode/src/extension/composer/`; file/diff navigation: `apps/vscode/src/extension/conversation/openReferencedLocation.ts` and `apps/vscode/src/extension/file-changes/`. Desktop file opening: `apps/desktop/src/main/openReferencedLocation.ts`; pure reference parsing/whitelist: `apps/pi-client/src/shared/files/fileReferences.ts`.
 - Shared setting parsing: `apps/pi-client/src/host/readConfiguration.ts`; Runtime invocation/compatibility: `apps/pi-client/src/core/configuration/`; process proxy calculation: `apps/pi-client/src/core/network/`.
 - Desktop settings storage/import/actions: `apps/desktop/src/main/settings/`; original-key schema additions and finite operations: `apps/desktop/src/shared/desktopSettings.ts`; settings modal/draft coordination: `apps/desktop/src/renderer/SettingsPanel.svelte`; grouped labels: `settingsPresentation.ts`; schema-based draft conversion: `settingsForm.ts`; field controls/key disclosure: `SettingRow.svelte` in the same renderer directory. Contract: `apps/desktop/SPEC.md`.
 - Native proxy configuration/secrets: `apps/vscode/src/extension/network/`. Contract: `proxy-environment.SPEC.md` there; proxy changes require process restart.
