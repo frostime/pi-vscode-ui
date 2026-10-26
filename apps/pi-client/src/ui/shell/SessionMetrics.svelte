@@ -58,7 +58,7 @@
   justify-content: space-between;
   gap: 8px;
   color: var(--frost-faint);
-  font-size: 9px;
+  font-size: calc(var(--font-size-ui) - 4px);
 }
 .extension-statuses { display: flex; align-items: center; gap: 8px; }
 .metrics-right { position: relative; display: flex; align-items: center; gap: 4px; }

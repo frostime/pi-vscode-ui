@@ -31,6 +31,6 @@
     background: var(--frost-surface-raised);
   }
   .panel-failure :global(.codicon) { color: var(--frost-error); }
-  .panel-failure h1 { margin: 8px 0 4px; font-size: 14px; }
+  .panel-failure h1 { margin: 8px 0 4px; font-size: calc(var(--font-size-ui) + 1px); }
   .panel-failure p { margin: 0; color: var(--frost-muted); line-height: 1.45; }
 </style>

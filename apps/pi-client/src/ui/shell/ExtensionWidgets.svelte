@@ -24,5 +24,5 @@
   border-left: 2px solid var(--frost-link);
   color: var(--frost-muted);
 }
-.extension-widget :global(pre) { white-space: pre-wrap; font: 10.5px/1.45 var(--font-mono); }
+.extension-widget :global(pre) { white-space: pre-wrap; font: calc(var(--font-size-ui) - 2.5px)/1.45 var(--font-mono); }
 </style>

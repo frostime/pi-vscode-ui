@@ -18,7 +18,7 @@
   gap: 7px;
   align-items: start;
   color: var(--frost-muted);
-  font-size: 10.5px;
+  font-size: calc(var(--font-size-ui) - 2.5px);
 }
 .session-notice > :global(.codicon) { padding-top: 3px; color: var(--frost-link); }
 .session-notice-warning { color: var(--frost-warning); }

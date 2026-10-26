@@ -90,10 +90,10 @@
     background: transparent;
     cursor: pointer;
   }
-  .question-tool-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-  .question-tool-title small { flex: 0 0 auto; color: var(--frost-muted); font-size: 9.5px; }
+  .question-tool-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-detail); }
+  .question-tool-title small { flex: 0 0 auto; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3.5px); }
   .request-switcher { display: flex; gap: 3px; }
-  .request-switcher button { min-width: 20px; height: 20px; padding: 0 5px; border-radius: 4px; color: var(--frost-muted); background: var(--frost-secondary-bg); font-size: 9.5px; cursor: pointer; }
+  .request-switcher button { min-width: 20px; min-height: 20px; padding: 0 5px; border-radius: 4px; color: var(--frost-muted); background: var(--frost-secondary-bg); font-size: calc(var(--font-size-ui) - 3.5px); cursor: pointer; }
   .request-switcher button.active { color: var(--frost-accent-text); background: var(--frost-accent); }
   @media (max-width: 360px) {
     .question-tool-title small { display: none; }

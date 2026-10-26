@@ -52,7 +52,7 @@ Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 - Models/thinking: `features/models/ModelPicker.svelte`, `thinkingLevels.ts`, and adjacent SPECs.
 - Extension/Question UI: `features/extension-ui/`, `features/question-tool/`; shared coordination: `../core/extension-ui/` and `../core/question-tool/`.
 - Provider usage surface: `features/provider-usage/` and its SPEC; credential/query engine remains `packages/provider-usage/`. Safe reports travel through the common validated bridge.
-- Styles/theme: `styles/`; preserve VS Code variables, FrostPi mappings and Codicons. Desktop palettes: `apps/desktop/src/renderer/theme.css`; application: `apps/desktop/src/renderer/theme.ts`; persisted choice: `desktop.theme` in the Desktop settings schema. Cross-feature requirements: `.dev/docs/design/ui-spec.md`.
+- Styles/theme: `styles/`; preserve VS Code variables, FrostPi mappings and Codicons. Desktop palettes: `apps/desktop/src/renderer/theme.css`; application: `apps/desktop/src/renderer/theme.ts`; persisted choice: `desktop.theme` in the Desktop settings schema. Desktop interface typography: `apps/desktop/src/renderer/uiTypography.ts`; native Zoom/shortcuts: `apps/desktop/src/main/windowZoom.ts`. Cross-feature requirements: `.dev/docs/design/ui-spec.md`.
 - Desktop-only outer navigation/dialogs: `apps/desktop/src/renderer/DesktopApp.svelte` and `apps/desktop/src/renderer/DesktopShell.svelte`; they mount the same ClientApp, not a second chat implementation.
 
 ## Editor, configuration, network, and diagnostics

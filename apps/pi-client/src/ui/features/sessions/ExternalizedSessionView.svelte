@@ -29,7 +29,7 @@
     color: var(--frost-muted);
   }
   .externalized-session > :global(.codicon) { font-size: 20px; }
-  h1 { margin: 8px 0 3px; color: var(--frost-text); font-size: 14px; }
+  h1 { margin: 8px 0 3px; color: var(--frost-text); font-size: calc(var(--font-size-ui) + 1px); }
   p { margin: 0 0 14px; }
   button {
     display: inline-flex;

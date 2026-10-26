@@ -251,16 +251,16 @@
   .image-trigger:focus-visible { outline: 2px solid var(--frost-focus); outline-offset: 2px; }
   img { display: block; width: auto; height: auto; max-width: 100%; max-height: min(400px, 55vh); object-fit: contain; border-radius: 7px; }
   .image-loading img { opacity: .45; }
-  .loading-label { position: absolute; inset: 0; display: grid; place-items: center; color: var(--frost-muted); font-size: 11px; }
-  .image-caption { align-self: stretch; padding: 5px 4px 0; color: var(--frost-faint); font-size: 11.5px; text-align: center; }
-  .svg-warning { display: flex; gap: 6px; align-items: flex-start; margin-top: 5px; padding: 5px 8px; border-radius: 5px; background: color-mix(in srgb, var(--frost-warning) 7%, transparent); color: color-mix(in srgb, var(--frost-warning) 82%, var(--frost-text)); font-size: 10.5px; }
+  .loading-label { position: absolute; inset: 0; display: grid; place-items: center; color: var(--frost-muted); font-size: var(--font-size-detail); }
+  .image-caption { align-self: stretch; padding: 5px 4px 0; color: var(--frost-faint); font-size: calc(var(--font-size-ui) - 1.5px); text-align: center; }
+  .svg-warning { display: flex; gap: 6px; align-items: flex-start; margin-top: 5px; padding: 5px 8px; border-radius: 5px; background: color-mix(in srgb, var(--frost-warning) 7%, transparent); color: color-mix(in srgb, var(--frost-warning) 82%, var(--frost-text)); font-size: calc(var(--font-size-ui) - 2.5px); }
   .image-placeholder { width: min(390px, 100%); min-height: 76px; display: grid; grid-template-columns: 32px minmax(0,1fr); align-items: center; gap: 9px; padding: 10px; border: 1px dashed var(--frost-border); border-radius: 7px; background: color-mix(in srgb, var(--frost-surface) 45%, var(--frost-bg)); }
   .remote-placeholder { grid-template-columns: 32px minmax(0,1fr) auto; }
   .placeholder-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; background: var(--frost-surface); color: var(--frost-muted); font-size: 17px; }
   .placeholder-copy { min-width: 0; display: flex; flex-direction: column; }
   .placeholder-copy strong, .placeholder-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .placeholder-copy strong { color: var(--frost-text); font-size: 11.5px; }
-  .placeholder-copy small { color: var(--frost-faint); font-size: 10.5px; }
+  .placeholder-copy strong { color: var(--frost-text); font-size: calc(var(--font-size-ui) - 1.5px); }
+  .placeholder-copy small { color: var(--frost-faint); font-size: calc(var(--font-size-ui) - 2.5px); }
   .image-placeholder button { padding: 4px 8px; white-space: nowrap; border: 1px solid var(--frost-border); border-radius: 5px; background: var(--frost-surface-raised); color: var(--frost-text); cursor: pointer; }
   .image-placeholder button:hover { background: var(--frost-hover); }
   .image-failed { border-style: solid; border-color: color-mix(in srgb, var(--frost-error) 34%, var(--frost-border)); }

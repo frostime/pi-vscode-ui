@@ -108,8 +108,8 @@
   .streaming-send-panel button:hover { background: var(--frost-hover); }
   .streaming-send-panel button[aria-selected="true"] { color: var(--frost-link); }
   .streaming-send-panel strong, .streaming-send-panel small { display: block; }
-  .streaming-send-panel strong { font-size: 11px; font-weight: 600; }
-  .streaming-send-panel small { margin-top: 2px; color: var(--frost-muted); font-size: 9.5px; }
+  .streaming-send-panel strong { font-size: var(--font-size-detail); font-weight: 600; }
+  .streaming-send-panel small { margin-top: 2px; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3.5px); }
   .option-check { display: grid; place-items: center; }
   @keyframes streaming-send-in {
     from { width: 0; opacity: 0; transform: translateX(5px) scale(.94); }

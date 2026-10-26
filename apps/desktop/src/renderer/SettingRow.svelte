@@ -93,24 +93,24 @@
   .setting-main { display: grid; grid-template-columns: minmax(0, 1fr) 240px; align-items: start; gap: 18px; }
   .setting-copy { min-width: 0; }
   .setting-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
-  label, .setting-label { font-size: 13px; font-weight: 550; overflow-wrap: anywhere; }
+  label, .setting-label { font-size: var(--font-size-ui); font-weight: 550; overflow-wrap: anywhere; }
   label { cursor: pointer; }
-  p { color: var(--frost-muted); font-size: 11.5px; line-height: 1.55; margin: 5px 0 0; overflow-wrap: anywhere; }
+  p { color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 1.5px); line-height: 1.55; margin: 5px 0 0; overflow-wrap: anywhere; }
   .customized { width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--frost-warning); }
   .details-control { position: relative; display: inline-flex; }
   button { color: var(--frost-text); font: inherit; cursor: pointer; border-radius: 4px; }
   button:disabled { cursor: default; opacity: .5; }
-  .details-toggle { min-height: 22px; padding: 0 4px; background: transparent; color: var(--frost-muted); font: 11px var(--font-mono); }
+  .details-toggle { min-height: 22px; padding: 0 4px; background: transparent; color: var(--frost-muted); font: var(--font-size-detail) var(--font-mono); }
   .details-toggle:hover, .details-toggle[aria-expanded="true"] { color: var(--frost-link); background: var(--frost-hover); }
   .key-hint { display: none; position: absolute; bottom: calc(100% + 6px); left: -6px; z-index: 2; width: max-content; max-width: min(400px, 65vw); padding: 6px 9px; border: 1px solid var(--frost-border); border-radius: 4px; background: var(--frost-surface-raised); box-shadow: var(--frost-shadow); pointer-events: none; overflow-wrap: anywhere; }
   .details-control:hover .key-hint, .details-control:focus-within .key-hint { display: block; }
-  code { font: 11px/1.5 var(--font-mono); overflow-wrap: anywhere; }
-  .effect { display: inline-flex; align-items: center; gap: 4px; margin-top: 7px; padding: 1px 6px; border: 1px solid var(--frost-border); border-radius: 3px; color: var(--frost-muted); font-size: 10px; }
+  code { font: var(--font-size-detail)/1.5 var(--font-mono); overflow-wrap: anywhere; }
+  .effect { display: inline-flex; align-items: center; gap: 4px; margin-top: 7px; padding: 1px 6px; border: 1px solid var(--frost-border); border-radius: 3px; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3px); }
   .effect .codicon { font-size: 10px; }
   .control { display: flex; align-items: center; justify-content: flex-end; gap: 7px; min-width: 0; min-height: 32px; }
   input:not([type="checkbox"]), select, textarea { box-sizing: border-box; min-width: 0; width: 100%; padding: 7px 9px; border: 1px solid var(--frost-input-border); border-radius: 4px; background: var(--frost-input-bg); color: var(--frost-text); font: inherit; }
   input[type="number"] { width: 78px; }
-  .unit { min-width: 20px; color: var(--frost-muted); font-size: 11px; }
+  .unit { min-width: 20px; color: var(--frost-muted); font-size: var(--font-size-detail); }
   .switch { appearance: none; flex: none; position: relative; width: 31px; height: 18px; margin: 5px 0; border-radius: 20px; background: var(--frost-muted); cursor: pointer; }
   .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
   .switch:checked { background: var(--frost-accent); }
@@ -120,13 +120,13 @@
   .reset:hover { color: var(--frost-text); background: var(--frost-hover); }
   .edit-structure, .copy-key { padding: 5px 9px; border: 1px solid var(--frost-border); background: var(--frost-secondary-bg); }
   .edit-structure:hover, .copy-key:hover { background: var(--frost-secondary-hover); }
-  .unavailable { font-size: 11px; color: var(--frost-muted); }
+  .unavailable { font-size: var(--font-size-detail); color: var(--frost-muted); }
   .technical { padding: 11px 12px; margin-top: 11px; border: 1px solid var(--frost-border); border-radius: 5px; background: var(--frost-bg-alt); }
   .technical-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
   .technical-heading code { user-select: text; }
-  .copy-key { flex: none; font-size: 10px; }
+  .copy-key { flex: none; font-size: calc(var(--font-size-ui) - 3px); }
   .default-value { overflow-wrap: anywhere; }
-  textarea { margin-top: 10px; font: 11px/1.6 var(--font-mono); resize: vertical; }
+  textarea { margin-top: 10px; font: var(--font-size-detail)/1.6 var(--font-mono); resize: vertical; }
   .field-error { color: var(--frost-error); }
   :is(button, input, select, textarea):focus-visible { outline: 2px solid var(--frost-focus); outline-offset: 2px; }
   [aria-invalid="true"] { border-color: var(--frost-error); }

@@ -301,7 +301,7 @@
   border-radius: 4px;
   background: transparent;
   color: var(--frost-muted);
-  font: 11px var(--font-ui);
+  font: var(--font-size-detail) var(--font-ui);
   cursor: pointer;
 }
 .tool-tabs :global(button:hover) { color: var(--frost-text); background: var(--frost-hover); }
@@ -312,7 +312,7 @@
 .tool-tabs :global(button:focus-visible) { outline: 1px solid var(--frost-focus); outline-offset: 1px; }
 /* The lone section of a single-section card keeps the switcher row's geometry, so cards
    still line up with each other without offering a choice that does not exist. */
-.tool-tab-static { padding: 2px 8px; color: var(--frost-muted); font: 11px var(--font-ui); }
+.tool-tab-static { padding: 2px 8px; color: var(--frost-muted); font: var(--font-size-detail) var(--font-ui); }
 .tool-action {
   display: inline-flex;
   align-items: center;
@@ -323,7 +323,7 @@
   border-radius: 4px;
   background: transparent;
   color: var(--frost-muted);
-  font: 11px var(--font-ui);
+  font: var(--font-size-detail) var(--font-ui);
   cursor: pointer;
 }
 .tool-action:hover:not(:disabled) { color: var(--frost-text); background: var(--frost-hover); }
@@ -336,7 +336,7 @@
   background: var(--frost-code-bg);
   border-radius: 5px;
   color: var(--frost-text);
-  font: 11px/1.48 var(--font-mono);
+  font: var(--font-size-detail)/1.48 var(--font-mono);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -347,7 +347,7 @@
   background: var(--frost-code-bg);
   border-radius: 5px;
   color: var(--frost-text);
-  font: 11px/1.48 var(--font-mono);
+  font: var(--font-size-detail)/1.48 var(--font-mono);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -358,7 +358,7 @@
   background: var(--frost-code-bg);
   border-radius: 5px;
   color: var(--frost-text);
-  font: 11px/1.48 var(--font-mono);
+  font: var(--font-size-detail)/1.48 var(--font-mono);
   white-space: pre;
 }
 .tool-diff-content {
@@ -384,7 +384,7 @@
   border-radius: 5px;
   background: color-mix(in srgb, var(--frost-surface) 88%, transparent);
   color: var(--frost-muted);
-  font: 10.5px/1.5 system-ui, sans-serif;
+  font: calc(var(--font-size-ui) - 2.5px)/1.5 var(--font-ui);
   cursor: pointer;
   user-select: none;
   transition: background .12s ease, color .12s ease;
@@ -410,17 +410,17 @@
   background: var(--vscode-diffEditor-removedTextBackground, color-mix(in srgb, var(--frost-error) 32%, transparent));
 }
 .tool-input { display: flex; flex-direction: column; gap: 2px; }
-.tool-input-row { display: flex; gap: 6px; align-items: baseline; font: 11px/1.48 var(--font-mono); }
+.tool-input-row { display: flex; gap: 6px; align-items: baseline; font: var(--font-size-detail)/1.48 var(--font-mono); }
 .tool-input-key { flex: none; color: var(--frost-muted); }
 .tool-input-value { min-width: 0; color: var(--frost-text); word-break: break-word; }
 /* Argument names sit inside a section rather than beside it, so they are labelled quietly
    instead of reusing a section heading's weight. */
-.tool-arg-key { margin: 6px 0 3px; color: var(--frost-muted); font-size: 10px; }
+.tool-arg-key { margin: 6px 0 3px; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3px); }
 .tool-arg-key:first-child { margin-top: 0; }
 .tool-activity-name {
   flex: none;
   color: color-mix(in srgb, var(--frost-text) 88%, var(--frost-muted));
-  font-size: 11px;
+  font-size: var(--font-size-detail);
   font-weight: 500;
 }
 .tool-activity-label {
@@ -429,7 +429,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--frost-muted);
-  font: 10.5px/1.35 var(--font-mono);
+  font: calc(var(--font-size-ui) - 2.5px)/1.35 var(--font-mono);
 }
 .tool-status-cancelled { color: var(--frost-warning); }
 /* Right-aligned end of the header row: final elapsed duration beside the status icon or
@@ -444,7 +444,7 @@
 .tool-duration {
   flex: none;
   color: var(--frost-muted);
-  font: 10.5px/1 var(--font-mono);
+  font: calc(var(--font-size-ui) - 2.5px)/1 var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 .tool-duration::before { content: "\00b7\00a0"; color: var(--frost-faint); }
@@ -456,7 +456,7 @@
   margin-left: auto;
   display: inline-flex;
   gap: 4px;
-  font: 10.5px/1 var(--font-mono);
+  font: calc(var(--font-size-ui) - 2.5px)/1 var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 .tool-diffstat-add { color: var(--frost-success); }
@@ -468,7 +468,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--frost-error);
-  font-size: 10px;
+  font-size: calc(var(--font-size-ui) - 3px);
 }
 .tool-activity-content { overflow: hidden; }
 

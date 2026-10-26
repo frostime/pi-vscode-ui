@@ -50,6 +50,8 @@
   --vscode-symbolIcon-classForeground: #4ec9b0;
 }
 
+body { font-family: var(--font-ui); font-size: var(--font-size-ui); }
+
 :root[data-desktop-theme="light"] {
   color-scheme: light;
   --vscode-sideBar-background: #f8f8f8;

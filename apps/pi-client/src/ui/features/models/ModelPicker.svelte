@@ -188,7 +188,7 @@
 
   .picker-scope button {
     width: auto;
-    height: 21px;
+    min-height: 21px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -196,7 +196,7 @@
     padding: 0 6px;
     border-radius: 3px;
     color: var(--frost-muted);
-    font-size: 10px;
+    font-size: calc(var(--font-size-ui) - 3px);
     line-height: 1;
     white-space: nowrap;
   }
@@ -213,7 +213,7 @@
 
   .picker-scope-count {
     color: var(--frost-muted);
-    font-size: 9px;
+    font-size: calc(var(--font-size-ui) - 4px);
     font-variant-numeric: tabular-nums;
   }
 
@@ -221,7 +221,7 @@
     min-width: 0;
     overflow: hidden;
     color: var(--frost-muted);
-    font-size: 10px;
+    font-size: calc(var(--font-size-ui) - 3px);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

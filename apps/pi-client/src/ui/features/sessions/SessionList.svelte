@@ -91,5 +91,5 @@
 <style>
   .session-list-title { display: flex; align-items: center; gap: 5px; }
   .session-title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .ephemeral-badge { flex: 0 0 auto; padding: 1px 4px; border: 1px solid var(--frost-border); border-radius: 4px; color: var(--frost-muted); font-size: 9px; line-height: 1.2; font-weight: 400; }
+  .ephemeral-badge { flex: 0 0 auto; padding: 1px 4px; border: 1px solid var(--frost-border); border-radius: 4px; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 4px); line-height: 1.2; font-weight: 400; }
 </style>

@@ -67,7 +67,7 @@
     border-radius: 6px;
     box-shadow: 0 20px 60px rgba(0,0,0,.5);
   }
-  figcaption { margin-top: 7px; color: white; font-size: 12px; }
+  figcaption { margin-top: 7px; color: white; font-size: var(--font-size-compact); }
   .lightbox-close {
     position: absolute;
     top: 12px;

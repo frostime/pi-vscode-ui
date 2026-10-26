@@ -59,8 +59,8 @@
 }
 .attachment-meta :global(span) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-meta :global(small) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.attachment-meta :global(span) { font-size: 9px; }
-.attachment-meta :global(small) { color: rgba(255, 255, 255, .78); font-size: 8px; }
+.attachment-meta :global(span) { font-size: calc(var(--font-size-ui) - 4px); }
+.attachment-meta :global(small) { color: rgba(255, 255, 255, .78); font-size: calc(var(--font-size-ui) - 5px); }
 .attachment-item :global(button) {
   position: absolute;
   z-index: 1;

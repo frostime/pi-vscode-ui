@@ -16,8 +16,9 @@ import { DesktopSettingsStore } from "./settings/DesktopSettingsStore.js";
 import { DesktopSettingsController } from "./settings/DesktopSettingsController.js";
 import { defaultVscodeSettingsPath, importVscodeSettings } from "./settings/importVscodeSettings.js";
 import { DesktopSettingsError, settingsErrorMessage } from "./settings/DesktopSettingsError.js";
-import { desktopThemes, readDesktopTheme, type DesktopSettingsResult } from "../shared/desktopSettings.js";
+import { desktopThemes, readDesktopTheme, readDesktopZoom, type DesktopSettingsResult } from "../shared/desktopSettings.js";
 import { DesktopStateStore, DesktopStateWriteError } from "./storage/DesktopStateStore.js";
+import { installWindowZoom } from "./windowZoom.js";
 
 export interface DesktopAppOptions {
   directories?: readonly string[];
@@ -58,8 +59,10 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     width: 1100, height: 800, minWidth: 280, minHeight: 400, show: options.show ?? true,
     title: "FrostPi Desktop — development preview",
     backgroundColor: desktopThemes[readDesktopTheme(settingsStore.values)].background,
-    webPreferences: { preload: join(__dirname, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
+    webPreferences: { preload: join(__dirname, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false,
+      zoomFactor: readDesktopZoom(settingsStore.values) },
   });
+  window.removeMenu();
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
   const logger: RuntimeLogger = {
@@ -135,6 +138,9 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
   }, dispatcher, drafts, logger, () => false, () => false, {
     fileSearch: new WorkspaceFileSearch(),
     readChatTypography: () => readChatTypography(host.configuration.getConfiguration("chat")),
+  });
+  const disposeZoom = installWindowZoom(window, settingsStore, () => {
+    connection.post({ type: "toast", level: "error", message: "Could not save Desktop zoom. Check settings.json and its folder permissions." });
   });
   const projectsView = (): DesktopProjectsView => ({
     ...projectState(),
@@ -231,6 +237,7 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     unsubscribeState();
     unsubscribeSettings();
     ipcMain.removeHandler("frostpi:settings:action");
+    await disposeZoom();
     for (const subscription of subscriptions) subscription.dispose();
     connection.dispose(); drafts.dispose(); incoming.dispose(); visibility.dispose();
     await registry.dispose();

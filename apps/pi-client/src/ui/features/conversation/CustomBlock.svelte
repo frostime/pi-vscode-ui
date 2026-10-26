@@ -55,8 +55,8 @@
 }
 .custom-message-trigger:hover { color: var(--frost-text); background: var(--frost-hover); }
 .custom-message-trigger > :global(.codicon:first-child) { color: var(--frost-link); }
-.custom-message-type { color: var(--frost-text); font-size: 11px; font-weight: 600; }
-.custom-message-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
+.custom-message-type { color: var(--frost-text); font-size: var(--font-size-detail); font-weight: 600; }
+.custom-message-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(var(--font-size-ui) - 2.5px); }
 .custom-message-content {
   padding: 8px 10px 10px 31px;
   border-top: 1px solid var(--frost-border-soft);

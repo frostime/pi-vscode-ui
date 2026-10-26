@@ -12,6 +12,7 @@
   import DesktopShell from "./DesktopShell.svelte";
   import { desktopSettingDefinitions, readDesktopTheme, type DesktopSettingsAction, type DesktopSettingsTarget, type DesktopSettingsView } from "../shared/desktopSettings.js";
   import { applyDesktopTheme } from "./theme.js";
+  import { applyDesktopUiTypography } from "./uiTypography.js";
   import { DESKTOP_CLIENT_UI_CAPABILITIES } from "../shared/desktopCapabilities.js";
 
   let { initialSettings }: { initialSettings: DesktopSettingsView | null } = $props();
@@ -69,6 +70,7 @@
   function applySettings(view: DesktopSettingsView): void {
     settingsView = view;
     applyDesktopTheme(readDesktopTheme(view.values));
+    applyDesktopUiTypography(view.values);
     const family = view.values["editor.fontFamily"];
     const fallback = String(desktopSettingDefinitions["editor.fontFamily"]!.default);
     document.documentElement.style.setProperty("--vscode-editor-font-family", typeof family === "string" && family.trim() ? family : fallback);
@@ -155,7 +157,7 @@
   dialog p { color: var(--frost-muted); margin-bottom: 8px; }
   dialog input { width: 100%; padding: 8px; border: 1px solid var(--frost-input-border); background: var(--frost-input-bg); }
   .choices { max-height: 55vh; overflow: auto; margin-top: 10px; }
-  .choices h3 { font-size: 11px; padding: 8px 0; color: var(--frost-muted); }
+  .choices h3 { font-size: var(--font-size-detail); padding: 8px 0; color: var(--frost-muted); }
   .choices button { display: grid; gap: 4px; width: 100%; text-align: left; padding: 8px; background: transparent; cursor: pointer; }
   .choices button:hover { background: var(--frost-hover); }
   .choices span, .choices small { color: var(--frost-muted); overflow-wrap: anywhere; }

@@ -63,7 +63,7 @@
   background: color-mix(in srgb, var(--frost-surface) 88%, transparent);
   color: var(--frost-muted);
   font: inherit;
-  font-size: 10.5px;
+  font-size: calc(var(--font-size-ui) - 2.5px);
   line-height: 1.5;
   cursor: pointer;
   user-select: none;

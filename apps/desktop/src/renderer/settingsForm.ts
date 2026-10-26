@@ -31,6 +31,17 @@ export function changedSettingKeys(saved: SettingsDraft, draft: SettingsDraft): 
   return [...new Set([...Object.keys(saved), ...Object.keys(draft)])].filter((key) => saved[key] !== draft[key]);
 }
 
+/** Adopt external updates (for example Zoom shortcuts) only for fields the user has not edited. */
+export function mergeSettingsDraft(saved: SettingsDraft, draft: SettingsDraft, values: DesktopSettingsValues): { saved: SettingsDraft; draft: SettingsDraft } {
+  const incoming = createSettingsDraft(values);
+  const merged = { ...incoming };
+  for (const key of changedSettingKeys(saved, draft)) {
+    if (draft[key] === undefined) delete merged[key];
+    else merged[key] = draft[key];
+  }
+  return { saved: incoming, draft: merged };
+}
+
 export function parseSettingsDraft(draft: SettingsDraft): { values: DesktopSettingsValues; errors: Record<string, string> } {
   const values: DesktopSettingsValues = {};
   const errors: Record<string, string> = {};

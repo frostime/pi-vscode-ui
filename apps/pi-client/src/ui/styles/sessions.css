@@ -18,7 +18,7 @@
 .session-heading {
   min-width: 0;
   width: 100%;
-  height: 28px;
+  min-height: 28px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -35,7 +35,7 @@ button.session-heading.active { background: var(--frost-hover); }
 .session-cwd-pill {
   flex: none;
   max-width: 9em;
-  height: 16px;
+  min-height: 16px;
   display: inline-flex;
   align-items: center;
   padding: 0 6px;
@@ -43,7 +43,7 @@ button.session-heading.active { background: var(--frost-hover); }
   border-radius: 999px;
   background: color-mix(in srgb, var(--frost-link) 14%, transparent);
   color: var(--frost-link);
-  font-size: 9.5px;
+  font-size: calc(var(--font-size-ui) - 3.5px);
   font-weight: 600;
   line-height: 1;
   overflow: hidden;
@@ -58,7 +58,7 @@ button.session-heading.active { background: var(--frost-hover); }
   gap: 6px;
   min-width: 0;
   color: var(--frost-muted);
-  font-size: 10.5px;
+  font-size: calc(var(--font-size-ui) - 2.5px);
   overflow: hidden;
   white-space: nowrap;
 }
@@ -71,7 +71,7 @@ button.session-heading.active { background: var(--frost-hover); }
 .session-title-input {
   min-width: 0;
   width: 100%;
-  height: 25px;
+  min-height: 25px;
   padding: 2px 6px;
   background: var(--frost-input-bg);
   border: 1px solid var(--frost-focus);
@@ -115,8 +115,8 @@ button.session-heading.active { background: var(--frost-hover); }
 .session-menu button:hover { background: var(--frost-hover); }
 .session-list-footer button:hover { background: var(--frost-hover); }
 .session-menu button > span:not(.codicon) { min-width: 0; display: flex; flex-direction: column; }
-.session-menu button strong { color: inherit; font-size: 11px; font-weight: 500; }
-.session-menu button small { color: var(--frost-muted); font-size: 9.5px; line-height: 1.35; }
+.session-menu button strong { color: inherit; font-size: var(--font-size-detail); font-weight: 500; }
+.session-menu button small { color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3.5px); line-height: 1.35; }
 .session-launcher-menu { width: min(250px, calc(100vw - 20px)); }
 .session-menu button.danger { color: var(--frost-error); }
 .menu-separator { height: 1px; margin: 4px 2px; background: var(--frost-border-soft); }
@@ -146,7 +146,7 @@ button.session-heading.active { background: var(--frost-hover); }
 .session-list-heading {
   padding: 4px 7px 5px;
   color: var(--frost-muted);
-  font-size: 10px;
+  font-size: calc(var(--font-size-ui) - 3px);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .04em;
@@ -173,7 +173,7 @@ button.session-heading.active { background: var(--frost-hover); }
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--frost-text);
-  font-size: 11.5px;
+  font-size: calc(var(--font-size-ui) - 1.5px);
   font-weight: 500;
 }
 .session-list-copy small {
@@ -183,7 +183,7 @@ button.session-heading.active { background: var(--frost-hover); }
   gap: 6px;
   overflow: hidden;
   color: var(--frost-muted);
-  font-size: 9.5px;
+  font-size: calc(var(--font-size-ui) - 3.5px);
   white-space: nowrap;
 }
 .session-list-copy small > span:last-child {
@@ -243,19 +243,19 @@ button.session-heading.active { background: var(--frost-hover); }
   top: -4px;
   right: -4px;
   min-width: 14px;
-  height: 14px;
+  min-height: 14px;
   padding: 0 3px;
   display: grid;
   place-items: center;
   border-radius: 7px;
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
-  font-size: 9px;
+  font-size: calc(var(--font-size-ui) - 4px);
 }
 
 @media (max-width: 430px) {
   .session-inline-status { display: none; }
-  .session-title { font-size: 12px; }
+  .session-title { font-size: var(--font-size-compact); }
   .session-cwd-pill { max-width: 7em; }
 }
 

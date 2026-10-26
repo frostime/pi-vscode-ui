@@ -35,8 +35,13 @@ export const settingsPages: readonly SettingsPage[] = [
       { title: "Theme", settings: [
         { key: "desktop.theme", label: "Color theme", description: "Choose a built-in Desktop palette.", enumLabels: { dark: "Dark Modern", light: "Light Modern" } },
       ] },
-      { title: "Fonts", settings: [
-        { key: "chat.fontFamily", label: "Conversation font", description: "Message text. Default uses the system UI font.", placeholder: "default" },
+      { title: "Interface", settings: [
+        { key: "desktop.ui.fontFamily", label: "Interface font", description: "Sidebar, buttons, menus and settings. Default uses the system UI font; chat fonts set to Default also follow it.", placeholder: "default" },
+        { key: "desktop.ui.fontSize", label: "Interface text size", description: "Resizes interface text, not Conversation or Composer text. Use Zoom to scale icons and spacing too.", unit: "px" },
+        { key: "desktop.zoomFactor", label: "Zoom", description: "Scales the whole app content. Ctrl/Cmd + and - adjust by 10%; Ctrl/Cmd 0 resets to 100%.", unit: "%", scale: 0.01 },
+      ] },
+      { title: "Chat fonts", settings: [
+        { key: "chat.fontFamily", label: "Conversation font", description: "Message text. Default follows the interface font.", placeholder: "default" },
         { key: "chat.fontSize", label: "Conversation text size", description: "Applies to message text and fenced code blocks.", unit: "px" },
         { key: "chat.editor.fontFamily", label: "Composer & code font", description: "Default uses the UI font in Composer, and the code fallback below for code blocks.", placeholder: "default" },
         { key: "chat.editor.fontSize", label: "Composer text size", description: "Only the input editor; message text size stays separate.", unit: "px" },

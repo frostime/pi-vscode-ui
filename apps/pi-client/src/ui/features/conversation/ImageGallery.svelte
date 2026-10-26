@@ -46,6 +46,6 @@
   border-radius: 3px;
   background: rgba(0,0,0,.58);
   color: white;
-  font-size: 9px;
+  font-size: calc(var(--font-size-ui) - 4px);
 }
 </style>

@@ -38,7 +38,7 @@ export async function verifySettingsPanel(directory: string, waitFor: WaitFor): 
     await waitFor(() => run("Boolean(document.querySelector('.settings-button'))"), "settings fixture shell mounts");
     await open();
     assert.equal(await run("document.querySelectorAll('.categories button').length"), 4);
-    assert.equal(await run("document.querySelectorAll('.group-card')[1].querySelectorAll('.setting').length"), 5);
+    assert.equal(await run("document.querySelector('[data-setting-key=\"chat.fontSize\"]').closest('.group-card').querySelectorAll('.setting').length"), 5);
     assert.equal(await run("document.querySelector('.setting label').textContent"), "Color theme");
     assert.equal(await run("Boolean(document.querySelector('.technical'))"), false);
     await click('[aria-label="Details for Conversation text size"]');

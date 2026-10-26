@@ -31,7 +31,7 @@
   flex: none;
   margin-left: auto;
   color: var(--frost-text);
-  font: 10.5px/1 var(--font-mono);
+  font: calc(var(--font-size-ui) - 2.5px)/1 var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 </style>

@@ -135,7 +135,7 @@
 </div>
 
 <style>
-  .resume-overlay { position: absolute; inset: 0 auto auto 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 18px; background: color-mix(in srgb, var(--frost-bg) 58%, transparent); backdrop-filter: blur(2px); font: var(--font-size) var(--font-ui); color: var(--frost-text); }
+  .resume-overlay { position: absolute; inset: 0 auto auto 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 18px; background: color-mix(in srgb, var(--frost-bg) 58%, transparent); backdrop-filter: blur(2px); font: var(--font-size-ui) var(--font-ui); color: var(--frost-text); }
   .resume-card { position: relative; width: 100%; max-width: 580px; max-height: 100%; min-height: 0; overflow: auto; padding: 16px; border: 1px solid var(--frost-border); border-radius: 10px; background: var(--frost-surface-raised); box-shadow: 0 1px 3px #0003; animation: resume-in 150ms ease-out; }
   .resume-card:focus { outline: none; }
   .resume-card:focus-visible { outline: 1px solid var(--frost-focus); outline-offset: 2px; }
@@ -143,35 +143,35 @@
   .resume-icon { flex: none; margin-top: 3px; color: var(--frost-link); font-size: 17px; }
   .failed .resume-icon { color: var(--frost-error); }
   .resume-heading { flex: 1; min-width: 0; }
-  h2 { margin: 0; font-size: 13px; line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; }
-  .resume-heading p { margin: 4px 0 0; color: var(--frost-muted); font-size: 11.5px; overflow-wrap: anywhere; }
-  .resume-path { font-family: var(--font-mono); font-size: 10.5px; }
-  .waiting { flex: none; padding-top: 3px; color: var(--frost-muted); font-size: 10.5px; }
+  h2 { margin: 0; font-size: var(--font-size-ui); line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; }
+  .resume-heading p { margin: 4px 0 0; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 1.5px); overflow-wrap: anywhere; }
+  .resume-path { font-family: var(--font-mono); font-size: calc(var(--font-size-ui) - 2.5px); }
+  .waiting { flex: none; padding-top: 3px; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 2.5px); }
   .waiting::before { content: ""; display: inline-block; width: 5px; height: 5px; margin-right: 5px; border: 1px solid currentColor; border-radius: 50%; }
   .resume-body { margin: 18px 0 0 29px; }
-  .resume-detail, .resume-error { margin: 0; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+  .resume-detail, .resume-error { margin: 0; font-size: var(--font-size-compact); line-height: 1.6; overflow-wrap: anywhere; }
   .resume-detail { color: var(--frost-muted); }
   .resume-activity { position: absolute; inset: 0 0 auto; height: 2px; overflow: hidden; }
   .resume-activity span { position: absolute; height: 100%; width: 25%; background: var(--frost-link); opacity: .75; animation: resume-scan 1.6s ease-in-out infinite; }
   .resume-search { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid var(--frost-input-border); border-radius: 5px; background: var(--frost-input-bg); color: var(--frost-muted); }
   .resume-search:focus-within { border-color: var(--frost-focus); }
-  input { width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--frost-text); font: inherit; font-size: 12px; outline: none; }
+  input { width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--frost-text); font: inherit; font-size: var(--font-size-compact); outline: none; }
   .resume-choices { max-height: min(38vh, 300px); overflow: auto; margin-top: 8px; }
-  h3 { margin: 14px 0 4px; color: var(--frost-muted); font-size: 10.5px; font-weight: 500; overflow-wrap: anywhere; }
+  h3 { margin: 14px 0 4px; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 2.5px); font-weight: 500; overflow-wrap: anywhere; }
   button { color: var(--frost-text); font: inherit; cursor: pointer; }
   .resume-choice { display: grid; gap: 4px; width: 100%; padding: 9px 8px; border: 0; border-radius: 5px; background: transparent; text-align: left; overflow-wrap: anywhere; }
   .resume-choice:hover { background: var(--frost-hover); }
-  .resume-choice strong { font-size: 12px; font-weight: 500; }
-  .resume-choice span, .resume-choice small { color: var(--frost-muted); font-size: 10.5px; }
+  .resume-choice strong { font-size: var(--font-size-compact); font-weight: 500; }
+  .resume-choice span, .resume-choice small { color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 2.5px); }
   .resume-choice small { display: -webkit-box; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   button:focus-visible { outline: 1px solid var(--frost-focus); outline-offset: -1px; }
-  .empty { color: var(--frost-muted); font-size: 12px; }
+  .empty { color: var(--frost-muted); font-size: var(--font-size-compact); }
   footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; }
-  footer button { flex: none; padding: 5px 10px; border: 1px solid var(--frost-border); border-radius: 5px; background: var(--frost-secondary-bg); font-size: 11.5px; }
+  footer button { flex: none; padding: 5px 10px; border: 1px solid var(--frost-border); border-radius: 5px; background: var(--frost-secondary-bg); font-size: calc(var(--font-size-ui) - 1.5px); }
   footer button:hover { background: var(--frost-secondary-hover); }
   footer .primary { color: var(--frost-accent-text); background: var(--frost-accent); }
   .picker-footer { justify-content: space-between; }
-  .picker-footer > span { color: var(--frost-muted); font-size: 10px; }
+  .picker-footer > span { color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3px); }
   @keyframes resume-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
   @keyframes resume-scan { from { transform: translateX(-100%); } to { transform: translateX(400%); } }
   @media (prefers-reduced-motion: reduce) { .resume-card, .resume-activity span { animation: none; } }

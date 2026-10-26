@@ -27,7 +27,7 @@
   color: var(--frost-text);
   box-shadow: 0 5px 18px rgba(0,0,0,.24);
   cursor: pointer;
-  font-size: 10.5px;
+  font-size: calc(var(--font-size-ui) - 2.5px);
   white-space: nowrap;
 }
 .new-updates-button:hover { background: color-mix(in srgb, var(--frost-surface-raised) 80%, var(--frost-hover)); }

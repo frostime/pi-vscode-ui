@@ -100,29 +100,29 @@
 
 <style>
   .usage-report { min-width: 0; }
-  h3 { margin: 0 0 3px; font-size: 12px; font-weight: 600; }
-  h4 { margin: 0 0 5px; color: var(--frost-faint); font-size: 9.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; overflow-wrap: anywhere; }
+  h3 { margin: 0 0 3px; font-size: var(--font-size-compact); font-weight: 600; }
+  h4 { margin: 0 0 5px; color: var(--frost-faint); font-size: calc(var(--font-size-ui) - 3.5px); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; overflow-wrap: anywhere; }
   p { margin: 0; }
   .report-heading { padding-bottom: 8px; border-bottom: 1px solid var(--frost-border-soft); }
-  .semantics { color: var(--frost-muted); font-size: 10.5px; overflow-wrap: anywhere; }
-  .report-context { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; margin-top: 3px; color: var(--frost-faint); font-size: 10px; overflow-wrap: anywhere; }
+  .semantics { color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 2.5px); overflow-wrap: anywhere; }
+  .report-context { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; margin-top: 3px; color: var(--frost-faint); font-size: calc(var(--font-size-ui) - 3px); overflow-wrap: anywhere; }
   .report-context time { white-space: nowrap; }
   .bucket-group, .metric-group { padding-top: 8px; }
   .bucket-group + .bucket-group, .metric-group + .metric-group, .bucket-group + .metric-group { margin-top: 7px; border-top: 1px solid var(--frost-border-soft); }
   .bucket + .bucket { margin-top: 12px; }
   .bucket-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 8px; }
-  .bucket-heading > span { color: var(--frost-muted); font-size: 10.5px; overflow-wrap: anywhere; }
-  .bucket-heading strong { margin-left: auto; color: var(--frost-text); font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .bucket-heading > span { color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 2.5px); overflow-wrap: anywhere; }
+  .bucket-heading strong { margin-left: auto; color: var(--frost-text); font-family: var(--font-mono); font-size: calc(var(--font-size-ui) - 1.5px); font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   .usage-bar { height: 4px; margin-top: 6px; overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--frost-muted) 15%, transparent); }
   .usage-bar span { display: block; height: 100%; border-radius: inherit; background: var(--frost-link); }
-  .bucket-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 3px 8px; margin-top: 5px; color: var(--frost-muted); font-size: 10px; }
+  .bucket-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 3px 8px; margin-top: 5px; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3px); }
   dl { margin: 0; }
   .metric { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 8px; }
   .metric + .metric { margin-top: 6px; }
-  dt { color: var(--frost-muted); font-size: 10.5px; overflow-wrap: anywhere; }
-  dd { min-width: 0; max-width: 100%; margin: 0 0 0 auto; color: var(--frost-text); font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+  dt { color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 2.5px); overflow-wrap: anywhere; }
+  dd { min-width: 0; max-width: 100%; margin: 0 0 0 auto; color: var(--frost-text); font-family: var(--font-mono); font-size: calc(var(--font-size-ui) - 1.5px); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
   .textual { flex-direction: column; align-items: stretch; gap: 2px; }
   .textual dd { margin-left: 0; font: inherit; text-align: left; white-space: pre-wrap; }
-  .report-notes { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--frost-border-soft); color: var(--frost-muted); font-size: 10px; overflow-wrap: anywhere; }
+  .report-notes { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--frost-border-soft); color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3px); overflow-wrap: anywhere; }
   .report-notes p + p { margin-top: 4px; }
 </style>

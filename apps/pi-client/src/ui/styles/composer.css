@@ -51,7 +51,7 @@
 .composer-toolbar-left { min-width: 0; display: flex; align-items: center; gap: 3px; }
 .composer-toolbar-right { min-width: 0; display: flex; align-items: center; gap: 3px; }
 .composer-toolbar-left { flex: 1 1 auto; overflow: visible; }
-.send-hint { color: var(--frost-faint); font-size: 9px; white-space: nowrap; }
+.send-hint { color: var(--frost-faint); font-size: calc(var(--font-size-ui) - 4px); white-space: nowrap; }
 .composer-expand-button {
   position: absolute;
   z-index: 3;
@@ -90,7 +90,7 @@
 .send-button:hover:not(:disabled) { background: var(--frost-accent-hover); }
 .send-button:disabled { opacity: .35; cursor: default; }
 .stop-button { background: color-mix(in srgb, var(--frost-error) 82%, var(--frost-bg)); }
-.composer-warning { display: flex; align-items: center; gap: 5px; margin: 0 3px 5px; color: var(--frost-warning); font-size: 10px; }
+.composer-warning { display: flex; align-items: center; gap: 5px; margin: 0 3px 5px; color: var(--frost-warning); font-size: calc(var(--font-size-ui) - 3px); }
 .app-shell:has(.composer-expanded) { grid-template-rows: auto 0fr minmax(0, 1fr); }
 .panel-shell:has(.composer-expanded) { grid-template-rows: 0fr minmax(0, 1fr); }
 .app-shell:has(.composer-expanded) .conversation-frame { min-height: 0; overflow: hidden; opacity: 0; pointer-events: none; }
@@ -150,14 +150,14 @@
 }
 .cm-tooltip.cm-tooltip-autocomplete > ul > li { min-height: 30px; padding: 5px 8px; color: var(--frost-text); }
 .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] { background: var(--frost-hover); }
-.cm-tooltip.cm-tooltip-autocomplete .cm-completionLabel { font-size: 11px; }
+.cm-tooltip.cm-tooltip-autocomplete .cm-completionLabel { font-size: var(--font-size-detail); }
 .cm-tooltip.cm-tooltip-autocomplete .cm-completionDetail {
   float: right;
   max-width: 55%;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--frost-muted);
-  font-size: 9.5px;
+  font-size: calc(var(--font-size-ui) - 3.5px);
 }
 .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon { color: var(--frost-muted); }
 .prompt-editor .cm-editor { min-height: var(--composer-editor-min-height); }

@@ -65,14 +65,14 @@
   border-radius: 5px;
   background: var(--frost-secondary-bg);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--font-size-detail);
 }
 .onboarding-view > :global(button) {
   padding: 5px 10px;
   border-radius: 5px;
   background: var(--frost-secondary-bg);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--font-size-detail);
 }
 .onboarding-actions :global(button:hover) { background: var(--frost-secondary-hover); }
 .onboarding-view > :global(button:hover) { background: var(--frost-secondary-hover); }
@@ -89,8 +89,8 @@
   padding: 24px;
   text-align: center;
 }
-.onboarding-view :global(h1) { margin: 16px 0 5px; font-size: 17px; font-weight: 600; }
-.onboarding-view :global(p) { max-width: 450px; margin: 0 0 14px; color: var(--frost-muted); font-size: 11px; }
+.onboarding-view :global(h1) { margin: 16px 0 5px; font-size: calc(var(--font-size-ui) + 4px); font-weight: 600; }
+.onboarding-view :global(p) { max-width: 450px; margin: 0 0 14px; color: var(--frost-muted); font-size: var(--font-size-detail); }
 .onboarding-error {
   max-height: 160px;
   overflow: auto;

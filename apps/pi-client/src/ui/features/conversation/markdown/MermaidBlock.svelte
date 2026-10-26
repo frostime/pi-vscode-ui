@@ -78,6 +78,6 @@
 .mermaid-block.mermaid-error { border-color: var(--frost-danger, var(--frost-border)); }
 .mermaid-host { padding: 10px 11px; min-width: min-content; }
 .mermaid-host :global(svg) { max-width: none; height: auto; }
-.mermaid-status { padding: 8px 11px; color: var(--frost-muted); font-size: 11px; }
+.mermaid-status { padding: 8px 11px; color: var(--frost-muted); font-size: var(--font-size-detail); }
 .mermaid-fallback :global(pre) { margin: 0; border: 0; border-radius: 0; background: transparent; }
 </style>

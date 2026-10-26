@@ -380,8 +380,8 @@
     gap: 7px;
   }
 
-  .workspace-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-  .workspace-heading span { flex: none; color: var(--frost-muted); font-size: 10px; }
+  .workspace-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-compact); }
+  .workspace-heading span { flex: none; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3px); }
 
   .primary-button,
   .discard-button,
@@ -391,7 +391,7 @@
     padding: 3px 9px;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 10.5px;
+    font-size: calc(var(--font-size-ui) - 2.5px);
   }
 
   .primary-button { background: var(--frost-accent); color: var(--frost-accent-text); }
@@ -429,8 +429,8 @@
   }
 
   .pane-heading > div { min-width: 0; display: flex; flex-direction: column; }
-  .pane-heading strong { font-size: 11px; }
-  .pane-heading span { color: var(--frost-muted); font-size: 9.5px; white-space: nowrap; }
+  .pane-heading strong { font-size: var(--font-size-detail); }
+  .pane-heading span { color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3.5px); white-space: nowrap; }
   .source-scroll,
   .notes-list { min-width: 0; min-height: 0; overflow: auto; scrollbar-color: var(--frost-scrollbar) transparent; }
 
@@ -442,7 +442,7 @@
     outline: none;
     color: var(--frost-text);
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: var(--font-size-compact);
     line-height: 1.7;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -481,11 +481,11 @@
     padding: 20px;
     color: var(--frost-muted);
     text-align: center;
-    font-size: 10.5px;
+    font-size: calc(var(--font-size-ui) - 2.5px);
   }
 
   .empty-notes .codicon { margin-bottom: 3px; color: var(--frost-faint); font-size: 20px; }
-  .empty-notes strong { color: var(--frost-text); font-size: 11px; }
+  .empty-notes strong { color: var(--frost-text); font-size: var(--font-size-detail); }
 
   .note-card {
     min-width: 0;
@@ -512,9 +512,9 @@
   }
 
   .note-content:hover { background: var(--frost-hover); }
-  .note-number { color: var(--frost-link); font-size: 9px; font-weight: 600; letter-spacing: 0.06em; }
-  .note-quote { color: var(--frost-muted); font-size: 10px; line-height: 1.45; }
-  .note-comment { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.5; }
+  .note-number { color: var(--frost-link); font-size: calc(var(--font-size-ui) - 4px); font-weight: 600; letter-spacing: 0.06em; }
+  .note-quote { color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3px); line-height: 1.45; }
+  .note-comment { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--font-size-detail); line-height: 1.5; }
 
   .note-actions {
     display: flex;
@@ -535,7 +535,7 @@
     flex: 1;
     overflow: hidden;
     color: var(--frost-muted);
-    font-size: 9.5px;
+    font-size: calc(var(--font-size-ui) - 3.5px);
     text-align: right;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -556,8 +556,8 @@
   }
 
   .confirmation::backdrop { background: color-mix(in srgb, var(--frost-bg) 62%, transparent); }
-  .confirmation strong { font-size: 12px; }
-  .confirmation p { margin: 6px 0 13px; color: var(--frost-muted); font-size: 10.5px; line-height: 1.45; }
+  .confirmation strong { font-size: var(--font-size-compact); }
+  .confirmation p { margin: 6px 0 13px; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 2.5px); line-height: 1.45; }
   .confirmation footer { display: flex; justify-content: flex-end; gap: 6px; }
   .confirmation button { background: var(--frost-secondary-bg); color: var(--frost-text); }
   .confirmation button:hover { background: var(--frost-secondary-hover); }

@@ -7,6 +7,7 @@ import { applyHostMessage } from "@frostime/pi-client/ui/bridge/applyHostMessage
 import DesktopApp from "./DesktopApp.svelte";
 import { readDesktopTheme, type DesktopSettingsView } from "../shared/desktopSettings.js";
 import { applyDesktopTheme } from "./theme.js";
+import { applyDesktopUiTypography } from "./uiTypography.js";
 
 connectHostBridge({
   postMessage: (message) => window.frostpiDesktop.postClientMessage(message),
@@ -18,6 +19,7 @@ async function start(): Promise<void> {
     initialSettings = await window.frostpiDesktop.settings({ type: "read" });
   } catch { /* DesktopApp shows the settings-service error without blocking the client. */ }
   applyDesktopTheme(readDesktopTheme(initialSettings?.values ?? {}));
+  applyDesktopUiTypography(initialSettings?.values ?? {});
   mount(DesktopApp, { target: document.getElementById("app")!, props: { initialSettings } });
   onHostMessage(applyHostMessage);
   postToHost({ type: "ready" });

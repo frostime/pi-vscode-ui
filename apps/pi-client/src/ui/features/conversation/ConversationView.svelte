@@ -150,8 +150,8 @@
   color: var(--frost-muted);
   padding: 30px 12px;
 }
-.conversation-empty :global(h2) { margin: 15px 0 4px; color: var(--frost-text); font-size: 17px; font-weight: 600; }
-.conversation-empty :global(p) { max-width: 360px; margin: 0; font-size: 12px; }
+.conversation-empty :global(h2) { margin: 15px 0 4px; color: var(--frost-text); font-size: calc(var(--font-size-ui) + 4px); font-weight: 600; }
+.conversation-empty :global(p) { max-width: 360px; margin: 0; font-size: var(--font-size-compact); }
 .empty-orbit {
   width: 52px;
   height: 52px;
@@ -177,14 +177,14 @@
   box-shadow: none;
 }
 .queued-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.45; }
-.queued-images { margin-top: 4px; color: var(--frost-muted); font-size: 10.5px; }
+.queued-images { margin-top: 4px; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 2.5px); }
 .queued-badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   margin-top: 6px;
   color: var(--frost-muted);
-  font-size: 10px;
+  font-size: calc(var(--font-size-ui) - 3px);
   font-weight: 500;
 }
 .queued-badge-steer { color: var(--frost-link); }
@@ -199,7 +199,7 @@
   border-radius: 7px;
   background: color-mix(in srgb, var(--frost-surface) 56%, transparent);
   color: var(--frost-muted);
-  font-size: 11px;
+  font-size: var(--font-size-detail);
 }
 .session-progress > :global(.codicon) { color: var(--frost-link); font-size: 13px; }
 .session-progress-label { color: var(--frost-text); font-weight: 600; }
@@ -212,7 +212,7 @@
 @media (max-width: 560px) {
   .conversation-inner { padding-left: 11px; padding-right: 11px; }
   .conversation-empty { min-height: min(380px, 58vh); padding-left: 8px; padding-right: 8px; }
-  .conversation-empty :global(h2) { max-width: 100%; font-size: 16px; }
+  .conversation-empty :global(h2) { max-width: 100%; font-size: calc(var(--font-size-ui) + 3px); }
   .conversation-empty :global(p) { max-width: min(330px, 100%); }
 }
 </style>

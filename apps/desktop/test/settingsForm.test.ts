@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { desktopOnlySettingDefinitions, desktopSettingDefinitions } from "../src/shared/desktopSettings.js";
 import { settingsPages, settingsByKey, matchesSettingSearch } from "../src/renderer/settingsPresentation.js";
-import { changedSettingKeys, createSettingsDraft, parseSettingsDraft, settingDraftValue } from "../src/renderer/settingsForm.js";
+import { changedSettingKeys, createSettingsDraft, mergeSettingsDraft, parseSettingsDraft, settingDraftValue, type SettingsDraft } from "../src/renderer/settingsForm.js";
 
 describe("Desktop settings presentation and original-key drafts", () => {
   it("places every schema key exactly once without mixing Desktop identity with visual grouping", () => {
@@ -36,6 +36,31 @@ describe("Desktop settings presentation and original-key drafts", () => {
     expect(settingDraftValue("frostpi.session.startOnOpen", draft)).toBe(false);
     expect(settingDraftValue("chat.fontFamily", draft)).toBe("");
     expect(parseSettingsDraft({}).values).toEqual({});
+  });
+
+  it("round-trips whole-window Zoom percentages independently of interface and chat sizes", () => {
+    const values = { "desktop.zoomFactor": 1.25, "desktop.ui.fontFamily": "Georgia, serif", "desktop.ui.fontSize": 18, "chat.fontSize": 22 };
+    const draft = createSettingsDraft(values);
+    expect(draft["desktop.zoomFactor"]).toBe("125");
+    expect(settingDraftValue("desktop.zoomFactor", {})).toBe("100");
+    expect(parseSettingsDraft(draft)).toEqual({ values, errors: {} });
+    const invalid = parseSettingsDraft({ "desktop.zoomFactor": "250", "desktop.ui.fontSize": "8" }).errors;
+    expect(invalid["desktop.zoomFactor"]).toContain("200");
+    expect(invalid["desktop.ui.fontSize"]).toContain("10");
+  });
+
+  it("adopts external shortcut changes without losing edited fields or Reset intent", () => {
+    const saved = createSettingsDraft({ "desktop.zoomFactor": 1.25, "chat.fontSize": 18, "desktop.theme": "dark" });
+    const draft: SettingsDraft = { ...saved, "chat.fontSize": "22" };
+    delete draft["desktop.theme"];
+    const next = mergeSettingsDraft(saved, draft, { "desktop.zoomFactor": 1.35, "chat.fontSize": 18, "desktop.theme": "dark" });
+    expect(next.draft["desktop.zoomFactor"]).toBe("135");
+    expect(next.draft["chat.fontSize"]).toBe("22");
+    expect(next.draft["desktop.theme"]).toBeUndefined();
+    expect(changedSettingKeys(next.saved, next.draft).sort()).toEqual(["chat.fontSize", "desktop.theme"]);
+    // An explicit local Zoom edit, unlike an untouched field, wins until Save/Discard.
+    const local = mergeSettingsDraft(next.saved, { ...next.draft, "desktop.zoomFactor": "150" }, { "desktop.zoomFactor": 1.45, "chat.fontSize": 18, "desktop.theme": "dark" });
+    expect(local.draft["desktop.zoomFactor"]).toBe("150");
   });
 
   it("keeps Reset distinct from an explicit default-valued override", () => {

@@ -40,7 +40,7 @@
     padding: 2px 6px;
     border-left: 2px solid color-mix(in srgb, var(--frost-link) 65%, transparent);
     color: var(--frost-muted);
-    font-size: 10.5px;
+    font-size: calc(var(--font-size-ui) - 2.5px);
   }
 
   .turn-timing-icon {
@@ -81,6 +81,6 @@
     }
 
     .turn-timing-status { max-width: 9.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .turn-timing-start { font-size: 9.5px; }
+    .turn-timing-start { font-size: calc(var(--font-size-ui) - 3.5px); }
   }
 </style>

@@ -105,7 +105,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--frost-muted);
-    font-size: 10.5px;
+    font-size: calc(var(--font-size-ui) - 2.5px);
   }
 
   .turn-trace-break {
@@ -143,7 +143,7 @@
 
   .turn-trace-break-label {
     color: var(--frost-faint);
-    font-size: 9.5px;
+    font-size: calc(var(--font-size-ui) - 3.5px);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;

@@ -101,7 +101,7 @@ import type { LocalComposerCommands } from "./features/composer/frostPiCommands"
   border-radius: 7px;
   box-shadow: var(--frost-shadow);
   animation: toast-in var(--motion-normal) ease-out;
-  font-size: 11px;
+  font-size: var(--font-size-detail);
 }
 .toast-error :global(.codicon) { color: var(--frost-error); }
 .toast-warning :global(.codicon) { color: var(--frost-warning); }

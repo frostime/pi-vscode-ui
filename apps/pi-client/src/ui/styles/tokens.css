@@ -107,7 +107,7 @@
   background: transparent;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 10.5px;
+  font-size: calc(var(--font-size-ui) - 2.5px);
 }
 .message-actions button:hover:not(:disabled) { color: var(--frost-text); background: var(--frost-hover); }
 .message-actions button:disabled { opacity: .5; cursor: default; }
@@ -116,7 +116,7 @@
 .action-row-timestamp {
   align-self: center;
   color: var(--frost-faint);
-  font-size: 10px;
+  font-size: calc(var(--font-size-ui) - 3px);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -161,7 +161,7 @@
 .activity-title {
   flex: none;
   color: color-mix(in srgb, var(--frost-text) 88%, var(--frost-muted));
-  font-size: 11px;
+  font-size: var(--font-size-detail);
   font-weight: 500;
 }
 .activity-status { flex: none; margin-left: auto; color: var(--frost-success); font-size: 12px; }
@@ -171,6 +171,8 @@
    keeps one left edge while the panel keeps the full panel width. */
 .activity-content { margin: 0 5px 6px 5px; padding: 6px 0 0; }
 .thinking-pulse { margin-left: 1px; }
+/* Interface text scale: buttons, headers, menus, pickers and tool/status rows. Conversation
+   body and Composer text keep their own `--frostpi-chat-*` values from settings. */
 :root {
   --font-size-ui: var(--vscode-font-size, 13px);
   --font-size-compact: calc(var(--font-size-ui) - 1px);

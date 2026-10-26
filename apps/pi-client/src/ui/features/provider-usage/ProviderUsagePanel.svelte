@@ -197,11 +197,11 @@
     width: min(var(--metrics-popover-width), calc(100vw - 20px)); max-height: min(480px, 70vh);
     margin: 0; padding: 10px; border: 1px solid var(--frost-border); border-radius: 8px;
     background: var(--frost-surface-raised); color: var(--frost-text); box-shadow: var(--frost-shadow);
-    font-family: var(--font-ui); font-size: 11px; line-height: 1.35;
+    font-family: var(--font-ui); font-size: var(--font-size-detail); line-height: 1.35;
     display: flex; flex-direction: column; gap: 8px; overflow: visible; box-sizing: border-box;
   }
   header { position: relative; flex: none; display: flex; align-items: center; gap: 4px; }
-  h3 { margin: 0; font-size: 12px; font-weight: 600; }
+  h3 { margin: 0; font-size: var(--font-size-compact); font-weight: 600; }
   p { margin: 0; }
   button { cursor: pointer; border: 1px solid var(--frost-border); border-radius: 4px; padding: 3px 7px; background: var(--frost-secondary-bg); color: inherit; font: inherit; }
   button:hover:not(:disabled) { background: var(--frost-hover); }
@@ -217,9 +217,9 @@
   .result-detail { color: var(--frost-muted); margin-top: 5px; overflow-wrap: anywhere; }
   .result-detail.failure { color: var(--frost-warning); }
   .provider-links { flex: none; display: flex; flex-direction: column; gap: 4px; margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--frost-border-soft); }
-  .usage-link { align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--frost-link); font-size: 10px; text-align: left; }
+  .usage-link { align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--frost-link); font-size: calc(var(--font-size-ui) - 3px); text-align: left; }
   .usage-link:hover:not(:disabled) { background: transparent; text-decoration: underline; }
-  .credential-details-toggle { padding: 0 2px; border: 0; background: transparent; color: var(--frost-muted); font-size: 10px; text-decoration: underline; }
-  .credential-details { color: var(--frost-muted); font-size: 10px; overflow-wrap: anywhere; }
+  .credential-details-toggle { padding: 0 2px; border: 0; background: transparent; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3px); text-decoration: underline; }
+  .credential-details { color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3px); overflow-wrap: anywhere; }
   .credential-details p { margin: 5px 0; }
 </style>

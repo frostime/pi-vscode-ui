@@ -139,20 +139,20 @@
   .provider-picker { flex: 1; min-width: 0; }
   button { color: inherit; font: inherit; cursor: pointer; }
   svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
-  .provider-trigger { display: flex; align-items: center; gap: 5px; width: 100%; min-height: 22px; padding: 2px 3px 2px 0; border: 0; border-radius: 4px; background: transparent; text-align: left; font-size: 12px; font-weight: 600; }
+  .provider-trigger { display: flex; align-items: center; gap: 5px; width: 100%; min-height: 22px; padding: 2px 3px 2px 0; border: 0; border-radius: 4px; background: transparent; text-align: left; font-size: var(--font-size-compact); font-weight: 600; }
   .provider-trigger > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .provider-trigger > svg { flex: none; color: var(--frost-muted); }
   .provider-trigger > svg.rotated { transform: rotate(180deg); }
   .provider-trigger:hover:not(:disabled), .provider-trigger.active { background: var(--frost-hover); }
   .provider-trigger:disabled { cursor: default; }
   /* The positioned Panel header anchors the menu across its full content width. */
-  .provider-menu { position: absolute; z-index: 1; top: calc(100% + 6px); left: 0; right: 0; overflow: auto; overscroll-behavior: contain; padding: 4px; border: 1px solid var(--frost-border); border-radius: 7px; background: var(--frost-surface-raised); box-shadow: var(--frost-shadow); font-size: 11px; font-weight: 400; }
+  .provider-menu { position: absolute; z-index: 1; top: calc(100% + 6px); left: 0; right: 0; overflow: auto; overscroll-behavior: contain; padding: 4px; border: 1px solid var(--frost-border); border-radius: 7px; background: var(--frost-surface-raised); box-shadow: var(--frost-shadow); font-size: var(--font-size-detail); font-weight: 400; }
   .provider-menu.above { top: auto; bottom: calc(100% + 6px); }
   .provider-option { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 28px; padding: 5px 6px; border: 0; border-radius: 4px; background: transparent; text-align: left; }
   .provider-option:hover, .provider-option:focus-visible { background: var(--frost-hover); }
   .provider-option:focus-visible { outline-offset: -1px; }
   .option-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-  .option-status { flex: none; color: var(--frost-muted); font-size: 9px; }
+  .option-status { flex: none; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 4px); }
   .option-check { flex: none; display: grid; place-items: center; width: 14px; color: var(--frost-link); }
   .picker-divider { height: 1px; margin: 4px 6px; background: var(--frost-border-soft); }
 </style>

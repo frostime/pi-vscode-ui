@@ -48,8 +48,8 @@
 }
 .branch-summary-trigger:hover { color: var(--frost-text); background: var(--frost-hover); }
 .branch-summary-trigger > :global(.codicon:first-child) { color: var(--frost-link); }
-.branch-summary-label { color: var(--frost-text); font-size: 11px; font-weight: 600; }
-.branch-summary-context { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
+.branch-summary-label { color: var(--frost-text); font-size: var(--font-size-detail); font-weight: 600; }
+.branch-summary-context { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(var(--font-size-ui) - 2.5px); }
 .branch-summary-content {
   padding: 8px 10px 10px 31px;
   border-top: 1px solid var(--frost-border-soft);

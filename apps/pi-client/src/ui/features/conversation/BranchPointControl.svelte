@@ -45,7 +45,7 @@
   border-radius: 7px;
   background: var(--frost-bg);
   color: var(--frost-muted);
-  font-size: 10.5px;
+  font-size: calc(var(--font-size-ui) - 2.5px);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;

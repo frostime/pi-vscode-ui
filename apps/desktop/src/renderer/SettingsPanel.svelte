@@ -4,7 +4,7 @@
   import { desktopSettingDefinitions, type DesktopSettingsAction, type DesktopSettingsTarget, type DesktopSettingsView } from "../shared/desktopSettings.js";
   import SettingRow from "./SettingRow.svelte";
   import { settingsPages, settingsByKey, matchesSettingSearch } from "./settingsPresentation.js";
-  import { createSettingsDraft, settingDraftValue, changedSettingKeys, parseSettingsDraft, type SettingsDraft } from "./settingsForm.js";
+  import { createSettingsDraft, settingDraftValue, changedSettingKeys, mergeSettingsDraft, parseSettingsDraft, type SettingsDraft } from "./settingsForm.js";
 
   let { view, target = "all", busy, error, onaction, onclose }: {
     view: DesktopSettingsView;
@@ -54,9 +54,17 @@
 
   $effect(() => {
     const incoming = view;
-    // Host refreshes must not overwrite an edited form. Explicit operations own
-    // their result: in particular an import is a draft, not a saved baseline.
-    if (untrack(() => operation === null && !hasChanges)) replaceDraft(incoming);
+    // Explicit operations own their results; an import is a draft, not a saved baseline.
+    // External Zoom/theme updates still reach untouched fields without discarding edits.
+    untrack(() => {
+      if (operation !== null) return;
+      if (!hasChanges) replaceDraft(incoming);
+      else {
+        const next = mergeSettingsDraft(savedDraft, draft, incoming.values);
+        savedDraft = next.saved;
+        draft = next.draft;
+      }
+    });
   });
 
   $effect(() => {
@@ -129,7 +137,11 @@
       if (action.type === "importVscode") {
         draft = createSettingsDraft(result.values);
         fieldErrors = {};
-      } else if (action.type !== "openFile") replaceDraft(result);
+      } else if (action.type === "openFile") {
+        const next = mergeSettingsDraft(savedDraft, draft, result.values);
+        savedDraft = next.saved;
+        draft = next.draft;
+      } else replaceDraft(result);
     } finally { operation = null; }
   }
 
@@ -275,12 +287,12 @@
 </dialog>
 
 <style>
-  .settings-dialog { box-sizing: border-box; padding: 0; margin: auto; width: min(1100px, calc(100vw - 32px)); height: min(760px, calc(100dvh - 32px)); max-width: none; max-height: none; overflow: hidden; border: 1px solid var(--frost-border); border-radius: 8px; background: var(--frost-bg-alt); color: var(--frost-text); font: var(--font-size) var(--font-ui); }
+  .settings-dialog { box-sizing: border-box; padding: 0; margin: auto; width: min(1100px, calc(100vw - 32px)); height: min(760px, calc(100dvh - 32px)); max-width: none; max-height: none; overflow: hidden; border: 1px solid var(--frost-border); border-radius: 8px; background: var(--frost-bg-alt); color: var(--frost-text); font: var(--font-size-ui) var(--font-ui); }
   .settings-dialog::backdrop { background: #0008; }
   .settings-frame { display: flex; flex-direction: column; height: 100%; min-height: 0; }
   header { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 22px 12px; }
-  header h2 { font-size: 19px; font-weight: 600; margin: 0; }
-  header p { font-size: 11px; margin: 4px 0 0; }
+  header h2 { font-size: calc(var(--font-size-ui) + 6px); font-weight: 600; margin: 0; }
+  header p { font-size: var(--font-size-detail); margin: 4px 0 0; }
   p { color: var(--frost-muted); line-height: 1.55; overflow-wrap: anywhere; }
   button, input, select { font: inherit; }
   button { max-width: 100%; padding: 6px 11px; border: 1px solid var(--frost-border); border-radius: 4px; background: var(--frost-secondary-bg); color: var(--frost-text); cursor: pointer; }
@@ -302,24 +314,24 @@
   .categories button[aria-current="page"] { color: var(--frost-text); background: color-mix(in srgb, var(--frost-active) 55%, transparent); }
   .categories button > span:not(.codicon) { flex: 1; }
   .categories .codicon { flex: none; font-size: 14px; }
-  .categories small { flex: none; font-size: 10px; }
+  .categories small { flex: none; font-size: calc(var(--font-size-ui) - 3px); }
   .settings-body { flex: 1; min-width: 0; min-height: 0; padding: 24px 28px 32px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
   .content-inner { max-width: 820px; margin: 0 auto; }
-  .section-title { font-size: 19px; font-weight: 600; margin: 0; }
-  .section-description { font-size: 12px; margin: 6px 0 22px; }
-  .setting-group > h3 { margin: 22px 4px 9px; color: var(--frost-muted); font-size: 12px; font-weight: 500; }
+  .section-title { font-size: calc(var(--font-size-ui) + 6px); font-weight: 600; margin: 0; }
+  .section-description { font-size: var(--font-size-compact); margin: 6px 0 22px; }
+  .setting-group > h3 { margin: 22px 4px 9px; color: var(--frost-muted); font-size: var(--font-size-compact); font-weight: 500; }
   .group-card { min-width: 0; border: 1px solid var(--frost-border); border-radius: 8px; background: var(--frost-surface); }
-  .notice { padding: 11px 12px; margin: 0 0 14px; border: 1px solid var(--frost-border); border-radius: 5px; color: var(--frost-muted); font-size: 11.5px; }
+  .notice { padding: 11px 12px; margin: 0 0 14px; border: 1px solid var(--frost-border); border-radius: 5px; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 1.5px); }
   .notice p { margin: 0 0 8px; }
   .notice p:last-child { margin-bottom: 0; }
-  .setup h3 { margin: 0 0 7px; color: var(--frost-text); font-size: 14px; }
+  .setup h3 { margin: 0 0 7px; color: var(--frost-text); font-size: calc(var(--font-size-ui) + 1px); }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .error, .error p { color: var(--frost-error); }
   .error-link { padding: 2px 6px; border-color: transparent; background: transparent; color: inherit; text-decoration: underline; }
-  .empty-results { font-size: 12px; padding: 24px 0; }
+  .empty-results { font-size: var(--font-size-compact); padding: 24px 0; }
   footer { flex: none; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 22px; border-top: 1px solid var(--frost-border); }
-  .save-status { font-size: 11px; color: var(--frost-muted); }
-  .save-status small { display: block; max-width: 320px; font-size: 10px; margin-top: 3px; }
+  .save-status { font-size: var(--font-size-detail); color: var(--frost-muted); }
+  .save-status small { display: block; max-width: 320px; font-size: calc(var(--font-size-ui) - 3px); margin-top: 3px; }
   .footer-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
   .review { border-color: transparent; background: transparent; color: var(--frost-muted); }
   .save, .primary { color: var(--frost-accent-text); background: var(--frost-accent); border-color: var(--frost-accent); }
@@ -329,21 +341,22 @@
   .file-actions { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 3; width: min(280px, calc(100vw - 48px)); padding: 7px; border: 1px solid var(--frost-border); border-radius: 5px; background: var(--frost-surface-raised); box-shadow: var(--frost-shadow); }
   .file-actions button { display: block; width: 100%; text-align: left; border: 0; background: transparent; }
   .file-actions button:hover { background: var(--frost-hover); }
-  .file-path { padding: 5px 7px; margin: 0 0 5px; font: 10px/1.6 var(--font-mono); user-select: text; }
+  .file-path { padding: 5px 7px; margin: 0 0 5px; font: calc(var(--font-size-ui) - 3px)/1.6 var(--font-mono); user-select: text; }
   .changes { flex: none; max-height: 180px; overflow: auto; padding: 12px 22px; border-top: 1px solid var(--frost-border); background: var(--frost-surface); }
-  .changes h3 { font-size: 12px; margin: 0 0 7px; }
-  .change-row { display: flex; justify-content: space-between; gap: 18px; padding: 6px 0; font-size: 11px; }
-  .change-row code { max-width: 55%; color: var(--frost-muted); overflow-wrap: anywhere; white-space: pre-wrap; font: 10px/1.5 var(--font-mono); }
+  .changes h3 { font-size: var(--font-size-compact); margin: 0 0 7px; }
+  .change-row { display: flex; justify-content: space-between; gap: 18px; padding: 6px 0; font-size: var(--font-size-detail); }
+  .change-row code { max-width: 55%; color: var(--frost-muted); overflow-wrap: anywhere; white-space: pre-wrap; font: calc(var(--font-size-ui) - 3px)/1.5 var(--font-mono); }
   .discard-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: #0008; }
   .discard-dialog { box-sizing: border-box; width: 360px; max-width: 100%; padding: 22px; border: 1px solid var(--frost-border); border-radius: 7px; background: var(--frost-surface-raised); }
-  .discard-dialog h3 { font-size: 16px; margin: 0 0 8px; }
-  .discard-dialog p { font-size: 12px; margin-bottom: 20px; }
+  .discard-dialog h3 { font-size: calc(var(--font-size-ui) + 3px); margin: 0 0 8px; }
+  .discard-dialog p { font-size: var(--font-size-compact); margin-bottom: 20px; }
   .discard-dialog .actions { justify-content: flex-end; }
   :is(button, input, select, summary):focus-visible { outline: 2px solid var(--frost-focus); outline-offset: 2px; }
   @media (max-width: 720px) {
     .settings-dialog { width: calc(100vw - 16px); height: calc(100dvh - 16px); }
     header { padding: 14px 16px 12px; }
-    header h2 { font-size: 17px; }
+    header p { display: none; }
+    header h2 { font-size: calc(var(--font-size-ui) + 4px); }
     .toolbar { padding: 0 16px 12px; flex-wrap: wrap; }
     .search-box { flex-basis: 100%; }
     .mobile-category { display: block; }

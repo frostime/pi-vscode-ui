@@ -86,17 +86,17 @@
 }
 .extension-ui-heading { flex: 0 0 auto; display: flex; gap: 8px; align-items: flex-start; }
 .extension-ui-heading > :global(.codicon) { margin-top: 2px; color: var(--frost-link); }
-.extension-ui-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.extension-ui-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-detail); }
 .extension-ui-heading :global(.icon-button) { flex-shrink: 0; margin: -4px -4px 0 0; }
 .extension-ui-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.extension-ui-message { margin: 6px 0 0; color: var(--frost-muted); font-size: 10.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.extension-ui-message { margin: 6px 0 0; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 2.5px); white-space: pre-wrap; overflow-wrap: anywhere; }
 .extension-ui-actions { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 6px; margin-top: 9px; }
 .extension-ui-actions :global(button) {
   padding: 5px 10px;
   border-radius: 5px;
   background: var(--frost-secondary-bg);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--font-size-detail);
 }
 .extension-select-options :global(button) {
   max-width: 100%;
@@ -106,7 +106,7 @@
   border-radius: 5px;
   background: var(--frost-secondary-bg);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--font-size-detail);
 }
 .extension-ui-actions :global(button:hover) { background: var(--frost-secondary-hover); }
 .extension-select-options :global(button:hover) { background: var(--frost-secondary-hover); }
@@ -133,5 +133,5 @@
 }
 .extension-input:focus { border-color: var(--frost-focus); }
 .extension-editor:focus { border-color: var(--frost-focus); }
-.extension-editor { resize: vertical; font-family: var(--font-mono); font-size: 11px; }
+.extension-editor { resize: vertical; font-family: var(--font-mono); font-size: var(--font-size-detail); }
 </style>

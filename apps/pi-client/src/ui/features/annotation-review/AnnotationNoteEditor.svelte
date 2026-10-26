@@ -125,7 +125,7 @@
     border-bottom: 1px solid var(--frost-border-soft);
   }
 
-  header strong { font-size: 12px; }
+  header strong { font-size: var(--font-size-compact); }
 
   blockquote {
     max-height: 94px;
@@ -136,7 +136,7 @@
     background: color-mix(in srgb, var(--frost-link) 8%, transparent);
     color: var(--frost-muted);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: calc(var(--font-size-ui) - 2.5px);
     line-height: 1.45;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -176,7 +176,7 @@
   footer > span {
     margin-right: auto;
     color: var(--frost-faint);
-    font-size: 9px;
+    font-size: calc(var(--font-size-ui) - 4px);
     white-space: nowrap;
   }
 
@@ -185,7 +185,7 @@
     min-height: 27px;
     padding: 3px 9px;
     border-radius: 6px;
-    font-size: 10.5px;
+    font-size: calc(var(--font-size-ui) - 2.5px);
     cursor: pointer;
   }
 
