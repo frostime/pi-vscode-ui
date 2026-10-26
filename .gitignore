@@ -8,6 +8,7 @@ artifacts/
 coverage/
 apps/vscode/assets/marketplace/screenshots/*.png
 .frostpi-update-backup/
+.worktrees/
 
 apps/vscode/CHANGELOG.md
 

@@ -1,19 +1,60 @@
 ---
 title: Development Workflow
-description: Workspace setup, package ownership, debugging, and source entry points.
+description: Workspace setup, independent product builds, shared-source resolution and setting generation.
 scope:
   - /**
-updated: 2026-10-15
+updated: 2026-10-24
 ---
 
 # Development Workflow
 
-Use Node 20.19+ and pnpm 10. A manually tested Pi executable may require a newer external Node than the extension build runtime.
+## Workspace setup
 
-Run `pnpm install --frozen-lockfile` from the repository root, then use `pnpm check` and `pnpm build` as needed. The shared lockfile covers all workspaces; never install independently inside a package. App TypeScript and Vite/Vitest workspace aliases must resolve internal packages to source so lint, type checks, and tests work before any package has built `dist`.
+Use Node 20.19+ and the repository's pnpm 10 version. Windows Desktop packaging requires Node 22.12+; this does not raise the extension build minimum. The installed Pi runtime can have a newer Node requirement of its own.
 
-Packages own local `build`, `clean`, `lint`, `typecheck`, and `test` scripts; root commands only orchestrate them. `packages/provider-usage` owns the independent credential/usage engine and synthetic/local HTTP tests; run its checks with `pnpm --filter @frostime/provider-usage <script>`. Add shared tools with `pnpm add -Dw <package>` and package dependencies with `pnpm --filter <workspace-name> add <package>`.
+Install once from the repository root:
 
-Launch the Extension Development Host with `.vscode/launch.json`. esbuild bundles the extension and Vite builds the Webview; production source maps require `FROSTPI_SOURCEMAP=1`. Production Host bundles are minified to keep the embedded HTTP client within the existing bundle budget; `FROSTPI_SOURCEMAP=1` retains unminified debug output. The launch configuration runs the `build:debug` task, which sets that variable automatically, so TypeScript breakpoints bind in the Development Host without any manual step.
+```bash
+pnpm install --frozen-lockfile
+```
 
-Start transport work in `packages/pi-rpc`, lifecycle work in `apps/vscode/src/extension/sessions/`, projection work in `apps/vscode/src/extension/conversation/`, and rendering work in the owning Webview feature. Preserve adjacent SPECs and never bridge raw Pi events or entries.
+The root lockfile covers all workspaces. Do not create app-local installations or lockfiles. Packages own their local scripts; root `build`, `typecheck`, `lint`, `test` and `check` orchestrate the workspaces. Root quality checks run packages serially; a package-local command is the normal starting point for an affected feature.
+
+## Product-local work
+
+| Work | Entry | What it includes |
+|---|---|---|
+| Build the VS Code extension | `pnpm --dir apps/vscode build` | Shared dependencies and extension outputs, not Desktop |
+| Debug the extension | `.vscode/launch.json` | The `build:debug` pre-launch task uses the extension-local build and sets `FROSTPI_SOURCEMAP=1` for Host source maps/unminified output; production output stays minified for the bundle budget |
+| Check shared types | `pnpm --dir apps/pi-client typecheck` | Separate core/shared/UI environment checks. Package-local `test` covers backend/host behavior; shared UI component tests use the vscode package's DOM infrastructure, as described in testing.md |
+| Build Desktop | `pnpm --dir apps/desktop build` | Electron main/preload and a renderer consuming the same ClientApp |
+| Run Desktop | `pnpm --dir apps/desktop start` | Development launch; pass directory arguments or add Projects through its native directory picker |
+
+VS Code remains in its workspace Extension Host, including remote workspaces. Do not move its process placement or require a Desktop launch to develop an editor integration. Use `.agents/skills/dual-maintenance/SKILL.md` to decide whether a shared change needs Desktop adaptation, and `.dev/docs/testing.md` to select verification.
+
+For Desktop experiments, set `FROSTPI_DESKTOP_USER_DATA` in the launched process's environment to an isolated directory. Ordinary launches keep the system application-data FrostPi profile. Automated tests use temporary profiles and synthetic settings, not real user configuration. Settings import and state/reopen behavior are contracts in `apps/desktop/SPEC.md`, not extra development steps.
+
+Desktop launchers remove `ELECTRON_RUN_AS_NODE` from their own launch environment. Do not change Pi runtime policy or global environment variables to compensate for it. Electron's native executable must be available: a successful dependency install or renderer build alone does not prove it can launch.
+
+`pnpm --dir apps/desktop test:smoke` requires a current build and runs actual Electron with controlled Pi children. It reports an explicit result and temporary artifact directory; it does not use model credentials. Creating and validating an independent ZIP is a separate delivery flow in `.dev/docs/release.md`, not part of normal plugin development.
+
+## Setting definitions
+
+FrostPi schemas/defaults are authored in `apps/vscode/package.json` under `contributes.configuration`. Shared runtime defaults and browser-safe setting definitions are generated from that source:
+
+```bash
+pnpm --dir apps/pi-client settings:generate
+pnpm --dir apps/pi-client settings:check
+```
+
+Include generated changes with the schema edit. Both product builds reach the stale-output check through the shared-client build. Runtime code consumes the generated modules, not the product manifest; do not hand-edit generated values or add host-local fallback tables.
+
+Generation does not implement a new setting. Wire its parsing, behavior and applicable host support, then verify the affected path. Native VS Code settings such as `chat.*`, `editor.*` and exclusion maps are not FrostPi manifest definitions. Desktop's import whitelist and original-key storage are owned by its settings contract.
+
+## Shared source resolution
+
+Product TypeScript, Vite, Vitest and esbuild mappings must select the same `apps/pi-client` implementation. Backend exports use built JS/declarations; browser builds consume exported Svelte/CSS source. Preserve the separate environment entries rather than introducing a root barrel that mixes browser and Node modules. Shared code declares its own runtime/type dependencies.
+
+Both products bundle the common `apps/pi-client/pi-extensions` sources into their outputs. Shared styles use one common entry, and vendor/font URLs must retain their entry-relative layout. A copied implementation or separately maintained asset list would require manual propagation and defeat the shared-source maintenance model. Source ownership is mapped in `.dev/docs/feature-map.md`; environment constraints are in `apps/pi-client/SPEC.md`.
+
+The independent `packages/provider-usage` engine has its own package-local checks. Versioning and publication are handled by `.dev/docs/release.md`, not by editing package versions during ordinary development.

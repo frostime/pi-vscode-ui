@@ -4,13 +4,13 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import questionTool from "../../pi-extensions/question-tool.js";
+import questionTool from "../../../pi-client/pi-extensions/question-tool.js";
 import {
   decodeQuestionToolMarker,
   parseQuestionRequestFile,
   QUESTION_TOOL_REQUEST_DIR_ENV,
   QUESTION_TOOL_TOKEN_ENV,
-} from "../../src/shared/question-tool/questionToolProtocol.js";
+} from "@frostime/pi-client/shared/question-tool/questionToolProtocol";
 
 type RegisteredTool = {
   execute(

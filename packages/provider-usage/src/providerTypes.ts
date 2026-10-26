@@ -1,48 +1,7 @@
 // Report/payload contracts adapted from pi-provider-usage; no Pi runtime types.
-export type UsageSemanticsKind = "consumer-subscription" | "api-key" | "project";
-export type UsageUnit = "percent" | "usd" | "currency" | "count";
+import type { UsageReport, UsageSemantics } from "./publicTypes.js";
 
-export interface UsageSemantics {
-  kind: UsageSemanticsKind;
-  label: string;
-}
-
-export interface UsageBucket {
-  id: string;
-  label: string;
-  groupId?: string;
-  groupLabel?: string;
-  modelKeys?: string[];
-  used?: number;
-  remaining?: number;
-  limit?: number;
-  unit: UsageUnit;
-  period?: string | undefined;
-  windowMinutes?: number;
-  /** Unix timestamp in seconds, as reported by the source adapters. */
-  resetsAt?: number;
-}
-
-export interface UsageMetric {
-  id: string;
-  label: string;
-  value: number | string;
-  unit?: UsageUnit;
-  currency?: string;
-}
-
-export interface UsageReport {
-  providerId: string;
-  providerName: string;
-  /** Unix timestamp in milliseconds for this query snapshot. */
-  capturedAt: number;
-  source: string;
-  semantics: UsageSemantics;
-  accountLabel?: string | undefined;
-  buckets: UsageBucket[];
-  metrics: UsageMetric[];
-  notes?: string[];
-}
+export type { UsageSemanticsKind, UsageUnit, UsageSemantics, UsageBucket, UsageMetric, UsageReport } from "./publicTypes.js";
 
 /** Explicit request headers used by the adapted Fireworks account adapter. */
 export interface ResolvedUsageAuth {

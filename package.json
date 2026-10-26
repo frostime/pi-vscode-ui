@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "clean": "pnpm --filter @frostime/pi-rpc clean && pnpm --filter @frostime/provider-usage clean && pnpm --filter frostpi clean && node scripts/clean-dir.mjs artifacts",
+    "clean": "pnpm --filter @frostime/pi-rpc clean && pnpm --filter @frostime/provider-usage clean && pnpm --filter @frostime/pi-client clean && pnpm --filter frostpi clean && pnpm --filter @frostime/frostpi-desktop clean && node scripts/clean-dir.mjs artifacts",
     "version:set": "node scripts/version.mjs set",
     "version:check": "node scripts/version.mjs check",
     "typecheck": "node scripts/quality.mjs typecheck",
@@ -18,6 +18,8 @@
     "package:vsix": "node scripts/package-vsix.mjs",
     "verify:vsix": "node scripts/verify-vsix.mjs",
     "package:zip": "node scripts/package-zip.mjs",
+    "package:desktop": "pnpm --dir apps/desktop build && pnpm --dir apps/desktop package:app",
+    "verify:desktop": "pnpm --dir apps/desktop verify:package",
     "publish:marketplace": "node scripts/publish-marketplace.mjs"
   },
   "devDependencies": {

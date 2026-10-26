@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it } from "vitest";
 
-import { sanitizeMarkdownSvg } from "../../src/webview/features/conversation/markdown/sanitizeMarkdownSvg.js";
+import { sanitizeMarkdownSvg } from "$ui/features/conversation/markdown/sanitizeMarkdownSvg.js";
 
 describe("sanitizeMarkdownSvg", () => {
   it("keeps ordinary SVG content and styles unchanged", () => {

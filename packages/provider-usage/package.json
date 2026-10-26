@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/publicTypes.d.ts",
+      "import": "./dist/publicTypes.js"
     }
   },
   "files": [

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { detectRasterImageMimeType } from "../../src/extension/webview-host/markdown-images/detectRasterImageMimeType.js";
+import { detectRasterImageMimeType } from "@frostime/pi-client/host/bridge/markdown-images/detectRasterImageMimeType";
 
 describe("detectRasterImageMimeType", () => {
   it("recognizes each supported raster format from its signature", () => {

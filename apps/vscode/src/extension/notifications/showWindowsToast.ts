@@ -36,6 +36,7 @@ export function showWindowsToast(
   });
 }
 
+// Keep notification content out of PowerShell/XML source: encode it as data and create text nodes.
 function windowsToastScript(title: string, message: string): string {
   const encodedTitle = Buffer.from(title, "utf8").toString("base64");
   const encodedMessage = Buffer.from(message, "utf8").toString("base64");

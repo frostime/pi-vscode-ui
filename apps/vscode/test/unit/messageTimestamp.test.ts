@@ -5,10 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 // the timestamp chrome under test does not depend on sanitized output.
 vi.mock("dompurify", () => ({ default: { sanitize: (markup: string) => markup } }));
 
-import type { ConversationMessageView, ResponseActivityView } from "../../src/shared/model/conversationModel.js";
-import ResponseActivity from "../../src/webview/features/conversation/ResponseActivity.svelte";
-import UserMessage from "../../src/webview/features/conversation/UserMessage.svelte";
-import { formatMessageTimestamp } from "../../src/webview/features/conversation/messageTimestamp.js";
+import type { ConversationMessageView, ResponseActivityView } from "@frostime/pi-client/shared/model/conversationModel";
+import ResponseActivity from "$ui/features/conversation/ResponseActivity.svelte";
+import UserMessage from "$ui/features/conversation/UserMessage.svelte";
+import { formatMessageTimestamp } from "$ui/features/conversation/messageTimestamp.js";
 
 describe("formatMessageTimestamp", () => {
   const now = new Date(2025, 8, 5, 18, 0).getTime();

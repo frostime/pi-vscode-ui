@@ -21,7 +21,7 @@ const extensionChangelog = resolve(extensionDir, "CHANGELOG.md");
 
 console.log(`Publishing frostime.frostpi@${version} to VS Code Marketplace…`);
 
-run("node", ["scripts/build.mjs"]);
+run("pnpm", ["--dir", "apps/vscode", "build"]);
 copyFileSync(resolve(root, "CHANGELOG.md"), extensionChangelog);
 
 // Keep a local copy of the same tree that will be published (audit / GitHub release reuse).

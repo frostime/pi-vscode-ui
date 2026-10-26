@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-import type { SessionRegistry } from "../sessions/SessionRegistry.js";
+import type { SessionRegistry } from "@frostime/pi-client/host/SessionRegistry";
 
 export class SessionStatusBar implements vscode.Disposable {
   readonly #item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 40);

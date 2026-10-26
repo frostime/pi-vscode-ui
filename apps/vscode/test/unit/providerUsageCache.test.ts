@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProviderUsageDescriptor, ProviderUsageResult } from "@frostime/provider-usage";
-import { cacheProviderUsage, type ProviderUsageSource } from "../../src/webview/features/provider-usage/providerUsageSource";
+import { cacheProviderUsage, type ProviderUsageSource } from "$ui/features/provider-usage/providerUsageSource";
 
 const provider: ProviderUsageDescriptor = { providerId: "example", displayName: "Example", availability: "ready", source: "auth.json", reason: "" };
 function snapshot(capturedAt: number): ProviderUsageResult {

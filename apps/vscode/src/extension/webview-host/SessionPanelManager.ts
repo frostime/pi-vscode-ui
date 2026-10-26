@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
 
-import type { SessionRegistry } from "../sessions/SessionRegistry.js";
+import type { SessionRegistry } from "@frostime/pi-client/host/SessionRegistry";
 import { createWebviewHtml } from "./createWebviewHtml.js";
-import type { WebviewConnection } from "./WebviewConnection.js";
-import type { WebviewEndpoint } from "./webviewTypes.js";
+import type { WebviewConnection } from "@frostime/pi-client/host/bridge/WebviewConnection";
+import type { WebviewEndpoint } from "@frostime/pi-client/host/bridge/webviewTypes";
 
 export interface SessionPanelHandle {
   readonly sessionId: string;
@@ -134,7 +134,8 @@ export class SessionPanelManager implements vscode.Disposable {
 
 function panelEndpoint(panel: vscode.WebviewPanel, sessionId: string): WebviewEndpoint {
   return {
-    webview: panel.webview,
+    postMessage: (message) => Promise.resolve(panel.webview.postMessage(message)),
+    onDidReceiveMessage: (listener) => panel.webview.onDidReceiveMessage(listener),
     surface: { kind: "panel", sessionId },
     isVisible: () => panel.visible,
     onDidChangeVisibility: (listener) => panel.onDidChangeViewState((event) => {

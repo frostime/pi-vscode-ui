@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "@frostime/pi-rpc": ["../../packages/pi-rpc/src/protocol/rpcTypes.ts"],
+      "@frostime/provider-usage/types": ["../../packages/provider-usage/src/publicTypes.ts"]
+    }
+  },
+  "include": ["src/shared/**/*.ts"]
+}

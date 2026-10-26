@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { collectionDelta } from "../../src/extension/webview-host/collectionDelta.js";
-import { mergeCollection } from "../../src/webview/bridge/applyHostMessage.js";
+import { collectionDelta } from "@frostime/pi-client/host/bridge/collectionDelta";
+import { mergeCollection } from "$ui/bridge/applyHostMessage.js";
 
 describe("incremental Webview collections", () => {
   it("transmits only appended or replaced objects while preserving order", () => {

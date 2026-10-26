@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { resolveLocalMarkdownImage } from "../../src/extension/webview-host/markdown-images/MarkdownImageResolver.js";
+import { resolveLocalMarkdownImage } from "@frostime/pi-client/host/bridge/markdown-images/MarkdownImageResolver";
 
 const temporaryDirectories: string[] = [];
 

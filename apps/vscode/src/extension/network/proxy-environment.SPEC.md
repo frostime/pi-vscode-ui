@@ -11,6 +11,8 @@ Proxy policy is resolved only when a Pi process starts. New and restarted sessio
 - Credentials remain in VS Code `SecretStorage`, and diagnostics/exported stderr redact them.
 - Readers preserve legacy `network.proxy.http` / `https` / `all` fallback when `endpoint` is empty; guided custom-mode writes store `endpoint` and clear those legacy keys.
 
+`apps/pi-client/src/core/network` owns proxy types/defaults and pure environment calculation; `extension/network` owns VS Code configuration and credential storage/policy, and `packages/pi-rpc` owns generic environment merging. Runtime receives a live host-proxy reader and a read-only credential provider rather than importing VS Code storage or configuration.
+
 ## Provider usage requests
 
 Usage requests read current workspace-scoped FrostPi proxy settings and SecretStorage
@@ -26,5 +28,3 @@ credential and NO_PROXY rules. Empty explicit endpoints fail without a request.
 HTTP(S) proxies are supported; SOCKS remains an explicit package error, never a
 fallback to inherited HTTP proxy or direct traffic. No global environment/dispatcher
 is changed, and no proxy URL or credential crosses the bridge.
-
-`proxyConfiguration.ts` owns types/defaults, `extension/network` owns configuration and credential policy, and `packages/pi-rpc` owns generic environment merging.

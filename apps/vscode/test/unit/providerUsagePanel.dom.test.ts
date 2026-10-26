@@ -1,11 +1,11 @@
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProviderUsageDescriptor, ProviderUsageResult } from "@frostime/provider-usage";
-import ProviderUsagePanel from "../../src/webview/features/provider-usage/ProviderUsagePanel.svelte";
-import { cacheProviderUsage, type ProviderUsageSource } from "../../src/webview/features/provider-usage/providerUsageSource";
+import ProviderUsagePanel from "$ui/features/provider-usage/ProviderUsagePanel.svelte";
+import { cacheProviderUsage, type ProviderUsageSource } from "$ui/features/provider-usage/providerUsageSource";
 
 const bridge = vi.hoisted(() => ({ post: vi.fn() }));
-vi.mock("../../src/webview/bridge/vscodeBridge", () => ({ postToHost: bridge.post }));
+vi.mock("$ui/bridge/hostBridge", () => ({ postToHost: bridge.post }));
 
 const officialUrl = "https://chatgpt.com/settings/usage";
 const providers: readonly ProviderUsageDescriptor[] = [

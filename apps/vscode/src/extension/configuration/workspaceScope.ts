@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-import { sameCanonicalPath } from "../_shared/canonicalPath.js";
+import { sameCanonicalPath } from "@frostime/pi-client/core/_shared/canonicalPath";
 
 /** Returns the original workspace URI when the path belongs to an open root.
  * This preserves remote and virtual URI schemes instead of rebuilding a file URI.

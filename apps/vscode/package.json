@@ -305,15 +305,16 @@
     }
   },
   "scripts": {
-    "build": "node esbuild.config.mjs && vite build",
+    "build": "pnpm --filter @frostime/pi-client build && node esbuild.config.mjs && vite build",
     "clean": "node ../../scripts/clean-dir.mjs dist coverage .vscode-test",
     "typecheck": "tsc -p tsconfig.json --noEmit && svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "node test/e2e/runTest.cjs",
-    "lint": "eslint src pi-extensions test --max-warnings 0"
+    "lint": "eslint src test --max-warnings 0"
   },
   "dependencies": {
+    "@frostime/pi-client": "workspace:*",
     "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/state": "^6.7.1",

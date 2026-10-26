@@ -26,12 +26,22 @@ export default defineConfig({
   base: "./",
   plugins: [svelte(), copyMermaidVendor()],
   resolve: {
-    alias: {
-      $shared: resolve(import.meta.dirname, "src/shared"),
-      $webview: resolve(import.meta.dirname, "src/webview"),
-      "@frostime/pi-rpc": resolve(import.meta.dirname, "../../packages/pi-rpc/src/index.ts"),
-      "@frostime/provider-usage": resolve(import.meta.dirname, "../../packages/provider-usage/src/index.ts"),
-    },
+    alias: [
+      { find: "$shared", replacement: resolve(import.meta.dirname, "../pi-client/src/shared") },
+      { find: "$webview", replacement: resolve(import.meta.dirname, "../pi-client/src/ui") },
+      { find: "$ui", replacement: resolve(import.meta.dirname, "../pi-client/src/ui") },
+      { find: /^@frostime\/pi-client\/host$/, replacement: resolve(import.meta.dirname, "../pi-client/src/host/index.ts") },
+      { find: /^@frostime\/pi-client\/host\//, replacement: `${resolve(import.meta.dirname, "../pi-client/src/host")}/` },
+      { find: /^@frostime\/pi-client\/ui$/, replacement: resolve(import.meta.dirname, "../pi-client/src/ui/ClientApp.svelte") },
+      { find: /^@frostime\/pi-client\/ui\//, replacement: `${resolve(import.meta.dirname, "../pi-client/src/ui")}/` },
+      { find: /^@frostime\/pi-client\/core$/, replacement: resolve(import.meta.dirname, "../pi-client/src/core/index.ts") },
+      { find: /^@frostime\/pi-client\/core\//, replacement: `${resolve(import.meta.dirname, "../pi-client/src/core")}/` },
+      { find: /^@frostime\/pi-client\/shared$/, replacement: resolve(import.meta.dirname, "../pi-client/src/shared/index.ts") },
+      { find: /^@frostime\/pi-client\/shared\//, replacement: `${resolve(import.meta.dirname, "../pi-client/src/shared")}/` },
+      { find: "@frostime/pi-rpc", replacement: resolve(import.meta.dirname, "../../packages/pi-rpc/src/index.ts") },
+      { find: "@frostime/provider-usage/types", replacement: resolve(import.meta.dirname, "../../packages/provider-usage/src/publicTypes.ts") },
+      { find: /^@frostime\/provider-usage$/, replacement: resolve(import.meta.dirname, "../../packages/provider-usage/src/index.ts") },
+    ],
   },
   build: {
     outDir: "dist/webview",

@@ -7,27 +7,9 @@
  */
 
 import type { UsageFetch } from "./http.js";
-import type { UsageReport } from "./providerTypes.js";
+import type { ProviderSourceCategory } from "./publicTypes.js";
 
-/** Safe category of the configured credential source. Never contains variable names. */
-export type ProviderSourceCategory = "auth.json" | "models.json" | "environment" | "not-configured";
-
-/** Fixed official navigation metadata, never extracted from provider responses. */
-export interface ProviderUsageLink {
-  label: string;
-  url: string;
-}
-
-/** A safe, browser-facing description of one supported configured provider. */
-export interface ProviderUsageDescriptor {
-  providerId: string;
-  displayName: string;
-  availability: "ready" | "unavailable";
-  links?: readonly ProviderUsageLink[];
-  source: ProviderSourceCategory;
-  /** Safe reason; sanitized, never file content, always present for unavailable results. */
-  reason: string;
-}
+export type { ProviderSourceCategory, ProviderUsageLink, ProviderUsageDescriptor, ProviderUsageResult } from "./publicTypes.js";
 
 /** Explicit input for resolution; explicit paths beat agent-directory defaults. */
 export interface ProviderResolutionInput {
@@ -90,7 +72,3 @@ export type ResolvedProviderCredential = ReadyProviderCredential | UnavailablePr
 export interface QueryUsageOptions extends ProviderResolutionInput {
   fetch?: UsageFetch;
 }
-
-export type ProviderUsageResult =
-  | { providerId: string; status: "ready"; source: ProviderSourceCategory; report: UsageReport }
-  | { providerId: string; status: "unavailable" | "query-failed" | "selection-required"; source: ProviderSourceCategory; reason: string };

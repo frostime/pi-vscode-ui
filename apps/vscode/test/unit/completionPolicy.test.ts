@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   promptCompletionConfigurationKey,
   shouldStartPromptCompletion,
-} from "../../src/webview/features/composer/completionPolicy.js";
+} from "$ui/features/composer/completionPolicy.js";
 
 describe("prompt completion activation", () => {
   it("opens file completion for an empty or partial @ mention", () => {

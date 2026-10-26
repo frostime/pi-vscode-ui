@@ -2,10 +2,10 @@ import { render } from "svelte/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProviderUsageResult, UsageReport } from "@frostime/provider-usage";
 
-import ProviderUsageReport from "../../src/webview/features/provider-usage/ProviderUsageReport.svelte";
-import { bucketProgress, formatUsageValue } from "../../src/webview/features/provider-usage/providerUsagePresentation";
+import ProviderUsageReport from "$ui/features/provider-usage/ProviderUsageReport.svelte";
+import { bucketProgress, formatUsageValue } from "$ui/features/provider-usage/providerUsagePresentation";
 import { mockProviderUsageSource } from "./providerUsageFixtures";
-import SessionMetrics from "../../src/webview/shell/SessionMetrics.svelte";
+import SessionMetrics from "$ui/shell/SessionMetrics.svelte";
 
 async function mockReports(): Promise<readonly ProviderUsageResult[]> {
   vi.useFakeTimers();
@@ -27,7 +27,7 @@ describe("provider usage presentation", () => {
     const session = {
       stats: { cost: 0.084 }, extensionStatuses: [],
     } as never;
-    const sidebar = render(SessionMetrics, { props: { session, providerUsageAvailable: true } }).body;
+    const sidebar = render(SessionMetrics, { props: { session, providerUsageSource: mockProviderUsageSource } }).body;
     const panel = render(SessionMetrics, { props: { session } }).body;
     expect(sidebar).toContain('aria-label="Provider usage"');
     expect(sidebar.indexOf('aria-label="Provider usage"')).toBeLessThan(sidebar.indexOf('aria-label="Context usage unavailable"'));

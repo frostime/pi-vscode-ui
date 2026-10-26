@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-import type { EditorMentionSpecialView } from "../../../shared/model/workspaceFileModel.js";
+import type { EditorMentionSpecialView } from "@frostime/pi-client/shared/model/workspaceFileModel";
 
 import { captureActiveFileReference } from "./captureActiveFile.js";
 import { captureActiveSelection } from "./captureSelection.js";

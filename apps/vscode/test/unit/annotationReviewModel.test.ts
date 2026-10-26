@@ -6,7 +6,7 @@ import {
   segmentAnnotationSource,
   sortAnnotations,
   type ResponseAnnotation,
-} from "../../src/webview/features/annotation-review/annotationReviewModel.js";
+} from "$ui/features/annotation-review/annotationReviewModel.js";
 
 describe("response annotation ranges", () => {
   it("normalizes either selection direction and excludes boundary whitespace", () => {

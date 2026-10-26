@@ -3,6 +3,7 @@ import viteConfig from "./vite.config.js";
 
 export default mergeConfig(viteConfig, defineConfig({
   test: {
+    server: { deps: { inline: ["katex"] } },
     projects: [
       {
         extends: true,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { rawMessageText } from "../../src/webview/features/conversation/copyMessageClient.js";
+import { rawMessageText } from "$ui/features/conversation/copyMessageClient.js";
 
 describe("message copy text", () => {
   it("preserves raw text block order without copying images or errors", () => {

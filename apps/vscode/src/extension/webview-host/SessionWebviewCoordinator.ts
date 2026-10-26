@@ -1,15 +1,17 @@
 import * as vscode from "vscode";
 
-import type { ComposerDraftView } from "../../shared/model/composerDraftModel.js";
+import type { ComposerDraftView } from "@frostime/pi-client/shared/model/composerDraftModel";
+import type { ClientHost, HostQuickPickItem } from "@frostime/pi-client/host";
+import { ComposerDraftCache } from "@frostime/pi-client/host/bridge/ComposerDraftCache";
+import { WebviewActionDispatcher, type WebviewActionDispatcherDependencies } from "@frostime/pi-client/host/bridge/WebviewActionDispatcher";
+import { WebviewConnection } from "@frostime/pi-client/host/bridge/WebviewConnection";
+import type { WebviewEndpoint } from "@frostime/pi-client/host/bridge/webviewTypes";
+import { WorkspaceFileSearch } from "@frostime/pi-client/host/file-search/WorkspaceFileSearch";
+import type { SessionRegistry } from "@frostime/pi-client/host/SessionRegistry";
 import { ComposerExternalEditor } from "../composer/ComposerExternalEditor.js";
-import { readChatTypography } from "../configuration/readChatTypography.js";
+import { readChatTypography } from "@frostime/pi-client/host/readChatTypography";
 import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
-import type { SessionRegistry } from "../sessions/SessionRegistry.js";
-import { ComposerDraftCache } from "./ComposerDraftCache.js";
 import { SessionPanelManager } from "./SessionPanelManager.js";
-import { WebviewActionDispatcher, type WebviewActionDispatcherDependencies } from "./WebviewActionDispatcher.js";
-import { WebviewConnection } from "./WebviewConnection.js";
-import type { WebviewEndpoint } from "./webviewTypes.js";
 
 export interface ReferenceDestination {
   sessionId: string;
@@ -22,7 +24,7 @@ export interface ReferenceDestination {
 export class SessionWebviewCoordinator implements vscode.Disposable {
   readonly #registry: SessionRegistry;
   readonly #logger: DiagnosticLogger;
-  readonly #drafts = new ComposerDraftCache();
+  readonly #drafts: ComposerDraftCache;
   readonly #externalEditor: ComposerExternalEditor;
   readonly #dispatcher: WebviewActionDispatcher;
   readonly #panels: SessionPanelManager;
@@ -33,14 +35,16 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
   #pendingSidebarComposerText = new Map<string, string>();
 
   constructor(registry: SessionRegistry, logger: DiagnosticLogger, extensionUri: vscode.Uri,
-    getProxyCredentials: WebviewActionDispatcherDependencies["getProxyCredentials"]) {
+    getProxyCredentials: WebviewActionDispatcherDependencies["getProxyCredentials"], host: ClientHost) {
     this.#registry = registry;
     this.#logger = logger;
     this.#knownSessionIds = new Set(registry.snapshot().sessions.map((session) => session.id));
+    this.#drafts = new ComposerDraftCache(host);
     this.#externalEditor = new ComposerExternalEditor(
       ({ sessionId, text }) => this.#applyExternalEditorText(sessionId, text),
     );
     this.#dispatcher = new WebviewActionDispatcher({
+      host,
       registry,
       getProxyCredentials,
       logger,
@@ -155,6 +159,16 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
       this.#logger,
       (sessionId) => this.#panels.has(sessionId),
       (sessionId) => this.#hostOwnsDraft(sessionId),
+      {
+        fileSearch: new WorkspaceFileSearch({
+          onLegacyFd: (fd) => {
+            void vscode.window.showWarningMessage(
+              `FrostPi found fd ${fd.version}. File completion remains available, but directory suggestions require fd 10.0.0 or newer.`,
+            );
+          },
+        }),
+        readChatTypography: () => readChatTypography(vscode.workspace.getConfiguration("chat")),
+      },
     );
   }
 
@@ -269,7 +283,7 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
 
 export function referenceDestinationItems(
   candidates: readonly ReferenceDestination[],
-): Array<vscode.QuickPickItem & { candidate: ReferenceDestination }> {
+): Array<HostQuickPickItem & { candidate: ReferenceDestination }> {
   return candidates.map((candidate) => ({
     label: candidate.title,
     description: candidate.externalized ? "Session Tab" : "FrostPi sidebar",

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const postToHost = vi.fn();
-vi.mock("../../src/webview/bridge/vscodeBridge", () => ({ postToHost }));
+vi.mock("$ui/bridge/hostBridge", () => ({ postToHost }));
 
 const { deliverMarkdownImageResult, loadLocalMarkdownImage } = await import(
-  "../../src/webview/features/conversation/markdown/markdownImageClient.js"
+  "$ui/features/conversation/markdown/markdownImageClient.js"
 );
-const { EMPTY_PRESENTATION, presentationStore } = await import("../../src/webview/state/sessionViewStore.svelte.js");
+const { EMPTY_PRESENTATION, presentationStore } = await import("$ui/state/sessionViewStore.svelte.js");
 
 beforeEach(() => {
   postToHost.mockClear();

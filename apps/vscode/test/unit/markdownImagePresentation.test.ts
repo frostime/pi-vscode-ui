@@ -1,9 +1,9 @@
 import { render } from "svelte/server";
 import { describe, expect, it } from "vitest";
 
-import ImageLightbox from "../../src/webview/features/conversation/ImageLightbox.svelte";
-import MarkdownImage from "../../src/webview/features/conversation/markdown/MarkdownImage.svelte";
-import { markdownImageCaption } from "../../src/webview/features/conversation/markdown/markdownImageCaption.js";
+import ImageLightbox from "$ui/features/conversation/ImageLightbox.svelte";
+import MarkdownImage from "$ui/features/conversation/markdown/MarkdownImage.svelte";
+import { markdownImageCaption } from "$ui/features/conversation/markdown/markdownImageCaption.js";
 
 describe("Markdown image presentation", () => {
   it("prefers an explicit title and falls back to concise alt text", () => {

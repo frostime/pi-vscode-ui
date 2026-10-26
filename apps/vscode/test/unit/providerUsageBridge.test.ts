@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { HostToWebviewMessage } from "../../src/shared/bridge/hostToWebview.js";
-import { BRIDGE_VERSION } from "../../src/shared/bridge/bridgeVersion.js";
+import type { HostToWebviewMessage } from "@frostime/pi-client/shared/bridge/hostToWebview";
+import { BRIDGE_VERSION } from "@frostime/pi-client/shared/bridge/bridgeVersion";
 
 const bridge = vi.hoisted(() => ({
   post: vi.fn(), listeners: new Set<(message: HostToWebviewMessage) => void>(),
 }));
-vi.mock("../../src/webview/bridge/vscodeBridge", () => ({
+vi.mock("$ui/bridge/hostBridge", () => ({
   postToHost: bridge.post,
   onHostMessage: (listener: (message: HostToWebviewMessage) => void) => {
     bridge.listeners.add(listener); return () => bridge.listeners.delete(listener);
   },
 }));
-const { bridgeProviderUsageSource } = await import("../../src/webview/features/provider-usage/bridgeProviderUsageSource");
+const { bridgeProviderUsageSource } = await import("$ui/features/provider-usage/bridgeProviderUsageSource");
 function deliver(message: HostToWebviewMessage): void { for (const listener of bridge.listeners) listener(message); }
 function requestId(): string { return (bridge.post.mock.calls.at(-1)![0] as { requestId: string }).requestId; }
 

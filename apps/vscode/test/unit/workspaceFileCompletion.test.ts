@@ -3,7 +3,7 @@ import { EditorState, type TransactionSpec } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { describe, expect, it, vi } from "vitest";
 
-import { workspaceFileCompletion } from "../../src/webview/features/composer/workspaceFileCompletion.js";
+import { workspaceFileCompletion } from "$ui/features/composer/workspaceFileCompletion.js";
 
 const candidate = {
   path: "src/beta.ts",
