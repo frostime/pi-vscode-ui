@@ -27,6 +27,8 @@ A checkpoint, test pass or local candidate does not authorize merging, tagging o
 4. Review user-facing README/screenshots, privacy/security statements, notices and diagnostic output. Check paths and third-party stderr before sharing artifacts.
 5. Publish from the tested version commit using the tag workflow below. Do not move a tag after publication.
 
+`pnpm package:vsix` and `pnpm publish:marketplace` build only the extension and its shared dependencies through `apps/vscode`'s build script. They do not require a Desktop build. Root `pnpm build` and `pnpm check` continue to cover both products.
+
 ### Tag workflow and publishing credentials
 
 `.github/workflows/release.yml` runs on `v*` tags. It checks the tag against the manifest, runs quality/build/package verification, and creates the VSIX and source archive. Stable `vX.Y.Z` tags publish the same verified VSIX to VS Code Marketplace and Open VSX before creating the GitHub Release. Pre-release tags create GitHub prereleases but do not publish to either registry. A rerun skips an already published version rather than replacing it.

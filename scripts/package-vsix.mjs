@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { ensureArtifacts, projectVersion, root, run } from "./lib.mjs";
 
-run("node", ["scripts/build.mjs"]);
+run("pnpm", ["--dir", "apps/vscode", "build"]);
 const artifacts = ensureArtifacts();
 const output = resolve(artifacts, `FrostPi-${projectVersion()}.vsix`);
 // Single product changelog lives at the monorepo root; copy it into the extension
