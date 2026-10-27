@@ -5,10 +5,10 @@ import { DESKTOP_MESSAGE_LIMIT_ERROR, DESKTOP_TRANSPORT_BLOCKED_CHANNEL } from "
 
 const native = vi.hoisted(() => ({
   invoke: vi.fn(),
+  listeners: new Map<string, EventListener>(),
   emit: undefined as undefined | ((event: { kind: string; channel: string; value: unknown }) => void),
 }));
 vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: () => true,
   invoke: native.invoke,
   Channel: class { set onmessage(listener: (event: { kind: string; channel: string; value: unknown }) => void) { native.emit = listener; } },
 }));
@@ -16,7 +16,8 @@ import { connectTauriDesktop } from "../src/renderer/tauriBridge.js";
 
 beforeEach(() => {
   native.invoke.mockReset().mockResolvedValue(undefined);
-  vi.stubGlobal("window", { addEventListener: vi.fn() });
+  native.listeners.clear();
+  vi.stubGlobal("window", { addEventListener: (name: string, listener: EventListener) => { native.listeners.set(name, listener); } });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -43,5 +44,20 @@ describe("Tauri local rejection", () => {
     unsubscribe();
     native.emit?.({ kind: "event", channel: DESKTOP_TRANSPORT_BLOCKED_CHANNEL, value: true });
     expect(blocked).toEqual([true, false]); expect(messages).toEqual([]);
+  });
+  it("routes Windows zoom shortcuts and ignores IME, Alt and unmodified input", async () => {
+    await connectTauriDesktop(); native.invoke.mockClear();
+    const press = (overrides: Record<string, unknown>) => {
+      const event = { ctrlKey: true, altKey: false, isComposing: false, key: "=", code: "Equal", preventDefault: vi.fn(), ...overrides };
+      native.listeners.get("keydown")?.(event as unknown as Event);
+      return event;
+    };
+    for (const overrides of [{ isComposing: true }, { altKey: true }, { ctrlKey: false }]) {
+      expect(press(overrides).preventDefault).not.toHaveBeenCalled();
+    }
+    expect(native.invoke).not.toHaveBeenCalled();
+    expect(press({ key: "Unidentified", code: "NumpadAdd" }).preventDefault).toHaveBeenCalled();
+    press({ key: "-", code: "Minus" }); press({ key: "0", code: "Digit0" });
+    expect(native.invoke.mock.calls.map((call) => (call[1] as { request: { args: unknown[] } }).request.args[0])).toEqual(["in", "out", "reset"]);
   });
 });

@@ -1,7 +1,7 @@
 import { writeSync } from "node:fs";
 import { DesktopWire } from "./DesktopWire.js";
-import { createDesktopBackend } from "../main/createDesktopBackend.js";
-import type { DesktopNative, DesktopTransport } from "../main/desktopNative.js";
+import { createDesktopBackend } from "./createDesktopBackend.js";
+import type { DesktopNative, DesktopTransport } from "./desktopNative.js";
 import { createDesktopPublisher } from "./publishDesktopEvent.js";
 import { DESKTOP_MESSAGE_LIMIT_ERROR, isDesktopRequest } from "../shared/desktopTransport.js";
 

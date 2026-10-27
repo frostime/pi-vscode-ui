@@ -36,4 +36,4 @@ Blocking inputs stay bound to their Runtime/request until response, Pi timeout o
 
 ## Verification
 
-Shared backend tests run with injected fake host services and isolated Pi settings; no VS Code mocks or Electron GUI are needed. Core/shared/UI have separate type checks and import restrictions. Both product builds must consume this implementation; VSIX/Electron artifacts must not depend on workspace source paths at runtime. Test ownership and interpretation of controlled/native/real-Pi evidence follow [testing.md](../../.dev/docs/testing.md#evidence-boundaries).
+Shared backend tests run with injected fake host services and isolated Pi settings; no native product GUI are needed. Core/shared/UI have separate type checks and import restrictions. Both product builds must consume this implementation; VSIX/Desktop artifacts must not depend on workspace source paths at runtime. Test ownership and interpretation of controlled/native/real-Pi evidence follow [testing.md](../../.dev/docs/testing.md#evidence-boundaries).

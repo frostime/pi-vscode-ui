@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, open, rename, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
-// The package's UMD main leaves dynamic requires in a bundled Electron entry.
+// The package's UMD main leaves dynamic requires in a bundled Node entry.
 import { parse, visit, type ParseError } from "jsonc-parser/lib/esm/main.js";
 
 export const MAX_JSON_BYTES = 1024 * 1024;

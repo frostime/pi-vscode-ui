@@ -12,7 +12,7 @@ updated: 2026-10-24
 
 # Webview Bridge Compatibility Contract
 
-The backend Host (VS Code Extension Host or Electron main) is authoritative. One sidebar `WebviewConnection` follows `SessionRegistry.activeSessionId`; each Session Tab has an independent Connection pinned to one Session id. Presentation snapshots explicitly carry surface identity, the true sidebar `activeSessionId`, and the Session displayed by that Connection. A pinned Session is never represented by changing or reinterpreting `activeSessionId`.
+The backend Host (VS Code Extension Host or Desktop Node service) is authoritative. One sidebar `WebviewConnection` follows `SessionRegistry.activeSessionId`; each Session Tab has an independent Connection pinned to one Session id. Presentation snapshots explicitly carry surface identity, the true sidebar `activeSessionId`, and the Session displayed by that Connection. A pinned Session is never represented by changing or reinterpreting `activeSessionId`.
 
 A mounted Webview sends `ready` and receives a complete presentation snapshot. A panel snapshot also carries its authoritative Host Composer draft; a sidebar snapshot carries a draft only when completing or recovering an externalization handoff. Sidebar selection changes snapshot the sidebar Connection. Same-target updates use deltas. Each Connection computes and caches deltas only for its displayed Session, advances that cache only after successful delivery, and owns one file-search cancellation scope. Hidden, failed, newly visible, or recreated panel projections recover through a fresh authoritative snapshot; browser persistence is not a recovery source.
 

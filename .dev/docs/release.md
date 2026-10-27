@@ -1,6 +1,6 @@
 ---
 title: Release Procedure
-description: Version authority, verified extension publication and explicit Windows Desktop candidate delivery.
+description: Version authority, verified extension publication and Windows Desktop ZIP delivery.
 scope:
   - /scripts/**
   - /.github/workflows/**
@@ -40,25 +40,19 @@ Before a stable tag, configure the `marketplace-publish` GitHub environment:
 
 Missing configuration or failed publishing must fail the release. Never store token values in Git, packages, logs or chat. `pnpm publish:marketplace` is an opt-in local path, not the tag workflow. After publication, check the registry pages and installation from VS Code/VSCodium.
 
-## Desktop candidate packaging (Windows x64)
+## Desktop packaging (Windows x64)
 
-Desktop currently has an explicit local, unsigned ZIP flow, not an installer or automatic update channel. Keep the current product version unless a version change was separately requested. Use Windows x64, Node 22.12+ and the locked Electron installation.
-
-From the repository root:
+Desktop uses a single Tauri host. The local delivery is an unsigned portable ZIP with no installer or automatic updater. Keep the product version unless a version change was separately requested. Native builds require Windows x64, Rust MSVC, Visual Studio C++ build tools/Windows SDK, and WebView2. Runtime prerequisites are Node 22.19+, Pi and WebView2; Node and Pi must be available to a normal desktop launch.
 
 ```bash
 pnpm package:desktop
 pnpm verify:desktop
+pnpm verify:desktop --real-pi
+pnpm verify:desktop --native-dialogs
 ```
 
-Packaging builds `artifacts/FrostPi-<version>-win32-x64.zip`, which extracts to `FrostPi/FrostPi.exe`. Electron is included; external Node and Pi remain machine prerequisites. Application settings/state stay in the system application-data FrostPi profile, not beside the executable. This is installation-free, not USB-portable data. The payload allowlist and native-resource requirements are in `apps/desktop/SPEC.md` under Packaged distribution.
+Packaging builds `artifacts/FrostPi-<version>-win32-x64.zip`, which extracts to `FrostPi/FrostPi.exe`. The backend and Pi extensions are ordinary files beside the executable; the renderer is embedded. Node, Pi and WebView2 are installed separately. User settings/state remain in `%APPDATA%/FrostPi`; this is installation-free, not portable user data. The payload contract is in [Desktop SPEC](../../apps/desktop/SPEC.md#packaged-distribution).
 
-Verification must run the actual extracted executable outside the repository with isolated data and an explicit success artifact identifying the ZIP SHA-256. Archive inspection or exit 0 alone does not pass. The optional `pnpm verify:desktop --real-pi` checks a limited installed-runtime command/UI path; its non-model scope is defined in `.dev/docs/testing.md` under Evidence boundaries.
+Verification enforces the archive allowlist and version, extracts outside the repository, reconstructs the configured Windows machine/user PATH and runs the actual executable using temporary Projects/profiles and controlled Pi children. It records the archive SHA-256 and explicit native smoke results. Optional `--real-pi` additionally checks installed Pi discovery and an isolated extension command/confirmation/custom-message path without a model request. It does not establish real-model or provider acceptance; see [testing evidence boundaries](testing.md#evidence-boundaries).
 
-When handing over a candidate, record its source commit, archive size/hash, the checks actually run and their limits in the relevant change record. Existing extracted directories do not update when a same-named ZIP is rebuilt; tell the user to close the old app and extract the candidate into a new directory.
-
-Public distribution separately requires user-instruction, licence, signing/Windows-warning and real-GUI review. Do not silently add Desktop publication to the extension workflow or treat candidate delivery as merge/publication approval.
-
-### Tauri migration candidate
-
-`pnpm --dir apps/desktop package:tauri` explicitly builds a release-mode Windows x64 Tauri research ZIP under a separate `-tauri-win32-x64.zip` name. The default `pnpm package:desktop`/`verify:desktop` remain the verified Electron candidate flow until the migration passes the parity gates in `apps/desktop/SPEC.md`. Node, Pi and WebView2 remain external prerequisites. Run `pnpm --dir apps/desktop verify:tauri` to inspect the archive allowlist and run its extracted executable from a temporary directory using the configured Windows desktop PATH; source/debug builds alone do not validate its resource lookup or desktop PATH. This candidate has no signing, installer or updater and is not added to extension publication.
+The package includes the project license, JS dependency notices, locked Rust dependency license texts and source references. Packaging fails when a Rust dependency lacks an available license text. Windows system runtimes are prerequisites rather than bundled payload. No tag, publication, signing or installer is implied by these commands. Extension publication uses its independent VS Code build and never invokes Rust.

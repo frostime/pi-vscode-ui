@@ -1,222 +1,56 @@
-import { closeSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
-
-import { packager } from "@electron/packager";
+import { basename, join, resolve, sep } from "node:path";
 import AdmZip from "adm-zip";
-import pngToIco from "png-to-ico";
-
+import { nativeNoticesText } from "./native-notices.mjs";
 import { desktopNoticesText } from "./desktop-notices.mjs";
-import { powerShellLiteral, runPowerShell } from "./powershell.mjs";
-import {
-  applicationPayload, artifactsRoot, buildOutput, distributionFiles, distributionReadme,
-  distributedArchive, electronInstallation, productName, productVersion, repositoryRoot, targetArch, targetPlatform,
-} from "./packaging.mjs";
+import { artifactsRoot, buildOutput, distributedArchive, productVersion, repositoryRoot } from "./packaging.mjs";
 
-const requiredBuildFiles = ["main.cjs", "preload.cjs", "renderer/index.html", "pi-extensions/session-tree.js", "pi-extensions/question-tool.js"];
-const brandIcon = resolve(repositoryRoot, "apps/vscode/assets/icon.png");
-const electronZipCache = resolve(tmpdir(), "frostpi-electron-zips");
-
-/**
- * The cache name and metadata describe Windows x64, so packaging must refuse to
- * relabel another platform's Electron distribution as this target.
- */
-function requireSupportedTarget(installation) {
-  if (process.platform !== targetPlatform || process.arch !== targetArch) {
-    throw new Error(`Packaging supports only ${targetPlatform}-${targetArch}; this host is ${process.platform}-${process.arch}.`);
-  }
-  const distVersion = readFileSync(resolve(installation.distribution, "version"), "utf8").trim();
-  if (distVersion !== installation.version) {
-    throw new Error(`Installed Electron distribution is ${distVersion}, but the electron package declares ${installation.version}.`);
-  }
-  const executable = resolve(installation.distribution, "electron.exe");
-  if (!isWindowsX64Executable(executable)) {
-    throw new Error(`Installed Electron binary is missing or not a Windows x64 executable: ${executable}`);
-  }
+if (process.platform !== "win32" || process.arch !== "x64") throw new Error("Tauri packaging supports Windows x64 only.");
+const executable = resolve("src-tauri/target/release/frostpi-desktop.exe");
+for (const file of [executable, join(buildOutput, "backend.cjs"), join(buildOutput, "pi-extensions/session-tree.js"), join(buildOutput, "pi-extensions/question-tool.js")]) {
+  if (!existsSync(file)) throw new Error(`Missing build output: ${file}`);
 }
-
-/** Reads the PE machine type instead of trusting the file name. */
-function isWindowsX64Executable(path) {
-  if (!existsSync(path)) return false;
-  const header = Buffer.alloc(4096);
-  const descriptor = openSync(path, "r");
-  try { readSync(descriptor, header, 0, header.length, 0); }
-  finally { closeSync(descriptor); }
-  if (header.toString("latin1", 0, 2) !== "MZ") return false;
-  const peOffset = header.readUInt32LE(0x3c);
-  if (peOffset + 6 > header.length) return false;
-  if (header.subarray(peOffset, peOffset + 4).toString("hex") !== "50450000") return false;
-  return header.readUInt16LE(peOffset + 4) === 0x8664;
+function removeStage(stage) {
+  const canonical = realpathSync(stage);
+  if (!canonical.startsWith(realpathSync(tmpdir()) + sep) || !basename(canonical).startsWith("frostpi-tauri-package-")) throw new Error("Refusing to remove an unexpected staging path.");
+  rmSync(canonical, { recursive: true, force: true });
 }
-
-function requireBuildOutput() {
-  for (const file of requiredBuildFiles) {
-    const path = resolve(buildOutput, file);
-    if (!existsSync(path)) throw new Error(`Desktop build output is missing: ${path}. Run "pnpm --dir apps/desktop build" first.`);
-  }
-}
-
-/**
- * A packaged app must not carry the repository. Staging copies only the built
- * runtime payload, so tests, sources, development dependencies and user profiles
- * cannot reach the archive by accident.
- */
-async function stageApplication(stagingRoot) {
-  const applicationRoot = resolve(stagingRoot, "app");
-  mkdirSync(resolve(applicationRoot, "dist"), { recursive: true });
-  cpSync(resolve(buildOutput, "main.cjs"), resolve(applicationRoot, "dist/main.cjs"));
-  cpSync(resolve(buildOutput, "preload.cjs"), resolve(applicationRoot, "dist/preload.cjs"));
-  cpSync(resolve(buildOutput, "renderer"), resolve(applicationRoot, "dist/renderer"), { recursive: true });
-  cpSync(resolve(buildOutput, "pi-extensions"), resolve(applicationRoot, "dist/pi-extensions"), { recursive: true });
-  cpSync(resolve(repositoryRoot, "LICENSE"), resolve(applicationRoot, "LICENSE"));
-  // Shared notices plus the Desktop runtime additions that file does not list.
-  writeFileSync(resolve(applicationRoot, "THIRD_PARTY_NOTICES.md"), desktopNoticesText());
-  writeFileSync(resolve(applicationRoot, "package.json"), `${JSON.stringify(runtimeManifest(), null, 2)}\n`);
-  const icon = resolve(stagingRoot, `${productName}.ico`);
-  writeFileSync(icon, await pngToIco(brandIcon));
-  return { applicationRoot, icon };
-}
-
-/** The runtime manifest stays minimal; the product version still comes from its single authority. */
-function runtimeManifest() {
-  return {
-    name: "frostpi-desktop",
-    productName,
-    version: productVersion(),
-    description: "FrostPi Desktop",
-    license: "AGPL-3.0-only",
-    private: true,
-    type: "module",
-    main: "dist/main.cjs",
-  };
-}
-
-/** Windows' own Compress-Archive keeps this dependency-free and available offline. */
-function compressArchive(source, destination) {
-  const script = `$ErrorActionPreference = 'Stop'; Compress-Archive -Path ${powerShellLiteral(source)} -DestinationPath ${powerShellLiteral(destination)} -Force`;
-  runPowerShell(script);
-  if (!existsSync(destination)) throw new Error(`Compress-Archive produced no archive: ${destination}`);
-}
-
-function isCompleteElectronRelease(archive) {
-  if (!existsSync(archive) || statSync(archive).size === 0) return false;
-  try {
-    return new AdmZip(archive).getEntries().some((entry) => /^electron\.exe$/i.test(entry.entryName));
-  } catch {
-    return false;
-  }
-}
-
-/**
- * @electron/packager needs an Electron release archive. Reuse the installed,
- * already-verified distribution instead of downloading another copy. The cache
- * is only accepted after a structure check, and a rebuild publishes through a
- * temporary file so an interrupted run cannot masquerade as a valid cache.
- */
-function electronReleaseArchive(installation) {
-  mkdirSync(electronZipCache, { recursive: true });
-  const archive = resolve(electronZipCache, `electron-v${installation.version}-${targetPlatform}-${targetArch}.zip`);
-  if (isCompleteElectronRelease(archive)) return archive;
-  const temporary = resolve(electronZipCache, `${basename(archive, ".zip")}.partial-${process.pid}.zip`);
-  try {
-    compressArchive(resolve(installation.distribution, "*"), temporary);
-    if (!isCompleteElectronRelease(temporary)) throw new Error(`Electron release archive is incomplete: ${temporary}`);
-    renameSync(temporary, archive);
-  } finally {
-    rmSync(temporary, { force: true });
-  }
-  return archive;
-}
-
-async function packageApplication({ applicationRoot, icon }, stagingRoot, installation) {
-  const [packagedRoot] = await packager({
-    dir: applicationRoot,
-    out: resolve(stagingRoot, "packaged"),
-    name: productName,
-    appVersion: productVersion(),
-    platform: targetPlatform,
-    arch: targetArch,
-    electronVersion: installation.version,
-    electronZipDir: electronZipCache,
-    // External Pi artifacts stay real files under resources/app; nothing runs from an ASAR.
-    asar: false,
-    prune: false,
-    overwrite: true,
-    icon,
-    win32metadata: {
-      CompanyName: "frostime",
-      FileDescription: "FrostPi Desktop",
-      InternalName: productName,
-      OriginalFilename: `${productName}.exe`,
-      ProductName: productName,
-    },
-  });
-  const resourcesApp = resolve(packagedRoot, "resources/app");
-  if (!existsSync(resolve(resourcesApp, "dist/main.cjs"))) throw new Error(`Packaged app payload is missing: ${resourcesApp}`);
-  if (existsSync(resolve(packagedRoot, "resources/app.asar"))) throw new Error("Packaged app unexpectedly uses an ASAR archive.");
-  return packagedRoot;
-}
-
-/** The archive root matches the product, so extracting yields "FrostPi/FrostPi.exe". */
-function addDistributionFiles(portableRoot) {
-  const content = { "README.txt": distributionReadme };
-  for (const file of distributionFiles) {
-    const text = content[file]?.();
-    if (text === undefined) throw new Error(`No content defined for distribution file: ${file}`);
-    // Notepad on Chinese Windows needs the byte-order mark to read UTF-8 text.
-    writeFileSync(resolve(portableRoot, file), `\uFEFF${text.replaceAll("\n", "\r\n")}`);
-  }
-}
-
-function archivePayloadSizes(root) {
-  let files = 0;
-  let bytes = 0;
-  const walk = (directory) => {
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const path = join(directory, entry.name);
-      if (entry.isDirectory()) walk(path);
-      else { files += 1; bytes += statSync(path).size; }
-    }
-  };
-  walk(root);
-  return { files, bytes };
-}
-
-const stagingRoot = mkdtempSync(resolve(tmpdir(), "frostpi-desktop-package-"));
+const stage = mkdtempSync(join(tmpdir(), "frostpi-tauri-package-"));
+const root = join(stage, "FrostPi"); mkdirSync(root);
 try {
-  requireBuildOutput();
+  cpSync(executable, join(root, "FrostPi.exe"));
+  cpSync(join(buildOutput, "backend.cjs"), join(root, "backend.cjs"));
+  mkdirSync(join(root, "pi-extensions"));
+  for (const name of ["session-tree.js", "question-tool.js"]) cpSync(join(buildOutput, "pi-extensions", name), join(root, "pi-extensions", name));
+  // Pi extension artifacts use ESM; backend.cjs remains explicitly CommonJS.
+  writeFileSync(join(root, "package.json"), JSON.stringify({ name: "frostpi-desktop", private: true, type: "module", version: productVersion() }) + "\n");
+  cpSync(join(repositoryRoot, "LICENSE"), join(root, "LICENSE"));
+  writeFileSync(join(root, "THIRD_PARTY_NOTICES.md"), desktopNoticesText());
+  writeFileSync(join(root, "NATIVE_NOTICES.md"), nativeNoticesText());
+  // Keep the exact native versions alongside their source and license notices.
+  cpSync(resolve("src-tauri/Cargo.lock"), join(root, "Cargo.lock"));
+  writeFileSync(join(root, "README.txt"), `FrostPi Desktop ${productVersion()} - Windows x64
+
+将 FrostPi 文件夹完整解压，双击 FrostPi.exe 启动。
+需要自行安装 Node.js 22.19+、Pi 命令行和 Microsoft Edge WebView2 Runtime。
+从资源管理器启动时的 PATH 必须能找到 Node 和 Pi；本包不捆绑这些运行时。
+
+设置与项目/会话索引保存在 %APPDATA%\\FrostPi；FROSTPI_DESKTOP_USER_DATA 可指定隔离目录。
+正常关闭会停止 Pi 子进程并保存索引；草稿和进行中的回答不会恢复。
+单条消息的 UTF-8 JSON 上限为 32 MiB。超限时请减少附件，或选择其他/新建会话。
+
+本包为未签名的 Windows x64 免安装版，不含自动更新。
+许可证：AGPL-3.0-only，见同目录 LICENSE。
+第三方归属见 THIRD_PARTY_NOTICES.md、NATIVE_NOTICES.md 和 Cargo.lock。
+源码：https://github.com/frostime/pi-vscode-ui
+`);
+  const archive = new AdmZip(); archive.addLocalFolder(root, "FrostPi");
   mkdirSync(artifactsRoot, { recursive: true });
-  const installation = electronInstallation();
-  requireSupportedTarget(installation);
-  electronReleaseArchive(installation);
-  const staged = await stageApplication(stagingRoot);
-  const packagedRoot = await packageApplication(staged, stagingRoot, installation);
-  const portableRoot = resolve(stagingRoot, productName);
-  renameSync(packagedRoot, portableRoot);
-  addDistributionFiles(portableRoot);
-  // Build beside the target and publish by rename, so a failure keeps the previous archive usable.
-  const output = distributedArchive();
-  const temporaryOutput = resolve(artifactsRoot, `${basename(output, ".zip")}.partial-${process.pid}.zip`);
-  try {
-    compressArchive(portableRoot, temporaryOutput);
-    const archive = new AdmZip(temporaryOutput);
-    // Compress-Archive can emit Windows separators; ZIP entry names use forward slashes.
-    if (archive.getEntries().some((entry) => entry.entryName.includes("\\"))) {
-      for (const entry of archive.getEntries()) entry.entryName = entry.entryName.replaceAll("\\", "/");
-      archive.writeZip(temporaryOutput);
-    }
-    const entries = archive.getEntries().map((entry) => entry.entryName);
-    const required = [`${productName}/${productName}.exe`, `${productName}/resources/app/dist/main.cjs`, ...distributionFiles.map((file) => `${productName}/${file}`)];
-    if (required.some((file) => !entries.includes(file)) || entries.some((file) => !file.startsWith(`${productName}/`))) {
-      throw new Error("The completed Desktop archive has an unexpected layout; the previous artifact was preserved.");
-    }
-    renameSync(temporaryOutput, output);
-  } finally {
-    rmSync(temporaryOutput, { force: true });
-  }
-  console.log(`Packaged ${applicationPayload.files.length} files plus ${applicationPayload.directories.length} directories with Electron ${installation.version}.`);
-  console.log(`Payload: ${archivePayloadSizes(resolve(portableRoot, "resources/app")).files} files; archive root: ${distributionFiles.join(", ")}`);
-  console.log(`Created ${output} (${(statSync(output).size / 1024 / 1024).toFixed(1)} MiB)`);
-} finally {
-  rmSync(stagingRoot, { recursive: true, force: true });
-}
+  const target = distributedArchive();
+  const temporary = `${target}.tmp`;
+  try { archive.writeZip(temporary); rmSync(target, { force: true }); renameSync(temporary, target); }
+  finally { rmSync(temporary, { force: true }); }
+  const size = readFileSync(target).length;
+  console.log(`Packaged Windows Desktop: ${target} (${size} bytes)`);
+} finally { removeStage(stage); }

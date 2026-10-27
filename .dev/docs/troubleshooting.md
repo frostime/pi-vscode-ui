@@ -8,7 +8,7 @@ updated: 2026-10-24
 
 # Troubleshooting
 
-Check the environment that actually hosts Pi: the workspace Extension Host for VS Code (possibly remote), or the local Electron main process for Desktop. A command working in a different terminal does not prove it is available there.
+Check the environment that actually hosts Pi: the workspace Extension Host for VS Code (possibly remote), or the local Desktop Node backend for Desktop. A command working in a different terminal does not prove it is available there.
 
 VS Code provides FrostPi Output and diagnostic export. Desktop does not provide those IDE surfaces; use its visible startup/settings errors and an isolated development reproduction when needed. Native smoke and diagnostic evidence are described in `.dev/docs/testing.md`.
 

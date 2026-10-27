@@ -2,9 +2,9 @@
   "name": "@frostime/frostpi-desktop",
   "private": true,
   "type": "module",
-  "main": "dist/main.cjs",
   "scripts": {
     "build": "pnpm --filter @frostime/pi-client build && node build.mjs && vite build",
+    "build:native": "pnpm build && tauri build --no-bundle -- --locked",
     "clean": "node ../../scripts/clean-dir.mjs dist coverage",
     "start": "node scripts/start.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && svelte-check --tsconfig ./tsconfig.renderer.json",
@@ -13,12 +13,7 @@
     "test:smoke": "node scripts/smoke.mjs",
     "package:app": "node scripts/package-app.mjs",
     "verify:package": "node scripts/verify-package.mjs",
-    "build:tauri": "pnpm build && tauri build --no-bundle -- --locked",
-    "start:tauri": "node scripts/start-tauri.mjs",
-    "test:tauri": "node scripts/smoke-tauri.mjs",
     "check:native": "cargo check --locked --manifest-path src-tauri/Cargo.toml",
-    "package:tauri": "pnpm build:tauri && node scripts/package-tauri.mjs",
-    "verify:tauri": "node scripts/verify-tauri.mjs",
     "test:native": "cargo test --locked --manifest-path src-tauri/Cargo.toml --features custom-protocol"
   },
   "dependencies": {
@@ -30,14 +25,11 @@
     "svelte": "^5.56.5"
   },
   "devDependencies": {
-    "@electron/packager": "^20.3.0",
     "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@tauri-apps/cli": "^2.12.4",
     "@types/node": "^24.1.0",
     "adm-zip": "^0.6.0",
-    "electron": "44.9.0",
     "esbuild": "^0.28.0",
-    "png-to-ico": "^3.0.2",
     "svelte-check": "^4.3.1",
     "vite": "^8.1.5",
     "vitest": "^4.1.10"

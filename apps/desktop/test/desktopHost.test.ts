@@ -4,13 +4,6 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-const native = vi.hoisted(() => ({ openDialog: vi.fn() }));
-vi.mock("electron", () => ({
-  dialog: { showOpenDialog: native.openDialog },
-  clipboard: { writeText: vi.fn() },
-  shell: { openExternal: vi.fn(), openPath: vi.fn() },
-}));
-
 import type { FrostPiConfiguration } from "@frostime/pi-client/core/configuration/configurationTypes";
 import type { HostInputBoxOptions, HostQuickPickItem, HostQuickPickOptions, HostQuickPickSeparator } from "@frostime/pi-client/host";
 import { SessionRegistry } from "@frostime/pi-client/host/SessionRegistry";
@@ -20,10 +13,13 @@ import { workspaceFileExcludeRules } from "@frostime/pi-client/host/file-search/
 
 import type { DesktopInteractions } from "../src/main/dialogs.js";
 import { createDesktopHost as createHost, type DesktopHostOptions } from "../src/main/desktopHost.js";
-import { electronNative } from "../src/main/electronNative.js";
-import type { BrowserWindow } from "electron";
-function createDesktopHost(options: Omit<DesktopHostOptions, "native"> & { window: BrowserWindow | (() => BrowserWindow | null) }) {
-  return createHost({ ...options, native: electronNative(() => { const w = typeof options.window === "function" ? options.window() : options.window; return w && !w.isDestroyed() ? w : undefined; }) });
+import type { DesktopNative } from "../src/main/desktopNative.js";
+const native = {
+  focused: () => false, message: vi.fn(), confirm: vi.fn(), openFiles: vi.fn(), chooseDirectory: vi.fn(),
+  writeClipboard: vi.fn(), openExternal: vi.fn(), openPath: vi.fn(), appearance: vi.fn(),
+} satisfies DesktopNative;
+function createDesktopHost(options: Omit<DesktopHostOptions, "native">) {
+  return createHost({ ...options, native });
 }
 import { DesktopProjects } from "../src/main/desktopProjects.js";
 import { DesktopSettingsStore } from "../src/main/settings/DesktopSettingsStore.js";
@@ -56,7 +52,7 @@ async function projectsWithRoots(roots: string[]): Promise<DesktopProjects> {
 
 describe("createDesktopHost", () => {
   it("uses the product's real UI declaration and does not pretend unsupported editor/export operations exist", () => {
-    const host = createDesktopHost({ window: () => null, projects: new DesktopProjects(), interactions: interactions() as unknown as DesktopInteractions });
+    const host = createDesktopHost({ projects: new DesktopProjects(), interactions: interactions() as unknown as DesktopInteractions });
     // Independent of synthetic all-false DOM tests: this checks the actual Desktop assembly.
     expect(host.capabilities).toBe(DESKTOP_CLIENT_UI_CAPABILITIES);
     expect(host.capabilities).toEqual({ sessionEditorTabs: false, editorMentionSpecials: false, openReferencedLocation: true, exportDiagnostics: false });
@@ -67,7 +63,7 @@ describe("createDesktopHost", () => {
   it("routes supported settings actions to known fields and explicitly rejects unsupported search queries", async () => {
     const targets: DesktopSettingsTarget[] = [];
     const host = createDesktopHost({
-      window: () => null, projects: new DesktopProjects(), interactions: interactions() as unknown as DesktopInteractions,
+      projects: new DesktopProjects(), interactions: interactions() as unknown as DesktopInteractions,
       openSettings: (target) => { targets.push(target); return Promise.resolve(); },
     });
     await host.editor.openSettings!("@ext:frostime.frostpi");
@@ -78,32 +74,28 @@ describe("createDesktopHost", () => {
     expect(targets).toHaveLength(3);
   });
 
-  it("translates VS Code file filters to Electron's native dialog shape", async () => {
-    const window = { isDestroyed: () => false };
-    native.openDialog.mockResolvedValueOnce({ canceled: false, filePaths: ["/selected/session.jsonl"] });
+  it("passes file filters to the finite native service", async () => {
+    vi.mocked(native.openFiles).mockResolvedValueOnce(["/selected/session.jsonl"]);
     const host = createDesktopHost({
-      window: window as never,
       projects: new DesktopProjects(),
       interactions: interactions() as unknown as DesktopInteractions,
     });
     const selected = await host.window.showOpenFileDialog!({ title: "Resume", filters: { "Pi session": ["jsonl"] } });
-    expect(native.openDialog).toHaveBeenCalledWith(window, {
-      title: "Resume", properties: ["openFile"], filters: [{ name: "Pi session", extensions: ["jsonl"] }],
-    });
+    expect(native.openFiles).toHaveBeenCalledWith({ title: "Resume", filters: { "Pi session": ["jsonl"] } });
     expect(selected?.[0]?.fsPath).toBe("/selected/session.jsonl");
   });
 
   it("rejects the VS Code proxy mode explicitly (prefixed or bare key)", async () => {
     const projects = await projectsWithRoots([await mkdtemp(join(tmpdir(), "frostpi-host-"))]);
     expect(() => createDesktopHost({
-      window: () => null,
+
       projects,
       interactions: interactions() as unknown as DesktopInteractions,
       settings: { "frostpi.network.proxy.mode": "vscode" },
     })).toThrow("'vscode' requires VS Code");
 
     expect(() => createDesktopHost({
-      window: () => null,
+
       projects,
       interactions: interactions() as unknown as DesktopInteractions,
       settings: { "network.proxy.mode": "vscode" },
@@ -113,7 +105,7 @@ describe("createDesktopHost", () => {
   it("applies setting overrides over shared defaults without duplicating defaults", async () => {
     const projects = await projectsWithRoots([await mkdtemp(join(tmpdir(), "frostpi-host-"))]);
     const host = createDesktopHost({
-      window: () => null,
+
       projects,
       interactions: interactions() as unknown as DesktopInteractions,
       settings: {
@@ -135,7 +127,7 @@ describe("createDesktopHost", () => {
   it("passes 'custom' proxy through shared readConfiguration; only 'vscode' is a Desktop incompatibility", async () => {
     const projects = await projectsWithRoots([await mkdtemp(join(tmpdir(), "frostpi-host-"))]);
     const host = createDesktopHost({
-      window: () => null,
+
       projects,
       interactions: interactions() as unknown as DesktopInteractions,
       settings: { "frostpi.network.proxy.mode": "custom", "frostpi.network.proxy.endpoint": "http://127.0.0.1:9000" },
@@ -157,7 +149,7 @@ describe("createDesktopHost", () => {
         "search.exclude": { "**/cache": true },
       });
       const host = createDesktopHost({
-        window: () => null, projects: new DesktopProjects(),
+        projects: new DesktopProjects(),
         interactions: interactions() as unknown as DesktopInteractions, settingsStore: store,
       });
       const chat = host.configuration.getConfiguration("chat");
@@ -181,7 +173,7 @@ describe("createDesktopHost", () => {
     const alpha = await mkdtemp(join(tmpdir(), "frostpi-host-alpha-"));
     const beta = await mkdtemp(join(tmpdir(), "frostpi-host-beta-"));
     const projects = await projectsWithRoots([alpha, beta]);
-    const host = createDesktopHost({ window: () => null, projects, interactions: interactions() as unknown as DesktopInteractions });
+    const host = createDesktopHost({ projects, interactions: interactions() as unknown as DesktopInteractions });
     const logged: string[] = [];
     const registry = new SessionRegistry(host, { logger: {
       error: (message) => logged.push(message),
@@ -219,7 +211,7 @@ describe("desktop host workspace mapping", () => {
     await symlink(target, alias, process.platform === "win32" ? "junction" : "dir");
 
     const projects = await projectsWithRoots([target, alias]);
-    const host = createDesktopHost({ window: () => null, projects, interactions: interactions() as unknown as DesktopInteractions });
+    const host = createDesktopHost({ projects, interactions: interactions() as unknown as DesktopInteractions });
     expect(host.workspace.getWorkspaceFolders()).toHaveLength(1);
     expect(host.workspace.getWorkspaceFolders()[0]?.uri.fsPath).toBe(target);
   });
