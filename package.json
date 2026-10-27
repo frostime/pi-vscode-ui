@@ -18,7 +18,7 @@
     "package:vsix": "node scripts/package-vsix.mjs",
     "verify:vsix": "node scripts/verify-vsix.mjs",
     "package:zip": "node scripts/package-zip.mjs",
-    "package:desktop": "pnpm --dir apps/desktop build && pnpm --dir apps/desktop package:app",
+    "package:desktop": "pnpm --dir apps/desktop build:native && pnpm --dir apps/desktop package:app",
     "verify:desktop": "pnpm --dir apps/desktop verify:package",
     "publish:marketplace": "node scripts/publish-marketplace.mjs"
   },

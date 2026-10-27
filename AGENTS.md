@@ -20,7 +20,7 @@ The project has two parts: a VS Code extension as the primary product, and a Des
 ## Hard boundaries
 
 - Shared client runtime code (`apps/pi-client/src/core` and `src/host`) must not import VS Code, Electron or product entries. Host services go through the finite `src/host/clientHost.ts` interface so both products can consume the same application.
-- `src/shared` contains serializable contracts and pure helpers, not Node/core/host runtime code. `src/ui` is browser-only: no Node, native host APIs or client backend imports. UI consumes projected models, never raw Pi events. Desktop renderer authority stays behind the finite preload bridge.
+- `src/shared` contains serializable contracts and pure helpers, not Node/core/host runtime code. `src/ui` is browser-only: no Node, native host APIs or client backend imports. UI consumes projected models, never raw Pi events. Desktop renderer authority stays behind the finite application bridge.
 - One `SessionRuntime` owns one Pi child. Do not globally serialize agent turns, intercept Pi file writes or inject `@file` contents; Pi owns execution and conversation persistence.
 - Proxy changes apply to new or explicitly restarted Pi processes. Never silently interrupt a running turn to apply them.
 - Do not put prompts, responses, image bytes, credentials or unredacted proxy URLs in logs or diagnostics. Pi owns provider credentials; FrostPi must not introduce another provider credential store.

@@ -62,7 +62,17 @@ pub fn execute(app: &tauri::AppHandle, packet: &Value) -> Result<Value, String> 
                 .set_parent(&window)
                 .set_title(options["title"].as_str().unwrap_or("Open file"));
             if let Some(path) = options["defaultFsPath"].as_str() {
-                dialog = dialog.set_directory(path);
+                let path = std::path::Path::new(path);
+                if path.is_file() {
+                    if let Some(parent) = path.parent() {
+                        dialog = dialog.set_directory(parent);
+                    }
+                    if let Some(name) = path.file_name() {
+                        dialog = dialog.set_file_name(name.to_string_lossy());
+                    }
+                } else {
+                    dialog = dialog.set_directory(path);
+                }
             }
             if let Some(filters) = options["filters"].as_object() {
                 for (name, extensions) in filters {

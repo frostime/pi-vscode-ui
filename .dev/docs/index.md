@@ -3,7 +3,7 @@ title: FrostPi Engineering Guide
 description: Choose the source map, contract or workflow needed for a maintenance task.
 scope:
   - /**
-updated: 2026-10-24
+updated: 2026-10-27
 ---
 
 # FrostPi Engineering Guide
@@ -20,7 +20,7 @@ updated: 2026-10-24
 | What must shared application/host changes preserve? | [apps/pi-client/SPEC.md](../../apps/pi-client/SPEC.md) |
 | What are the Session state, Fork and recovery rules? | [session-lifecycle.SPEC.md](../../apps/pi-client/src/host/session-lifecycle.SPEC.md); it also identifies the VS Code reference policy |
 | How do browser messages, pinned views and draft handoff work? | [webview-bridge.SPEC.md](../../apps/pi-client/src/shared/bridge/webview-bridge.SPEC.md) |
-| How should Desktop Projects, settings, state or native interaction behave? | [apps/desktop/SPEC.md](../../apps/desktop/SPEC.md) |
+| Which Desktop invariants must host, navigation or renderer changes preserve? | [apps/desktop/SPEC.md](../../apps/desktop/SPEC.md) |
 | What spans shared UI layout, styles, themes and accessibility? | [design/ui-spec.md](design/ui-spec.md); feature-specific details stay with their feature |
 | Which Pi protocol assumptions cross module boundaries? | [protocol/pi-rpc-compatibility.md](protocol/pi-rpc-compatibility.md) and the RPC package SPEC |
 | How should OMP support be extended without spreading runtime branches? | [architecture/omp-compatibility.md](architecture/omp-compatibility.md), for the two-layer design and ownership test |
@@ -28,8 +28,8 @@ updated: 2026-10-24
 ## Choose a workflow
 
 - [development.md](development.md): workspace setup, independent builds, generated settings and shared-source resolution.
-- [testing.md](testing.md): test ownership, focused versus broader checks, native runners and evidence limits.
-- [release.md](release.md): version authority, extension publication and explicit Desktop candidate delivery.
+- [testing.md](testing.md): test ownership, focused checks, real-client CDP interactions, native runners and evidence limits.
+- [release.md](release.md): version authority, extension publication and Windows Desktop ZIP delivery.
 - [troubleshooting.md](troubleshooting.md): symptom-based recovery and Host-specific checks before changing product behavior.
 
 `.dev/changes/` and `.dev/backlog/` contain task context and historical evidence. Read them when working on that task; current architecture and module contracts do not depend on replaying old sessions or plans.

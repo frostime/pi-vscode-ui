@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
-import { createRequire } from "node:module";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 
-const require = createRequire(import.meta.url);
-const environment = { ...process.env };
-delete environment.ELECTRON_RUN_AS_NODE;
-const child = spawn(require("electron"), [".", ...process.argv.slice(2)], { stdio: "inherit", env: environment });
-child.on("error", () => { console.error("Could not launch Electron."); process.exitCode = 1; });
-child.on("exit", (code) => { process.exitCode = code ?? 1; });
+if (process.platform !== "win32" || process.arch !== "x64") throw new Error("Tauri Desktop currently supports Windows x64 only.");
+const executable = resolve("src-tauri/target/release/frostpi-desktop.exe");
+if (!existsSync(executable)) throw new Error("Run pnpm --dir apps/desktop build:native first.");
+const child = spawn(executable, process.argv.slice(2), { stdio: "inherit", windowsHide: true });
+child.once("error", () => { console.error("Could not start FrostPi Desktop."); process.exitCode = 1; });
+child.once("exit", (code) => { process.exitCode = code ?? 1; });

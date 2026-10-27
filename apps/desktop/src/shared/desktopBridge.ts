@@ -54,7 +54,7 @@ export interface DesktopResumeView {
   error?: string;
 }
 
-/** The renderer gets this finite bridge, never ipcRenderer or Node access. */
+/** The renderer gets this finite bridge, never raw native commands or Node access. */
 export interface DesktopApi {
   postClientMessage(message: WebviewToHostMessage): void;
   onClientMessage(listener: (message: HostToWebviewMessage) => void): () => void;

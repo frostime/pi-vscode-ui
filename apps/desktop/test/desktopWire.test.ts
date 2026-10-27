@@ -1,6 +1,6 @@
 import { PassThrough, Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { DesktopWire } from "../src/tauri/DesktopWire.js";
+import { DesktopWire } from "../src/main/DesktopWire.js";
 import { isDesktopRequest } from "../src/shared/desktopTransport.js";
 
 describe("Desktop private stdio transport", () => {

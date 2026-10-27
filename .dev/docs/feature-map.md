@@ -15,7 +15,7 @@ Use this map to locate a feature's source and nearest contract. Paths are worksp
 
 - Shared collection: `apps/pi-client/src/host/SessionRegistry.ts`; metadata: `apps/pi-client/src/host/sessions/SessionPersistence.ts`; single-session execution/state: `apps/pi-client/src/core/sessions/`.
 - VS Code assembly: `apps/vscode/src/extension/activate.ts` and `clientHost.ts`.
-- Desktop Project roots: `apps/desktop/src/main/desktopProjects.ts`; Project ownership/last Session/sidebar state: `apps/desktop/src/main/DesktopProjectNavigation.ts`; action adaptation: `apps/desktop/src/main/DesktopActionDispatcher.ts`; sidebar/drawer/resize: `apps/desktop/src/renderer/DesktopShell.svelte`. `apps/desktop/src/main/createDesktopBackend.ts` assembles the shared Registry/client with `desktopHost.ts`; `createDesktopApp.ts` binds the default Electron shell and `src/tauri/backend.ts` binds the Windows Tauri candidate. Versioned Project/client Memento data lives in `apps/desktop/src/main/storage/DesktopStateStore.ts`; both JSON stores use the bounded/atomic `apps/desktop/src/main/storage/jsonFile.ts` helper.
+- Desktop Project roots: `apps/desktop/src/main/desktopProjects.ts`; Project ownership/last Session/sidebar state: `apps/desktop/src/main/DesktopProjectNavigation.ts`; action adaptation: `apps/desktop/src/main/DesktopActionDispatcher.ts`; sidebar/drawer/resize: `apps/desktop/src/renderer/DesktopShell.svelte`. `apps/desktop/src/main/createDesktopBackend.ts` assembles the shared Registry/client with `desktopHost.ts`; `src/main/backend.ts` binds private transport to the Windows Tauri shell. Versioned Project/client Memento data lives in `apps/desktop/src/main/storage/DesktopStateStore.ts`; both JSON stores use the bounded/atomic `apps/desktop/src/main/storage/jsonFile.ts` helper.
 - Contracts: `apps/pi-client/SPEC.md`, `apps/pi-client/src/host/session-lifecycle.SPEC.md`, and `apps/desktop/SPEC.md`.
 
 ## Working directories, history catalog, and session tree
@@ -37,8 +37,8 @@ Use this map to locate a feature's source and nearest contract. Paths are worksp
 - Shared authorization/dispatch/synchronization/drafts: `apps/pi-client/src/host/bridge/`; start with `WebviewConnection.ts`, `WebviewActionDispatcher.ts`, and `ComposerDraftCache.ts`.
 - Shared browser bridge and presentation state: `apps/pi-client/src/ui/bridge/` and `state/`.
 - VS Code sidebar/tab assembly: `apps/vscode/src/extension/webview-host/SessionWebviewCoordinator.ts` and `SessionPanelManager.ts`; native browser transport: `apps/vscode/src/webview/bridge/vscodeBridge.ts`.
-- Desktop finite preload/IPC: `apps/desktop/src/preload.ts`, `apps/desktop/src/shared/desktopBridge.ts`, `apps/desktop/src/main/createDesktopApp.ts`.
-- Windows Tauri candidate: finite browser adapter `apps/desktop/src/renderer/tauriBridge.ts`; private Node transport `apps/desktop/src/tauri/`; native window/process/native operations `apps/desktop/src-tauri/src/`. It consumes the same Desktop backend and does not replace the default Electron distribution yet.
+- Desktop finite application IPC: `apps/desktop/src/shared/desktopBridge.ts`, `apps/desktop/src/shared/desktopTransport.ts`, `apps/desktop/src/renderer/tauriBridge.ts`.
+- Windows native host: finite browser adapter `apps/desktop/src/renderer/tauriBridge.ts`; private Node transport `apps/desktop/src/main/backend.ts` and `DesktopWire.ts`; native window/process/native operations `apps/desktop/src-tauri/src/`. It authorizes the local window and owns the Node/Pi process tree.
 - Contract: `apps/pi-client/src/shared/bridge/webview-bridge.SPEC.md`.
 
 ## Shared UI
@@ -53,7 +53,7 @@ Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 - Models/thinking: `features/models/ModelPicker.svelte`, `thinkingLevels.ts`, and adjacent SPECs.
 - Extension/Question UI: `features/extension-ui/`, `features/question-tool/`; shared coordination: `../core/extension-ui/` and `../core/question-tool/`.
 - Provider usage surface: `features/provider-usage/` and its SPEC; credential/query engine remains `packages/provider-usage/`. Safe reports travel through the common validated bridge.
-- Styles/theme: `styles/`; preserve VS Code variables, FrostPi mappings and Codicons. Desktop palettes: `apps/desktop/src/renderer/theme.css`; application: `apps/desktop/src/renderer/theme.ts`; persisted choice: `desktop.theme` in the Desktop settings schema. Desktop interface typography: `apps/desktop/src/renderer/uiTypography.ts`; native Zoom/shortcuts: `apps/desktop/src/main/windowZoom.ts`. Cross-feature requirements: `.dev/docs/design/ui-spec.md`.
+- Styles/theme: `styles/`; preserve VS Code variables, FrostPi mappings and Codicons. Desktop palettes: `apps/desktop/src/renderer/theme.css`; application: `apps/desktop/src/renderer/theme.ts`; persisted choice: `desktop.theme` in the Desktop settings schema. Desktop interface typography: `apps/desktop/src/renderer/uiTypography.ts`; native Zoom/shortcuts: `apps/desktop/src/renderer/tauriBridge.ts` plus backend settings writes and `src-tauri/src/native.rs`. Cross-feature requirements: `.dev/docs/design/ui-spec.md`.
 - Desktop-only outer navigation/dialogs: `apps/desktop/src/renderer/DesktopApp.svelte` and `apps/desktop/src/renderer/DesktopShell.svelte`; they mount the same ClientApp, not a second chat implementation.
 
 ## Editor, configuration, network, and diagnostics

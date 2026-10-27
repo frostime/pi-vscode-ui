@@ -1,8 +1,8 @@
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { DESKTOP_TRANSPORT_BLOCKED_CHANNEL } from "../src/shared/desktopTransport.js";
-import { DesktopWire } from "../src/tauri/DesktopWire.js";
-import { createDesktopPublisher } from "../src/tauri/publishDesktopEvent.js";
+import { DesktopWire } from "../src/main/DesktopWire.js";
+import { createDesktopPublisher } from "../src/main/publishDesktopEvent.js";
 
 function publisher() {
   const output = new PassThrough(); const packets: Array<{ channel: string; value: unknown }> = [];

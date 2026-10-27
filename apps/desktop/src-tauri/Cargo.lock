@@ -885,6 +885,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tokio",
+ "webview2-com",
  "windows-sys 0.61.2",
 ]
 

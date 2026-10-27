@@ -408,17 +408,59 @@ async fn desktop_request(
         .await
         .map_err(|_| "Desktop request cancelled".to_string())?
 }
+// Preserve backend disposal when the native browser loses its conversation renderer.
+fn watch_webview(
+    window: &tauri::WebviewWindow,
+    backend: Backend,
+    handle: tauri::AppHandle,
+) -> tauri::Result<()> {
+    window.with_webview(move |platform| unsafe {
+        use webview2_com::{
+            Microsoft::Web::WebView2::Win32::{
+                COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED,
+                COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED,
+            },
+            ProcessFailedEventHandler,
+        };
+        let failed_backend = backend.clone();
+        let failed_app = handle.clone();
+        let result = platform.controller().CoreWebView2().and_then(|core| {
+            core.add_ProcessFailed(
+                &ProcessFailedEventHandler::create(Box::new(move |_, args| {
+                    if let Some(args) = args {
+                        let mut kind = Default::default();
+                        args.ProcessFailedKind(&mut kind)?;
+                        if kind == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED
+                            || kind == COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED
+                        {
+                            failed_backend.close(failed_app.clone());
+                        }
+                    }
+                    Ok(())
+                })),
+                &mut 0,
+            )
+        });
+        if result.is_err() {
+            backend.close(handle);
+        }
+    })
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![desktop_connect, desktop_request])
         .setup(|app| {
             let backend = start_backend(app)?;
             app.manage(backend);
-            tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
+            let window = tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
                 .data_directory(profile_directory().join("WebView2"))
                 .on_navigation(local_url)
                 .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
                 .build()?;
+            let backend = app.state::<Backend>().inner().clone();
+            let handle = app.handle().clone();
+            watch_webview(&window, backend, handle)?;
             Ok(())
         })
         .on_window_event(|window, event| {

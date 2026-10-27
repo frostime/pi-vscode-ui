@@ -5,7 +5,7 @@ scope:
   - /apps/**
   - /packages/pi-rpc/**
   - /packages/provider-usage/**
-updated: 2026-10-24
+updated: 2026-10-27
 ---
 
 # Architecture Overview
@@ -17,17 +17,17 @@ FrostPi provides a GUI for Pi through its native RPC mode. Pi executes agent wor
 The project has two parts: a VS Code extension as the primary product, and a Desktop App maintained alongside it. `apps/pi-client` contains their common UI, session behavior and message contracts. It is FrostPi application code, not a general-purpose host SDK. The products share source, not a background service or running session state.
 
 ```text
-VS Code Webview                         Electron renderer
+VS Code Webview                         Tauri WebView2 renderer
        |                                       |
-VS Code message endpoint                finite preload bridge
+VS Code message endpoint                finite Tauri application bridge
        |                                       |
-Workspace Extension Host                Electron main process
+Workspace Extension Host                Desktop Node backend
        +------- shared Registry / Runtime -----+
                          |
                     Pi children
 ```
 
-The Windows Tauri migration candidate replaces the Desktop shell with a local WebView2 window plus one external Node backend, assembled by `apps/desktop/src/main/createDesktopBackend.ts`. Rust exposes finite application requests and translates only backend-authorized native operations; Registry, Runtime and Pi ownership remain unchanged. Electron remains the verified/default entry while native parity is evaluated.
+Desktop uses one Windows x64 Tauri/WebView2 shell and one external Node backend, assembled by `apps/desktop/src/main/createDesktopBackend.ts`. Rust exposes finite application requests and performs backend-authorized native operations. The Node backend owns Registry/Runtime and each Session owns one Pi child; the native shell owns the backend process tree.
 
 Each product has its own Registry and Pi processes. VS Code sessions run in the workspace Extension Host, including SSH, WSL and Dev Containers; Desktop runs locally. There is no local-to-remote relay. Untrusted and virtual VS Code workspaces remain unsupported.
 
@@ -67,13 +67,13 @@ FrostPi has no telemetry endpoint or hosted account service. Pi/model-provider t
 | Provider Usage reports | Browser cache keyed by provider | Safe reports only; no disk persistence. Cache/source lifetime is defined by the Provider Usage and bridge SPECs |
 | Logs and diagnostics | Host logging; diagnostic export where the product supports it | No conversation/image payloads; redact common credentials and URL authentication. Paths and third-party stderr still require review before sharing |
 
-These are storage boundaries, not another conversation database or credential manager. Product-specific persistence and error handling belong in the product SPECs; query/credential behavior belongs in `packages/provider-usage/SPEC.md`.
+These are storage boundaries, not another conversation database or credential manager. Product-local constraints stay beside their code; product SPECs hold cross-file invariants. Query/credential behavior belongs in `packages/provider-usage/SPEC.md`.
 
 ## Dependency and trust boundaries
 
 - `packages/pi-rpc` owns child processes, JSONL framing, correlation and runtime dialects, with no product host dependency.
 - Shared `core` and `host` modules must not import product entries, renderers, VS Code or Electron. Inject host services rather than duplicating shared algorithms in adapters.
 - `src/shared` contains serializable contracts and pure helpers; `src/ui` contains browser code. Neither may import Node/backend runtime code.
-- Product browser entries install transport before mounting and sending ready. Desktop exposes finite preload operations, not Node or raw IPC. Main validates the sender/frame; common messages also pass version/schema and session-target authorization.
+- Product browser entries install transport before mounting and sending ready. Desktop exposes finite application operations, not Node or raw IPC. The native shell authorizes the local main window; common messages also pass version/schema and session-target authorization.
 
 File references, Markdown images and interaction responses resolve against their originating Session, not a later foreground Project. Filesystem reads and returned image bytes remain Host-mediated and transient. Changing navigation cannot grant filesystem authority or redirect a pending request to another Pi.

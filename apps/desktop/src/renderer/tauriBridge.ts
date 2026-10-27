@@ -1,4 +1,4 @@
-import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { BRIDGE_VERSION } from "@frostime/pi-client/shared/bridge/bridgeVersion";
 import type { WebviewToHostMessage } from "@frostime/pi-client/shared/bridge/webviewToHost";
 import { DESKTOP_MESSAGE_LIMIT_ERROR, DESKTOP_TRANSPORT_BLOCKED_CHANNEL } from "../shared/desktopTransport.js";
@@ -7,7 +7,6 @@ import type { DesktopSettingsResult } from "../shared/desktopSettings.js";
 
 /** Only this adapter imports Tauri. Shared ClientApp keeps its existing DesktopApi. */
 export async function connectTauriDesktop(): Promise<void> {
-  if (!isTauri()) return;
   const listeners = new Map<string, Set<(value: unknown) => void>>();
   const subscribe = <T>(channel: string, listener: (value: T) => void): (() => void) => {
     const callback = (value: unknown): void => listener(value as T);
@@ -57,7 +56,9 @@ export async function connectTauriDesktop(): Promise<void> {
   window.frostpiDesktop = Object.freeze(api);
   window.addEventListener("keydown", (event) => {
     if (!event.ctrlKey || event.altKey || event.isComposing) return;
-    const action = ["+", "="].includes(event.key) ? "in" : event.key === "-" ? "out" : event.key === "0" ? "reset" : undefined;
+    const action = ["+", "="].includes(event.key) || ["Equal", "NumpadAdd"].includes(event.code) ? "in"
+      : event.key === "-" || ["Minus", "NumpadSubtract"].includes(event.code) ? "out"
+        : event.key === "0" || ["Digit0", "Numpad0"].includes(event.code) ? "reset" : undefined;
     if (action) { event.preventDefault(); send("frostpi:zoom", action); }
   }, { capture: true });
   window.addEventListener("wheel", (event) => {
