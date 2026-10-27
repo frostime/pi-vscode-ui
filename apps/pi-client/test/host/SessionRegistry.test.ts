@@ -125,6 +125,7 @@ function createTestHost(): { host: ClientHost; logger: { error: Mock<RuntimeLogg
 }
 
 const { SessionRegistry } = await import("../../src/host/SessionRegistry.js");
+const { SessionRuntime } = await import("../../src/core/sessions/SessionRuntime.js");
 
 describe("FrostPi session collection", () => {
   const registries: InstanceType<typeof SessionRegistry>[] = [];
@@ -169,6 +170,30 @@ describe("FrostPi session collection", () => {
     expect(write).not.toHaveBeenCalled();
     await expect(registry.createSession()).rejects.toThrow("client has closed");
     expect(discover).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets runtime cleanup finish during shutdown without queuing metadata saves", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "frostpi-registry-shutdown-"));
+    testEnvironment.cwd = cwd;
+    const { host, logger } = createTestHost();
+    const writeMetadata = vi.fn(() => Promise.resolve());
+    host.storage.update = writeMetadata;
+    const stored = { version: 1, activeSessionId: "saved-a", sessions: [{ id: "saved-a", title: "Saved A", cwd, updatedAt: 1 }] };
+    host.storage.get = (<T>() => stored as T);
+    const registry = new SessionRegistry(host, { logger });
+    registries.push(registry);
+    // Registry uses allSettled, so its own successful disposal can hide a rejected Runtime cleanup.
+    const runtimeDisposal = vi.spyOn(SessionRuntime.prototype, "dispose");
+    try {
+      await registry.dispose();
+      expect(runtimeDisposal).toHaveBeenCalledTimes(1);
+      await expect(runtimeDisposal.mock.results[0]?.value).resolves.toBeUndefined();
+      await registry.flushPersistence();
+      expect(writeMetadata).not.toHaveBeenCalled();
+      expect(registry.sessionView("saved-a")).toMatchObject({ status: "stopped" });
+    } finally {
+      runtimeDisposal.mockRestore();
+    }
   });
 
   it("preserves the native first-session fallback while exact restoration keeps a saved null selection", async () => {

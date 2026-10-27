@@ -884,6 +884,7 @@ export class SessionRegistry {
   }
 
   #handleRuntimeChange(runtime: SessionRuntime): void {
+    if (this.#disposed) return;
     const view = runtime.view;
     const previous = this.#records.get(runtime.id);
     const previousStatus = this.#lastStatuses.get(runtime.id);
