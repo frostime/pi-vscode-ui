@@ -6,6 +6,12 @@ Store Session-to-Project associations in Desktop navigation metadata. Reassignin
 
 While the same Session remains selected, sidebar hide/resize, theme/zoom changes and Resume/transport-limit overlays must not remount ClientApp or Composer or discard its draft. Hiding the Resume overlay alone must not cancel the pending Resume request. Attribute any later result to the Project that initiated that request, even if another Project is now selected.
 
+## Window and application lifetime
+
+Closing the main window hides it to the Windows tray; it must not dispose the backend, stop Pi children or remount ClientApp. The first close in each launch explains the tray behavior. Tray left-click and Show restore the same window and its drafts. Hidden windows report invisible to the backend so restoring them refreshes the shared presentation.
+
+Only explicit Exit ends normal application lifetime. Node checks activity across all Projects, including pending input and process/session operations; the native shell asks for confirmation when that work would be interrupted. Cancelling leaves tasks running. Approval uses the same bounded stop/metadata-drain path as before; renderer/browser failure still terminates through that path rather than hiding a broken window. Exit checks travel over the private shell/backend wire, not the renderer bridge.
+
 ## Persistence
 
 Only Session ids admitted by shared `SessionPersistence` may appear in persisted Desktop Session-to-Project mappings or last-viewed selections. Eligibility is defined in `apps/pi-client/src/host/session-lifecycle.SPEC.md`.

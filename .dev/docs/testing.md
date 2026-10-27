@@ -4,7 +4,7 @@ description: Choose verification by changed responsibility, understand evidence 
 scope:
   - /apps/**/test/**
   - /packages/**/test/**
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # Testing Strategy
@@ -82,6 +82,6 @@ Unit tests and controlled smoke use synthetic settings and temporary profiles, n
 
 ### Windows native evidence
 
-The Desktop `test:smoke` runner launches the native release executable and exercises WebView2 through a test-launcher-enabled loopback DevTools endpoint. Native dialog automation targets only HWNDs owned by that test process. Controlled fixtures cover Project concurrency/Stop, Resume, settings/drafts, message limits, appearance, shutdown/reopen and Job Object cleanup. Add `--native-dialogs` to exercise file/folder and confirmation dialogs plus clipboard preservation on an unlocked foreground desktop. Windows focus restrictions make that phase unverified rather than passed; keep it explicit so the regular suite does not seize desktop focus. Composition events are browser checks, not a complete Windows IME acceptance result.
+The Desktop `test:smoke` runner launches the native release executable and exercises WebView2 through a test-launcher-enabled loopback DevTools endpoint. Native dialog automation targets only HWNDs owned by that test process. Controlled fixtures cover Project concurrency/Stop, Resume, settings/drafts, message limits, appearance, tray hide/restore and Exit confirmation, shutdown/reopen and Job Object cleanup. Tray smoke sends native notifications to the owned tray window and selects its real menu command; `apps/desktop/scripts/native-window.ps1` records the pinned `tray-icon` behavior it depends on. Basic tray notices/confirmation buttons run in the regular suite; foreground-dependent file-dialog typing remains opt-in. Add `--native-dialogs` to exercise file/folder and confirmation dialogs plus clipboard preservation on an unlocked foreground desktop. Windows focus restrictions make that phase unverified rather than passed; keep it explicit so the regular suite does not seize desktop focus. Composition events are browser checks, not a complete Windows IME acceptance result.
 
 `test:native` covers the Node launcher using a canonical verbatim directory with spaces/Unicode. `verify:package` enforces the archive allowlist, extracts outside the repository and runs this same native suite with configured machine/user PATH; it records archive SHA-256 and explicit results. A test of a substituted native service establishes backend behavior, while a test of the actual dialog establishes its native binding. Real-model, accessibility, memory and startup-performance claims require their own evidence.

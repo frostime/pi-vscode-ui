@@ -1,4 +1,4 @@
-param([int]$OwnerProcessId, [ValidateSet('cancel','accept','path')] [string]$Action, [string]$Value)
+param([int]$OwnerProcessId, [ValidateSet('cancel','accept','path')] [string]$Action, [string]$Value, [int]$TaskButtonId = 0)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 # Only enumerate HWNDs owned by the launched test process.
@@ -41,6 +41,14 @@ do {
 } while ($dialog -eq [IntPtr]::Zero -and [DateTime]::UtcNow -lt $deadline)
 if ($dialog -eq [IntPtr]::Zero) { throw 'The owned Desktop process opened no native dialog' }
 $children = [FrostPiNativeDialog]::Children($dialog)
+if ($TaskButtonId -gt 0) {
+  # TaskDialog's DirectUI buttons can all expose HWND control id 0. Use its documented button message.
+  [void][FrostPiNativeDialog]::PostMessage($dialog, 1126, [IntPtr]$TaskButtonId, [IntPtr]::Zero) # TDM_CLICK_BUTTON
+  $deadline = [DateTime]::UtcNow.AddSeconds(5)
+  while ([FrostPiNativeDialog]::IsWindowVisible($dialog) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
+  if ([FrostPiNativeDialog]::IsWindowVisible($dialog)) { throw "TaskDialog button $TaskButtonId did not close its dialog" }
+  return
+}
 if ($Action -eq 'path') {
   $edits = @($children | Where-Object { [FrostPiNativeDialog]::Class($_) -eq 'Edit' -and [FrostPiNativeDialog]::IsWindowVisible($_) })
   $field = $edits | Where-Object { [FrostPiNativeDialog]::GetDlgCtrlID($_) -eq 1148 } | Select-Object -First 1
@@ -58,7 +66,10 @@ if ($Action -eq 'path') {
 $id = if ($Action -eq 'cancel') { 2 } else { 1 }
 $button = $children | Where-Object { [FrostPiNativeDialog]::Class($_) -eq 'Button' -and [FrostPiNativeDialog]::GetDlgCtrlID($_) -eq $id } | Select-Object -First 1
 if (-not $button -and $Action -eq 'accept') { $button = $children | Where-Object { [FrostPiNativeDialog]::Class($_) -eq 'Button' -and [FrostPiNativeDialog]::GetDlgCtrlID($_) -eq 1000 } | Select-Object -First 1 }
-if (-not $button) { throw "Native dialog has no expected action button: $Action" }
+if (-not $button) {
+  $details = @($children | ForEach-Object { "$( [FrostPiNativeDialog]::Class($_) ):$( [FrostPiNativeDialog]::GetDlgCtrlID($_) ):$( [FrostPiNativeDialog]::Text($_) )" }) -join '; '
+  throw "Native dialog has no expected action button: $Action; controls: $details"
+}
 [void][FrostPiNativeDialog]::SetForegroundWindow($dialog)
 [void][FrostPiNativeDialog]::PostMessage($button, 245, [IntPtr]::Zero, [IntPtr]::Zero)
 Start-Sleep -Milliseconds 800

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "node:net";
@@ -18,7 +18,7 @@ cpSync(resolve("../pi-client/test/fixtures/fake-pi.cjs"), fixturePi);
 const settings = { "frostpi.pi.executable": fixturePi, "frostpi.session.startOnOpen": true, "frostpi.pi.arguments": ["--persist-session-fixture", "--session-dir", sessionsRoot, "--stream-084-release", join(directory, "release-stream")], "desktop.theme": "dark" };
 writeFileSync(join(profile, "settings.json"), JSON.stringify(settings));
 const checks = [];
-let child; let client;
+let child; let client; let trayNoticeSeen = false; let trayExitCommand = 0;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function until(check, label, timeout = 20000) {
   const end = Date.now() + timeout;
@@ -27,6 +27,7 @@ async function until(check, label, timeout = 20000) {
 }
 const rows = "[...document.querySelectorAll('.project-row button.project-select')]";
 async function launch(directories = [], extraEnvironment = {}) {
+  trayNoticeSeen = false; trayExitCommand = 0;
   const server = createServer(); await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = server.address().port; await new Promise((resolve) => server.close(resolve));
   child = spawn(executable, directories, { cwd: directory, windowsHide: true, stdio: "ignore", env: {
@@ -41,9 +42,24 @@ async function launch(directories = [], extraEnvironment = {}) {
   client = devtoolsClient(await openDebuggingSocket(page.webSocketDebuggerUrl));
   await until(() => client.evaluate("Boolean(window.frostpiDesktop && document.querySelector('.desktop-shell'))"), "shared client mounts");
 }
-async function closeWindow() {
-  runPowerShell(`Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class FrostPiSmokeWindow { [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l); }'; $p = Get-Process -Id ${child.pid}; if ($p.MainWindowHandle -eq [IntPtr]::Zero) { throw "No visible main window" }; if (-not [FrostPiSmokeWindow]::PostMessage($p.MainWindowHandle, 16, [IntPtr]::Zero, [IntPtr]::Zero)) { throw "WM_CLOSE failed" }`, { capture: true, timeout: 10000 });
-  await until(() => child.exitCode !== null, "normal close drains backend");
+function nativeWindow(action) {
+  const output = runPowerShell(`& ${powerShellLiteral(resolve("scripts/native-window.ps1"))} -OwnerProcessId ${child.pid} -Action ${powerShellLiteral(action)} -ExitCommandId ${trayExitCommand}`, { capture: true, timeout: 15000 });
+  if (action === "exit") {
+    trayExitCommand = Number(output.trim());
+    assert.ok(Number.isInteger(trayExitCommand) && trayExitCommand > 0, "Exit command came from this launch's tray menu");
+  }
+  return action === "state" ? JSON.parse(output) : undefined;
+}
+async function hideWindow() {
+  nativeWindow("close");
+  if (!trayNoticeSeen) { nativeDialog("accept", "", 1); trayNoticeSeen = true; }
+  await until(() => !nativeWindow("state").visible, "X hides the window to its tray");
+  assert.equal(child.exitCode, null);
+}
+async function exitApplication(confirm = false) {
+  nativeWindow("exit");
+  if (confirm) nativeDialog("accept", "", 1000);
+  await until(() => child.exitCode !== null, "tray Exit drains backend");
   assert.equal(child.exitCode, 0);
   client.close(); client = undefined;
 }
@@ -53,8 +69,8 @@ async function send(text) {
   await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Send to Pi\"]')) && !document.querySelector('[aria-label=\"Send to Pi\"]').disabled"), "composer can send");
   await client.evaluate("document.querySelector('[aria-label=\"Send to Pi\"]').click()");
 }
-function nativeDialog(action, value = "") {
-  runPowerShell(`& ${powerShellLiteral(resolve("scripts/native-dialog.ps1"))} -OwnerProcessId ${child.pid} -Action ${powerShellLiteral(action)} -Value ${powerShellLiteral(value)}`, { capture: true, timeout: 20000 });
+function nativeDialog(action, value = "", taskButtonId = 0) {
+  runPowerShell(`& ${powerShellLiteral(resolve("scripts/native-dialog.ps1"))} -OwnerProcessId ${child.pid} -Action ${powerShellLiteral(action)} -Value ${powerShellLiteral(value)} -TaskButtonId ${taskButtonId}`, { capture: true, timeout: 20000 });
 }
 async function observeProjects() {
   await client.evaluate("window.__projectsUnsubscribe?.();window.__projectsUnsubscribe=window.frostpiDesktop.onProjects(view=>window.__projects=view);window.frostpiDesktop.requestProjects()");
@@ -74,6 +90,36 @@ async function resumePicker() {
   await until(() => client.evaluate("Boolean(document.querySelector('.session-launcher-menu'))"), "session launcher");
   await client.evaluate("[...document.querySelectorAll('.session-launcher-menu button')].find(b=>b.textContent.includes('Resume')).click()");
   await until(() => client.evaluate("Boolean(document.querySelector('.resume-choice'))"), "Resume choices");
+}
+async function verifyTrayBehavior() {
+  assert.equal(nativeWindow("state").tray, true);
+  await send("stream-084");
+  await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Stop Pi\"]'))"), "task active before hide");
+  await client.typeIntoComposer("tray-unsent-draft");
+  await client.evaluate("window.__trayRoot=document.querySelector('.frostpi-root');window.__trayEditor=document.querySelector('.cm-editor')");
+  await hideWindow();
+  const sessionFile = join(project, readdirSync(project).find(name => name.endsWith(".jsonl")));
+  const release = join(directory, "release-stream");
+  const completedBefore = readFileSync(sessionFile, "utf8").split('"file body"').length;
+  writeFileSync(release, "finish");
+  await until(() => readFileSync(sessionFile, "utf8").split('"file body"').length > completedBefore, "Pi finishes and persists its result while the window is hidden");
+  unlinkSync(release);
+  nativeWindow("restore");
+  await until(() => nativeWindow("state").visible && client.evaluate("!document.querySelector('[aria-label=\"Stop Pi\"]')"), "tray click restores the completed task");
+  assert.equal(await client.evaluate("window.__trayRoot===document.querySelector('.frostpi-root') && window.__trayEditor===document.querySelector('.cm-editor') && document.querySelector('.cm-content').textContent==='tray-unsent-draft'"), true);
+  checks.push("X hides without stopping Pi; tray click restores the same client and draft after background completion");
+  await client.evaluate("document.querySelector('[aria-label=\"Send to Pi\"]').click()");
+  await until(() => client.evaluate("Boolean(document.querySelector('.cm-placeholder')) && !document.querySelector('[aria-label=\"Stop Pi\"]')"), "retained draft sends normally after restore");
+  await send("stream-084");
+  await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Stop Pi\"]'))"), "task active before cancelled Exit");
+  await hideWindow();
+  nativeWindow("exit"); nativeDialog("cancel", "", 1001);
+  assert.equal(child.exitCode, null);
+  assert.equal(nativeWindow("state").visible, true);
+  assert.equal(await client.evaluate("Boolean(document.querySelector('[aria-label=\"Stop Pi\"]'))"), true);
+  await client.evaluate("document.querySelector('[aria-label=\"Stop Pi\"]').click()");
+  await until(() => client.evaluate("!document.querySelector('[aria-label=\"Stop Pi\"]')"), "task stops after cancelling Exit");
+  checks.push("active-task Exit restores the hidden window; cancelling leaves Pi running; later X shows no second notice");
 }
 async function verifyParallelAndResume() {
   await observeProjects();
@@ -205,7 +251,7 @@ async function verifyInstalledPi() {
   await until(() => client.evaluate("[...document.querySelectorAll('.custom-message-trigger')].some(b=>b.textContent.includes('package-check'))"), "installed Pi custom message");
   await client.evaluate("[...document.querySelectorAll('.custom-message-trigger')].find(b=>b.textContent.includes('package-check')).click()");
   await until(() => client.evaluate("document.querySelector('.custom-message-content')?.textContent.includes('FROSTPI_REAL_RPC_OK')"), "installed Pi command result renders");
-  await closeWindow();
+  await exitApplication();
   assert.deepEqual(JSON.parse(readFileSync(join(profile,"state.json"),"utf8")).workspaceState["frostpi.sessions.v1"].sessions, []);
   checks.push("installed Pi from desktop PATH: offline command, confirmation and ephemeral message; no model request");
 }
@@ -254,6 +300,7 @@ try {
   await send("mermaid");
   await until(() => client.evaluate("Boolean(document.querySelector('.mermaid-host svg'))"), "Mermaid vendor loads");
   checks.push("Mermaid bundled assets render in WebView2");
+  await verifyTrayBehavior();
   await verifyOversizedPrompt();
   await verifyParallelAndResume();
   if (process.argv.includes("--native-dialogs")) await verifyNativeDialogs();
@@ -264,16 +311,21 @@ try {
   await until(() => client.evaluate("document.body.classList.contains('vscode-light')"), "live theme");
   await until(() => client.evaluate(`Math.abs(innerWidth * 1.2 - ${initialWidth * initialZoom}) <= 2`), "native WebView2 zoom scales viewport");
   checks.push("live settings/theme and measured native zoom");
-  await closeWindow();
+  await client.evaluate("document.querySelector('[aria-label=\"Send to Pi\"]').click()");
+  await until(() => client.evaluate("Boolean(document.querySelector('.cm-placeholder')) && !document.querySelector('[aria-label=\"Stop Pi\"]')"), "composed draft sends before the Exit test");
+  await send("stream-084");
+  await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Stop Pi\"]'))"), "active task before confirmed Exit");
+  await hideWindow();
+  await exitApplication(true);
   const state = JSON.parse(readFileSync(join(profile, "state.json"), "utf8"));
   assert.equal(state.projects.length, 2);
   assert.ok(state.workspaceState["frostpi.sessions.v1"].sessions.length > 0);
-  checks.push("normal native close flushes Project/session state");
+  checks.push("confirmed tray Exit stops active Pi and flushes Project/session state");
   await launch();
   await until(() => client.evaluate(`${rows}.length === 2`), "restored Project");
   assert.equal((await client.evaluate("window.frostpiDesktop.settings({type:'read'})")).values["desktop.theme"], "light");
   checks.push("native reopen restores Projects/settings");
-  await closeWindow();
+  await exitApplication();
   await launch();
   await send("stream-084");
   await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Stop Pi\"]'))"), "Pi streams before renderer crash");
@@ -295,12 +347,14 @@ try {
   console.log(JSON.stringify({ ok: true, directory, checks }));
 } catch (error) {
   let startup;
-  try { startup = await client?.evaluate("({url:location.href,api:typeof window.frostpiDesktop,tauri:typeof window.__TAURI_INTERNALS__,shell:!!document.querySelector('.desktop-shell'),connectionError:document.getElementById('app')?.textContent.startsWith('FrostPi could not connect'),scripts:[...document.scripts].map(s=>s.src)})"); } catch { /* The child may already be gone. */ }
+  try { startup = await client?.evaluate("({url:location.href,api:typeof window.frostpiDesktop,tauri:typeof window.__TAURI_INTERNALS__,shell:!!document.querySelector('.desktop-shell'),composerLength:document.querySelector('.cm-content')?.textContent.length,stopVisible:!!document.querySelector('[aria-label=\"Stop Pi\"]'),sendDisabled:document.querySelector('[aria-label=\"Send to Pi\"]')?.disabled,connectionError:document.getElementById('app')?.textContent.startsWith('FrostPi could not connect'),scripts:[...document.scripts].map(s=>s.src)})"); } catch { /* The child may already be gone. */ }
   if (startup?.connectionError) {
     try { startup.rpcError = await client.evaluate("Promise.race([window.__TAURI_INTERNALS__.invoke('desktop_connect',{channel:'__CHANNEL__:'+window.__TAURI_INTERNALS__.transformCallback(()=>{})}).then(()=>null,error=>String(error).slice(0,256)),new Promise(resolve=>setTimeout(()=>resolve('Connection retry still pending'),3000))])"); } catch { /* Diagnostic only. */ }
   }
-  writeFileSync(join(directory, "result.json"), JSON.stringify({ ok: false, error: String(error), checks, startup }, null, 2));
-  if (startup) console.error(JSON.stringify(startup));
+  let nativeState;
+  try { if (child?.exitCode === null) nativeState = nativeWindow("state"); } catch { /* The native host may already be exiting. */ }
+  writeFileSync(join(directory, "result.json"), JSON.stringify({ ok: false, error: String(error), checks, startup, nativeState }, null, 2));
+  if (startup || nativeState) console.error(JSON.stringify({ startup, nativeState }));
   console.error(String(error)); console.error(`Tauri smoke artifacts: ${directory}`); process.exitCode = 1;
 } finally {
   client?.close(); if (child && child.exitCode === null) child.kill();
