@@ -19,7 +19,12 @@ import { readChatTypography } from "@frostime/pi-client/host/readChatTypography"
 import { workspaceFileExcludeRules } from "@frostime/pi-client/host/file-search/mentionSearchContext";
 
 import type { DesktopInteractions } from "../src/main/dialogs.js";
-import { createDesktopHost } from "../src/main/desktopHost.js";
+import { createDesktopHost as createHost, type DesktopHostOptions } from "../src/main/desktopHost.js";
+import { electronNative } from "../src/main/electronNative.js";
+import type { BrowserWindow } from "electron";
+function createDesktopHost(options: Omit<DesktopHostOptions, "native"> & { window: BrowserWindow | (() => BrowserWindow | null) }) {
+  return createHost({ ...options, native: electronNative(() => { const w = typeof options.window === "function" ? options.window() : options.window; return w && !w.isDestroyed() ? w : undefined; }) });
+}
 import { DesktopProjects } from "../src/main/desktopProjects.js";
 import { DesktopSettingsStore } from "../src/main/settings/DesktopSettingsStore.js";
 import { DESKTOP_CLIENT_UI_CAPABILITIES } from "../src/shared/desktopCapabilities.js";

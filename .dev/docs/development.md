@@ -58,3 +58,19 @@ Product TypeScript, Vite, Vitest and esbuild mappings must select the same `apps
 Both products bundle the common `apps/pi-client/pi-extensions` sources into their outputs. Shared styles use one common entry, and vendor/font URLs must retain their entry-relative layout. A copied implementation or separately maintained asset list would require manual propagation and defeat the shared-source maintenance model. Source ownership is mapped in `.dev/docs/feature-map.md`; environment constraints are in `apps/pi-client/SPEC.md`.
 
 The independent `packages/provider-usage` engine has its own package-local checks. Versioning and publication are handled by `.dev/docs/release.md`, not by editing package versions during ordinary development.
+
+### Windows Tauri candidate
+
+The Tauri migration currently runs alongside the verified Electron entry. Native builds require Windows x64, the stable Rust MSVC toolchain, Visual Studio C++ build tools/Windows SDK, and WebView2 Runtime. Node 22.19+ and Pi remain external runtime prerequisites. Install JS dependencies from the repository root as usual; do not create a separate Desktop lockfile.
+
+```bash
+pnpm --dir apps/desktop build:tauri
+pnpm --dir apps/desktop start:tauri
+pnpm --dir apps/desktop check:native
+pnpm --dir apps/desktop test:native
+pnpm --dir apps/desktop test:tauri src-tauri/target/release/frostpi-desktop.exe
+pnpm --dir apps/desktop package:tauri
+pnpm --dir apps/desktop verify:tauri
+```
+
+`pnpm check` continues to validate the shared/extension/Desktop JavaScript and TypeScript boundary without requiring Rust. Run the explicit native check/build/smoke on Windows for changes to the Tauri shell. `test:tauri` uses a real WebView2 window with isolated settings/Pi data and a controlled Pi fixture, not a model request. Its DevTools endpoint is enabled only by the test launcher. The candidate is not the default Desktop release; large-message parity and native acceptance gates are recorded in the Desktop SPEC.

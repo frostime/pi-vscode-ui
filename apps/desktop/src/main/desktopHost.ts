@@ -1,5 +1,4 @@
-import { clipboard, dialog, shell } from "electron";
-import type { BrowserWindow, MessageBoxOptions, OpenDialogOptions } from "electron";
+import type { DesktopNative } from "./desktopNative.js";
 import type {
   ClientHost,
   HostConfiguration,
@@ -18,8 +17,7 @@ import { DESKTOP_CLIENT_UI_CAPABILITIES } from "../shared/desktopCapabilities.js
 import { openReferencedLocation } from "./openReferencedLocation.js";
 
 export interface DesktopHostOptions {
-  /** Current window for native dialogs and focus; a getter is allowed (windows are created lazily). */
-  window: BrowserWindow | (() => BrowserWindow | null | undefined);
+  native: DesktopNative;
   projects: DesktopProjects;
   /** Renderer-bridge quick pick/input (DesktopDialogs). */
   interactions: DesktopInteractions;
@@ -40,7 +38,7 @@ export interface DesktopHostOptions {
 
 /**
  * Desktop adapter for the shared client backend's ClientHost.
- * Native Electron capabilities and external file opening are bound here; IDE-only
+ * Native window capabilities and external file opening are bound here; IDE-only
  * integrations stay absent so the shared dispatcher fails those actions explicitly.
  */
 export function createDesktopHost(options: DesktopHostOptions): ClientHost {
@@ -49,10 +47,7 @@ export function createDesktopHost(options: DesktopHostOptions): ClientHost {
   const resumeSelection = <T>(selection: "session" | "file" | "confirmation", work: () => Promise<T>): Promise<T> =>
     options.resume ? options.resume.choose(selection, work) : work();
   rejectUnsupportedProxyMode(readSettings());
-  const resolveWindow = (): BrowserWindow | undefined => {
-    const value = typeof options.window === "function" ? options.window() : options.window;
-    return value && !value.isDestroyed() ? value : undefined;
-  };
+
 
   return {
     capabilities: DESKTOP_CLIENT_UI_CAPABILITIES,
@@ -91,37 +86,28 @@ export function createDesktopHost(options: DesktopHostOptions): ClientHost {
       },
     },
     window: {
-      focused: () => resolveWindow()?.isFocused() ?? false,
-      showInformation: (message) => void showMessageBox(resolveWindow(), { type: "info", message }),
-      showWarning: (message) => void showMessageBox(resolveWindow(), { type: "warning", message }),
-      showError: (message) => void showMessageBox(resolveWindow(), { type: "error", message }),
-      showWarningDialog: (message, actions) => resumeSelection("confirmation", () => showActionsMessageBox(resolveWindow(), "warning", message, actions)),
-      showActionsDialog: (message, actions) => resumeSelection("confirmation", () => showActionsMessageBox(resolveWindow(), "info", message, actions)),
+      focused: () => options.native.focused(),
+      showInformation: (message) => void options.native.message("info", message),
+      showWarning: (message) => void options.native.message("warning", message),
+      showError: (message) => void options.native.message("error", message),
+      showWarningDialog: (message, actions) => resumeSelection("confirmation", () => options.native.confirm("warning", message, actions)),
+      showActionsDialog: (message, actions) => resumeSelection("confirmation", () => options.native.confirm("info", message, actions)),
       withProgress: (_title, work) => work(),
       showQuickPick: (items, pickOptions) => resumeSelection("session", () => options.interactions.showQuickPick(items, pickOptions)),
       showInputBox: (inputOptions) => options.interactions.showInputBox(inputOptions),
       showOpenFileDialog: (dialogOptions) => resumeSelection("file", async () => {
-        const window = resolveWindow();
-        if (!window) return undefined;
-        const openOptions: OpenDialogOptions = { properties: ["openFile"] };
-        if (dialogOptions.title !== undefined) openOptions.title = dialogOptions.title;
-        if (dialogOptions.defaultFsPath !== undefined) openOptions.defaultPath = dialogOptions.defaultFsPath;
-        if (dialogOptions.filters !== undefined) {
-          openOptions.filters = Object.entries(dialogOptions.filters).map(([name, extensions]) => ({ name, extensions: [...extensions] }));
-        }
-        const result = await dialog.showOpenDialog(window, openOptions);
-        if (result.canceled) return undefined;
-        return result.filePaths?.map((fsPath) => desktopUri(fsPath));
+        const paths = await options.native.openFiles(dialogOptions);
+        return paths?.map((fsPath) => desktopUri(fsPath));
       }),
     },
     editor: {
       writeClipboard: async (text) => {
-        await clipboard.writeText(text);
+        await options.native.writeClipboard(text);
       },
       openExternalUrl: async (url) => {
-        await shell.openExternal(url);
+        await options.native.openExternal(url);
       },
-      openReferencedLocation,
+      openReferencedLocation: (reference, cwd) => openReferencedLocation(reference, cwd, options.native),
       ...(options.openFolder ? { openFolder: options.openFolder } : {}),
       ...(openSettings ? {
         openSettings: (query: string) => {
@@ -178,27 +164,4 @@ function rejectUnsupportedProxyMode(settings: Record<string, unknown>): void {
   if (mode === "vscode") {
     throw new Error("frostpi.network.proxy.mode 'vscode' requires VS Code. Use 'inherit', 'custom', or 'direct' on Desktop.");
   }
-}
-
-function showMessageBox(window: BrowserWindow | undefined, message: { type: "info" | "warning" | "error"; message: string }): void {
-  if (!window) return;
-  void dialog.showMessageBox(window, message).catch(() => undefined);
-}
-
-/** Modal and non-modal native confirmations resolve the clicked action label, or undefined on dismissal. */
-function showActionsMessageBox(
-  window: BrowserWindow | undefined,
-  type: "warning" | "info",
-  message: string,
-  actions: readonly string[],
-): Promise<string | undefined> {
-  if (!window) return Promise.resolve(undefined);
-  const options: MessageBoxOptions = {
-    type,
-    message,
-    buttons: [...actions, "Cancel"],
-    cancelId: actions.length,
-    noLink: true,
-  };
-  return dialog.showMessageBox(window, options).then((result) => result.response < actions.length ? actions[result.response] : undefined);
 }

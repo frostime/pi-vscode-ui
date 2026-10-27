@@ -27,6 +27,8 @@ Workspace Extension Host                Electron main process
                     Pi children
 ```
 
+The Windows Tauri migration candidate replaces the Desktop shell with a local WebView2 window plus one external Node backend, assembled by `apps/desktop/src/main/createDesktopBackend.ts`. Rust exposes finite application requests and translates only backend-authorized native operations; Registry, Runtime and Pi ownership remain unchanged. Electron remains the verified/default entry while native parity is evaluated.
+
 Each product has its own Registry and Pi processes. VS Code sessions run in the workspace Extension Host, including SSH, WSL and Dev Containers; Desktop runs locally. There is no local-to-remote relay. Untrusted and virtual VS Code workspaces remain unsupported.
 
 VS Code is the reference environment and vocabulary. Its adapter binds real services; Desktop translates the finite capabilities declared in `apps/pi-client/src/host/clientHost.ts`. Unsupported editor services are hidden or rejected, not successful no-ops. Desktop does not constrain plugin development to a lowest common denominator or emulate the whole VS Code SDK.

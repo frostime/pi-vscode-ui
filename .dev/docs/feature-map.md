@@ -15,7 +15,7 @@ Use this map to locate a feature's source and nearest contract. Paths are worksp
 
 - Shared collection: `apps/pi-client/src/host/SessionRegistry.ts`; metadata: `apps/pi-client/src/host/sessions/SessionPersistence.ts`; single-session execution/state: `apps/pi-client/src/core/sessions/`.
 - VS Code assembly: `apps/vscode/src/extension/activate.ts` and `clientHost.ts`.
-- Desktop Project roots: `apps/desktop/src/main/desktopProjects.ts`; Project ownership/last Session/sidebar state: `apps/desktop/src/main/DesktopProjectNavigation.ts`; action adaptation: `apps/desktop/src/main/DesktopActionDispatcher.ts`; sidebar/drawer/resize: `apps/desktop/src/renderer/DesktopShell.svelte`. `apps/desktop/src/main/createDesktopApp.ts` assembles the shared Registry/client with `desktopHost.ts`. Versioned Project/client Memento data lives in `apps/desktop/src/main/storage/DesktopStateStore.ts`; both JSON stores use the bounded/atomic `apps/desktop/src/main/storage/jsonFile.ts` helper.
+- Desktop Project roots: `apps/desktop/src/main/desktopProjects.ts`; Project ownership/last Session/sidebar state: `apps/desktop/src/main/DesktopProjectNavigation.ts`; action adaptation: `apps/desktop/src/main/DesktopActionDispatcher.ts`; sidebar/drawer/resize: `apps/desktop/src/renderer/DesktopShell.svelte`. `apps/desktop/src/main/createDesktopBackend.ts` assembles the shared Registry/client with `desktopHost.ts`; `createDesktopApp.ts` binds the default Electron shell and `src/tauri/backend.ts` binds the Windows Tauri candidate. Versioned Project/client Memento data lives in `apps/desktop/src/main/storage/DesktopStateStore.ts`; both JSON stores use the bounded/atomic `apps/desktop/src/main/storage/jsonFile.ts` helper.
 - Contracts: `apps/pi-client/SPEC.md`, `apps/pi-client/src/host/session-lifecycle.SPEC.md`, and `apps/desktop/SPEC.md`.
 
 ## Working directories, history catalog, and session tree
@@ -38,6 +38,7 @@ Use this map to locate a feature's source and nearest contract. Paths are worksp
 - Shared browser bridge and presentation state: `apps/pi-client/src/ui/bridge/` and `state/`.
 - VS Code sidebar/tab assembly: `apps/vscode/src/extension/webview-host/SessionWebviewCoordinator.ts` and `SessionPanelManager.ts`; native browser transport: `apps/vscode/src/webview/bridge/vscodeBridge.ts`.
 - Desktop finite preload/IPC: `apps/desktop/src/preload.ts`, `apps/desktop/src/shared/desktopBridge.ts`, `apps/desktop/src/main/createDesktopApp.ts`.
+- Windows Tauri candidate: finite browser adapter `apps/desktop/src/renderer/tauriBridge.ts`; private Node transport `apps/desktop/src/tauri/`; native window/process/native operations `apps/desktop/src-tauri/src/`. It consumes the same Desktop backend and does not replace the default Electron distribution yet.
 - Contract: `apps/pi-client/src/shared/bridge/webview-bridge.SPEC.md`.
 
 ## Shared UI
