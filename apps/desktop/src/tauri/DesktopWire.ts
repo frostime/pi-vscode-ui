@@ -1,7 +1,9 @@
 import { EventEmitter } from "node:events";
 import type { Readable, Writable } from "node:stream";
 
-export const MAX_FRAME_BYTES = 32 * 1024 * 1024;
+import { DESKTOP_MESSAGE_LIMIT_BYTES } from "../shared/desktopTransport.js";
+
+export const MAX_FRAME_BYTES = DESKTOP_MESSAGE_LIMIT_BYTES;
 /** Bounded NDJSON framing. stdout is private transport; diagnostics must never include frame content. */
 export class DesktopWire extends EventEmitter {
   private buffer = Buffer.alloc(0);
@@ -27,14 +29,18 @@ export class DesktopWire extends EventEmitter {
     output.on("error", () => this.fail());
   }
   private fail(): void { if (!this.closed) { this.closed = true; this.emit("disconnect"); } }
-  send(value: unknown): void {
-    if (this.closed) return;
-    const frame = Buffer.from(JSON.stringify(value) + "\n");
-    if (frame.length > this.maximumFrame || this.queued + frame.length > this.maximumFrame * 2) { this.fail(); return; }
+  /** A locally generated oversized message is rejected without corrupting the connection. */
+  send(value: unknown): boolean {
+    if (this.closed) return false;
+    const json = JSON.stringify(value);
+    if (Buffer.byteLength(json, "utf8") > this.maximumFrame) return false;
+    const frame = Buffer.from(json + "\n");
+    if (this.queued + frame.length > this.maximumFrame * 2) { this.fail(); return false; }
     this.queued += frame.length;
     this.writes = this.writes.then(() => new Promise<void>((resolve, reject) => {
       this.output.write(frame, (error) => { this.queued -= frame.length; if (error) reject(error); else resolve(); });
     })).catch(() => this.fail());
+    return true;
   }
   flush(): Promise<void> { return this.writes; }
 }

@@ -60,7 +60,7 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
   // Preserve loaded client metadata while registering roots before Registry construction.
   await stateStore.saveProjects(projectState()).catch(() => undefined);
   let disposed = false;
-  const publish = (channel: string, value: unknown): void => { if (!disposed) transport.publish(channel, value); };
+  const publish = (channel: string, value: unknown): boolean => !disposed && transport.publish(channel, value);
   const applyAppearance = (): void => {
     const theme = readDesktopTheme(settingsStore.values);
     native.appearance(theme, desktopThemes[theme].background, readDesktopZoom(settingsStore.values));
@@ -128,9 +128,7 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
     surface: { kind: "sidebar" },
     isVisible: () => !disposed && transport.visible(),
     postMessage: (message) => {
-      if (disposed) return Promise.resolve(false);
-      publish("frostpi:client:out", message);
-      return Promise.resolve(true);
+      return Promise.resolve(publish("frostpi:client:out", message));
     },
     onDidReceiveMessage: incoming.event,
     onDidChangeVisibility: visibility.event,

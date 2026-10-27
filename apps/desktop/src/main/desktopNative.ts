@@ -14,7 +14,8 @@ export interface DesktopNative {
 }
 
 export interface DesktopTransport {
-  publish(channel: string, value: unknown): void;
+  /** False means the message was not accepted for delivery. */
+  publish(channel: string, value: unknown): boolean;
   listen(channel: string, action: (...values: unknown[]) => void | Promise<void>): () => void;
   handle(channel: string, action: (value: unknown) => Promise<unknown>): () => void;
   visible(): boolean;

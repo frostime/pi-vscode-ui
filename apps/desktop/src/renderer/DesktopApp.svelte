@@ -20,6 +20,7 @@
   let settingsOpen = $state(false);
   let settingsTarget = $state<DesktopSettingsTarget>("all");
   let settingsBusy = $state(false);
+  let transportBlocked = $state(false);
   let settingsError = $state("");
   const theme = $derived(readDesktopTheme(settingsView?.values ?? {}));
 
@@ -43,6 +44,7 @@
   };
 
   onMount(() => {
+    const unsubscribeTransport = window.frostpiDesktop.onTransportBlocked((value) => transportBlocked = value);
     const unsubscribeProjects = window.frostpiDesktop.onProjects((value) => projects = value);
     const unsubscribeDialog = window.frostpiDesktop.onDialog((value) => {
       const changed = value?.id !== request?.id;
@@ -58,7 +60,7 @@
     } else settingsError = "Could not load Desktop settings.";
     window.frostpiDesktop.requestProjects();
     window.frostpiDesktop.requestResume();
-    return () => { unsubscribeProjects(); unsubscribeDialog(); unsubscribeResume(); unsubscribeSettings(); unsubscribeOpenSettings(); };
+    return () => { unsubscribeTransport(); unsubscribeProjects(); unsubscribeDialog(); unsubscribeResume(); unsubscribeSettings(); unsubscribeOpenSettings(); };
   });
 
   function showSettings(target: DesktopSettingsTarget = "all"): void {
@@ -116,7 +118,16 @@
   onsidebar={(layout) => window.frostpiDesktop.setSidebar(layout)}
   onsession={(id) => postToHost({ type: "activateSession", sessionId: id })}
   onresume={(id) => window.frostpiDesktop.showResume(id)}>
-  <ClientApp localComposerCommands={commands} capabilities={DESKTOP_CLIENT_UI_CAPABILITIES} sidebarSessions={projectSessions} />
+  <div class="desktop-client" inert={transportBlocked}>
+    <ClientApp localComposerCommands={commands} capabilities={DESKTOP_CLIENT_UI_CAPABILITIES} sidebarSessions={projectSessions} />
+  </div>
+  {#if transportBlocked}
+    <section class="transport-limit" role="alert" aria-label="Desktop display limit">
+      <h2>This session exceeds Desktop's 32 MiB display limit.</h2>
+      <p>Choose another session or create a new one. Pi processes keep running and saved history is unchanged.</p>
+      <button type="button" onclick={() => postToHost({ type: "createSession" })}>New session</button>
+    </section>
+  {/if}
   {#if resume?.visible}
     <ResumeOverlay view={resume} picker={resumePicker}
       onrespond={(id, value) => window.frostpiDesktop.respondDialog(id, value)}
@@ -151,6 +162,13 @@
 {/if}
 
 <style>
+  .desktop-client { display: contents; }
+  .desktop-client[inert] :global(.frostpi-root) { opacity: 0; }
+  .transport-limit { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; background: var(--frost-surface); text-align: center; }
+  .transport-limit h2 { font-size: var(--font-size-ui); }
+  .transport-limit p { max-width: 480px; color: var(--frost-muted); }
+  .transport-limit button { padding: 8px 12px; background: var(--frost-secondary-bg); cursor: pointer; }
+
   dialog { margin: auto; width: min(650px, calc(100vw - 30px)); max-height: 85vh; padding: 16px; border: 1px solid var(--frost-border); border-radius: 8px; color: var(--frost-text); background: var(--frost-surface-raised); font-family: var(--font-ui); }
   dialog::backdrop { background: #0008; }
   dialog h2 { margin: 0 0 12px; }

@@ -2,7 +2,8 @@ import { writeSync } from "node:fs";
 import { DesktopWire } from "./DesktopWire.js";
 import { createDesktopBackend } from "../main/createDesktopBackend.js";
 import type { DesktopNative, DesktopTransport } from "../main/desktopNative.js";
-import { isDesktopRequest } from "../shared/desktopTransport.js";
+import { createDesktopPublisher } from "./publishDesktopEvent.js";
+import { DESKTOP_MESSAGE_LIMIT_ERROR, isDesktopRequest } from "../shared/desktopTransport.js";
 
 const wire = new DesktopWire(process.stdin, process.stdout);
 const listeners = new Map<string, (...args: unknown[]) => void | Promise<void>>();
@@ -17,7 +18,10 @@ let starting: Promise<void> | undefined;
 let closing = false;
 const nativeCall = (operation: string, args: unknown[]): Promise<unknown> => new Promise((resolve, reject) => {
   if (closing) { reject(new Error("Desktop is closing.")); return; }
-  const id = ++nextId; pending.set(id, { resolve, reject }); wire.send({ kind: "native", id, operation, args });
+  const id = ++nextId; pending.set(id, { resolve, reject });
+  if (!wire.send({ kind: "native", id, operation, args })) {
+    pending.delete(id); reject(new Error(DESKTOP_MESSAGE_LIMIT_ERROR));
+  }
 });
 const native: DesktopNative = {
   focused: () => focused,
@@ -30,8 +34,9 @@ const native: DesktopNative = {
   openPath: async (path) => await nativeCall("openPath", [path]) as string,
   appearance: (theme, background, zoom) => { void nativeCall("appearance", [theme, background, zoom]).catch(() => undefined); },
 };
+const publisher = createDesktopPublisher(wire);
 const transport: DesktopTransport = {
-  publish: (channel, value) => wire.send({ kind: "event", channel, value }),
+  publish: publisher.publish,
   listen: (channel, action) => { listeners.set(channel, action); return () => { listeners.delete(channel); }; },
   handle: (channel, action) => { handlers.set(channel, action); return () => { handlers.delete(channel); }; },
   visible: () => visible,
@@ -76,13 +81,16 @@ wire.on("packet", (packet: unknown) => {
     await starting;
     if (!backend || !isDesktopRequest(message.request)) throw new Error("Invalid Desktop request.");
     const { channel, args } = message.request;
+    if (channel === "frostpi:client:in" && args[0] && typeof args[0] === "object" && "type" in args[0] && args[0].type === "ready") publisher.replay();
     const handler = handlers.get(channel);
     if (handler) return await handler(args[0]);
     const listener = listeners.get(channel);
     if (!listener) throw new Error("Unknown Desktop operation.");
     await listener(...args);
     return null;
-  })().then((value) => wire.send({ kind: "response", id, ok: true, value }), () => wire.send({ kind: "response", id, ok: false }));
+  })().then((value) => {
+    if (!wire.send({ kind: "response", id, ok: true, value })) wire.send({ kind: "response", id, ok: false });
+  }, () => { wire.send({ kind: "response", id, ok: false }); });
 });
 // No prompt, frame content or native path is written to diagnostics.
 process.on("uncaughtException", () => { writeSync(2, "FrostPi Desktop backend failed.\n"); void shutdown(); });

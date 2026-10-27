@@ -1,5 +1,7 @@
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import { BRIDGE_VERSION } from "@frostime/pi-client/shared/bridge/bridgeVersion";
+import type { WebviewToHostMessage } from "@frostime/pi-client/shared/bridge/webviewToHost";
+import { DESKTOP_MESSAGE_LIMIT_ERROR, DESKTOP_TRANSPORT_BLOCKED_CHANNEL } from "../shared/desktopTransport.js";
 import type { DesktopApi } from "../shared/desktopBridge.js";
 import type { DesktopSettingsResult } from "../shared/desktopSettings.js";
 
@@ -18,13 +20,19 @@ export async function connectTauriDesktop(): Promise<void> {
   };
   const request = (channel: string, ...args: unknown[]): Promise<unknown> => invoke("desktop_request", { request: { channel, args } });
   const send = (channel: string, ...args: unknown[]): void => {
-    void request(channel, ...args).catch(() => {
-      for (const listener of listeners.get("frostpi:client:out") ?? []) listener({ bridgeVersion: BRIDGE_VERSION, type: "toast", level: "error", message: "Could not reach the Desktop service." });
+    void request(channel, ...args).catch((error: unknown) => {
+      const reason = String(error).includes("Desktop message is too large") ? DESKTOP_MESSAGE_LIMIT_ERROR : "Could not reach the Desktop service.";
+      const message = channel === "frostpi:client:in" ? args[0] as WebviewToHostMessage : undefined;
+      const failure = message?.type === "sendPrompt"
+        ? { type: "promptResult", requestId: message.requestId, ok: false, error: reason }
+        : { type: "toast", level: "error", message: reason };
+      for (const listener of listeners.get("frostpi:client:out") ?? []) listener({ bridgeVersion: BRIDGE_VERSION, ...failure });
     });
   };
   const api: DesktopApi = {
     postClientMessage: (message) => send("frostpi:client:in", message),
     onClientMessage: (listener) => subscribe("frostpi:client:out", listener),
+    onTransportBlocked: (listener) => subscribe<boolean>(DESKTOP_TRANSPORT_BLOCKED_CHANNEL, listener),
     requestProjects: () => send("frostpi:projects:request"),
     addProject: () => send("frostpi:projects:add"),
     removeProject: (id) => send("frostpi:projects:remove", id),

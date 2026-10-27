@@ -23,7 +23,7 @@ export async function createDesktopApp(options: DesktopAppOptions = {}) {
     clientVersion: app.isPackaged ? app.getVersion() : "unknown",
     native: electronNative(() => window.isDestroyed() ? undefined : window),
     transport: {
-      publish: (channel, value) => { if (!window.isDestroyed()) window.webContents.send(channel, value); },
+      publish: (channel, value) => { if (window.isDestroyed()) return false; window.webContents.send(channel, value); return true; },
       visible: () => !window.isDestroyed() && !window.isMinimized(),
       onVisibility: (listener) => {
         const hide = () => listener(false); const show = () => listener(true);

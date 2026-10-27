@@ -37,6 +37,21 @@ describe("Desktop private stdio transport", () => {
     expect(received).toEqual([{ data: payload }]);
     await wire.flush();
   });
+  it("rejects oversized output without disconnecting and measures UTF-8 JSON without the newline", async () => {
+    const value = { text: "中文 😀" };
+    const maximum = Buffer.byteLength(JSON.stringify(value));
+    const output = new PassThrough(); const frames: string[] = [];
+    output.on("data", (chunk: Buffer) => frames.push(chunk.toString()));
+    const wire = new DesktopWire(new PassThrough(), output, maximum);
+    let disconnected = false; wire.on("disconnect", () => disconnected = true);
+    expect(wire.send(value)).toBe(true);
+    await wire.flush();
+    expect(wire.send({ text: "中文 😀x" })).toBe(false);
+    expect(disconnected).toBe(false);
+    expect(wire.send({ ok: true })).toBe(true);
+    await wire.flush();
+    expect(frames.map((line) => JSON.parse(line) as unknown)).toEqual([value, { ok: true }]);
+  });
   it("does not expose native operations or arbitrary channels through renderer requests", () => {
     expect(isDesktopRequest({ channel: "frostpi:settings:action", args: [{ type: "read" }] })).toBe(true);
     for (const channel of ["openPath", "native", "frostpi:arbitrary", "__proto__"]) expect(isDesktopRequest({ channel, args: [] })).toBe(false);

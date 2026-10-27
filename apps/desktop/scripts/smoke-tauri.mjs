@@ -52,6 +52,31 @@ async function send(text) {
   await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Send to Pi\"]')) && !document.querySelector('[aria-label=\"Send to Pi\"]').disabled"), "composer can send");
   await client.evaluate("document.querySelector('[aria-label=\"Send to Pi\"]').click()");
 }
+async function verifyOversizedPrompt() {
+  await client.typeIntoComposer("desktop-limit-draft");
+  await client.evaluate(`(() => {
+    window.__limitEditor = document.querySelector('.cm-content');
+    const data = new Uint8Array(9 * 1024 * 1024);
+    const png = atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLxLwAAAABJRU5ErkJggg==');
+    data.set(Uint8Array.from(png, c => c.charCodeAt(0)));
+    const clipboard = new DataTransfer();
+    for(let i=0;i<3;i++) clipboard.items.add(new File([data], 'limit-'+i+'.png', {type:'image/png'}));
+    window.__limitEditor.dispatchEvent(new ClipboardEvent('paste', {clipboardData:clipboard,bubbles:true,cancelable:true}));
+  })()`);
+  await until(() => client.evaluate("document.querySelectorAll('.attachment-item').length===3"), "three individually valid images reach the draft");
+  await client.evaluate(`window.__limitFailures=0;window.__limitSubscription=window.frostpiDesktop.onClientMessage(message=>{if(message.type==='promptResult'&&!message.ok&&message.error?.includes('32 MiB'))window.__limitFailures++});document.querySelector('[aria-label="Send to Pi"]').click()`);
+  await until(() => client.evaluate("window.__limitFailures===1 && document.querySelectorAll('.attachment-item').length===3 && document.querySelector('.cm-content').textContent==='desktop-limit-draft' && !document.querySelector('[aria-label=\"Send to Pi\"]').disabled"), "oversized prompt restores text/images and releases pending Send");
+  assert.equal(await client.evaluate("window.__limitEditor===document.querySelector('.cm-content') && !document.querySelector('.transport-limit')"), true);
+  assert.equal(await client.evaluate("document.querySelector('.conversation-frame').textContent.includes('desktop-limit-draft')"), false);
+  assert.equal((await client.evaluate("window.frostpiDesktop.settings({type:'read'})")).values["desktop.theme"], "dark");
+  await client.evaluate("[...document.querySelectorAll('.attachment-item button')].forEach(button=>button.click())");
+  await until(() => client.evaluate("!document.querySelector('.attachment-item')"), "user removes oversized attachments");
+  await client.evaluate("document.querySelector('[aria-label=\"Send to Pi\"]').click()");
+  await until(() => client.evaluate("document.querySelector('.conversation-frame').textContent.includes('desktop-limit-draft') && !document.querySelector('[aria-label=\"Stop Pi\"]')"), "the retained draft sends normally after reducing attachments");
+  await client.evaluate("window.__limitSubscription()");
+  checks.push("32 MiB rejection preserves draft and backend; smaller resend succeeds");
+}
+
 try {
   await launch([project]);
   assert.equal(await client.evaluate("document.title"), "FrostPi Desktop");
@@ -72,6 +97,7 @@ try {
   await send("mermaid");
   await until(() => client.evaluate("Boolean(document.querySelector('.mermaid-host svg'))"), "Mermaid vendor loads");
   checks.push("Mermaid bundled assets render in WebView2");
+  await verifyOversizedPrompt();
   const initialWidth = await client.evaluate("innerWidth");
   await client.evaluate("window.frostpiDesktop.settings({type:'read'}).then(view => window.frostpiDesktop.settings({type:'save',values:{...view.values,'desktop.theme':'light','desktop.zoomFactor':1.2}}))");
   await until(() => client.evaluate("document.body.classList.contains('vscode-light')"), "live theme");
