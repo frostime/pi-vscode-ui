@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "sha256": "4fb3d2b2c3acb66b7c19bb7582bb30ef1adef904da29fc2c94409fd31f8973c1",
+  "archiveBytes": 5598540,
+  "archive": "artifacts/FrostPi-0.15.5-tauri-win32-x64.zip",
+  "sourceBase": "9d9dfbbd896b00dfe91eaf3d135cfebe01a1d6a2",
+  "uncommittedImplementation": true,
+  "checks": [
+    "actual WebView2 mounts shared client and isolated finite bridge",
+    "settings read and invalid-operation rejection",
+    "controlled Pi prompt crosses Rust/Node/shared UI",
+    "Mermaid bundled assets render in WebView2",
+    "live settings/theme and measured native zoom",
+    "normal native close flushes Project/session state",
+    "native reopen restores Projects/settings",
+    "forced shell exit kills backend and Pi descendants"
+  ]
+}

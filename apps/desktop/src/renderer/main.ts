@@ -9,11 +9,14 @@ import { readDesktopTheme, type DesktopSettingsView } from "../shared/desktopSet
 import { applyDesktopTheme } from "./theme.js";
 import { applyDesktopUiTypography } from "./uiTypography.js";
 
-connectHostBridge({
-  postMessage: (message) => window.frostpiDesktop.postClientMessage(message),
-  onMessage: (listener) => window.frostpiDesktop.onClientMessage(listener),
-});
+import { connectTauriDesktop } from "./tauriBridge.js";
+
 async function start(): Promise<void> {
+  await connectTauriDesktop();
+  connectHostBridge({
+    postMessage: (message) => window.frostpiDesktop.postClientMessage(message),
+    onMessage: (listener) => window.frostpiDesktop.onClientMessage(listener),
+  });
   let initialSettings: DesktopSettingsView | null = null;
   try {
     initialSettings = await window.frostpiDesktop.settings({ type: "read" });
@@ -25,4 +28,6 @@ async function start(): Promise<void> {
   postToHost({ type: "ready" });
 }
 
-void start();
+void start().catch(() => {
+  document.getElementById("app")!.textContent = "FrostPi could not connect to its Desktop service. Check Node.js and restart the application.";
+});

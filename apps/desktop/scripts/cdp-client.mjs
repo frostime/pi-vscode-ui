@@ -70,7 +70,7 @@ export function clearDebuggingEndpoint(searchRoots) {
   }
 }
 
-async function openDebuggingSocket(url) {
+export async function openDebuggingSocket(url) {
   const socket = new WebSocket(url);
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -98,7 +98,7 @@ export async function connectToApplication({ searchRoots, deadline }) {
   return devtoolsClient(await openDebuggingSocket(page.webSocketDebuggerUrl));
 }
 
-function devtoolsClient(socket) {
+export function devtoolsClient(socket) {
   let sequence = 0;
   const pending = new Map();
   const failPending = (message) => {

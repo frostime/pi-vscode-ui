@@ -58,3 +58,7 @@ Verification must run the actual extracted executable outside the repository wit
 When handing over a candidate, record its source commit, archive size/hash, the checks actually run and their limits in the relevant change record. Existing extracted directories do not update when a same-named ZIP is rebuilt; tell the user to close the old app and extract the candidate into a new directory.
 
 Public distribution separately requires user-instruction, licence, signing/Windows-warning and real-GUI review. Do not silently add Desktop publication to the extension workflow or treat candidate delivery as merge/publication approval.
+
+### Tauri migration candidate
+
+`pnpm --dir apps/desktop package:tauri` explicitly builds a release-mode Windows x64 Tauri research ZIP under a separate `-tauri-win32-x64.zip` name. The default `pnpm package:desktop`/`verify:desktop` remain the verified Electron candidate flow until the migration passes the parity gates in `apps/desktop/SPEC.md`. Node, Pi and WebView2 remain external prerequisites. Run `pnpm --dir apps/desktop verify:tauri` to inspect the archive allowlist and run its extracted executable from a temporary directory using the configured Windows desktop PATH; source/debug builds alone do not validate its resource lookup or desktop PATH. This candidate has no signing, installer or updater and is not added to extension publication.

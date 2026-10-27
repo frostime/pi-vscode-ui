@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const native = vi.hoisted(() => ({ openExternal: vi.fn(), openPath: vi.fn() }));
 vi.mock("electron", () => ({ shell: native }));
 
-import { openReferencedLocation } from "../src/main/openReferencedLocation.js";
+import { openReferencedLocation as openLocation } from "../src/main/openReferencedLocation.js";
+const openReferencedLocation = (reference: Parameters<typeof openLocation>[0], cwd: string | undefined) => openLocation(reference, cwd, native);
 
 let cwd: string;
 beforeEach(async () => {

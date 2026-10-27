@@ -13,3 +13,7 @@ apps/vscode/assets/marketplace/screenshots/*.png
 apps/vscode/CHANGELOG.md
 
 .pi-input.md
+
+apps/desktop/src-tauri/target/
+
+apps/desktop/src-tauri/gen/

@@ -58,6 +58,8 @@ export interface DesktopResumeView {
 export interface DesktopApi {
   postClientMessage(message: WebviewToHostMessage): void;
   onClientMessage(listener: (message: HostToWebviewMessage) => void): () => void;
+  /** Desktop-local presentation failure, outside the shared client protocol. */
+  onTransportBlocked(listener: (blocked: boolean) => void): () => void;
   requestProjects(): void;
   addProject(): void;
   removeProject(id: string): void;

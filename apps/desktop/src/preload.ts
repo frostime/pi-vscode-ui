@@ -1,3 +1,4 @@
+import { DESKTOP_TRANSPORT_BLOCKED_CHANNEL } from "./shared/desktopTransport.js";
 import { contextBridge, ipcRenderer } from "electron";
 
 import type { DesktopApi, DesktopDialog, DesktopProjectsView, DesktopResumeView } from "./shared/desktopBridge.js";
@@ -13,6 +14,7 @@ function subscribe<T>(channel: string, listener: (value: T) => void): () => void
 const api: DesktopApi = {
   postClientMessage: (message) => ipcRenderer.send("frostpi:client:in", message),
   onClientMessage: (listener) => subscribe<HostToWebviewMessage>("frostpi:client:out", listener),
+  onTransportBlocked: (listener) => subscribe<boolean>(DESKTOP_TRANSPORT_BLOCKED_CHANNEL, listener),
   requestProjects: () => ipcRenderer.send("frostpi:projects:request"),
   addProject: () => ipcRenderer.send("frostpi:projects:add"),
   removeProject: (id) => ipcRenderer.send("frostpi:projects:remove", id),

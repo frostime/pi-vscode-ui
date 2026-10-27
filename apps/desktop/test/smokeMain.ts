@@ -4,6 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { app, type WebContents } from "electron";
+import { DESKTOP_TRANSPORT_BLOCKED_CHANNEL } from "../src/shared/desktopTransport.js";
 import { createDesktopApp } from "../src/main/createDesktopApp.js";
 import { DesktopSettingsStore } from "../src/main/settings/DesktopSettingsStore.js";
 import { DesktopStateStore } from "../src/main/storage/DesktopStateStore.js";
@@ -220,6 +221,15 @@ void app.whenReady().then(async () => {
     await browser.executeJavaScript("document.querySelector('[aria-label=\"Minimize composer\"]').click()");
     await Promise.all([desktop.registry.sendPrompt(a, "stream-084", []), desktop.registry.sendPrompt(b, "stream-084", [])]);
     await until(() => desktop.registry.sessionView(a)?.status === "running" && desktop.registry.sessionView(b)?.status === "running", "both Pi actively stream");
+    await browser.executeJavaScript("window.__limitEditor=document.querySelector('.cm-content');window.__limitDraft=window.__limitEditor.textContent");
+    desktop.window.webContents.send(DESKTOP_TRANSPORT_BLOCKED_CHANNEL, true);
+    await until(() => browser.executeJavaScript("Boolean(document.querySelector('[aria-label=\"Desktop display limit\"]')) && document.querySelector('.desktop-client').inert"), "Desktop limit blocks only the client region");
+    assert.equal(await browser.executeJavaScript("!document.querySelector('.sidebar').inert && Boolean(document.querySelector('.transport-limit button')) && getComputedStyle(document.querySelector('.frostpi-root')).opacity==='0'"), true);
+    assert.equal(desktop.registry.sessionView(a)?.status, "running");
+    assert.equal(desktop.registry.sessionView(b)?.status, "running");
+    desktop.window.webContents.send(DESKTOP_TRANSPORT_BLOCKED_CHANNEL, false);
+    await until(() => browser.executeJavaScript("!document.querySelector('.transport-limit') && !document.querySelector('.desktop-client').inert"), "Desktop limit clears without remounting the client");
+    assert.equal(await browser.executeJavaScript("window.__limitEditor===document.querySelector('.cm-content') && window.__limitDraft===document.querySelector('.cm-content').textContent"), true);
     await browser.executeJavaScript(`window.frostpiDesktop.settings({type:'save',values:${JSON.stringify({
       ...settingsStore.values,
       "frostpi.pi.executable": join(directory, "not-a-pi-executable"),
@@ -286,7 +296,7 @@ void app.whenReady().then(async () => {
   await verifyDesktopStateReopen(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
   await verifyDesktopResume(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
   await verifyProjectNavigation(directory, process.env.FROSTPI_DESKTOP_SMOKE_PI!, until);
-  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true, groupedSettingsPanel: true, settingsDraftRecovery: true, sharedSettingsEntryPoints: true, actualDesktopCapabilities: true, fileLinks: true, interfaceTypography: true, windowZoom: true, hiddenMenu: true, stateReopen: true, selectedOnlyAutoStart: true, savedNullSelection: true, shutdownFlush: true, resumeOverlay: true, resumeWithoutRuntime: true, resumeFailureCleanup: true, resumePiSwitch: true, resumeExpandedComposer: true, projectNavigation: true, projectRemoval: true, themeSwitching: true, themeReopen: true, worktreeProjectOwnership: true, sidebarLayoutReopen: true }));
+  await writeFile(join(directory, "result.json"), JSON.stringify({ ok: true, projects: 2, livePi: 2, sharedUi: true, parallelExecution: true, stopIsolation: true, stableCwd: true, rendererIsolated: true, transportLimitOverlay: true, quickPickIcons: true, mermaid: true, typography: true, noImplicitRestart: true, settingsImportSaveReopen: true, groupedSettingsPanel: true, settingsDraftRecovery: true, sharedSettingsEntryPoints: true, actualDesktopCapabilities: true, fileLinks: true, interfaceTypography: true, windowZoom: true, hiddenMenu: true, stateReopen: true, selectedOnlyAutoStart: true, savedNullSelection: true, shutdownFlush: true, resumeOverlay: true, resumeWithoutRuntime: true, resumeFailureCleanup: true, resumePiSwitch: true, resumeExpandedComposer: true, projectNavigation: true, projectRemoval: true, themeSwitching: true, themeReopen: true, worktreeProjectOwnership: true, sidebarLayoutReopen: true }));
   app.exit(0);
 }).catch((error: unknown) => {
   writeFileSync(join(directory, "result.json"), JSON.stringify({ ok: false, error: error instanceof Error ? error.message : "Smoke failure" }));

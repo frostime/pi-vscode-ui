@@ -1,0 +1,34 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "FrostPi",
+  "version": "../../vscode/package.json",
+  "identifier": "io.github.frostime.frostpi",
+  "build": {
+    "frontendDist": "../dist/renderer"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "FrostPi Desktop",
+        "width": 1100,
+        "height": 800,
+        "minWidth": 280,
+        "minHeight": 400,
+        "visible": false,
+        "dragDropEnabled": false,
+        "create": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; frame-src 'none'; object-src 'none'; base-uri 'none'"
+    }
+  },
+  "bundle": {
+    "active": false,
+    "resources": {
+      "../dist/backend.cjs": "backend.cjs",
+      "../dist/pi-extensions/": "pi-extensions/"
+    }
+  }
+}
