@@ -8,7 +8,7 @@ scope:
   - /apps/vscode/package.json
   - /apps/desktop/**
   - /packages/pi-rpc/package.json
-updated: 2026-10-24
+updated: 2026-10-27
 ---
 
 # Release Procedure
@@ -51,7 +51,7 @@ pnpm verify:desktop --real-pi
 pnpm verify:desktop --native-dialogs
 ```
 
-Packaging builds `artifacts/FrostPi-<version>-win32-x64.zip`, which extracts to `FrostPi/FrostPi.exe`. The backend and Pi extensions are ordinary files beside the executable; the renderer is embedded. Node, Pi and WebView2 are installed separately. User settings/state remain in `%APPDATA%/FrostPi`; this is installation-free, not portable user data. The payload contract is in [Desktop SPEC](../../apps/desktop/SPEC.md#packaged-distribution).
+Packaging builds `artifacts/FrostPi-<version>-win32-x64.zip`, which extracts to `FrostPi/FrostPi.exe`. The backend and Pi extensions are ordinary files beside the executable; the renderer is embedded. Node, Pi and WebView2 are installed separately. User settings/state remain in `%APPDATA%/FrostPi`; this is installation-free, not portable user data. `apps/desktop/scripts/package-app.mjs` stages the payload; `apps/desktop/scripts/verify-package.mjs` enforces the archive allowlist.
 
 Verification enforces the archive allowlist and version, extracts outside the repository, reconstructs the configured Windows machine/user PATH and runs the actual executable using temporary Projects/profiles and controlled Pi children. It records the archive SHA-256 and explicit native smoke results. Optional `--real-pi` additionally checks installed Pi discovery and an isolated extension command/confirmation/custom-message path without a model request. It does not establish real-model or provider acceptance; see [testing evidence boundaries](testing.md#evidence-boundaries).
 

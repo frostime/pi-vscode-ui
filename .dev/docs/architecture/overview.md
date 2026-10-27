@@ -5,7 +5,7 @@ scope:
   - /apps/**
   - /packages/pi-rpc/**
   - /packages/provider-usage/**
-updated: 2026-10-24
+updated: 2026-10-27
 ---
 
 # Architecture Overview
@@ -67,7 +67,7 @@ FrostPi has no telemetry endpoint or hosted account service. Pi/model-provider t
 | Provider Usage reports | Browser cache keyed by provider | Safe reports only; no disk persistence. Cache/source lifetime is defined by the Provider Usage and bridge SPECs |
 | Logs and diagnostics | Host logging; diagnostic export where the product supports it | No conversation/image payloads; redact common credentials and URL authentication. Paths and third-party stderr still require review before sharing |
 
-These are storage boundaries, not another conversation database or credential manager. Product-specific persistence and error handling belong in the product SPECs; query/credential behavior belongs in `packages/provider-usage/SPEC.md`.
+These are storage boundaries, not another conversation database or credential manager. Product-local constraints stay beside their code; product SPECs hold cross-file invariants. Query/credential behavior belongs in `packages/provider-usage/SPEC.md`.
 
 ## Dependency and trust boundaries
 
