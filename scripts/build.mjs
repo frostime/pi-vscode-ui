@@ -3,7 +3,9 @@ import { resolve } from "node:path";
 
 import { root, run } from "./lib.mjs";
 
+const vscodeOnly = process.argv.includes("--vscode");
 for (const packageName of ["@frostime/pi-rpc", "@frostime/provider-usage", "@frostime/pi-client", "frostpi", "@frostime/frostpi-desktop"]) {
+  if (vscodeOnly && packageName === "@frostime/frostpi-desktop") continue;
   run("pnpm", ["--filter", packageName, "build"]);
 }
 

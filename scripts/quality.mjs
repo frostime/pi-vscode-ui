@@ -5,11 +5,12 @@ import { run } from "./lib.mjs";
 const targets = new Set(["lint", "typecheck", "test"]);
 const packageNames = ["@frostime/pi-rpc", "@frostime/provider-usage", "@frostime/pi-client", "frostpi", "@frostime/frostpi-desktop"];
 
-export function runQuality(target) {
+export function runQuality(target, { vscodeOnly = false } = {}) {
   if (!target || !targets.has(target)) {
     throw new Error(`Unknown quality target: ${target ?? ""}`);
   }
   for (const packageName of packageNames) {
+    if (vscodeOnly && packageName === "@frostime/frostpi-desktop") continue;
     run("pnpm", ["--filter", packageName, target]);
   }
 }

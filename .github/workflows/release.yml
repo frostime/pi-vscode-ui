@@ -43,8 +43,7 @@ jobs:
           [[ -n "$AZURE_CLIENT_ID" ]] || { echo "::error::Missing AZURE_CLIENT_ID"; exit 1; }
           [[ -n "$AZURE_TENANT_ID" ]] || { echo "::error::Missing AZURE_TENANT_ID"; exit 1; }
           [[ -n "$OVSX_PAT" ]] || { echo "::error::Missing OVSX_PAT"; exit 1; }
-      - run: pnpm check
-      - run: pnpm build
+      - run: pnpm check:vscode
       - run: pnpm package:vsix
       - run: pnpm verify:vsix
       - run: pnpm package:zip

@@ -66,8 +66,8 @@ async function exitApplication(confirm = false) {
 async function send(text) {
   await until(() => client.evaluate("Boolean(document.querySelector('.cm-content[aria-label=\"Message Pi\"]'))"), "composer mounts before typing");
   await client.typeIntoComposer(text);
-  await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Send to Pi\"]')) && !document.querySelector('[aria-label=\"Send to Pi\"]').disabled"), "composer can send");
-  await client.evaluate("document.querySelector('[aria-label=\"Send to Pi\"]').click()");
+  // Startup can disable Send between separate CDP calls. Check and click in the same renderer task.
+  await until(() => client.evaluate("(() => { const button = document.querySelector('[aria-label=\"Send to Pi\"]'); if (!button || button.disabled) return false; button.click(); return true; })()"), "composer can send");
 }
 function nativeDialog(action, value = "", taskButtonId = 0) {
   runPowerShell(`& ${powerShellLiteral(resolve("scripts/native-dialog.ps1"))} -OwnerProcessId ${child.pid} -Action ${powerShellLiteral(action)} -Value ${powerShellLiteral(value)} -TaskButtonId ${taskButtonId}`, { capture: true, timeout: 20000 });
@@ -353,7 +353,9 @@ try {
   }
   let nativeState;
   try { if (child?.exitCode === null) nativeState = nativeWindow("state"); } catch { /* The native host may already be exiting. */ }
-  writeFileSync(join(directory, "result.json"), JSON.stringify({ ok: false, error: String(error), checks, startup, nativeState }, null, 2));
+  const failure = { ok: false, directory, error: String(error), checks, startup, nativeState };
+  writeFileSync(join(directory, "result.json"), JSON.stringify(failure, null, 2));
+  console.log(JSON.stringify(failure));
   if (startup || nativeState) console.error(JSON.stringify({ startup, nativeState }));
   console.error(String(error)); console.error(`Tauri smoke artifacts: ${directory}`); process.exitCode = 1;
 } finally {

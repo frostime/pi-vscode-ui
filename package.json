@@ -15,11 +15,15 @@
     "test:watch": "pnpm --filter frostpi test:watch",
     "lint": "node scripts/quality.mjs lint",
     "check": "node scripts/check.mjs",
+    "check:vscode": "node scripts/check.mjs --vscode",
     "package:vsix": "node scripts/package-vsix.mjs",
     "verify:vsix": "node scripts/verify-vsix.mjs",
     "package:zip": "node scripts/package-zip.mjs",
-    "package:desktop": "pnpm --dir apps/desktop build:native && pnpm --dir apps/desktop package:app",
+    "check:desktop:native": "pnpm --dir apps/desktop check:native && pnpm --dir apps/desktop test:native",
+    "package:desktop": "pnpm --dir apps/desktop package:app",
     "verify:desktop": "pnpm --dir apps/desktop verify:package",
+    "test:desktop:manual": "node apps/desktop/scripts/manual-smoke.mjs",
+    "prepare:desktop:release": "node apps/desktop/scripts/prepare-release.mjs",
     "publish:marketplace": "node scripts/publish-marketplace.mjs"
   },
   "devDependencies": {

@@ -1,10 +1,11 @@
 import { build } from "esbuild";
 import { rm } from "node:fs/promises";
+import { piExtensionNames } from "./scripts/packaging.mjs";
 
 await rm(new URL("./dist", import.meta.url), { recursive: true, force: true });
 
 await Promise.all([
-  ...["session-tree", "question-tool"].map((name) => build({
+  ...piExtensionNames.map((name) => build({
     entryPoints: [`../pi-client/pi-extensions/${name}.ts`],
     bundle: true,
     platform: "node",

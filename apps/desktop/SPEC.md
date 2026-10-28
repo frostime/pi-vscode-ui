@@ -20,9 +20,13 @@ Report application shutdown as saved only after Registry session metadata and De
 
 ## Settings and initial import
 
+The development launcher isolates only FrostPi-owned settings/state and WebView2 storage. It must not redirect Pi agent/session directories or copy credentials. Normal packaged launches keep the existing profile, and an explicit `FROSTPI_DESKTOP_USER_DATA` takes precedence in both launch paths.
+
 Store VS Code/FrostPi keys as flat dot-delimited names; reserve `desktop.*` for Desktop-only settings. Types/defaults come from `desktopSettingDefinitions` in `apps/desktop/src/shared/desktopSettings.ts`; UI labels/groups must not redefine them. Saving settings must not stop or restart an existing Pi child.
 
 ## Native authority and delivery
+
+Build provenance is descriptive, not an attestation: a dirty commit does not identify the full source tree, and payload hashes do not prove source-to-binary correspondence. Keep native/GUI verification separate from the Rust-free JS gate so extension-only development does not acquire a Windows toolchain dependency.
 
 Only the Node Desktop backend may request native operations from the Rust host. Before Desktop-specific dispatch, shared client messages must pass shared bridge-version/schema validation; requests targeting a Session must also pass shared Session authorization. The renderer must not gain a direct native-operation API.
 

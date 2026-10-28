@@ -33,7 +33,7 @@ pnpm --dir apps/pi-client exec vitest run <affected.test.ts>
 pnpm --dir apps/desktop exec vitest run <affected.test.ts>
 ```
 
-Finish shared boundary/assembly changes with `pnpm check`. It checks version policy, lint, types, tests, both product builds and the plugin bundle budgets. GUI smoke, Extension Host E2E and packaged-executable verification are separate commands, not hidden parts of that gate. Run them when the changed path depends on native assembly, resources, launch or distribution. Release gates are in `.dev/docs/release.md`.
+Finish shared boundary/assembly changes with `pnpm check`. It checks version policy, lint, types, tests, both product builds and the plugin bundle budgets. Extension releases use `pnpm check:vscode`, which retains shared/extension checks but excludes Desktop-only packages. GUI smoke, Extension Host E2E and packaged-executable verification are separate commands, not hidden parts of that gate. Run them when the changed path depends on native assembly, resources, launch or distribution. Release gates are in `.dev/docs/release.md`.
 
 Shared UI can also fail at a product-supplied theme, typography, resource-URL or shell boundary without changing a message contract. Exercise Desktop build/smoke when changing those dependencies. A component-private styling edit that does not change them does not by itself require a Desktop run; use focused tests and inspect the affected theme, focus and narrow-width states. DOM tests cannot establish browser-rendered typography or native resource loading.
 
@@ -69,6 +69,8 @@ Synthetic capability states and real product declarations need separate checks. 
 A controlled process/GUI run passes only when its result explicitly reports success. A Desktop process exit alone is insufficient. Extension Host E2E requires both a successful host exit and the suite-completion marker; a process that exited without running its suite did not pass. Report timeouts and environment-blocked runs as unverified, without inventing a product defect or a passing result.
 
 Record actual results against the tested commit or archive SHA in CI artifacts or the relevant change record, not as evergreen pass claims in this guide. A shared UI propagation check must inspect actual product outputs; two similar screenshots or a disposable prototype do not prove shared implementation.
+
+`pnpm test:desktop:manual` launches the packaged ZIP with controlled Pi and temporary profiles for human checks; `--reopen` reuses that test profile for the same ZIP. Record task-specific steps and human results in the relevant change directory, not this guide or an automated pass report.
 
 ## Native checks and isolation
 
