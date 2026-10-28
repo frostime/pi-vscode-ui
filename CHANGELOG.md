@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-28
+
+### Added
+
+- A Windows Desktop app for using FrostPi outside VS Code.
+
+### Changed
+
+- Share the chat interface and Pi integration between the VS Code extension and Desktop, while keeping platform-specific features separate.
+
 ## [0.15.5] - 2026-10-15
 
 ### Added
@@ -505,7 +515,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.5...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.5...v0.16.0
 [0.15.5]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.4...v0.15.5
 [0.15.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.3...v0.15.4
 [0.15.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.2...v0.15.3
