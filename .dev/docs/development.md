@@ -3,7 +3,7 @@ title: Development Workflow
 description: Workspace setup, independent product builds, shared-source resolution and setting generation.
 scope:
   - /**
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # Development Workflow
@@ -28,23 +28,24 @@ The root lockfile covers all workspaces. Do not create app-local installations o
 | Debug the extension | `.vscode/launch.json` | The `build:debug` pre-launch task uses the extension-local build and sets `FROSTPI_SOURCEMAP=1` for Host source maps/unminified output; production output stays minified for the bundle budget |
 | Check shared types | `pnpm --dir apps/pi-client typecheck` | Separate core/shared/UI environment checks. Package-local `test` covers backend/host behavior; shared UI component tests use the vscode package's DOM infrastructure, as described in testing.md |
 | Build Desktop | `pnpm --dir apps/desktop build` | Node backend and WebView2 renderer consuming the same ClientApp; no Rust build |
-| Run Desktop | `pnpm --dir apps/desktop start` | Run the executable from `build:native`; pass directory arguments or add Projects through its native directory picker |
+| Run Desktop for development | `pnpm --dir apps/desktop start` | Run the executable from `build:native` with a separate FrostPi development profile; pass directory arguments or add Projects through its native directory picker |
 
 VS Code remains in its workspace Extension Host, including remote workspaces. Do not move its process placement or require a Desktop launch to develop an editor integration. Use `.agents/skills/dual-maintenance/SKILL.md` to decide whether a shared change needs Desktop adaptation, and `.dev/docs/testing.md` to select verification.
 
-For Desktop experiments, set `FROSTPI_DESKTOP_USER_DATA` in the launched process's environment to an isolated directory. Ordinary launches keep the system application-data FrostPi profile. Automated tests use temporary profiles and synthetic settings, not real user configuration. Settings import and state/reopen behavior are contracts in `apps/desktop/SPEC.md`, not extra development steps.
+Desktop's `start` command defaults to `%APPDATA%/FrostPi-Dev`; a normal packaged-executable launch defaults to `%APPDATA%/FrostPi`. Both keep an explicit `FROSTPI_DESKTOP_USER_DATA` override. The profile includes FrostPi settings, Project/session indexes and WebView2 storage. No existing profile is copied, migrated or cleared. Directly double-clicking the build-output exe bypasses the development launcher and uses the normal profile unless the environment overrides it; use `start` for development isolation rather than relying on debug/release compilation mode.
+
+Development isolation changes only FrostPi storage. It must not set or replace Pi's agent directory, session directory, credentials, extensions or skills. Development therefore uses normal Pi history/configuration unless the caller explicitly overrides them. Automated tests remain distinct: temporary FrostPi/Pi directories and controlled children, not real user configuration. Settings import and state/reopen behavior are contracts in `apps/desktop/SPEC.md`, not extra development steps.
 
 Native builds require Windows x64, the stable Rust MSVC toolchain, Visual Studio C++ build tools/Windows SDK, and installed WebView2 Runtime. Node 22.19+ and Pi remain external runtime prerequisites.
 
 ```bash
 pnpm --dir apps/desktop build:native
 pnpm --dir apps/desktop start
-pnpm --dir apps/desktop check:native
-pnpm --dir apps/desktop test:native
+pnpm check:desktop:native
 pnpm --dir apps/desktop test:smoke
 ```
 
-`build:native` includes the JS build and produces the release executable. `pnpm check` checks product JavaScript/TypeScript and builds JS outputs without requiring Rust. Native shell/launch changes additionally require native build/tests and smoke. `test:smoke` launches actual WebView2 with temporary Projects/profiles and controlled Pi children; its loopback DevTools endpoint is enabled only by the test launcher. Independent ZIP delivery uses the [release workflow](release.md#desktop-packaging-windows-x64).
+`build:native` includes the JS build and produces the release executable. `pnpm check` checks both products' JavaScript/TypeScript and builds JS outputs without requiring Rust. `pnpm check:vscode` selects shared packages and the extension only, so Desktop-only failures do not gate extension releases. Native shell/launch changes additionally require native build/tests and smoke. `test:smoke` launches actual WebView2 with temporary Projects/profiles and controlled Pi children; its loopback DevTools endpoint is enabled only by the test launcher. Independent ZIP delivery uses the [release workflow](release.md#desktop-packaging-windows-x64).
 
 For real-browser client UI checks, use the [CDP workflow](testing.md#real-client-ui-interaction).
 

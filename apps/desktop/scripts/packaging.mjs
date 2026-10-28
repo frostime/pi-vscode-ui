@@ -11,6 +11,15 @@ export const productName = "FrostPi";
 export const targetPlatform = "win32";
 export const targetArch = "x64";
 
+export const piExtensionNames = ["session-tree", "question-tool"];
+export const buildInfoFile = "BUILD_INFO.json";
+export const archivePayloadFiles = [
+  "FrostPi.exe", "backend.cjs", "package.json", "LICENSE", "THIRD_PARTY_NOTICES.md",
+  "README.txt", "Cargo.lock", "NATIVE_NOTICES.md",
+  ...piExtensionNames.map((name) => `pi-extensions/${name}.js`),
+];
+export const archiveFiles = [...archivePayloadFiles, buildInfoFile];
+
 const versionSource = resolve(repositoryRoot, "apps/vscode/package.json");
 
 /** The product version keeps its single authority in the extension manifest. */

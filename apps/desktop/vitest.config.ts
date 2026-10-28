@@ -14,5 +14,5 @@ export default defineConfig({
       { find: "@frostime/provider-usage", replacement: resolve(import.meta.dirname, "../../packages/provider-usage/src/index.ts") },
     ],
   },
-  test: { include: ["test/**/*.test.ts"], setupFiles: ["../pi-client/test/isolatePiSettings.ts"] },
+  test: { include: ["test/**/*.test.{ts,mjs}"], setupFiles: ["../pi-client/test/isolatePiSettings.ts"] },
 });

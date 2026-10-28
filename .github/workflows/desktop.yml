@@ -1,0 +1,103 @@
+name: Desktop release
+
+# Independent of release.yml: Desktop failures must never gate extension publication.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-package:
+    name: Build and verify Windows Desktop
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.13.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.20.0
+          cache: pnpm
+      - name: Check tag version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: pnpm version:check ($env:GITHUB_REF_NAME.Substring(1))
+      - name: Select Windows MSVC Rust toolchain
+        run: rustup default stable-x86_64-pc-windows-msvc
+      - run: pnpm install --frozen-lockfile
+      # Native custom-protocol tests embed the renderer; typechecks also need shared declarations.
+      - run: pnpm package:desktop
+      - run: pnpm --dir apps/desktop lint
+      - run: pnpm --dir apps/desktop typecheck
+      - run: pnpm --dir apps/desktop test
+      - run: pnpm check:desktop:native
+      - name: Verify the extracted ZIP in actual WebView2
+        run: pnpm verify:desktop
+      - name: Bind release assets to this commit and successful GUI verification
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: pnpm prepare:desktop:release "$env:GITHUB_REF_NAME"
+      - name: Preserve candidate and actual verification result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: FrostPi-Desktop-Windows-x64-candidate
+          path: |
+            artifacts/FrostPi-*-win32-x64.zip
+            artifacts/FrostPi-*-win32-x64.zip.verification.json
+            artifacts/FrostPi-*-win32-x64.zip.sha256
+          if-no-files-found: warn
+
+  publish:
+    name: Upload verified Desktop to GitHub Release
+    needs: windows-package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Download this run's verified candidate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh run download "$GITHUB_RUN_ID" --name FrostPi-Desktop-Windows-x64-candidate --dir artifacts
+      - name: Recheck transferred ZIP checksum
+        working-directory: artifacts
+        run: sha256sum --check FrostPi-*-win32-x64.zip.sha256
+      - name: Create release if needed, then attach verified Desktop assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            flags=()
+            if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              flags+=(--prerelease)
+            fi
+            # Extension release may create the same release concurrently; accept that, not other errors.
+            if ! gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes "${flags[@]}"; then
+              gh release view "$TAG" >/dev/null
+            fi
+          fi
+          # Recover partial uploads without ever replacing already published bytes.
+          remote_asset=$(mktemp)
+          trap 'rm -f "$remote_asset"' EXIT
+          for asset in artifacts/FrostPi-*-win32-x64.zip artifacts/FrostPi-*-win32-x64.zip.sha256 artifacts/FrostPi-*-win32-x64.zip.verification.json; do
+            name=$(basename "$asset")
+            existing_id=$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq ".assets[] | select(.name == \"$name\") | .id")
+            if [[ -n "$existing_id" ]]; then
+              gh api "repos/$GH_REPO/releases/assets/$existing_id" -H 'Accept: application/octet-stream' > "$remote_asset"
+              if ! cmp --silent "$asset" "$remote_asset"; then
+                echo "::error::Published asset differs: $name. Existing bytes were not replaced."
+                exit 1
+              fi
+              echo "Already published with identical bytes: $name"
+            else
+              gh release upload "$TAG" "$asset"
+            fi
+          done
