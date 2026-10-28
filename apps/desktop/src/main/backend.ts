@@ -75,6 +75,14 @@ wire.on("packet", (packet: unknown) => {
     })().catch(() => { wire.send({ kind: "fatal", message: "FrostPi could not start. Existing settings were not reset." }); void shutdown(); });
     return;
   }
+  if (message.kind === "exitCheck" && !closing && typeof message.id === "number") {
+    const id = message.id;
+    void (async () => {
+      await starting;
+      wire.send({ kind: "response", id, ok: true, value: backend?.requiresExitConfirmation() ?? false });
+    })().catch(() => { wire.send({ kind: "response", id, ok: false }); });
+    return;
+  }
   if (message.kind !== "request" || closing || typeof message.id !== "number") return;
   const id = message.id;
   void (async () => {

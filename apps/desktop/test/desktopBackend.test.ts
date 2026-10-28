@@ -39,6 +39,22 @@ async function fixture(overrides: Partial<DesktopBackendOptions> = {}, firstRun 
 }
 
 describe("Desktop backend assembly", () => {
+  it("requires exit confirmation for a running background Session, but not an idle Pi process", async () => {
+    const { backend, directory } = await fixture();
+    await backend.settingsStore.update("frostpi.pi.arguments", ["--persist-session-fixture", "--stream-084-release", join(directory, "release-stream")]);
+    expect(backend.requiresExitConfirmation()).toBe(false);
+    const id = await backend.registry.createSession();
+    if (!id) throw new Error("Expected a new Session");
+    await vi.waitFor(() => expect(backend.registry.sessionView(id)?.status).toBe("ready"));
+    expect(backend.requiresExitConfirmation()).toBe(false);
+    await backend.registry.sendPrompt(id, "stream-084", []);
+    await vi.waitFor(() => expect(backend.registry.sessionView(id)?.isStreaming).toBe(true));
+    await backend.registry.clearActiveSession();
+    expect(backend.registry.activeSessionId).toBeNull();
+    expect(backend.requiresExitConfirmation()).toBe(true);
+    await backend.registry.abort(id);
+    await vi.waitFor(() => expect(backend.requiresExitConfirmation()).toBe(false));
+  });
   it("shows Resume before discovery finishes, cancels without a Pi, and surfaces a later discovery failure", async () => {
     let release!: () => void;
     const discovery = new Promise<void>((done) => { release = done; });

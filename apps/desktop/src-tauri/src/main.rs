@@ -3,6 +3,7 @@
 mod native;
 mod node_backend;
 mod process_tree;
+mod tray;
 
 use serde_json::{json, Value};
 use std::{
@@ -57,6 +58,28 @@ impl Backend {
             self.0.queued_bytes.fetch_sub(length, Ordering::AcqRel);
             "Desktop backend is unavailable or busy".to_string()
         })
+    }
+    async fn exit_confirmation_required(&self) -> Result<bool, String> {
+        let id = self.0.serial.fetch_add(1, Ordering::Relaxed);
+        let (sender, receiver) = oneshot::channel();
+        {
+            let mut pending = self.0.pending.lock().unwrap();
+            if pending.len() >= 1024 {
+                return Err("Too many pending Desktop requests".into());
+            }
+            pending.insert(id, sender);
+        }
+        if let Err(error) = self.send(json!({"kind":"exitCheck","id":id})) {
+            self.0.pending.lock().unwrap().remove(&id);
+            return Err(error);
+        }
+        let result = tokio::time::timeout(Duration::from_secs(15), receiver).await;
+        self.0.pending.lock().unwrap().remove(&id);
+        result
+            .map_err(|_| "Desktop exit check timed out".to_string())?
+            .map_err(|_| "Desktop exit check cancelled".to_string())??
+            .as_bool()
+            .ok_or_else(|| "Invalid Desktop exit check".to_string())
     }
     fn publish(&self, value: Value) {
         if let Some(channel) = self.0.channel.lock().unwrap().as_ref() {
@@ -447,6 +470,14 @@ fn watch_webview(
     })
 }
 
+fn publish_window_state(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let visible = window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false);
+        let backend = app.state::<Backend>();
+        let _ = backend.send(json!({"kind":"window","focused":visible && window.is_focused().unwrap_or(false),"visible":visible}));
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![desktop_connect, desktop_request])
@@ -460,19 +491,19 @@ fn main() {
                 .build()?;
             let backend = app.state::<Backend>().inner().clone();
             let handle = app.handle().clone();
+            tray::install(app)?;
             watch_webview(&window, backend, handle)?;
             Ok(())
         })
         .on_window_event(|window, event| {
-            let Some(backend) = window.try_state::<Backend>() else { return; };
+            if window.try_state::<Backend>().is_none() { return; }
             match event {
-                tauri::WindowEvent::CloseRequested { api, .. } => { api.prevent_close(); backend.close(window.app_handle().clone()); }
-                tauri::WindowEvent::Focused(focused) => { let _ = backend.send(json!({"kind":"window","focused":focused,"visible":!window.is_minimized().unwrap_or(false)})); }
-                tauri::WindowEvent::Resized(_) => { let _ = backend.send(json!({"kind":"window","focused":window.is_focused().unwrap_or(false),"visible":!window.is_minimized().unwrap_or(false)})); }
+                tauri::WindowEvent::CloseRequested { api, .. } => { api.prevent_close(); tray::hide(window.app_handle()); }
+                tauri::WindowEvent::Focused(_) | tauri::WindowEvent::Resized(_) => publish_window_state(window.app_handle()),
                 _ => {}
             }
         })
         .build(tauri::generate_context!())
         .unwrap_or_else(|_| { rfd::MessageDialog::new().set_title("FrostPi Desktop").set_description("FrostPi could not start. Install Node 22.19+ and WebView2 Runtime, and check that Node is on the desktop PATH.").set_level(rfd::MessageLevel::Error).show(); std::process::exit(1); })
-        .run(|app, event| { if let tauri::RunEvent::ExitRequested { api, .. } = event { let backend = app.state::<Backend>(); if !backend.0.closing.load(Ordering::Acquire) { api.prevent_exit(); backend.close(app.clone()); } } });
+        .run(|app, event| { if let tauri::RunEvent::ExitRequested { api, .. } = event { let backend = app.state::<Backend>(); if !backend.0.closing.load(Ordering::Acquire) { api.prevent_exit(); tray::request_exit(app); } } });
 }

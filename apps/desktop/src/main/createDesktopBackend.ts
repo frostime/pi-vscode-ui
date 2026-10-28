@@ -222,6 +222,12 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
   listen("frostpi:resume:dismiss", (id) => resume.dismiss(id));
   const unsubscribeVisibility = transport.onVisibility((value) => visibility.fire(value));
 
+  const requiresExitConfirmation = (): boolean => registry.snapshot().sessions.some((session) => {
+    const view = registry.sessionView(session.id);
+    return session.requiresUserInput || ["queued", "starting", "running", "stopping"].includes(session.status)
+      || Boolean(view?.isStreaming || view?.isCompacting || view?.isForking || view?.isNavigatingTree);
+  });
+
   let disposal: Promise<void> | undefined;
   const dispose = (): Promise<void> => disposal ??= (async () => {
     disposed = true;
@@ -254,5 +260,5 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
     await dispose().catch(() => undefined);
     throw error;
   }
-  return { registry, projects, connection, settingsStore, stateStore, navigation, dispose };
+  return { registry, projects, connection, settingsStore, stateStore, navigation, requiresExitConfirmation, dispose };
 }
