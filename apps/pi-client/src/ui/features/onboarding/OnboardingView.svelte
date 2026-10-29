@@ -29,7 +29,7 @@
         <span class="codicon codicon-settings-gear"></span> Settings
       </button>
     </div>
-    <p class="onboarding-note">FrostPi expects a working Pi installation and uses its existing providers, extensions, skills, prompts, and session storage.</p>
+    <p class="onboarding-note">If Pi is not installed, install it first. If it is already installed, choose Configure Pi to set its executable path, or check that FrostPi can find Pi and Node.js on PATH. Then retry. FrostPi uses your existing Pi providers, extensions, skills, prompts, and session storage.</p>
   {:else}
     <h1>Start or resume a Pi session</h1>
     <p>Create a session to begin working with Pi in this workspace.</p>
