@@ -68,7 +68,7 @@ Packaging includes project/JS/Rust license notices and source references, and fa
 
 `.github/workflows/desktop.yml` handles tags and manual dispatch independently: Desktop failures must not block extension publication. Shared-code failures can still block the extension's own checks. Manual branch dispatch validates a candidate without publishing.
 
-The Windows job packages, checks Desktop JS/Rust and runs `verify:desktop`. GUI success is a hard publication gate; runner limitations must fail it, not trigger skipped assertions or static-only acceptance. Preserve candidate artifacts and actual failure reports. Hosted GUI acceptance can only be claimed after an actual successful workflow run.
+The Windows job packages, checks Desktop JS/Rust and runs `verify:desktop`. Automated GUI success is a hard publication gate; runner limitations must fail it, not trigger skipped assertions or static-only acceptance. Tray menu Exit/confirmation are separate manual checks listed by the runner; record them for the candidate using the [testing procedure](testing.md#windows-native-evidence). Preserve candidate artifacts and actual failure reports. Hosted GUI acceptance can only be claimed after an actual successful workflow run.
 
 For tags, `node apps/desktop/scripts/prepare-release.mjs v<version>` requires a clean checkout, matching tag/archive version and source commit, and a successful GUI report for the identical ZIP SHA-256. It writes `<archive>.sha256` without rebuilding. Dirty local builds may be packaged/tested but cannot pass this release preparation.
 

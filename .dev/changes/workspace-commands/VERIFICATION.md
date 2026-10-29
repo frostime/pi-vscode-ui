@@ -19,3 +19,9 @@
 - `FrostPi-0.16.0-win32-x64.zip`：`ff87d8f6adff21c1c054b90abdbc1c2db89fae1047447ba133df621f1ce7505d`
 
 Desktop ZIP 的构建来源为 dirty，只有静态检查，没有 GUI report，不能作为正式已验证交付物。未运行 GUI smoke、verify:desktop、人工验收、E2E、GitHub Actions 或真实模型；未推送/打 tag/发布，也未验证其他 OS/最低 Node。VSIX 最后补打包排除规则后重新打包验证，未重跑整轮应用测试。
+
+## 合并后的托盘验收
+
+`18cdc1d` 的干净候选 ZIP（SHA-256 `f58a30a829a86f9fbf0aa185afbca75e548e2051676ba40aaf22fab05f2630c2`）两次自动化均卡在重开后的托盘菜单发现。用户随后手动从托盘退出，再复用同包/同测试 profile 重开并退出，两次确认正常，启动器退出码均为 0；未据此声称验证了活动任务的退出确认。
+
+托盘菜单/Exit 确认改为人工检查，自动化不再发现菜单或发送 Exit 命令。使用已有 renderer 故障关闭路径验证 backend drain、状态保存和重开，保留强制结束进程树清理；报告以 `manualChecks` 明确未自动覆盖的操作。修改后的 `verify:desktop` 对同一 ZIP 一次通过，14 项自动检查完成。VS Code 1.143.1 Extension Host E2E 也通过（suiteCompleted=true）。日志在 `tmp/release-016-*.log`；未运行 GitHub Actions 或发布。
