@@ -1,13 +1,13 @@
-# 实施方法
+# 当前实施方法
 
-以 `quasi-main` 合并提交后的 `refactor/workspace-commands` 为工作分支；先前 `chore/prepare-0.16.0` 已按用户要求用非快进合并。
+在 `refactor/workspace-commands` 的 `f9cffb3` 上继续修订，不改写旧提交或再次合并 quasi-main。
 
-根构建先调用共享客户端的完整 build，再调用所选产品的 build:local。共享客户端继续构建 RPC 和 provider-usage；不另造 DAG 引擎或跨命令缓存。单独产品 build 先准备共享客户端再编译自身，公开打包仍使用完整 build。
+根 `scripts/build.mjs` 是 Rust-free JS 编排工具，提供 `buildJavaScript(scope)` 给完整 Desktop 构建使用，CLI 供常规 gate 和 Agent 调用。它先运行共享客户端完整 build，再执行各产品自有 `build.mjs`。产品自有 build 文件完成 esbuild 和 Vite；不再通过 package.json 的 build:local 转发。
 
-在 `scripts/` 集中声明包范围供 build、quality、clean 使用。构建输出检查随产品范围选择，不能让 Desktop-only JS 构建要求已有 VS Code 产物。根 quality 增加工程脚本 lint 和 Node 内置测试，不另加测试框架。
+VS Code 公开 build 调用上述 JS 编排器，Desktop 公开 build 调用所属 `scripts/build.mjs`：先准备 JS，再执行 Tauri/Cargo 生成 exe。Desktop package:app 调用这个唯一完整 build。Rust 完成后用 `packaging.mjs` 的 `copyRuntimeFiles` 刷新 exe 旁后台和 Pi 扩展；ZIP staging 复用该函数，不能依赖目标目录此前留下的资源。根不保留含义模糊的裸 build。
 
-用少量回归测试保护构建依赖去重、产品范围及非法参数提前失败。Node 测试通过在 `scripts/test` 中运行默认发现纳入根 gate；Desktop 入口测试留在 Desktop 包，避免 Desktop-only 脚本错误阻断 check:vscode。参数拒绝测试运行隔离的脚本副本和空 workspace，防止 guard 回归后意外清理实际 artifacts 或触发真实构建。直接执行 Node 时不走 Windows shell，以保留带空格的路径和参数；pnpm.cmd 仍使用 shell。
+根保留常用产品入口、常规检查、版本设置、产物验证和人工验收；子包保留 build/clean/lint/typecheck/test，Desktop 额外保留 start/package:app/verify:package。专项任务直接调用已有 Node/Cargo/Vitest 工具，不新增命令框架。CI 改用直接版本检查、Rust 命令、E2E runner 和发布准备脚本。自制源码归档和重复本地发布脚本按目标删除。
 
-运行实际构建和常规检查提供集成证据；最终结果和证据边界见 [VERIFICATION.md](VERIFICATION.md)。文档保持现有十篇结构，压缩重复说明和底层实现清单，保留隔离、打包重建、证据绑定及独立发布约束。
+文档沿用 development/testing/release 分工，添加专项操作的直接调用而非复制全部命令表。设置生成脚本中的 regenerate 注释同步修改并实际重新生成；不能手改生成文件。模块和 root AGENTS 只修正现有入口，不扩写新流程。
 
-源码归档脚本可因入口改名重命名文件，但不改变选文件规则。发布脚本不借本轮重构修改凭证或发布机制。
+验证仍使用隔离参数拒绝测试，避免失败 guard 触发真实清理/构建；删除只为已删入口存在的测试。完整 Native 构建不打开 GUI；若运行 GUI 必须先告知。默认测试超时或并发不因执行波动而改写。实际结果与未验证边界见 [VERIFICATION.md](VERIFICATION.md)。

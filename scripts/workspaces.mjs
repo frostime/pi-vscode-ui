@@ -1,28 +1,30 @@
 import { parseArgs } from "node:util";
 
 const sharedPackages = ["@frostime/pi-rpc", "@frostime/provider-usage", "@frostime/pi-client"];
-const productPackages = { vscode: "frostpi", desktop: "@frostime/frostpi-desktop" };
+const products = {
+  vscode: {
+    packageName: "frostpi",
+    directory: "apps/vscode",
+    outputs: ["dist/extension/extension.cjs", "dist/webview/webview.js", "dist/webview/webview.css"],
+  },
+  desktop: {
+    packageName: "@frostime/frostpi-desktop",
+    directory: "apps/desktop",
+    outputs: ["dist/backend.cjs", "dist/renderer/index.html"],
+  },
+};
 
-function productsForScope(scope) {
-  if (scope === "all") return Object.values(productPackages);
-  if (Object.hasOwn(productPackages, scope)) return [productPackages[scope]];
+export function productsForScope(scope) {
+  if (scope === "all") return Object.values(products);
+  if (Object.hasOwn(products, scope)) return [products[scope]];
   throw new Error(`Unknown workspace scope: ${scope}`);
 }
 
 export function packagesForScope(scope = "all") {
-  return [...sharedPackages, ...productsForScope(scope)];
+  return [...sharedPackages, ...productsForScope(scope).map((product) => product.packageName)];
 }
 
-export function buildSteps(scope = "all") {
-  // SPEC: The client build prepares both shared engines. Product-local builds must
-  // compile only their own outputs here, so a workspace build never rebuilds dependencies.
-  return [
-    { packageName: "@frostime/pi-client", script: "build" },
-    ...productsForScope(scope).map((packageName) => ({ packageName, script: "build:local" })),
-  ];
-}
-
-export function scopeFromArgs(args, allowedScopes = ["all", "vscode", "desktop"]) {
+export function scopeFromArgs(args, allowedScopes = ["all", ...Object.keys(products)]) {
   const { values, tokens } = parseArgs({
     args,
     options: { scope: { type: "string", default: "all" } },
@@ -31,7 +33,7 @@ export function scopeFromArgs(args, allowedScopes = ["all", "vscode", "desktop"]
     tokens: true,
   });
   if (tokens.filter((token) => token.kind === "option" && token.name === "scope").length > 1) {
-    throw new Error("Pass --scope only once; a product entry cannot override its scope");
+    throw new Error("Pass --scope only once");
   }
   if (!allowedScopes.includes(values.scope)) {
     throw new Error(`Expected --scope <${allowedScopes.join("|")}>`);

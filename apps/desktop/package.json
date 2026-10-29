@@ -3,22 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter @frostime/pi-client build && pnpm build:local",
-    "build:local": "node build.mjs && vite build",
-    "build:native": "pnpm build && tauri build --no-bundle -- --locked",
+    "build": "node scripts/build.mjs",
     "clean": "node ../../scripts/clean-dir.mjs dist coverage",
     "start": "node scripts/start.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && svelte-check --tsconfig ./tsconfig.renderer.json",
     "lint": "eslint src test scripts build.mjs --max-warnings 0",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:smoke": "node scripts/smoke.mjs",
     "package:app": "node scripts/package-app.mjs",
-    "verify:package": "node scripts/verify-package.mjs",
-    "test:manual": "node scripts/manual-smoke.mjs",
-    "prepare:release": "node scripts/prepare-release.mjs",
-    "check:native": "cargo check --locked --manifest-path src-tauri/Cargo.toml && pnpm test:native",
-    "test:native": "cargo test --locked --manifest-path src-tauri/Cargo.toml --features custom-protocol"
+    "verify:package": "node scripts/verify-package.mjs"
   },
   "dependencies": {
     "@frostime/pi-client": "workspace:*",

@@ -36,6 +36,7 @@ for (const entry of required) {
 const forbidden = entries.filter((entry) =>
   /(^|\/)(src|test|node_modules|\.vscode-test)(\/|$)/.test(entry)
   || /^extension\/pi-extensions\//.test(entry)
+  || entry === "extension/build.mjs"
   || entry.endsWith(".map"),
 );
 if (forbidden.length) throw new Error(`VSIX contains forbidden files:\n${forbidden.join("\n")}`);

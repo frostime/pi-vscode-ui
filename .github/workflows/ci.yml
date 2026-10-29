@@ -43,7 +43,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm package:vsix
       - run: pnpm verify:vsix
-      - run: xvfb-run -a pnpm --dir apps/vscode test:e2e
+      - run: xvfb-run -a node test/e2e/runTest.cjs
+        working-directory: apps/vscode
       - run: node scripts/check-bundle-size.mjs
       - uses: actions/upload-artifact@v7
         with:

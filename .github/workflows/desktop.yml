@@ -25,7 +25,7 @@ jobs:
           cache: pnpm
       - name: Check tag version
         if: startsWith(github.ref, 'refs/tags/v')
-        run: pnpm version:check ($env:GITHUB_REF_NAME.Substring(1))
+        run: node scripts/version.mjs check ($env:GITHUB_REF_NAME.Substring(1))
       - name: Select Windows MSVC Rust toolchain
         run: rustup default stable-x86_64-pc-windows-msvc
       - run: pnpm install --frozen-lockfile
@@ -34,12 +34,13 @@ jobs:
       - run: pnpm --dir apps/desktop lint
       - run: pnpm --dir apps/desktop typecheck
       - run: pnpm --dir apps/desktop test
-      - run: pnpm check:desktop:native
+      - run: cargo check --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --features custom-protocol
       - name: Verify the extracted ZIP in actual WebView2
         run: pnpm verify:desktop
       - name: Bind release assets to this commit and successful GUI verification
         if: startsWith(github.ref, 'refs/tags/v')
-        run: pnpm prepare:desktop:release "$env:GITHUB_REF_NAME"
+        run: node apps/desktop/scripts/prepare-release.mjs "$env:GITHUB_REF_NAME"
       - name: Preserve candidate and actual verification result
         if: always()
         uses: actions/upload-artifact@v7

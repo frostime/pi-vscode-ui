@@ -4,14 +4,14 @@ import { basename, join, resolve, sep } from "node:path";
 import AdmZip from "adm-zip";
 import { nativeNoticesText } from "./native-notices.mjs";
 import { desktopNoticesText } from "./desktop-notices.mjs";
-import { artifactsRoot, buildInfoFile, buildOutput, desktopRoot, distributedArchive, piExtensionNames, productVersion, repositoryRoot } from "./packaging.mjs";
+import { artifactsRoot, buildInfoFile, buildOutput, copyRuntimeFiles, desktopRoot, distributedArchive, piExtensionNames, productVersion, repositoryRoot } from "./packaging.mjs";
 import { createBuildInfo } from "./archive-contract.mjs";
 import { assertNoArguments, run } from "../../../scripts/lib.mjs";
 
 assertNoArguments("pnpm package:desktop");
 if (process.platform !== "win32" || process.arch !== "x64") throw new Error("Tauri packaging supports Windows x64 only.");
 // SPEC: Every packaging entry rebuilds all components; staging is not a public build-skipping operation.
-run("pnpm", ["build:native"], { cwd: desktopRoot });
+run("pnpm", ["build"], { cwd: desktopRoot });
 const executable = resolve(desktopRoot, "src-tauri/target/release/frostpi-desktop.exe");
 for (const file of [executable, join(buildOutput, "backend.cjs"), ...piExtensionNames.map((name) => join(buildOutput, "pi-extensions", `${name}.js`))]) {
   if (!existsSync(file)) throw new Error(`Missing build output: ${file}`);
@@ -25,9 +25,7 @@ const stage = mkdtempSync(join(tmpdir(), "frostpi-tauri-package-"));
 const root = join(stage, "FrostPi"); mkdirSync(root);
 try {
   cpSync(executable, join(root, "FrostPi.exe"));
-  cpSync(join(buildOutput, "backend.cjs"), join(root, "backend.cjs"));
-  mkdirSync(join(root, "pi-extensions"));
-  for (const name of piExtensionNames) cpSync(join(buildOutput, "pi-extensions", `${name}.js`), join(root, "pi-extensions", `${name}.js`));
+  copyRuntimeFiles(root);
   // Pi extension artifacts use ESM; backend.cjs remains explicitly CommonJS.
   writeFileSync(join(root, "package.json"), JSON.stringify({ name: "frostpi-desktop", private: true, type: "module", version: productVersion() }) + "\n");
   cpSync(join(repositoryRoot, "LICENSE"), join(root, "LICENSE"));

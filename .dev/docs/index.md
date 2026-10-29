@@ -29,9 +29,9 @@ updated: 2026-10-29
 
 Read the guide that owns your current decision, not all four in order:
 
-- [development.md](development.md): install the workspace, choose between root and package commands, build and start a product, generate settings, and keep shared-source resolution intact.
-- [testing.md](testing.md): select checks by changed responsibility, run focused and watch tests plus real-Host verification (Extension Host E2E, Desktop Rust checks, GUI smoke, packaged ZIP verification, manual acceptance), and read evidence limits and isolation rules.
-- [release.md](release.md): set the product version, build and verify an extension or Desktop candidate, read tag/publication credentials, and follow the independent Desktop release gates.
+- [development.md](development.md): install the workspace, read the common root and package entries, build and start each product (extension JS only; Desktop includes Rust), generate settings, and keep shared-source resolution intact.
+- [testing.md](testing.md): select checks by changed responsibility, run focused or watch tests through Vitest, run the gate, and run real-Host verification (Extension Host E2E, Rust checks, GUI smoke, packaged ZIP verification, manual acceptance) with its evidence limits and isolation rules.
+- [release.md](release.md): set the product version, build and verify an extension or Desktop candidate, follow tag publication and its credentials, use the authorized manual `vsce --packagePath` path, and follow the independent Desktop release gates.
 - [troubleshooting.md](troubleshooting.md): recover from a runtime, discovery, search or editor symptom before changing product behavior.
 
 `.dev/changes/` and `.dev/backlog/` contain task context and historical evidence. Read them when working on that task; current architecture and module contracts do not depend on replaying old sessions or plans.

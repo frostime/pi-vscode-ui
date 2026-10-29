@@ -6,12 +6,10 @@
     "node": ">=20.19"
   },
   "scripts": {
-    "build": "node scripts/build.mjs",
-    "build:vscode": "node scripts/build.mjs --scope vscode",
-    "build:desktop": "node scripts/build.mjs --scope desktop",
+    "build:vscode": "pnpm --dir apps/vscode build",
+    "build:desktop": "pnpm --dir apps/desktop build",
     "clean": "node scripts/clean.mjs",
     "version:set": "node scripts/version.mjs set",
-    "version:check": "node scripts/version.mjs check",
     "typecheck": "node scripts/quality.mjs typecheck",
     "test": "node scripts/quality.mjs test",
     "lint": "node scripts/quality.mjs lint",
@@ -19,13 +17,9 @@
     "check:vscode": "node scripts/check.mjs --scope vscode",
     "package:vsix": "node scripts/package-vsix.mjs",
     "verify:vsix": "node scripts/verify-vsix.mjs",
-    "package:source": "node scripts/package-source.mjs",
-    "check:desktop:native": "pnpm --dir apps/desktop check:native",
     "package:desktop": "pnpm --dir apps/desktop package:app",
     "verify:desktop": "pnpm --dir apps/desktop verify:package",
-    "test:desktop:manual": "pnpm --dir apps/desktop test:manual",
-    "prepare:desktop:release": "pnpm --dir apps/desktop prepare:release",
-    "publish:marketplace": "node scripts/publish-marketplace.mjs"
+    "test:desktop:manual": "node apps/desktop/scripts/manual-smoke.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

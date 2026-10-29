@@ -20,8 +20,8 @@ Test observable behavior and contracts, not implementation call order. During it
 | Shared Runtime/projection | `apps/pi-client/test/unit`; isolated Pi settings and controlled children where needed |
 | Shared Registry/configuration/bridge | `apps/pi-client/test/host`; injected host services, without native product hosts |
 | Shared UI and browser behavior | `apps/vscode/test/unit`; the extension package currently supplies the shared UI test infrastructure, including jsdom `*.dom.test.ts` component tests |
-| VS Code adapter and sidebar/tab coordination | `apps/vscode/test`; native services are mocked in unit tests, while `test:e2e` runs a real Extension Host |
-| Desktop adaptation and state | `apps/desktop/test`; unit/integration tests inject native services; `test:smoke` runs actual Tauri/WebView2 |
+| VS Code adapter and sidebar/tab coordination | `apps/vscode/test`; native services are mocked in unit tests, while the E2E runner uses a real Extension Host |
+| Desktop adaptation and state | `apps/desktop/test`; unit/integration tests inject native services; GUI smoke uses actual Tauri/WebView2 |
 | Provider Usage engine | `packages/provider-usage`; credential/query policy and safe result contracts |
 
 The shared UI tests' physical location does not make the implementation plugin-only. Vitest separates ordinary unit/SSR and DOM environments; browser tests use Svelte browser resolution. Reuse that infrastructure rather than treating a shared-client backend test run as component coverage.
@@ -34,9 +34,9 @@ pnpm --dir apps/pi-client exec vitest run <affected.test.ts>
 pnpm --dir apps/desktop exec vitest run <affected.test.ts>
 ```
 
-All five packages provide `test:watch`, for example `pnpm --dir apps/pi-client test:watch`. Root `test` is a finite all-package run, not watch mode.
+For watch mode, run `pnpm --dir <package> exec vitest`; append a test path to focus on one file.
 
-Finish shared boundary/assembly changes with `pnpm check`. It runs version policy, lint (including engineering scripts), types, tests (including the scripts' Node built-in tests), both product builds and the plugin bundle budgets. `pnpm check:vscode` keeps shared and extension checks and excludes Desktop-only packages, so a Desktop-only failure does not gate an extension release. Desktop Rust checks, GUI smoke, Extension Host E2E, packaged verification and manual acceptance are separate commands, not hidden parts of either gate; run them when the changed path depends on native assembly, resources, launch or distribution.
+Finish shared boundary/assembly changes with `pnpm check`. It runs version policy, lint (including the engineering scripts), types, tests, the internal JavaScript build for both products, and the plugin bundle budgets. That build is Rust-free, so the ordinary gate needs neither the Rust toolchain nor a window. `pnpm check:vscode` keeps shared and extension checks and excludes Desktop-only packages, so a Desktop-only failure does not gate an extension release. Rust checks, GUI smoke, Extension Host E2E, packaged verification and manual acceptance are separate commands, not hidden parts of either gate; run them when the changed path depends on native assembly, resources, launch or distribution.
 
 Shared UI can also fail at a product-supplied theme, typography, resource-URL or shell boundary without changing a message contract. Exercise Desktop build/smoke when changing those dependencies. A component-private styling edit that does not change them does not by itself require a Desktop run; use focused tests and inspect the affected theme, focus and narrow-width states. DOM tests cannot establish browser-rendered typography or native resource loading.
 
@@ -44,27 +44,28 @@ Shared UI can also fail at a product-supplied theme, typography, resource-URL or
 
 Use Desktop's Chrome DevTools Protocol (CDP) runner when shared ClientApp changes need real-browser layout, input or focus checks. Start ordinary component changes with the DOM tests above. Desktop results do not establish VS Code-specific bindings or native OS dialog behavior.
 
-The executable embeds the renderer, so any UI change needs `pnpm --dir apps/desktop build:native` before the GUI smoke entry below; a JS-only build leaves the existing executable serving the previous UI. Windows prerequisites are in [development.md](development.md#product-local-work).
+The executable embeds the renderer, so a renderer change needs a complete Desktop build (`pnpm build:desktop` or `pnpm --dir apps/desktop build`) before GUI smoke; a JS-only build leaves the existing executable serving the previous UI. Windows prerequisites are in [development.md](development.md#product-local-work).
 
 Fixture setup, scenarios, wait helpers and cleanup belong to `apps/desktop/scripts/smoke.mjs`, which uses `apps/desktop/scripts/cdp-client.mjs` for CDP operations. Extend that runner with its existing helpers instead of adding a second automation path. Use its isolated Projects/profiles and controlled Pi, not the user's normal window or sessions. Tell the user before launching: the run opens and automatically operates visible windows, including close/reopen and crash checks.
 
 ## Real Host verification
 
-| Verification | Entry | Preparation and side effects |
+| Verification | Entry | Prerequisite and effect |
 |---|---|---|
-| Extension Host E2E | `pnpm --dir apps/vscode test:e2e` | Build the extension first. May download VS Code and opens an isolated Extension Host |
-| Desktop Rust checks | `pnpm check:desktop:native` or Desktop-local `check:native` | Requires the Windows toolchain and current JS/renderer outputs (`pnpm build:desktop`); custom-protocol tests embed the renderer. Does not open the application |
-| Desktop GUI smoke | `pnpm --dir apps/desktop test:smoke` | Requires a current `build:native`; opens and operates visible test windows |
-| Packaged ZIP verification | `pnpm verify:desktop` | Requires an existing ZIP; extracts and runs it, then writes a ZIP-bound report. Does not rebuild |
-| Manual acceptance | `pnpm test:desktop:manual` | Launches the current packaged ZIP with controlled Pi and temporary data; the human result is recorded separately |
+| Extension Host E2E | `node apps/vscode/test/e2e/runTest.cjs` from the repository root | Extension built (`pnpm build:vscode`). Uses or downloads a VS Code executable, fresh profiles and a fixture outside Git, then runs the controlled suite in a real Extension Host |
+| Desktop Rust check | `pnpm --dir apps/desktop exec cargo check --locked --manifest-path src-tauri/Cargo.toml` | Current JS/renderer via `node scripts/build.mjs --scope desktop` or a complete Desktop build. Compiles only; no window |
+| Desktop Rust tests | `pnpm --dir apps/desktop exec cargo test --locked --manifest-path src-tauri/Cargo.toml --features custom-protocol` | Same JS prerequisite; the custom-protocol feature embeds the renderer. No window |
+| Desktop GUI smoke | From `apps/desktop`: `node scripts/smoke.mjs` | Executable from a complete Desktop build. The runner's default executable path is relative to the Desktop directory. Opens and drives real WebView2 windows |
+| Packaged ZIP verification | `pnpm verify:desktop` | ZIP from `pnpm package:desktop`. Extracts outside the repository, runs the executable with isolated data and writes its report beside the archive |
+| Manual acceptance | `pnpm test:desktop:manual` | Launches the packaged ZIP with an isolated profile and controlled Pi; `--reopen` reuses that profile for the same ZIP |
 
-Desktop-local `test:native` runs the Rust tests alone; `check:native` adds the compile check. Neither is the GUI check: `test:smoke` starts the real WebView2 application, and only that run exercises renderer assembly, window lifecycle and native IPC. A passing Rust test does not show that the window renders or that the packaged executable starts.
+Desktop Rust tests and GUI smoke answer different questions. `cargo test` compiles with renderer assets embedded and runs Rust tests without opening the application. `smoke.mjs` starts the application to exercise renderer assembly, window lifecycle and native IPC. A passing Rust test does not show that the window renders, and a passing smoke run does not cover every Rust branch.
 
-For `pnpm --dir apps/vscode test:e2e`, the runner uses a fixture outside Git, fresh VS Code/Pi profiles and software rendering. SDK downloads keep the caller's proxy configuration; environment sanitization applies only to the later isolated test launch. Use `FROSTPI_VSCODE_EXECUTABLE` for an existing absolute VS Code launcher path when an offline run is needed. `FROSTPI_E2E_TIMEOUT_MS` overrides the 180-second watchdog. Timeout cleanup may stop only the owned runner tree, never a process-name wildcard, the user's IDE or its updater.
+The E2E runner keeps the caller's proxy configuration for SDK downloads and sanitizes only the isolated test launch. Use `FROSTPI_VSCODE_EXECUTABLE` for an existing absolute VS Code launcher path when an offline run is needed, and `FROSTPI_E2E_TIMEOUT_MS` to override the 180-second watchdog. Timeout cleanup may stop only the owned runner tree, never a process-name wildcard, the user's IDE or its updater.
 
-`pnpm verify:desktop` accepts `--real-pi` and `--native-dialogs`; an explicitly supplied archive is checked against its embedded version. It needs a ZIP produced by `pnpm package:desktop`. `--real-pi` uses the installed runtime with isolated data and an offline-configured temporary extension command. It checks real command/confirmation/custom-message paths, not a model completion or durable real-Pi history. `PI_OFFLINE` suppresses automatic activity; it is not a sandbox against explicit model calls. Delivery gates are in [release.md](release.md#desktop-packaging-windows-x64).
+`pnpm verify:desktop` accepts `--real-pi` and `--native-dialogs`; an explicitly supplied archive is checked against its embedded version. `--real-pi` uses the installed runtime with isolated data and an offline-configured temporary extension command. It checks real command/confirmation/custom-message paths, not a model completion or durable real-Pi history. `PI_OFFLINE` suppresses automatic activity; it is not a sandbox against explicit model calls. Delivery gates are in [release.md](release.md#desktop-packaging-windows-x64).
 
-`pnpm test:desktop:manual` (Desktop-local `test:manual`) launches the current ZIP in `artifacts/` with a temporary profile and controlled Pi; `--reopen` reuses that profile for the same ZIP. It is a setup step for human checks, not a pass attestation: write the task steps and the observed result in the change directory, not in this guide or a generated report. Closing the window, or the process exiting on its own, does not mark acceptance as passed.
+`pnpm test:desktop:manual` runs `apps/desktop/scripts/manual-smoke.mjs` against the current ZIP in `artifacts/`; `--reopen` reuses that profile for the same ZIP. It is a setup step for human checks, not a pass attestation: write the task steps and the observed result in the change directory, not in this guide or a generated report. Closing the window, or the process exiting on its own, does not mark acceptance as passed.
 
 ## Evidence boundaries
 
@@ -86,7 +87,7 @@ Record actual results against the tested commit or archive SHA in CI artifacts o
 
 ## Native checks and isolation
 
-Desktop smoke runs the executable produced by the current `build:native`; its runner creates temporary Projects, profiles, session roots and a controlled Pi fixture, and reports its temporary artifact directory. Those fixtures test identity, draft/input ownership, concurrency and persistence without model credentials. A startup exception before application import must still become a failed result, not a native dialog left waiting for a user.
+Desktop smoke runs the executable produced by a complete Desktop build; its runner creates temporary Projects, profiles, session roots and a controlled Pi fixture, and reports its temporary artifact directory. Those fixtures test identity, draft/input ownership, concurrency and persistence without model credentials. A startup exception before application import must still become a failed result, not a native dialog left waiting for a user.
 
 Unit tests and controlled smoke use synthetic settings and temporary profiles, not real user settings or live sessions repurposed as fixtures. Keep real-runtime probes isolated, with any necessary authorization for account/model access. Preserve plugin light/dark/high-contrast, keyboard, reduced-motion and 280px usability checks where the changed UI is affected.
 
@@ -94,6 +95,6 @@ Unit tests and controlled smoke use synthetic settings and temporary profiles, n
 
 Windows-specific phases extend the same runner; `apps/desktop/scripts/native-window.ps1` owns native automation. Dialog automation must target only windows owned by the test process.
 
-Basic tray notices and confirmation buttons run in the regular suite. Add `--native-dialogs` to exercise file/folder and confirmation dialogs plus clipboard preservation on an unlocked foreground desktop; Windows focus restrictions make that phase unverified rather than passed, so it stays opt-in instead of seizing desktop focus. Composition events are browser checks, not a complete Windows IME acceptance result.
+Basic tray notices and confirmation buttons run in the regular suite. Add `--native-dialogs` to the smoke runner for file/folder and confirmation dialogs plus clipboard preservation on an unlocked foreground desktop; Windows focus restrictions make that phase unverified rather than passed, so it stays opt-in instead of seizing desktop focus. Composition events are browser checks, not a complete Windows IME acceptance result.
 
 `verify:package` enforces the archive allowlist, extracts outside the repository and runs the same smoke suite against the extracted executable with the configured Windows desktop PATH. A test of a substituted native service establishes backend behavior, while a test of the actual dialog establishes its native binding. Real-model, accessibility, memory and startup-performance claims require their own evidence.

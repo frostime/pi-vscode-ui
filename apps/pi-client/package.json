@@ -15,13 +15,10 @@
   },
   "files": ["dist", "src/ui", "SPEC.md"],
   "scripts": {
-    "settings:generate": "node scripts/generate-setting-defaults.mjs",
-    "settings:check": "node scripts/generate-setting-defaults.mjs --check",
-    "build": "pnpm settings:check && pnpm --filter @frostime/pi-rpc build && pnpm --filter @frostime/provider-usage build && node ../../scripts/clean-dir.mjs dist && tsc -p tsconfig.build.json",
+    "build": "node scripts/generate-setting-defaults.mjs --check && pnpm --filter @frostime/pi-rpc build && pnpm --filter @frostime/provider-usage build && node ../../scripts/clean-dir.mjs dist && tsc -p tsconfig.build.json",
     "clean": "node ../../scripts/clean-dir.mjs dist coverage",
     "typecheck": "tsc -p tsconfig.core.json --noEmit && tsc -p tsconfig.shared.json --noEmit && svelte-check --tsconfig ./tsconfig.ui.json",
     "test": "vitest run",
-    "test:watch": "vitest",
     "lint": "eslint src pi-extensions test scripts --max-warnings 0"
   },
   "dependencies": {

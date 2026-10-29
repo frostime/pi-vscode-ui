@@ -3,7 +3,7 @@
  *
  * Invocation (never executed as a test, never in CI):
  *
- *   pnpm --filter @frostime/provider-usage inspect -- --agent-dir ~/.pi/agent [providerId ...]
+ *   node packages/provider-usage/dist/inspect.js --agent-dir <agent-directory> [providerId ...]
  *
  * Environment: actual CLI runs use the process environment unmodified;
  * the `environment` parameter lets tests inject explicit synthetic maps so

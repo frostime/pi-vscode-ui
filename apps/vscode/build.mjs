@@ -1,7 +1,9 @@
 import { rmSync } from "node:fs";
 
 import esbuild from "esbuild";
+import { build as buildWebview } from "vite";
 
+// Internal product compilation; scripts/build.mjs prepares shared dependencies.
 rmSync("dist", { recursive: true, force: true });
 
 const sourcemap = process.env.FROSTPI_SOURCEMAP === "1";
@@ -43,3 +45,5 @@ await Promise.all([
     logLevel: "info",
   }),
 ]);
+
+await buildWebview();

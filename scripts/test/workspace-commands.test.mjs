@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { after, test } from "node:test";
 
 import { root, run } from "../lib.mjs";
-import { buildSteps, packagesForScope } from "../workspaces.mjs";
+import { packagesForScope } from "../workspaces.mjs";
 
 test("Node orchestration preserves arguments containing spaces", () => {
   const value = "argument containing spaces";
@@ -17,15 +17,6 @@ test("Node orchestration preserves arguments containing spaces", () => {
 const sharedPackages = ["@frostime/pi-rpc", "@frostime/provider-usage", "@frostime/pi-client"];
 const vscode = "frostpi";
 const desktop = "@frostime/frostpi-desktop";
-
-for (const [scope, products] of [["all", [vscode, desktop]], ["vscode", [vscode]], ["desktop", [desktop]]]) {
-  test(`${scope} build prepares shared dependencies once and compiles only selected products`, () => {
-    assert.deepEqual(buildSteps(scope), [
-      { packageName: "@frostime/pi-client", script: "build" },
-      ...products.map((packageName) => ({ packageName, script: "build:local" })),
-    ]);
-  });
-}
 
 test("extension quality includes shared packages but never Desktop", () => {
   assert.deepEqual(packagesForScope("vscode"), [...sharedPackages, vscode]);
@@ -55,7 +46,6 @@ const invalidInvocations = [
   ["scripts/quality.mjs", ["typo"], /Usage:/],
   ["scripts/clean.mjs", ["--vscode"], /Usage:/],
   ["scripts/package-vsix.mjs", ["--skip-build"], /Usage:/],
-  ["scripts/package-source.mjs", ["--unknown"], /Usage:/],
   ["scripts/verify-vsix.mjs", ["--unknown"], /Usage:/],
 ];
 
@@ -65,6 +55,6 @@ for (const [script, args, expectedError] of invalidInvocations) {
     assert.equal(result.error, undefined);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, expectedError);
-    assert.doesNotMatch(result.stdout, /\[build\]|\[check\]|> .* (?:build|lint|test|clean)|Created |Packaged /);
+    assert.doesNotMatch(result.stdout, /\[build(?::js)?\]|\[check\]|> .* (?:build|lint|test|clean)|Created |Packaged /);
   });
 }

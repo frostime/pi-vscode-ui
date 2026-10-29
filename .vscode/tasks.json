@@ -2,9 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "build",
+      "label": "build:vscode",
       "type": "shell",
-      "command": "pnpm build",
+      "command": "pnpm build:vscode",
       "group": "build",
       "problemMatcher": ["$tsc"]
     },

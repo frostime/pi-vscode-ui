@@ -1,8 +1,8 @@
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { cpSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** Packaging constants shared by the Desktop packager and its archive verification. */
+/** Runtime resource inventory and constants shared by Desktop build, packaging and verification. */
 export const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 export const desktopRoot = resolve(repositoryRoot, "apps/desktop");
 export const buildOutput = resolve(desktopRoot, "dist");
@@ -19,6 +19,16 @@ export const archivePayloadFiles = [
   ...piExtensionNames.map((name) => `pi-extensions/${name}.js`),
 ];
 export const archiveFiles = [...archivePayloadFiles, buildInfoFile];
+
+// Release executables resolve the backend and Pi extensions beside themselves.
+// Use the same resource copies for the development executable and ZIP staging.
+export function copyRuntimeFiles(destination, source = buildOutput) {
+  mkdirSync(join(destination, "pi-extensions"), { recursive: true });
+  cpSync(join(source, "backend.cjs"), join(destination, "backend.cjs"));
+  for (const name of piExtensionNames) {
+    cpSync(join(source, "pi-extensions", `${name}.js`), join(destination, "pi-extensions", `${name}.js`));
+  }
+}
 
 const versionSource = resolve(repositoryRoot, "apps/vscode/package.json");
 

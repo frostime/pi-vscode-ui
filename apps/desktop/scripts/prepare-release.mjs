@@ -30,7 +30,7 @@ export function prepareReleaseAssets(archive, tag, expectedCommit) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  assert.equal(process.argv.length, 3, "Usage: pnpm prepare:desktop:release <tag>");
+  assert.equal(process.argv.length, 3, "Usage: node apps/desktop/scripts/prepare-release.mjs <tag>");
   const source = buildSource();
   assert.equal(source.dirty, false, "Prepare Desktop release assets from a clean Git checkout");
   const assets = prepareReleaseAssets(distributedArchive(), process.argv[2], source.commit);

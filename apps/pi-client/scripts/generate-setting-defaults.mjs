@@ -11,7 +11,7 @@ for (const [key, definition] of Object.entries(manifest.contributes.configuratio
   }
   defaults[key.slice("frostpi.".length)] = definition.default;
 }
-const header = "// Generated from apps/vscode/package.json; do not edit.\n// Regenerate: pnpm --dir apps/pi-client settings:generate\n";
+const header = "// Generated from apps/vscode/package.json; do not edit.\n// Regenerate: node apps/pi-client/scripts/generate-setting-defaults.mjs\n";
 const outputs = [
   [outputPath, `${header}export const frostPiSettingDefaults = ${JSON.stringify(defaults, null, 2)} as const;\n`],
   [new URL("../src/shared/configuration/frostPiSettingDefinitions.generated.ts", import.meta.url),
@@ -24,7 +24,7 @@ if (args.length > 1 || (args.length === 1 && args[0] !== "--check")) {
 for (const [path, source] of outputs) {
   if (args[0] === "--check") {
     if (readFileSync(path, "utf8").replaceAll("\r\n", "\n") !== source) {
-      throw new Error("Shared setting definitions/defaults are stale. Run: pnpm --dir apps/pi-client settings:generate");
+      throw new Error("Shared setting definitions/defaults are stale. Run: node apps/pi-client/scripts/generate-setting-defaults.mjs");
     }
   } else {
     mkdirSync(new URL(".", path), { recursive: true });
