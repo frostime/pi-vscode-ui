@@ -504,6 +504,6 @@ fn main() {
             }
         })
         .build(tauri::generate_context!())
-        .unwrap_or_else(|_| { rfd::MessageDialog::new().set_title("FrostPi Desktop").set_description("FrostPi could not start. Install Node 22.19+ and WebView2 Runtime, and check that Node is on the desktop PATH.").set_level(rfd::MessageLevel::Error).show(); std::process::exit(1); })
+        .unwrap_or_else(|_| { rfd::MessageDialog::new().set_title("FrostPi Desktop could not start").set_description("Check the following, then open FrostPi again:\n\n1. Install Node.js 22.19 or newer and make sure node is on the Windows PATH. If a newly installed Node.js is still not found, sign out of Windows and sign in again to refresh the desktop environment.\n2. Install or repair Microsoft Edge WebView2 Runtime.\n3. Extract the entire FrostPi ZIP. Keep FrostPi.exe, backend.cjs and the pi-extensions folder together.\n\nPi is installed separately. If Pi is missing, the app will show setup instructions when you start a session.").set_level(rfd::MessageLevel::Error).show(); std::process::exit(1); })
         .run(|app, event| { if let tauri::RunEvent::ExitRequested { api, .. } = event { let backend = app.state::<Backend>(); if !backend.0.closing.load(Ordering::Acquire) { api.prevent_exit(); tray::request_exit(app); } } });
 }
