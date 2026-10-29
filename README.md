@@ -314,7 +314,7 @@ pnpm install --frozen-lockfile
 pnpm check
 pnpm package:vsix
 pnpm verify:vsix
-pnpm package:zip
+pnpm package:source
 ```
 
 The workspace contains:

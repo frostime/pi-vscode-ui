@@ -46,7 +46,7 @@ jobs:
       - run: pnpm check:vscode
       - run: pnpm package:vsix
       - run: pnpm verify:vsix
-      - run: pnpm package:zip
+      - run: pnpm package:source
       - name: Sign in to Microsoft Entra
         if: steps.release.outputs.stable == 'true'
         uses: azure/login@v3

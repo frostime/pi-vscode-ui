@@ -21,7 +21,8 @@
     "clean": "node ../../scripts/clean-dir.mjs dist coverage",
     "typecheck": "tsc -p tsconfig.core.json --noEmit && tsc -p tsconfig.shared.json --noEmit && svelte-check --tsconfig ./tsconfig.ui.json",
     "test": "vitest run",
-    "lint": "eslint src pi-extensions test --max-warnings 0"
+    "test:watch": "vitest",
+    "lint": "eslint src pi-extensions test scripts --max-warnings 0"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

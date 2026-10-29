@@ -4,7 +4,7 @@ description: Product features, owning code, and nearest contracts.
 scope:
   - /apps/**
   - /packages/**
-updated: 2026-10-28
+updated: 2026-10-29
 ---
 
 # Feature → Code Map
@@ -67,6 +67,7 @@ Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 
 ## Verification and packaging
 
-- Desktop distribution inventory/version/target: `apps/desktop/scripts/packaging.mjs`; full build and staging: `package-app.mjs`; embedded provenance and payload hash contract: `archive-contract.mjs`; actual extracted-executable verification and adjacent report: `verify-package.mjs`; release evidence/checksum gate: `prepare-release.mjs`; controlled manual acceptance setup: `manual-smoke.mjs` in the same directory.
+- Root package scopes/build steps: `scripts/workspaces.mjs`; build, quality, gate and cleanup runners: `scripts/build.mjs`, `quality.mjs`, `check.mjs`, `clean.mjs`. Root and product `build` prepare shared outputs; `build:local` compiles only the product. Source archive: `scripts/package-source.mjs`; VSIX packaging/verification: `scripts/package-vsix.mjs` and `verify-vsix.mjs`.
+- Desktop distribution inventory/version/target: `apps/desktop/scripts/packaging.mjs`; full build and staging: `package-app.mjs`; embedded provenance and payload hash contract: `archive-contract.mjs`; actual extracted-executable verification and adjacent report: `verify-package.mjs`; release evidence/checksum gate: `prepare-release.mjs`; controlled manual acceptance setup (`pnpm test:desktop:manual`): `manual-smoke.mjs` in the same directory.
 - Package-local scripts and tests: `apps/pi-client/`, `apps/vscode/`, `apps/desktop/`, `packages/pi-rpc/`, `packages/provider-usage/`.
 - Workflows: `development.md`, `testing.md`, `release.md`. Root scripts orchestrate packages; plugin-local build must not require Desktop.

@@ -1,9 +1,9 @@
 ---
 title: Development Workflow
-description: Workspace setup, independent product builds, shared-source resolution and setting generation.
+description: Install the workspace, choose between root and package commands, build and launch each product, generate settings and preserve shared-source resolution.
 scope:
   - /**
-updated: 2026-10-28
+updated: 2026-10-29
 ---
 
 # Development Workflow
@@ -18,14 +18,33 @@ Install once from the repository root:
 pnpm install --frozen-lockfile
 ```
 
-The root lockfile covers all workspaces. Do not create app-local installations or lockfiles. Packages own their local scripts; root `build`, `typecheck`, `lint`, `test` and `check` orchestrate the workspaces. Root quality checks run packages serially; a package-local command is the normal starting point for an affected feature.
+The root lockfile covers all workspaces. Do not create app-local installations or lockfiles.
+
+## Command layers
+
+Root commands name a whole-repository task or a product flow; packages own the concrete implementation. Use a root command when the work spans packages or mirrors a delivery step, and a package-local command as the normal starting point for an affected feature.
+
+| Root entry | What it runs |
+|---|---|
+| `pnpm build` | All five packages once: the shared client builds its RPC and provider-usage dependencies, then the extension and Desktop produce their JavaScript outputs |
+| `pnpm build:vscode` | Shared client, then the extension only |
+| `pnpm build:desktop` | Shared client, then Desktop JavaScript and renderer only; no Rust |
+| `pnpm check` / `pnpm check:vscode` | Quality gate for both products, or for shared code plus the extension |
+| `pnpm lint`, `pnpm typecheck`, `pnpm test` | One quality target across packages; `lint` and `test` also cover the engineering scripts |
+| `pnpm clean` | Package outputs and `artifacts/` |
+
+Each product's `build` prepares its shared dependencies before compiling the product, so no manual dependency build is needed. Product-only `build:local` is an internal orchestration step: it assumes shared outputs already exist. Desktop's `build:native` rebuilds the JavaScript outputs and adds the Rust executable.
+
+Root orchestration rejects an unsupported argument instead of ignoring it, so a mistyped flag cannot silently widen a build, check or clean. Quality targets run packages serially.
+
+Use [testing.md](testing.md) to choose checks and read evidence limits, and [release.md](release.md) for delivery gates.
 
 ## Product-local work
 
 | Work | Entry | What it includes |
 |---|---|---|
 | Build the VS Code extension | `pnpm --dir apps/vscode build` | Shared dependencies and extension outputs, not Desktop |
-| Debug the extension | `.vscode/launch.json` | The `build:debug` pre-launch task uses the extension-local build and sets `FROSTPI_SOURCEMAP=1` for Host source maps/unminified output; production output stays minified for the bundle budget |
+| Debug the extension | `.vscode/launch.json` | The `build:debug` pre-launch task runs `pnpm build:vscode` and sets `FROSTPI_SOURCEMAP=1` for Host source maps/unminified output; production output stays minified for the bundle budget |
 | Check shared types | `pnpm --dir apps/pi-client typecheck` | Separate core/shared/UI environment checks. Package-local `test` covers backend/host behavior; shared UI component tests use the vscode package's DOM infrastructure, as described in testing.md |
 | Build Desktop | `pnpm --dir apps/desktop build` | Node backend and WebView2 renderer consuming the same ClientApp; no Rust build |
 | Run Desktop for development | `pnpm --dir apps/desktop start` | Run the executable from `build:native` with a separate FrostPi development profile; pass directory arguments or add Projects through its native directory picker |
@@ -41,11 +60,9 @@ Native builds require Windows x64, the stable Rust MSVC toolchain, Visual Studio
 ```bash
 pnpm --dir apps/desktop build:native
 pnpm --dir apps/desktop start
-pnpm check:desktop:native
-pnpm --dir apps/desktop test:smoke
 ```
 
-`build:native` includes the JS build and produces the release executable. `pnpm check` checks both products' JavaScript/TypeScript and builds JS outputs without requiring Rust. `pnpm check:vscode` selects shared packages and the extension only, so Desktop-only failures do not gate extension releases. Native shell/launch changes additionally require native build/tests and smoke. `test:smoke` launches actual WebView2 with temporary Projects/profiles and controlled Pi children; its loopback DevTools endpoint is enabled only by the test launcher. Independent ZIP delivery uses the [release workflow](release.md#desktop-packaging-windows-x64).
+`build:native` rebuilds the JavaScript outputs and produces the release executable that `start` launches. The executable embeds the renderer, so renderer changes need this rebuild rather than a JS-only build. Native shell, launch, resource or packaging changes also need the Rust checks, GUI smoke or packaged verification selected in [testing.md](testing.md).
 
 For real-browser client UI checks, use the [CDP workflow](testing.md#real-client-ui-interaction).
 

@@ -6,8 +6,9 @@ import { nativeNoticesText } from "./native-notices.mjs";
 import { desktopNoticesText } from "./desktop-notices.mjs";
 import { artifactsRoot, buildInfoFile, buildOutput, desktopRoot, distributedArchive, piExtensionNames, productVersion, repositoryRoot } from "./packaging.mjs";
 import { createBuildInfo } from "./archive-contract.mjs";
-import { run } from "../../../scripts/lib.mjs";
+import { assertNoArguments, run } from "../../../scripts/lib.mjs";
 
+assertNoArguments("pnpm package:desktop");
 if (process.platform !== "win32" || process.arch !== "x64") throw new Error("Tauri packaging supports Windows x64 only.");
 // SPEC: Every packaging entry rebuilds all components; staging is not a public build-skipping operation.
 run("pnpm", ["build:native"], { cwd: desktopRoot });

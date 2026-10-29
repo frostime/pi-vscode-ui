@@ -305,13 +305,14 @@
     }
   },
   "scripts": {
-    "build": "pnpm --filter @frostime/pi-client build && node esbuild.config.mjs && vite build",
+    "build": "pnpm --filter @frostime/pi-client build && pnpm build:local",
+    "build:local": "node esbuild.config.mjs && vite build",
     "clean": "node ../../scripts/clean-dir.mjs dist coverage .vscode-test",
     "typecheck": "tsc -p tsconfig.json --noEmit && svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "node test/e2e/runTest.cjs",
-    "lint": "eslint src test --max-warnings 0"
+    "lint": "eslint src test esbuild.config.mjs --max-warnings 0"
   },
   "dependencies": {
     "@frostime/pi-client": "workspace:*",

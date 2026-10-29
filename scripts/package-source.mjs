@@ -3,8 +3,9 @@ import { basename, relative, resolve } from "node:path";
 
 import AdmZip from "adm-zip";
 
-import { ensureArtifacts, projectVersion, root } from "./lib.mjs";
+import { assertNoArguments, ensureArtifacts, projectVersion, root } from "./lib.mjs";
 
+assertNoArguments("pnpm package:source");
 const artifacts = ensureArtifacts();
 const output = resolve(artifacts, `FrostPi-${projectVersion()}-source.zip`);
 const excludedNames = new Set(["node_modules", ".git", ".vscode-test", "coverage", ".DS_Store"]);
