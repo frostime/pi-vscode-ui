@@ -63,7 +63,7 @@ For Rust-only work, `node scripts/build.mjs --scope desktop` supplies the JS/ren
 | Type/import/schema checks | Consistent declarations and environment boundaries | Working native operations or rendered resources |
 | Unit/DOM tests | Named behavior under controlled inputs | Every real Host binding or model flow |
 | Extension Host E2E | Suite execution in VS Code; currently activation, registration and New/Stop | Complete Webview, remote, theme or real-model acceptance |
-| Desktop GUI smoke | Real WebView2/application IPC with controlled Pi | Real-Pi history or model responses |
+| Desktop GUI smoke | Real WebView2/application IPC, hide/restore and renderer-failure cleanup with controlled Pi | Tray menu Exit/confirmation, real-Pi history or model responses |
 | Packaged verification | The identified ZIP's extracted exe works with isolated data | Later source edits, signing, other OSes or complete user experience |
 | Shared Runtime with real Pi | Selected operations with the installed runtime | GUI/packaging behavior |
 | Real Pi GUI acceptance | Actual tested send, Stop, history and blocking-input paths | Every runtime/provider/extension combination |
@@ -82,6 +82,8 @@ The E2E runner preserves caller proxies for SDK downloads, then sanitizes the is
 
 ### Windows native evidence
 
-Native automation (`apps/desktop/scripts/native-window.ps1`) must target only test-process windows. Regular smoke includes tray/confirmation behavior; `--native-dialogs` additionally exercises file/folder dialogs and clipboard preservation on an unlocked foreground desktop. Focus restrictions make that phase unverified, not passed; keep it opt-in. Composition events are not complete Windows IME acceptance.
+Native automation (`apps/desktop/scripts/native-window.ps1`) must target only test-process windows. Regular smoke checks hide/restore and renderer-failure cleanup; its `manualChecks` lists tray right-click Exit/confirmation, which Windows menu automation cannot reliably exercise. For those checks, use `test:desktop:manual`, exit through the tray, reopen with `--reopen` and exit again; record the ZIP SHA and observed results separately. Do not relabel renderer-failure cleanup as normal Exit coverage.
+
+`--native-dialogs` additionally exercises file/folder dialogs and clipboard preservation on an unlocked foreground desktop. Focus restrictions make that phase unverified, not passed; keep it opt-in. Composition events are not complete Windows IME acceptance.
 
 Mocked native services establish backend behavior, not OS bindings. Real dialogs, accessibility, memory and startup-performance claims each require evidence at that boundary.
