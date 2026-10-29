@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import AdmZip from "adm-zip";
@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildSource, createBuildInfo, sha256, verifyArchive } from "../scripts/archive-contract.mjs";
 import { prepareReleaseAssets } from "../scripts/prepare-release.mjs";
 import { prepareManualSmoke } from "../scripts/manual-smoke.mjs";
-import { archivePayloadFiles, buildInfoFile, desktopRoot, piExtensionNames, productVersion } from "../scripts/packaging.mjs";
+import { archivePayloadFiles, buildInfoFile, copyRuntimeFiles, desktopRoot, piExtensionNames, productVersion, repositoryRoot } from "../scripts/packaging.mjs";
 
 const temporaryDirectories = [];
 function temporaryDirectory() {
@@ -36,6 +36,51 @@ function fixtureArchive(version = productVersion(), source) {
   zip.addLocalFolder(directory, "FrostPi");
   return { zip, info };
 }
+
+describe("Desktop packaging commands", () => {
+  it.each([
+    ["build.mjs", ["--skip-build"]],
+    ["package-app.mjs", ["--skip-build"]],
+    ["prepare-release.mjs", ["v0.16.0", "--unknown"]],
+  ])("rejects unsupported arguments before doing work: %s", (script, args) => {
+    // A regressed argument guard must not start a real native build or replace a ZIP.
+    const directory = temporaryDirectory();
+    writeFileSync(join(directory, "package.json"), '{"name":"command-fixture","private":true}\n');
+    writeFileSync(join(directory, "pnpm-workspace.yaml"), "packages: []\n");
+    for (const relative of ["scripts", "apps/desktop/scripts"]) {
+      mkdirSync(join(directory, relative), { recursive: true });
+      for (const name of readdirSync(join(repositoryRoot, relative))) {
+        if (name.endsWith(".mjs")) copyFileSync(join(repositoryRoot, relative, name), join(directory, relative, name));
+      }
+    }
+    symlinkSync(join(repositoryRoot, "node_modules"), join(directory, "node_modules"), "junction");
+    const child = spawnSync(process.execPath, [join(directory, "apps/desktop/scripts", script), ...args], {
+      cwd: join(directory, "apps/desktop"), encoding: "utf8", windowsHide: true, timeout: 10_000,
+    });
+    expect(child.error).toBeUndefined();
+    expect(child.status, child.stderr).toBe(1);
+    expect(child.stderr).toContain("Usage:");
+    expect(child.stdout).not.toMatch(/Packaged |Prepared |\[build/);
+  });
+});
+
+describe("Desktop runtime resource assembly", () => {
+  it("replaces a stale backend and copies only the required runtime files", () => {
+    const source = temporaryDirectory();
+    const destination = temporaryDirectory();
+    mkdirSync(join(source, "pi-extensions"));
+    writeFileSync(join(source, "backend.cjs"), "current backend");
+    writeFileSync(join(destination, "backend.cjs"), "stale backend");
+    for (const name of piExtensionNames) writeFileSync(join(source, "pi-extensions", `${name}.js`), `current ${name}`);
+    writeFileSync(join(source, "unrelated-build-output.txt"), "not a runtime resource");
+
+    copyRuntimeFiles(destination, source);
+
+    expect(readFileSync(join(destination, "backend.cjs"), "utf8")).toBe("current backend");
+    for (const name of piExtensionNames) expect(readFileSync(join(destination, "pi-extensions", `${name}.js`), "utf8")).toBe(`current ${name}`);
+    expect(existsSync(join(destination, "unrelated-build-output.txt"))).toBe(false);
+  });
+});
 
 describe("Desktop archive contract", () => {
   it("accepts a complete historical archive using its embedded version and hashes", () => {

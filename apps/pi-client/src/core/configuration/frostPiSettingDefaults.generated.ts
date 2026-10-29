@@ -1,5 +1,5 @@
 // Generated from apps/vscode/package.json; do not edit.
-// Regenerate: pnpm --dir apps/pi-client settings:generate
+// Regenerate: node apps/pi-client/scripts/generate-setting-defaults.mjs
 export const frostPiSettingDefaults = {
   "pi.executable": "",
   "pi.runtimeCompatibility": "pi",

@@ -6,7 +6,11 @@ import AdmZip from "adm-zip";
 
 import { projectVersion, root } from "./lib.mjs";
 
-const path = resolve(process.argv[2] ?? resolve(root, "artifacts", `FrostPi-${projectVersion()}.vsix`));
+const args = process.argv.slice(2);
+if (args.length > 1 || args.some((arg) => arg.startsWith("-"))) {
+  throw new Error("Usage: pnpm verify:vsix [archive.vsix]");
+}
+const path = resolve(args[0] ?? resolve(root, "artifacts", `FrostPi-${projectVersion()}.vsix`));
 if (!existsSync(path)) throw new Error(`VSIX not found: ${path}`);
 const zip = new AdmZip(path);
 const entries = zip.getEntries().map((entry) => entry.entryName);
@@ -32,6 +36,7 @@ for (const entry of required) {
 const forbidden = entries.filter((entry) =>
   /(^|\/)(src|test|node_modules|\.vscode-test)(\/|$)/.test(entry)
   || /^extension\/pi-extensions\//.test(entry)
+  || entry === "extension/build.mjs"
   || entry.endsWith(".map"),
 );
 if (forbidden.length) throw new Error(`VSIX contains forbidden files:\n${forbidden.join("\n")}`);
@@ -40,7 +45,7 @@ if (!notices.includes("Copyright (c) 2026 narumiruna") || !notices.includes("Per
   throw new Error("VSIX is missing bundled provider usage / HTTP client license notices.");
 }
 const webviewCss = zip.readAsText("extension/dist/webview/webview.css");
-if (/url\(\s*["\']?\/assets\//.test(webviewCss)) {
+if (/url\(\s*["']?\/assets\//.test(webviewCss)) {
   throw new Error("Webview CSS contains a root-relative asset URL; packaged fonts will not resolve in VS Code.");
 }
 if (!webviewCss.includes("./assets/codicon.ttf")) {

@@ -14,7 +14,7 @@ The project has two parts: a VS Code extension as the primary product, and a Des
 ## Tooling traps
 
 - Install workspace dependencies from the repository root, not inside an app. Packages own local scripts; root scripts orchestrate them. See [development](.dev/docs/development.md).
-- FrostPi setting definitions/defaults come from `apps/vscode/package.json`. After changing them, run `pnpm --dir apps/pi-client settings:generate` and include the generated files; builds reject stale output. Native VS Code settings have a separate source.
+- FrostPi setting definitions/defaults come from `apps/vscode/package.json`. After changing them, run `node apps/pi-client/scripts/generate-setting-defaults.mjs` and include the generated files; builds reject stale output. Native VS Code settings have a separate source.
 - Change product versions only with `pnpm version:set <version>`; follow [release](.dev/docs/release.md) for packaging and publication.
 
 ## Hard boundaries

@@ -3,7 +3,7 @@ title: Troubleshooting
 description: Choose a recovery action for runtime, discovery, search and editor failures without changing session authority.
 scope:
   - /apps/**
-updated: 2026-10-24
+updated: 2026-10-29
 ---
 
 # Troubleshooting
@@ -17,6 +17,7 @@ VS Code provides FrostPi Output and diagnostic export. Desktop does not provide 
 | Pi does not start | Both products | Verify the configured executable and `pi --mode rpc` in the actual Host environment. A `.js`/`.mjs`/`.cjs` entry also needs `node` on that environment's PATH. Desktop's GUI launch PATH can differ from a development shell; inspect the explicit executable setting rather than relying on shell aliases |
 | A restored Session cannot load | Both | If only history failed, use retry/load; the child may still be live. A missing/corrupt/incompatible file needs external repair or closing the FrostPi entry, not an empty replacement under the same identity |
 | Commands or models look stale | Both, subject to runtime support | Refresh the relevant picker. Extensions may register commands dynamically; cached startup metadata is not the complete runtime surface |
+| Desktop UI stays old | Desktop | JS-only checks do not update the embedded renderer. Rebuild with `pnpm build:desktop`; `start` only launches the existing exe |
 | Proxy edit appears ineffective | Both | Explicitly restart the affected Pi. Process proxy changes do not alter an existing child; active work and pending input cannot survive that restart |
 | A saved Session is absent from Resume | Both | Check the allowed directory/worktree and session-directory settings. Browse handles non-standard storage; a file outside the allowed set requires opening its owning directory, not changing an existing Pi's cwd |
 | File/directory mentions are missing | Shared Composer; inspect tools in its Host | Check `fd` on PATH or in Pi's managed bin, exclusions and `frostpi.composer.fileMentions.*`. Older fd versions can omit directory rows. Mentions select paths, not injected file contents |

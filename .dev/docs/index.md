@@ -3,7 +3,7 @@ title: FrostPi Engineering Guide
 description: Choose the source map, contract or workflow needed for a maintenance task.
 scope:
   - /**
-updated: 2026-10-28
+updated: 2026-10-29
 ---
 
 # FrostPi Engineering Guide
@@ -27,9 +27,9 @@ updated: 2026-10-28
 
 ## Choose a workflow
 
-- [development.md](development.md): workspace setup, independent builds, generated settings and shared-source resolution.
-- [testing.md](testing.md): test ownership, focused checks, real-client CDP interactions, native runners and evidence limits.
-- [release.md](release.md): version authority, independent product publication and verified Windows Desktop ZIP delivery.
-- [troubleshooting.md](troubleshooting.md): symptom-based recovery and Host-specific checks before changing product behavior.
+- [development.md](development.md): install dependencies, build/start a product, generate settings and preserve shared-source resolution.
+- [testing.md](testing.md): choose checks by changed responsibility, run focused or real-Host tests, and interpret their evidence.
+- [release.md](release.md): version, package, verify and publish each product with its release gates and credentials.
+- [troubleshooting.md](troubleshooting.md): investigate runtime, discovery, search or editor symptoms before changing behavior.
 
 `.dev/changes/` and `.dev/backlog/` contain task context and historical evidence. Read them when working on that task; current architecture and module contracts do not depend on replaying old sessions or plans.

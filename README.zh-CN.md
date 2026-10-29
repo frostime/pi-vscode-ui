@@ -311,7 +311,6 @@ pnpm install --frozen-lockfile
 pnpm check
 pnpm package:vsix
 pnpm verify:vsix
-pnpm package:zip
 ```
 
 工作区包含：

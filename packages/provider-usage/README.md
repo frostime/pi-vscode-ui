@@ -49,7 +49,7 @@ print complete keys, tokens, authorization headers or environment-variable names
 After building, optional credential inspection:
 
 ```bash
-pnpm --filter @frostime/provider-usage inspect -- --agent-dir /path/to/pi/agent openai-codex
+node packages/provider-usage/dist/inspect.js --agent-dir /path/to/pi/agent openai-codex
 ```
 
 Run this only with permission to read that configuration and its referenced environment.

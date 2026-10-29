@@ -26,7 +26,7 @@ jobs:
         id: release
         run: |
           version="${GITHUB_REF_NAME#v}"
-          pnpm version:check "$version"
+          node scripts/version.mjs check "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo "stable=true" >> "$GITHUB_OUTPUT"
@@ -46,7 +46,6 @@ jobs:
       - run: pnpm check:vscode
       - run: pnpm package:vsix
       - run: pnpm verify:vsix
-      - run: pnpm package:zip
       - name: Sign in to Microsoft Entra
         if: steps.release.outputs.stable == 'true'
         uses: azure/login@v3
@@ -67,4 +66,3 @@ jobs:
           prerelease: ${{ steps.release.outputs.stable != 'true' }}
           files: |
             artifacts/FrostPi-*.vsix
-            artifacts/FrostPi-*-source.zip
