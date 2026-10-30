@@ -164,36 +164,30 @@ describe("Desktop release gate", () => {
     const { zip, info } = fixtureArchive(productVersion(), source);
     const archive = join(temporaryDirectory(), `FrostPi-${info.version}-win32-x64.zip`);
     zip.writeZip(archive);
-    const report = {
-      ok: true, sha256: sha256(readFileSync(archive)), buildInfo: info,
-      checks: { archive: "passed", smoke: "passed" }, smoke: { ok: true },
-    };
-    return { archive, report, tag: `v${info.version}` };
+    return { archive, tag: `v${info.version}` };
   }
 
-  it("writes a checksum for the same clean, tag-matched ZIP whose GUI report passed", () => {
-    const { archive, report, tag } = releaseFixture();
-    writeFileSync(`${archive}.verification.json`, JSON.stringify(report));
+  it("prepares the clean, tag-matched ZIP without requiring or claiming GUI verification", () => {
+    const { archive, tag } = releaseFixture();
+    const hash = sha256(readFileSync(archive));
     const assets = prepareReleaseAssets(archive, tag, commit);
-    expect(assets).toEqual({ archive, checksum: `${archive}.sha256`, verification: `${archive}.verification.json` });
-    expect(readFileSync(assets.checksum, "utf8")).toBe(`${report.sha256}  ${basename(archive)}\n`);
+    expect(assets).toEqual({ archive, checksum: `${archive}.sha256` });
+    expect(readFileSync(assets.checksum, "utf8")).toBe(`${hash}  ${basename(archive)}\n`);
+    expect(existsSync(`${archive}.verification.json`)).toBe(false);
+    expect(sha256(readFileSync(archive))).toBe(hash);
   });
 
-  it.each([
-    ["failed GUI", (report) => { report.ok = false; }, /GUI verification did not pass/],
-    ["unverified smoke", (report) => { report.checks.smoke = "unverified"; }, /GUI smoke did not pass/],
-    ["different ZIP", (report) => { report.sha256 = "0".repeat(64); }, /different ZIP/],
-    ["missing native result", (report) => { delete report.smoke; }, /Missing successful native smoke/],
-  ])("blocks publication with %s", (_label, mutate, error) => {
-    const { archive, report, tag } = releaseFixture();
-    mutate(report);
-    writeFileSync(`${archive}.verification.json`, JSON.stringify(report));
-    expect(() => prepareReleaseAssets(archive, tag, commit)).toThrow(error);
+  it("rejects a corrupt payload before producing an upload checksum", () => {
+    const { archive, tag } = releaseFixture();
+    const zip = new AdmZip(archive);
+    zip.updateFile("FrostPi/backend.cjs", Buffer.from("corrupt"));
+    zip.writeZip(archive);
+    expect(() => prepareReleaseAssets(archive, tag, commit)).toThrow("Payload SHA-256 mismatch: backend.cjs");
+    expect(existsSync(`${archive}.sha256`)).toBe(false);
   });
 
   it("rejects a wrong tag, a different source commit and an uncommitted build", () => {
-    const { archive, report, tag } = releaseFixture();
-    writeFileSync(`${archive}.verification.json`, JSON.stringify(report));
+    const { archive, tag } = releaseFixture();
     expect(() => prepareReleaseAssets(archive, "vwrong", commit)).toThrow("Release tag does not match");
     expect(() => prepareReleaseAssets(archive, tag, "b".repeat(40))).toThrow("different commit");
     const dirty = releaseFixture({ commit, dirty: true });

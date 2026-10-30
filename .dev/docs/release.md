@@ -8,7 +8,7 @@ scope:
   - /apps/vscode/package.json
   - /apps/desktop/**
   - /packages/pi-rpc/package.json
-updated: 2026-10-29
+updated: 2026-10-30
 ---
 
 # Release Procedure
@@ -60,18 +60,22 @@ Both root `package:desktop` and Desktop-local `package:app` rebuild JS and Rust 
 
 Verification checks the allowlist, embedded version and hashes, then runs the extracted exe outside the checkout using the configured Windows desktop PATH, temporary data and controlled Pi. An explicit archive is checked against its own version, not the checkout. Archives lacking build information fail the current contract.
 
-The adjacent `<archive>.verification.json` binds executed results and optional checks to the ZIP SHA-256. Replacing the ZIP removes its previous report/checksum. A package without successful verification is a candidate, not a verified deliverable; static checks cannot substitute for GUI verification. Optional `--real-pi`/`--native-dialogs` behavior and evidence limits are in [testing.md](testing.md#real-host-verification).
+The adjacent `<archive>.verification.json` binds locally executed results and optional checks to the ZIP SHA-256. Replacing the ZIP removes its previous report/checksum. Static archive checks do not establish GUI behavior. Optional `--real-pi`/`--native-dialogs` behavior and evidence limits are in [testing.md](testing.md#real-host-verification).
 
 Packaging includes project/JS/Rust license notices and source references, and fails when a locked Rust dependency's license text is unavailable. System runtimes are not bundled.
 
 ### Independent Desktop release
 
-`.github/workflows/desktop.yml` handles tags and manual dispatch independently: Desktop failures must not block extension publication. Shared-code failures can still block the extension's own checks. Manual branch dispatch validates a candidate without publishing.
+Test Desktop locally **before pushing the release tag**. Run the affected automated tests locally, package the intended source commit and run `pnpm verify:desktop`. Manual acceptance of the extracted ZIP is also sufficient: confirm startup, send/reply, Stop, project/session switching, persistence after reopening and tray Exit/confirmation. Use the [manual acceptance procedure](testing.md#windows-native-evidence) for isolated data, and record the source commit, ZIP SHA and observed results in the change record. A timeout or a closed test window alone is not a passed manual test.
 
-The Windows job packages, checks Desktop JS/Rust and runs `verify:desktop`. Automated GUI success is a hard publication gate; runner limitations must fail it, not trigger skipped assertions or static-only acceptance. Tray menu Exit/confirmation are separate manual checks listed by the runner; record them for the candidate using the [testing procedure](testing.md#windows-native-evidence). Preserve candidate artifacts and actual failure reports. Hosted GUI acceptance can only be claimed after an actual successful workflow run.
+`.github/workflows/desktop.yml` handles tags and manual dispatch independently of extension publication. The hosted job only compiles, packages and uploads Desktop; it does not run lint, typechecks, unit tests, Rust tests or GUI smoke. Local pre-release acceptance is the test gate. Do not reintroduce hosted test gates without a separate decision to change this release policy. Build, archive-integrity and upload errors still fail publication; manual branch dispatch only packages a candidate without publishing.
 
-For tags, `node apps/desktop/scripts/prepare-release.mjs v<version>` requires a clean checkout, matching tag/archive version and source commit, and a successful GUI report for the identical ZIP SHA-256. It writes `<archive>.sha256` without rebuilding. Dirty local builds may be packaged/tested but cannot pass this release preparation.
+For tags, `node apps/desktop/scripts/prepare-release.mjs v<version>` checks archive inventory, payload hashes, version, clean source state and matching source commit. It writes `<archive>.sha256` without rebuilding or requiring a GUI report. Dirty local builds may be packaged/tested but cannot pass release preparation.
 
-The publish job downloads this run's assets, rechecks the checksum and attaches ZIP/checksum/report to the same GitHub Release as the extension, creating it if necessary. Stable/prerelease status follows the tag. It uses `GITHUB_TOKEN`, not Marketplace credentials; workflow permissions are declared in the YAML.
+CI rebuilds from the tag, so local acceptance covers the tested source/local ZIP, not the exact CI-produced bytes. The hosted ZIP has static archive checks only; do not call it GUI-verified or attach a local verification report to it.
+
+The publish job downloads this run's assets, rechecks the checksum and attaches ZIP/checksum to the same GitHub Release as the extension, creating it if necessary. Stable/prerelease status follows the tag. It uses `GITHUB_TOKEN`, not Marketplace credentials; workflow permissions are declared in the YAML.
 
 Published assets are immutable: skip byte-identical assets, upload missing ones, and fail on different bytes under an existing name. Upload retries can complete partial publication; rebuilding a tag may change bytes and must not replace published files.
+
+To supplement an existing release, an explicitly authorized local upload may attach a locally accepted ZIP with `gh release upload <tag> <zip> <zip>.sha256`. Validate its archive/version and clean embedded source first. The source commit must match the tag, or have an identical Git tree (for example, a release merge with unchanged contents); record that comparison and the archive SHA. Upload the successful `<zip>.verification.json` only when it belongs to those exact bytes. Do not move the tag, rebuild after acceptance or use `--clobber` to replace existing assets.
