@@ -38,9 +38,6 @@ export interface WebviewActionDispatcherDependencies {
 }
 
 const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
-  "listUsageProviders",
-  "queryProviderUsage",
-  "cancelProviderUsage",
   "openFolder",
   "createSession",
   "createSessionWithArguments",

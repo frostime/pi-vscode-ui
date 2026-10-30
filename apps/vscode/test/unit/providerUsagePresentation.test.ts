@@ -23,17 +23,17 @@ function readyReport(results: readonly ProviderUsageResult[], id: string): Usage
 afterEach(() => vi.useRealTimers());
 
 describe("provider usage presentation", () => {
-  it("places Usage beside Context in the sidebar metrics without adding it to restricted panels", () => {
+  it("places Usage beside Context when a source is supplied and keeps cost in the popover", () => {
     const session = {
       stats: { cost: 0.084 }, extensionStatuses: [],
     } as never;
-    const sidebar = render(SessionMetrics, { props: { session, providerUsageSource: mockProviderUsageSource } }).body;
-    const panel = render(SessionMetrics, { props: { session } }).body;
-    expect(sidebar).toContain('aria-label="Provider usage"');
-    expect(sidebar.indexOf('aria-label="Provider usage"')).toBeLessThan(sidebar.indexOf('aria-label="Context usage unavailable"'));
-    expect(sidebar).not.toContain("Estimated session cost");
-    expect(sidebar).not.toContain("$0.084");
-    expect(panel).not.toContain('aria-label="Provider usage"');
+    const metrics = render(SessionMetrics, { props: { session, providerUsageSource: mockProviderUsageSource } }).body;
+    const withoutSource = render(SessionMetrics, { props: { session } }).body;
+    expect(metrics).toContain('aria-label="Provider usage"');
+    expect(metrics.indexOf('aria-label="Provider usage"')).toBeLessThan(metrics.indexOf('aria-label="Context usage unavailable"'));
+    expect(metrics).not.toContain("Estimated session cost");
+    expect(metrics).not.toContain("$0.084");
+    expect(withoutSource).not.toContain('aria-label="Provider usage"');
   });
 
   it("preserves quota groups, reset timestamps in seconds, and read-only reset availability", async () => {

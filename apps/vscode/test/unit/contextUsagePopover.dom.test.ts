@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, within } from "@testing-library/svelte";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import ContextUsagePopover from "$ui/features/usage/ContextUsagePopover.svelte";
 
@@ -32,16 +32,19 @@ afterEach(() => cleanup());
 afterAll(() => vi.unstubAllGlobals());
 
 describe("context metrics trigger", () => {
-  it("uses a ring and label without duplicating the number, keeping exact readings in the accessible name and popover", async () => {
+  it("shows the current percentage beside the ring and updates the trigger and popover together", async () => {
     const view = render(ContextUsagePopover, { session: session(5) });
     const trigger = view.getByRole("button", { name: "Context usage: 5%" });
-    expect(trigger.textContent?.trim()).toBe("Context");
+    expect(trigger.textContent?.trim()).toBe("5%");
     expect(trigger.querySelector(".context-ring-progress")?.getAttribute("stroke-dasharray")).toBe("5 100");
     expect(view.queryByText("$0.035")).toBeNull();
     await fireEvent.focus(trigger);
-    expect(view.getByRole("dialog", { name: "Context and session usage" })).not.toBeNull();
-    expect(view.getByText("5%")).not.toBeNull();
-    expect(view.getByText("$0.035")).not.toBeNull();
+    const popover = view.getByRole("dialog", { name: "Context and session usage" });
+    expect(within(popover).getByText("5%")).not.toBeNull();
+    expect(within(popover).getByText("$0.035")).not.toBeNull();
+    await view.rerender({ session: session(29.2) });
+    expect(view.getByRole("button", { name: "Context usage: 29%" }).textContent?.trim()).toBe("29%");
+    expect(within(popover).getByText("29%")).not.toBeNull();
   });
 
   it("keeps K/M token units when the default Intl locale is Chinese", async () => {
@@ -66,14 +69,18 @@ describe("context metrics trigger", () => {
   it("does not present unavailable context as zero and bounds only the visual ring", () => {
     const unavailable = render(ContextUsagePopover, { session: session(null) });
     const missingTrigger = unavailable.getByRole("button", { name: "Context usage unavailable" });
+    expect(missingTrigger.textContent?.trim()).toBe("—");
     expect(missingTrigger.querySelector(".context-ring-track")?.getAttribute("stroke-dasharray")).toBe("2 2");
     expect(missingTrigger.querySelector(".context-ring-progress")).toBeNull();
     unavailable.unmount();
     const zero = render(ContextUsagePopover, { session: session(0) });
-    expect(zero.getByRole("button", { name: "Context usage: 0%" }).querySelector(".context-ring-track")?.hasAttribute("stroke-dasharray")).toBe(false);
+    const zeroTrigger = zero.getByRole("button", { name: "Context usage: 0%" });
+    expect(zeroTrigger.textContent?.trim()).toBe("0%");
+    expect(zeroTrigger.querySelector(".context-ring-track")?.hasAttribute("stroke-dasharray")).toBe(false);
     zero.unmount();
     const overflow = render(ContextUsagePopover, { session: session(125) });
     const overflowTrigger = overflow.getByRole("button", { name: "Context usage: 125%" });
+    expect(overflowTrigger.textContent?.trim()).toBe("125%");
     expect(overflowTrigger.querySelector(".context-ring-progress")?.getAttribute("stroke-dasharray")).toBe("100 100");
   });
 });

@@ -50,7 +50,7 @@ import type { LocalComposerCommands } from "./features/composer/frostPiCommands"
 <main class="frostpi-root">
   {#if $presentationStore.surface.kind === "panel"}
     {#if $presentationStore.displayedSession}
-      <PanelShell session={$presentationStore.displayedSession} localCommands={localComposerCommands} />
+      <PanelShell session={$presentationStore.displayedSession} localCommands={localComposerCommands} {providerUsageSource} />
     {:else}
       <section class="removed-panel-session" role="status">This FrostPi Session is no longer available.</section>
     {/if}
