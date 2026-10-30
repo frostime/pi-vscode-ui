@@ -26,6 +26,94 @@ async function until(check, label, timeout = 20000) {
   while (Date.now() < end) { if (await check()) return; await delay(100); }
   throw new Error(`Tauri smoke timed out: ${label}`);
 }
+// A cold WebView2 start on a slow host is latency; a browser that answered but
+// never serves the app page is a defect. The two waits stay separate.
+const WEBVIEW2_START_TIMEOUT_MS = Number(process.env.FROSTPI_SMOKE_WEBVIEW2_TIMEOUT_MS ?? 60000);
+const RENDERER_MOUNT_TIMEOUT = 20000;
+
+function withDiagnostics(error, diagnostics) {
+  const wrapped = new Error(String(error?.message ?? error));
+  wrapped.diagnostics = diagnostics;
+  return wrapped;
+}
+
+function webView2RuntimeVersion() {
+  try {
+    const version = runPowerShell("(Get-ItemProperty 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}' -ErrorAction SilentlyContinue).pv", { capture: true, timeout: 10000 }).trim();
+    return version || "not-installed";
+  } catch { return "unavailable"; }
+}
+
+/** Processes owned by the launched app: tells "WebView2 never started" from "started and stalled". */
+function ownedProcesses() {
+  try {
+    const output = runPowerShell(`$all = @(Get-CimInstance Win32_Process); $todo = @(${child.pid}); $owned = @(${child.pid}); while($todo.Count -gt 0) { $next = @(); foreach($parent in $todo) { foreach($p in $all) { if($p.ParentProcessId -eq $parent) { $next += $p.ProcessId; $owned += $p.ProcessId } } }; $todo = $next }; $names = @($all | Where-Object { $owned -contains $_.ProcessId } | ForEach-Object { $_.Name }); ConvertTo-Json -InputObject $names -Compress`, { capture: true, timeout: 10000 });
+    return JSON.parse(output || "[]");
+  } catch { return "unavailable"; }
+}
+
+/** Poll the DevTools endpoint until the app page appears, recording what it saw if it never does. */
+async function waitForWebView2Page(port) {
+  const observations = { port, attempts: 0, outcome: "no-response", pages: [] };
+  const end = Date.now() + WEBVIEW2_START_TIMEOUT_MS;
+  while (Date.now() < end) {
+    observations.attempts += 1;
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(1000) });
+      const targets = await response.json();
+      const pages = (Array.isArray(targets) ? targets : []).filter((entry) => entry.type === "page");
+      observations.outcome = "answered";
+      observations.pages = pages.map(({ url, title }) => ({ url, title }));
+      const appPage = pages.find((entry) => /tauri\.localhost|tauri:\/\/localhost/.test(entry.url));
+      if (appPage) return appPage;
+    } catch (error) {
+      observations.outcome = "connect-failed";
+      observations.lastError = String(error);
+    }
+    await delay(100);
+  }
+  throw withDiagnostics(
+    `Tauri smoke timed out after ${WEBVIEW2_START_TIMEOUT_MS / 1000}s waiting for a WebView2 page at tauri.localhost`,
+    {
+      webView2Endpoint: observations,
+      webView2RuntimeVersion: webView2RuntimeVersion(),
+      ownedProcesses: ownedProcesses(),
+    },
+  );
+}
+
+async function captureScreenshot() {
+  try {
+    const { data } = await client.command("Page.captureScreenshot", { format: "png" });
+    if (!data) return undefined;
+    const path = join(directory, "renderer-mount-failure.png");
+    writeFileSync(path, Buffer.from(data, "base64"));
+    return path;
+  } catch { return undefined; }
+}
+
+/** The browser is up; the shared client must mount on its own within the renderer budget. */
+async function waitForRendererMount() {
+  const observations = { attempts: 0, outcome: "not-probed" };
+  try {
+    await until(async () => {
+      observations.attempts += 1;
+      try {
+        const mounted = await client.evaluate("Boolean(window.frostpiDesktop && document.querySelector('.desktop-shell'))");
+        observations.outcome = mounted ? "mounted" : "not-mounted";
+        if (!mounted) observations.lastProbe = await client.evaluate("({url:location.href,shell:!!document.querySelector('.desktop-shell'),appText:(document.getElementById('app')?.textContent ?? '').slice(0,200),scripts:[...document.scripts].map(s=>s.src)})");
+        return mounted;
+      } catch (error) {
+        observations.outcome = "evaluation-failed";
+        observations.lastError = String(error);
+        return false;
+      }
+    }, "shared client mounts", RENDERER_MOUNT_TIMEOUT);
+  } catch (error) {
+    throw withDiagnostics(error, { rendererMount: observations, screenshot: await captureScreenshot() });
+  }
+}
+
 const rows = "[...document.querySelectorAll('.project-row button.project-select')]";
 async function launch(directories = [], extraEnvironment = {}) {
   trayNoticeSeen = false;
@@ -36,12 +124,9 @@ async function launch(directories = [], extraEnvironment = {}) {
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1`,
   } });
   child.once("error", () => {});
-  let page;
-  await until(async () => {
-    try { const list = await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(1000) })).json(); page = list.find((p) => p.type === "page" && /tauri\.localhost|tauri:\/\/localhost/.test(p.url)); return !!page; } catch { return false; }
-  }, "WebView2 endpoint");
+  const page = await waitForWebView2Page(port);
   client = devtoolsClient(await openDebuggingSocket(page.webSocketDebuggerUrl));
-  await until(() => client.evaluate("Boolean(window.frostpiDesktop && document.querySelector('.desktop-shell'))"), "shared client mounts");
+  await waitForRendererMount();
 }
 function nativeWindow(action) {
   const output = runPowerShell(`& ${powerShellLiteral(resolve("scripts/native-window.ps1"))} -OwnerProcessId ${child.pid} -Action ${powerShellLiteral(action)}`, { capture: true, timeout: 15000 });
@@ -335,7 +420,7 @@ try {
   }
   let nativeState;
   try { if (child?.exitCode === null) nativeState = nativeWindow("state"); } catch { /* The native host may already be exiting. */ }
-  const failure = { ok: false, directory, error: String(error), checks, manualChecks, startup, nativeState };
+  const failure = { ok: false, directory, error: String(error), diagnostics: error?.diagnostics, checks, manualChecks, startup, nativeState };
   writeFileSync(join(directory, "result.json"), JSON.stringify(failure, null, 2));
   console.log(JSON.stringify(failure));
   if (startup || nativeState) console.error(JSON.stringify({ startup, nativeState }));

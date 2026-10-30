@@ -52,6 +52,15 @@ try {
   let smoke;
   try { smoke = JSON.parse(output.trim().split(/\r?\n/).at(-1)); } catch { /* No success artifact means failure. */ }
   result.smoke = smoke;
+  // The screenshot stays in the smoke temp directory by default; copy it beside the
+  // report so the release workflow uploads it with the failure evidence.
+  if (smoke?.diagnostics?.screenshot) {
+    try {
+      const target = `${report.replace(/\.verification\.json$/, "")}.smoke.png`;
+      writeFileSync(target, readFileSync(smoke.diagnostics.screenshot));
+      result.diagnosticsScreenshot = target;
+    } catch { /* Diagnostic only; the report keeps the failure either way. */ }
+  }
   assert.ok(code === 0 && smoke?.ok === true, "Packaged Desktop smoke did not report success");
   result.checks.smoke = "passed";
   if (args.includes("--real-pi")) result.checks.realPi = "passed";

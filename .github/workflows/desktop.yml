@@ -49,6 +49,7 @@ jobs:
           path: |
             artifacts/FrostPi-*-win32-x64.zip
             artifacts/FrostPi-*-win32-x64.zip.verification.json
+            artifacts/FrostPi-*-win32-x64.zip.smoke.png
             artifacts/FrostPi-*-win32-x64.zip.sha256
           if-no-files-found: warn
 
