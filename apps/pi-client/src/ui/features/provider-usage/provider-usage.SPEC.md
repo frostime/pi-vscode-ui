@@ -4,9 +4,9 @@
 
 This feature renders only safe `ProviderUsageDescriptor` and `ProviderUsageResult` values from `@frostime/provider-usage`. Its data-source interface accepts a provider scope and cancellation signal, never credentials, file paths, environment maps or transport hooks. Provider discovery, credential interpretation and request rules remain outside the browser.
 
-The shell supplies a stable `ProviderUsageSource` for each SessionMetrics mount; absent source means no Usage entry. Metrics wraps that source with its per-mount cache once, independent of the displayed Session/model. Swapping a source requires a new metrics mount. Sidebar assembly supplies the bridge source, while Session Tabs continue to omit it.
+The shell supplies a stable `ProviderUsageSource` for each SessionMetrics mount; absent source means no Usage entry. Metrics wraps that source with its per-mount cache once, independent of the displayed Session/model. Swapping a source requires a new metrics mount. Sidebar and Session Tab assembly supply the same bridge source; each presentation keeps its own cache and pending requests.
 
-The sidebar's metrics row places the chart-icon Usage trigger immediately left of the ring-icon Context trigger, with matched compact transparent button styling. Context percentage and session cost are shown in the Context popover, not repeated in the metrics row. Clicking opens a compact non-modal popover above the row without unmounting conversation or Composer. Closing/Escape restores the Usage trigger's focus. Outside pointer actions dismiss without stealing focus from their target.
+Both presentations place the chart-icon Usage trigger immediately left of the context ring and percentage, with matched compact transparent button styling. Unavailable context reads “—”, not zero; only the visual ring is clamped. Session cost remains in the Context popover. Clicking opens a compact non-modal popover above the row without unmounting conversation or Composer. Closing/Escape restores the Usage trigger's focus. Outside pointer actions dismiss without stealing focus from their target.
 
 ## Requests
 
