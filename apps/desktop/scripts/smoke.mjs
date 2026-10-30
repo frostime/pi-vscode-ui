@@ -47,9 +47,28 @@ function webView2RuntimeVersion() {
 /** Processes owned by the launched app: tells "WebView2 never started" from "started and stalled". */
 function ownedProcesses() {
   try {
-    const output = runPowerShell(`$all = @(Get-CimInstance Win32_Process); $todo = @(${child.pid}); $owned = @(${child.pid}); while($todo.Count -gt 0) { $next = @(); foreach($parent in $todo) { foreach($p in $all) { if($p.ParentProcessId -eq $parent) { $next += $p.ProcessId; $owned += $p.ProcessId } } }; $todo = $next }; $names = @($all | Where-Object { $owned -contains $_.ProcessId } | ForEach-Object { $_.Name }); ConvertTo-Json -InputObject $names -Compress`, { capture: true, timeout: 10000 });
+    const output = runPowerShell(ownedProcessQuery("$names = @($all | Where-Object { $owned -contains $_.ProcessId } | ForEach-Object { $_.Name }); ConvertTo-Json -InputObject $names -Compress"), { capture: true, timeout: 10000 });
     return JSON.parse(output || "[]");
   } catch { return "unavailable"; }
+}
+
+/** Did the browser receive the debugging switch that the smoke relies on? */
+function webView2LaunchEvidence(port) {
+  try {
+    const output = runPowerShell(ownedProcessQuery("$browsers = @($all | Where-Object { $owned -contains $_.ProcessId -and $_.Name -eq 'msedgewebview2.exe' } | ForEach-Object { $_.CommandLine }); ConvertTo-Json -Compress -InputObject @($browsers | Select-Object -First 2)"), { capture: true, timeout: 20000 });
+    const commandLines = (JSON.parse(output || "[]") ?? []).map((line) => String(line));
+    return {
+      debuggingSwitchPresent: commandLines.some((line) => line.includes(`--remote-debugging-port=${port}`)),
+      additionalBrowserArgumentsVariable: process.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS,
+      // Keep the report readable: the switch matters more than the whole command line.
+      browserCommandLines: commandLines.map((line) => line.slice(0, 600)),
+    };
+  } catch (error) { return { error: String(error).slice(0, 400) }; }
+}
+
+/** Shared process-tree preamble: $all and $owned for the launched app. */
+function ownedProcessQuery(body) {
+  return `$all = @(Get-CimInstance Win32_Process); $todo = @(${child.pid}); $owned = @(${child.pid}); while($todo.Count -gt 0) { $next = @(); foreach($parent in $todo) { foreach($p in $all) { if($p.ParentProcessId -eq $parent) { $next += $p.ProcessId; $owned += $p.ProcessId } } }; $todo = $next }; ${body}`;
 }
 
 /** Poll the DevTools endpoint until the app page appears, recording what it saw if it never does. */
@@ -78,6 +97,7 @@ async function waitForWebView2Page(port) {
       webView2Endpoint: observations,
       webView2RuntimeVersion: webView2RuntimeVersion(),
       ownedProcesses: ownedProcesses(),
+      webView2Launch: webView2LaunchEvidence(port),
     },
   );
 }
