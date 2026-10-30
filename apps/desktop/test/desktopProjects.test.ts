@@ -129,8 +129,10 @@ describe("DesktopProjects", () => {
   });
 
   it("keeps an explicit anchor: switching selection never removes roots, unknown ids fail", async () => {
-    const a = await mkdtemp(join(tmpdir(), "frostpi-projects-a-"));
-    const b = await mkdtemp(join(tmpdir(), "frostpi-projects-b-"));
+    // Project roots are canonicalized on add, so expectations must use the real path
+    // (a Windows temp directory can be reached through its 8.3 short name).
+    const a = await realpath(await mkdtemp(join(tmpdir(), "frostpi-projects-a-")));
+    const b = await realpath(await mkdtemp(join(tmpdir(), "frostpi-projects-b-")));
 
     const projects = new DesktopProjects();
     const projectA = await projects.addProject(a);

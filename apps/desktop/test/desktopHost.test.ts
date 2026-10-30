@@ -170,8 +170,10 @@ describe("createDesktopHost", () => {
   });
 
   it("keeps every Project root stable in workspaceFolders while the anchor switches", async () => {
-    const alpha = await mkdtemp(join(tmpdir(), "frostpi-host-alpha-"));
-    const beta = await mkdtemp(join(tmpdir(), "frostpi-host-beta-"));
+    // Project roots are canonicalized on add, so expectations must use the real path
+    // (a Windows temp directory can be reached through its 8.3 short name).
+    const alpha = await realpath(await mkdtemp(join(tmpdir(), "frostpi-host-alpha-")));
+    const beta = await realpath(await mkdtemp(join(tmpdir(), "frostpi-host-beta-")));
     const projects = await projectsWithRoots([alpha, beta]);
     const host = createDesktopHost({ projects, interactions: interactions() as unknown as DesktopInteractions });
     const logged: string[] = [];
