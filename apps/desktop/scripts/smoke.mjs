@@ -52,14 +52,20 @@ function ownedProcesses() {
   } catch { return "unavailable"; }
 }
 
-/** Did the browser receive the debugging switch that the smoke relies on? */
+/**
+ * Did the browser receive the debugging switch that the smoke relies on?
+ * A WebView2 browser-arguments policy overrides the variable this test passes,
+ * so the policy values are part of the evidence.
+ */
 function webView2LaunchEvidence(port) {
   try {
-    const output = runPowerShell(ownedProcessQuery("$browsers = @($all | Where-Object { $owned -contains $_.ProcessId -and $_.Name -eq 'msedgewebview2.exe' } | ForEach-Object { $_.CommandLine }); ConvertTo-Json -Compress -InputObject @($browsers | Select-Object -First 2)"), { capture: true, timeout: 20000 });
-    const commandLines = (JSON.parse(output || "[]") ?? []).map((line) => String(line));
+    const commandLineOutput = runPowerShell(ownedProcessQuery("$browsers = @($all | Where-Object { $owned -contains $_.ProcessId -and $_.Name -eq 'msedgewebview2.exe' } | ForEach-Object { $_.CommandLine }); ConvertTo-Json -Compress -InputObject @($browsers | Select-Object -First 2)"), { capture: true, timeout: 20000 });
+    const commandLines = (JSON.parse(commandLineOutput || "[]") ?? []).map((line) => String(line));
+    const policyOutput = runPowerShell("$paths = @('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge\\WebView2','HKCU:\\SOFTWARE\\Policies\\Microsoft\\Edge\\WebView2','HKLM:\\SOFTWARE\\WOW6432Node\\Policies\\Microsoft\\Edge\\WebView2'); $found = @(); foreach ($path in $paths) { if (Test-Path $path) { $found += ($path + '=' + ((Get-ItemProperty $path).AdditionalBrowserArguments -join '')) } }; ConvertTo-Json -Compress -InputObject @($found)", { capture: true, timeout: 20000 });
     return {
       debuggingSwitchPresent: commandLines.some((line) => line.includes(`--remote-debugging-port=${port}`)),
-      additionalBrowserArgumentsVariable: process.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS,
+      requestedArguments: `--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1`,
+      browserArgumentsPolicies: JSON.parse(policyOutput || "[]"),
       // Keep the report readable: the switch matters more than the whole command line.
       browserCommandLines: commandLines.map((line) => line.slice(0, 600)),
     };
