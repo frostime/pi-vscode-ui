@@ -5,7 +5,7 @@ scope:
   - /apps/**/test/**
   - /packages/**/test/**
   - /scripts/test/**
-updated: 2026-10-29
+updated: 2026-10-30
 ---
 
 # Testing Strategy
@@ -54,7 +54,7 @@ Commands run from the repository root unless another directory is shown.
 | Packaged verification | `pnpm verify:desktop [archive.zip]` | Existing ZIP; extracts/runs it outside the checkout and writes an adjacent report; no rebuild |
 | Human acceptance | `pnpm test:desktop:manual [--reopen]` | Opens the current ZIP with controlled Pi and temporary data; reopen requires the same ZIP |
 
-For Rust-only work, `node scripts/build.mjs --scope desktop` supplies the JS/renderer prerequisite without compiling the exe. For GUI checks, use a complete build instead. Packaging and publication gates belong to [release.md](release.md#desktop-packaging-windows-x64).
+For Rust-only work, `node scripts/build.mjs --scope desktop` supplies the JS/renderer prerequisite without compiling the exe. For GUI checks, use a complete build instead. Desktop acceptance runs locally before tagging; hosted Desktop publication does not run tests. Automated packaged verification or recorded manual acceptance can satisfy that local check; the workflow and evidence requirements belong to [release.md](release.md#independent-desktop-release).
 
 ## Evidence boundaries
 

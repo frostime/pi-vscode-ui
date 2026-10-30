@@ -4,7 +4,7 @@ description: Product features, owning code, and nearest contracts.
 scope:
   - /apps/**
   - /packages/**
-updated: 2026-10-29
+updated: 2026-10-30
 ---
 
 # Feature → Code Map
@@ -68,6 +68,6 @@ Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 ## Verification and packaging
 
 - Workspace drivers (`scripts/`): `workspaces.mjs`, `build.mjs`, `quality.mjs`, `check.mjs`, `clean.mjs`. Product JS compilers: `apps/vscode/build.mjs`, `apps/desktop/build.mjs`. VSIX: `scripts/package-vsix.mjs` and `scripts/verify-vsix.mjs`.
-- Desktop (`apps/desktop/scripts/`): `build.mjs` completes JS + Rust; `packaging.mjs` owns inventory/runtime copies; `package-app.mjs` stages the ZIP; `archive-contract.mjs` defines provenance/hashes; `verify-package.mjs` tests the extracted exe and writes its report; `prepare-release.mjs` validates release evidence; `manual-smoke.mjs` launches controlled human acceptance.
+- Desktop (`apps/desktop/scripts/`): `build.mjs` completes JS + Rust; `packaging.mjs` owns inventory/runtime copies; `package-app.mjs` stages the ZIP; `archive-contract.mjs` defines provenance/hashes; `verify-package.mjs` tests the extracted exe and writes its report; `prepare-release.mjs` checks archive integrity/source and writes the upload checksum; `manual-smoke.mjs` launches controlled human acceptance.
 - Package-local scripts and tests: `apps/pi-client/`, `apps/vscode/`, `apps/desktop/`, `packages/pi-rpc/`, `packages/provider-usage/`.
 - Workflows: `development.md`, `testing.md`, `release.md`. Root scripts orchestrate packages; plugin-local build must not require Desktop.
