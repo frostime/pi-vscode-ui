@@ -25,4 +25,8 @@ The existing clean local ZIP is used without rebuilding:
 - The native smoke completed 14 checks, including shared UI/IPC, controlled Pi send, Mermaid, hide/restore, oversized-message rejection, concurrent Projects/Stop, Resume/history, settings/IME/zoom, persistence/reopening and process cleanup.
 - Real-provider/model calls and opt-in native dialogs were not requested. Tray right-click Exit/confirmation remains a manual check, not a passed automated result.
 
-At this record's creation, upload has not yet occurred. Successful attachment must be confirmed against the remote asset names, sizes and digests; this document alone is not publication evidence. Never overwrite the existing VSIX or move the published tag.
+## Publication
+
+`gh release upload v0.16.0` successfully added the ZIP, `.sha256` and `.verification.json` to <https://github.com/frostime/pi-vscode-ui/releases/tag/v0.16.0>. GitHub reported all three assets as uploaded; their sizes and SHA-256 digests matched the local files. The ZIP is 5,807,025 bytes.
+
+The existing VSIX remained unchanged (SHA-256 `e7531d40c6d4f7396ae98f370737ad2d67d3d3e7b3a54baf148e2f9d4efda2fa`). The remote `v0.16.0` commit remained `8dbfde8a0ce12b1ed1e58ee8668efea5ff0b757a`. No tag was moved, existing asset replaced, new version created or Marketplace publication triggered.
