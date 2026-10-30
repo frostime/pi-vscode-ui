@@ -1,77 +1,85 @@
 ---
 title: OMP Compatibility Architecture
-description: Why FrostPi supports OMP through a Pi-centered contract, how the two compatibility layers divide work, and how future support is developed.
+description: Why Oh My Pi support is split into transport and product compatibility layers, what the bounded surface covers, and how to add support safely.
 scope:
   - /packages/pi-rpc/**
-  - /apps/vscode/src/extension/**
-updated: 2026-10-03
+  - /apps/pi-client/**
+updated: 2026-10-24
 ---
 
 # OMP Compatibility Architecture
 
-## From a second runtime to a bounded compatibility surface
+FrostPi runs Oh My Pi (OMP) as an alternate runtime behind its existing Pi-centered product contract. The installed OMP runs unchanged; a patched distribution or an upstream change is not a prerequisite. [Pi RPC compatibility](../protocol/pi-rpc-compatibility.md) defines the transport ownership and failure rules this document builds on.
 
-Since v0.15.0, FrostPi has supported Oh My Pi (OMP) as a runtime on a limited basis. The product can launch OMP, hold ordinary conversations, resume OMP sessions, change model and thinking level, and use FrostPi's Question tool when it is enabled in settings. The command surface now also supports discovered Markdown file commands and skills. This does not mean FrostPi implements OMP's full RPC or TUI surface: session-tree navigation, fork, builtin/extension/custom/MCP runtime commands, and separate `prompts/` templates remain unsupported. FrostPi's Question tool remains available through its extension UI path; it is distinct from OMP's built-in `ask` tool. Compatibility uses the user's installed OMP unchanged; patched distributions or upstream changes are not prerequisites.
+## Why two layers exist
 
-The architectural problem is larger than making individual OMP commands work. FrostPi already has a product contract expressed in Pi's RPC vocabulary, and its session lifecycle, conversation projection, and UI depend on that contract. If each OMP difference is handled by adding an OMP condition to those consumers, compatibility knowledge spreads through the Pi path. Later work then has to rediscover which branches belong to which runtime, and a small protocol change can affect unrelated product behavior.
+FrostPi's session lifecycle, conversation projection and UI are written in Pi's RPC vocabulary, and both products share them. If every OMP difference were handled by adding an OMP condition inside those consumers, knowledge about which runtime owns which behavior would spread through the Pi path. Later work would have to rediscover the branches, and a small protocol change could alter behavior for the other runtime. OMP is not a Pi clone: its RPC mode has its own handshake, framing and events, and some operations with Pi-like names mean something else.
 
-FrostPi therefore treats OMP as an implementation to adapt to its existing Pi-centered contract, not as a second product model. Compatibility has two layers because OMP differences have two different kinds: differences in how RPC messages are exchanged, and differences in what a runtime feature means to the product.
+The differences fall into two kinds, and they need different treatment. A difference in how messages are exchanged can be translated where that exchange happens. A difference in what an operation means to the product depends on session state, earlier events, UI interaction or commit rules, so it cannot be decided from a single message. Compatibility therefore has two layers:
 
 ```text
 OMP process
    │ runtime-specific frames and events
    ▼
-RPC compatibility layer (`packages/pi-rpc`)
-   │ Pi-shaped RPC contract + preserved protocol facts
+RPC compatibility layer (packages/pi-rpc)
+   │ Pi-shaped RPC contract, plus preserved facts that have no isomorphic form
    ▼
-Product compatibility layer (VS Code Extension Host)
+Product compatibility layer (apps/pi-client core, running in the Host)
    │ FrostPi session and feature behavior
    ▼
-Session lifecycle, conversation projection, and UI
+Session lifecycle, conversation projection and UI
 ```
 
-The direction of this flow is the central maintenance rule: normalize a message at the RPC boundary only when doing so preserves its meaning; keep stateful or behaviorally different features above that boundary. Each difference has one owner, so the two layers do not translate or compensate for it twice.
+This flow implies the maintenance rule. A difference is normalized at the RPC boundary only when normalization preserves its meaning; otherwise the runtime-specific facts remain available and the product layer implements the behavior. Each difference gets one owner. Two translations of the same difference hide each other, and the product can no longer tell what the runtime actually reported.
 
-## Layer one: adapt the RPC conversation
+This is not a plugin or adapter framework. OMP is one declared profile with a bounded surface, not evidence that FrostPi should grow a general runtime SDK.
 
-`packages/pi-rpc` owns the child process, JSONL framing, request correlation, chunk reassembly, startup negotiation, and runtime-specific RPC dialects. It has no VS Code dependency. `PiRpcConnection` performs transport mechanics; `RpcDialect` supplies runtime-specific startup and event behavior; `PiRpcApi` continues to expose Pi's vocabulary to product code. See [`packages/pi-rpc/SPEC.md`](../../../packages/pi-rpc/SPEC.md) for the transport contract and [`pi-rpc-compatibility.md`](../protocol/pi-rpc-compatibility.md) for cross-module rules.
+## The bounded supported surface
 
-General message translations in this layer must be **isomorphic**. A translation is isomorphic only when all four conditions hold:
+FrostPi supports launching the installed `omp` with `--mode rpc`, ordinary conversation and tool calls, model and thinking-level changes, discovery and resume of OMP sessions, discovered Markdown command files and skills, and FrostPi's Question tool when settings enable it.
 
-1. The Pi-shaped name and payload can be derived from that message alone, without additional business state.
+It does not support OMP's full RPC or TUI surface, session-tree navigation, fork, builtin/extension/custom/MCP runtime commands, or separate `prompts/` templates. OMP's built-in `ask` tool is not registered in the ordinary `--mode rpc` launch, and FrostPi does not implement the separate `rpc-ui` / `set_ask_dialog` path. FrostPi's Question tool is a different mechanism: it is injected as an extension and answers through `extension_ui_request`. Neither tool's availability says anything about the other.
+
+This list is the support boundary, and capability flags do not replace it. `apps/pi-client/src/core/configuration/runtimeCompatibility.ts` declares the profile defaults and the product capabilities that gate operations FrostPi implements; a flag does not prove the runtime supports the feature behind it, and adding one does not extend support. Discovering an OMP command likewise proves only that the runtime can list it, not that FrostPi can complete its lifecycle.
+
+## Layer one: the RPC conversation
+
+`packages/pi-rpc` owns the child process, JSONL framing, request correlation, reassembly, startup negotiation and the selected dialect. `PiRpcConnection` performs transport work, `RpcDialect` supplies startup and event behavior, and `PiRpcApi` keeps exposing Pi's vocabulary to product code. The transport contract is [`packages/pi-rpc/SPEC.md`](../../../packages/pi-rpc/SPEC.md).
+
+A translation belongs here only when it is isomorphic, which requires all four conditions:
+
+1. The Pi-shaped name and payload follow from that message alone, without additional business state.
 2. The mapping is complete and loses no information.
-3. It introduces no new ordering, timing, or completion guarantee.
-4. Failure and cancellation semantics remain the same.
+3. It adds no ordering, timing or completion guarantee.
+4. Failure and cancellation semantics are unchanged.
 
-For example, OMP's `session_settled` is normalized to Pi's `agent_settled` at the RPC boundary. The session code can then consume the same completion event without knowing which runtime emitted it. The earlier OMP `agent_end` is not interchangeable: it describes an agent attempt, not necessarily the end of the session's work.
+OMP `session_settled` → `agent_settled` satisfies all four. It carries exactly the fact the shared lifecycle needs, so session code consumes one completion event without knowing which runtime emitted it. OMP's `agent_end` looks similar and fails the test: it marks the end of an agent attempt, not necessarily the end of the session's work. Because the third condition covers completion, mapping `agent_end` onto the same event would move the completion boundary and let the UI declare a turn finished while queued work remains.
 
-Transport negotiation follows the same separation. OMP advertises supported RPC protocol versions in `ready`. If it advertises v2, FrostPi negotiates v2 and configures that connection's chunk decoder from the advertised physical and logical frame limits. Those limits are protocol parameters, not reasons to silently remain on v1. If v2 is not advertised, FrostPi uses v1; a failed negotiation is visible rather than silently downgraded. V1 can still fail on oversized responses, so supporting v1 does not guarantee that every history fits its single-line response format. The OMP dialect and assembler comments record the rationale at the implementation points.
+OMP `branch` and Pi `fork` fail the same test outside events. They may differ in commit boundary, session identity, abort behavior and whether history is replaced, so aliasing the matching name would promise a product operation FrostPi has not implemented. Those differences must be established and tested at the product level, not inferred from method names or response shapes.
 
-Command discovery has an explicit bounded projection rather than claiming full OMP coverage: `get_commands` maps to `get_available_commands`, and only Markdown file commands and skills are returned. File descriptors map to Pi-shaped `source: "prompt"` while preserving `runtimeSource: "file"`; supported descriptors retain additive metadata. The same projection handles live command updates. It excludes known handler/builtin-prefix collisions using the complete discovery response. This stateless restriction belongs to the command-discovery contract; submission authorization and lifecycle state do not move into transport.
+The same reasoning leaves OMP skill messages and `prompt_result` unchanged on the wire. Their presentation, correlation and completion interpretation depend on session state and on what FrostPi already told the user, which the transport does not have.
 
-Do not translate two operations merely because their names or return values look similar. OMP `branch` and Pi `fork`, for instance, may differ in commit boundary, session identity, abort behavior, or history replacement. Those differences require product-level analysis, not a method-name alias. OMP skill custom messages and `prompt_result` stay unmodified at the RPC boundary.
+Command discovery is the one deliberate projection. `get_commands` is sent as `get_available_commands`, and only Markdown file commands and skills are returned. Names that OMP's own parser would route to a builtin, another handler or skill syntax are excluded using the complete discovery response; that exclusion is why the projection needs the whole list rather than one descriptor at a time. Live updates use the same projection. It is stateless: it decides what FrostPi can discover, not what it may execute. Submission authorization and lifecycle state remain in the Host.
 
-## Layer two: decide what the product supports
+Protocol version selection belongs to the transport; using v1 or v2 creates no product capability. A failed negotiation fails startup rather than silently downgrading, and supporting v1 does not promise that every history loads: v1 responses are single-line, so an oversized payload remains a visible command error.
 
-The VS Code Extension Host owns runtime facts and FrostPi feature policy. [`runtimeCompatibility.ts`](../../../apps/vscode/src/extension/configuration/runtimeCompatibility.ts) declares profile defaults, settings ownership, and product capabilities. [`SessionRuntime`](../../../apps/vscode/src/extension/sessions/SessionRuntime.ts) uses the selected profile to assemble the RPC dialect, extensions, and feature gates. Session lifecycle and conversation projection continue to consume the Pi-shaped contract.
+## Layer two: the product behavior
 
-Some OMP differences are not message translations. They depend on prior events, session state, UI interaction, or product-specific commit rules. When a requested feature falls into that category, implement it in an explicit OMP business-compatibility module selected at the runtime assembly point. Such a module should own the complete behavior and return explicit outcomes to the common lifecycle; do not scatter `if (isOmp)` branches through session and projection code.
+Whatever fails the isomorphism test stays visible to the product layer and is implemented in an explicit OMP module selected at runtime assembly. [`OmpPromptCompatibility.ts`](../../../apps/pi-client/src/core/sessions/OmpPromptCompatibility.ts) is the current module; `SessionRuntime` creates it only for the `oh-my-pi` profile. The module owns the complete behavior and returns explicit outcomes to the shared lifecycle. Do not scatter runtime-identity conditionals through session and projection code, and do not let the transport learn about queued prompts, turn status or UI state to compensate.
 
-`OmpPromptCompatibility` owns the bounded command submission and presentation differences. `SessionRuntime` refreshes command discovery before leading slash submission; the module rejects unknown/unsupported names and skill images. It presents user-attributed `skill-prompt` events and entries as original-invocation user messages without changing raw session entries or showing an expanded skill preview. It tracks connection request ids before acknowledgement, removes only a rejected submission's local queue/turn, and treats a terminal result as session completion only when OMP explicitly reports `sessionSettled: true`. Metadata checks are not an atomic registration lock or a sandbox for trusted runtime extensions.
+The module owns three decisions the transport cannot make: whether a discovered command may be submitted, how a runtime skill invocation is presented, and when a prompt result completes the session. Admission is a product decision because discovery is not authorization. Presentation must show the user's original invocation while leaving the persisted entry and OMP's persistence authority intact. Completion must follow OMP's explicit session-settled signal, because a prompt ending is not necessarily a session ending. Command admission and visible invocation rules are in the [Composer contract](../../../apps/pi-client/src/ui/features/composer/composer.SPEC.md). Session completion and persisted/live identity follow the [session lifecycle](../../../apps/pi-client/src/host/session-lifecycle.SPEC.md) and [conversation projection](../../../apps/pi-client/src/core/conversation/conversation-projection.SPEC.md) contracts; request correlation stays local to `OmpPromptCompatibility.ts`.
 
-Capabilities control whether FrostPi offers or accepts a product operation; they are not inferred from whichever RPC events happen to arrive. An unavailable feature must be gated before it reaches the runtime, rather than exposed and then failing with `Unknown command`. FrostPi's local commands and runtime slash commands are separate paths; support for one must not be used as evidence that the other is supported.
+The module's checks are compatibility rules for a trusted runtime, not a security boundary or a lock against concurrent runtime changes.
 
-OMP's built-in `ask` tool is not registered in ordinary `--mode rpc`. FrostPi's Question tool is instead injected as an extension and uses `ctx.ui.input()` through `extension_ui_request`. Keep these paths distinct: the Question tool remains part of the current integration, while OMP's separate `rpc-ui` / `set_ask_dialog` path is not implemented and has no runtime capability flag.
+The child process remains authoritative for its session JSONL and runtime state. Compatibility must not create an empty replacement session, write or migrate OMP session files on FrostPi's behalf, or add a global execution lock; one `SessionRuntime` owns one child process.
 
-The child process remains authoritative for its session JSONL and runtime state. Compatibility must not silently create an empty replacement session, write or migrate OMP session files on FrostPi's behalf, or add a global execution lock. One `SessionRuntime` continues to own one child process.
+## Adding support
 
-## How to extend OMP support
+Move from the requested user operation to the layer that owns its difference, then prove the whole behavior before exposing it.
 
-Future agents should move from a requested user operation to the layer that owns its difference, then prove the complete behavior before exposing it:
-
-1. **Define the product result.** Read this document, the relevant product SPECs, and the user's requested behavior. State what a user must be able to do and what counts as success. A historical change or an agent-written proposal is not user approval.
-2. **Establish OMP facts.** Inspect the actual OMP RPC client, server, types, and relevant agent/tool implementation for the version being tested. Record the version and distinguish source evidence from runtime observations. Do not rely on another agent's summary or a machine-specific installation path.
-3. **Assign the difference once.** Apply the four isomorphism conditions. If all pass, translate in the RPC dialect and preserve all required fields. If any fail, keep the runtime-specific facts available and implement the requested behavior in the product compatibility layer. If the semantics remain uncertain and could change the design, run the smallest discriminating experiment before choosing.
-4. **Keep unsupported behavior closed until its contract is met.** Add a capability and gate at the product entry point while the behavior is incomplete. Discovery of a command is not proof it is safe to expose or that FrostPi can complete its lifecycle. For tree or fork work, verify identity, commit, abort, and history-reload behavior before enabling the UI.
-5. **Test the user-visible contract.** Keep Pi regression tests. Add OMP fake-process tests for handshake, message shape, ordering, failure, and stateful sequences as relevant. Then test with the real OMP runtime. For resume, copy the session JSONL and its same-named artifact directory; never disrupt or edit an online session. RPC-level success alone does not prove the full Extension Host and UI flow.
-6. **Update durable contracts with the implementation.** Update `packages/pi-rpc/SPEC.md` for transport or dialect behavior and every affected product SPEC for session/UI behavior. Update this architecture document only when the compatibility model, ownership boundary, supported surface, or maintenance workflow changes. Keep local algorithm details in code comments and tests.
+1. **Define the product result.** State what a user must be able to do, what success looks like, and which product SPEC owns it. A historical change record or an Agent-written proposal is not user approval.
+2. **Establish OMP facts for the version FrostPi launches.** Inspect that version's RPC client, server, types and relevant implementation, and record the version. Distinguish source reading from runtime observation; another agent's summary or a machine-specific install path is not evidence.
+3. **Assign the difference once.** Apply the four isomorphism conditions. If all hold, translate in the dialect and preserve every required field. If any fail, keep the runtime facts and implement the behavior in the product compatibility layer. If the semantics could change the design and are still uncertain, run the smallest discriminating experiment before choosing.
+4. **Keep the surface closed until its contract is met.** Add the capability and gate it at the product entry point while behavior is incomplete. Discovery is not permission to expose, and RPC success is not proof that the user-visible operation completes. For tree or fork work, verify identity, commit, abort and history reload before enabling the UI.
+5. **Test the user-visible contract.** Keep Pi regression tests, add OMP fake-process tests for handshake, message shape, ordering, failure and stateful sequences, then test the installed OMP runtime. For resume, copy the session JSONL and its same-named artifact directory; never disturb or edit an online session. RPC-level success does not prove the Extension Host or UI flow. Classify what each check establishes with [evidence boundaries](../testing.md#evidence-boundaries).
+6. **Update the contracts with the implementation.** Update `packages/pi-rpc/SPEC.md` or a product SPEC only when the contract it owns changes; implementation-only compatibility fixes do not require mechanical SPEC edits. Update this document only when the compatibility model, layer ownership, supported surface or maintenance workflow changes. Local algorithm details stay in code comments and tests.

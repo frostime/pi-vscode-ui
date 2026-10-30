@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src/core/**/*.ts", "src/host/**/*.ts", "src/shared/**/*.ts", "test/**/*.ts", "pi-extensions/**/*.ts", "vitest.config.ts"]
+}

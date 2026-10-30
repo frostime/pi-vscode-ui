@@ -11,7 +11,8 @@ export function run(command, args, options = {}) {
     env: { ...process.env, ...options.env },
     encoding: "utf8",
     stdio: options.capture ? "pipe" : "inherit",
-    shell: process.platform === "win32",
+    // Windows pnpm.cmd needs a shell; Node must retain paths/arguments with spaces.
+    shell: process.platform === "win32" && command !== process.execPath,
   });
   if (result.status !== 0) {
     if (options.capture) {
@@ -21,6 +22,10 @@ export function run(command, args, options = {}) {
     throw new Error(`${command} ${args.join(" ")} failed with exit code ${result.status ?? "unknown"}`);
   }
   return result.stdout ?? "";
+}
+
+export function assertNoArguments(usage, args = process.argv.slice(2)) {
+  if (args.length > 0) throw new Error(`Usage: ${usage}`);
 }
 
 export function projectVersion() {

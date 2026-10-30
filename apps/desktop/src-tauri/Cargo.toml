@@ -1,0 +1,28 @@
+[package]
+name = "frostpi-desktop"
+version = "0.0.0"
+description = "FrostPi Windows desktop shell"
+authors = ["FrostPi contributors"]
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "~2.12.5", features = ["tray-icon"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dunce = "1"
+rfd = { version = "0.17", features = ["common-controls-v6"] }
+arboard = { version = "3", default-features = false }
+open = "5"
+tokio = { version = "1", features = ["sync", "time"] }
+
+[target.'cfg(windows)'.dependencies]
+# with_webview exposes this controller type; upgrade its binding together with Tauri.
+webview2-com = "=0.39.1"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security"] }
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]

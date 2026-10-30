@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getSupportedThinkingLevels, normalizeThinkingLevel } from "../../src/webview/features/models/thinkingLevels.js";
+import { getSupportedThinkingLevels, normalizeThinkingLevel } from "$ui/features/models/thinkingLevels.js";
 
 describe("thinking level compatibility", () => {
   it("disables configurable thinking for non-reasoning models", () => {

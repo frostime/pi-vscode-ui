@@ -6,6 +6,7 @@ src/**
 pi-extensions/**
 test/**
 dev/**
+build.mjs
 *.config.*
 tsconfig*.json
 coverage/**

@@ -1,0 +1,33 @@
+{
+  "name": "@frostime/frostpi-desktop",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "clean": "node ../../scripts/clean-dir.mjs dist coverage",
+    "start": "node scripts/start.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && svelte-check --tsconfig ./tsconfig.renderer.json",
+    "lint": "eslint src test scripts build.mjs --max-warnings 0",
+    "test": "vitest run",
+    "package:app": "node scripts/package-app.mjs",
+    "verify:package": "node scripts/verify-package.mjs"
+  },
+  "dependencies": {
+    "@frostime/pi-client": "workspace:*",
+    "@tauri-apps/api": "^2.12.4",
+    "@vscode/codicons": "^0.0.44",
+    "ajv": "^8.20.0",
+    "jsonc-parser": "^3.3.1",
+    "svelte": "^5.56.5"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "@tauri-apps/cli": "^2.12.4",
+    "@types/node": "^24.1.0",
+    "adm-zip": "^0.6.0",
+    "esbuild": "^0.28.0",
+    "svelte-check": "^4.3.1",
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10"
+  }
+}

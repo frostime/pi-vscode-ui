@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const { writeFile } = require("node:fs/promises");
 const vscode = require("vscode");
 
 async function waitFor(predicate, timeoutMs = 10_000) {
@@ -12,7 +13,7 @@ async function waitFor(predicate, timeoutMs = 10_000) {
 }
 
 async function run() {
-  const fakePi = path.resolve(__dirname, "../fake-pi.cjs");
+  const fakePi = path.resolve(__dirname, "../../../../pi-client/test/fixtures/fake-pi.cjs");
   await vscode.workspace.getConfiguration("frostpi").update("pi.executable", fakePi, vscode.ConfigurationTarget.Global);
   await vscode.workspace.getConfiguration("frostpi").update("session.startOnOpen", true, vscode.ConfigurationTarget.Global);
 
@@ -29,6 +30,12 @@ async function run() {
   await vscode.commands.executeCommand("frostpi.newSession");
   await waitFor(async () => (await vscode.commands.getCommands(true)).includes("frostpi.stop"));
   await vscode.commands.executeCommand("frostpi.stop");
+  if (process.env.FROSTPI_E2E_RESULT) {
+    await writeFile(process.env.FROSTPI_E2E_RESULT, JSON.stringify({
+      ok: true, suiteCompleted: true, vscodeVersion: vscode.version, controlledPi: true,
+      commandsRegistered: true, newCommandCompleted: true, stopCommandCompleted: true,
+    }));
+  }
 }
 
 module.exports = { run };

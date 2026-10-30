@@ -5,7 +5,7 @@ import {
   indentPromptWithTab,
   insertPromptNewline,
   outdentPromptWithShiftTab,
-} from "../../src/webview/features/composer/promptEditing.js";
+} from "$ui/features/composer/promptEditing.js";
 
 describe("prompt Tab editing", () => {
   it("inserts two spaces at an unselected cursor", () => {

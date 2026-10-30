@@ -1,12 +1,12 @@
 /** @vitest-environment jsdom */
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { parseFileReference } from "../../src/webview/features/conversation/markdown/fileReferences.js";
+import { parseFileReference } from "$shared/files/fileReferences.js";
 import {
   ensureKatex,
   renderMarkdownHtml,
   sanitizeMermaidSvg,
-} from "../../src/webview/features/conversation/markdown/renderMarkdown.js";
+} from "$ui/features/conversation/markdown/renderMarkdown.js";
 
 describe("renderMarkdownHtml", () => {
   beforeAll(async () => {

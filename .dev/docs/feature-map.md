@@ -1,90 +1,73 @@
 ---
 title: Feature → Code Map
-description: Compact map from product features to owning modules, entry points, and nearest contracts.
+description: Product features, owning code, and nearest contracts.
 scope:
-  - /apps/vscode/**
-  - /packages/pi-rpc/**
-updated: 2026-09-04
+  - /apps/**
+  - /packages/**
+updated: 2026-10-29
 ---
 
 # Feature → Code Map
 
-Use this map when the feature is known but its owner is not. Paths name owners and one or two useful entry points rather than every implementation file.
+Use this map to locate a feature's source and nearest contract. Paths are workspace-relative unless a section states otherwise. For questions about process placement, state authority or dependency direction, read [architecture overview](architecture/overview.md).
 
-## Session lifecycle and persistence
+## Session lifecycle, persistence, and Projects
 
-- Owner: `apps/vscode/src/extension/sessions/`; start with `SessionRegistry.ts`, `SessionRuntime.ts`, and `SessionPersistence.ts`.
-- Contract: `apps/vscode/src/extension/sessions/session-lifecycle.SPEC.md`.
+- Shared collection: `apps/pi-client/src/host/SessionRegistry.ts`; metadata: `apps/pi-client/src/host/sessions/SessionPersistence.ts`; single-session execution/state: `apps/pi-client/src/core/sessions/`.
+- VS Code assembly: `apps/vscode/src/extension/activate.ts` and `clientHost.ts`.
+- Desktop Project roots: `apps/desktop/src/main/desktopProjects.ts`; Project ownership/last Session/sidebar state: `apps/desktop/src/main/DesktopProjectNavigation.ts`; action adaptation: `apps/desktop/src/main/DesktopActionDispatcher.ts`; sidebar/drawer/resize: `apps/desktop/src/renderer/DesktopShell.svelte`. `apps/desktop/src/main/createDesktopBackend.ts` assembles the shared Registry/client with `desktopHost.ts`; `src/main/backend.ts` binds private transport to the Windows Tauri shell. Versioned Project/client Memento data lives in `apps/desktop/src/main/storage/DesktopStateStore.ts`; both JSON stores use the bounded/atomic `apps/desktop/src/main/storage/jsonFile.ts` helper.
+- Contracts: `apps/pi-client/SPEC.md`, `apps/pi-client/src/host/session-lifecycle.SPEC.md`, and `apps/desktop/SPEC.md`.
 
-## Existing-session catalog and worktrees
+## Working directories, history catalog, and session tree
 
-- Owner: `apps/vscode/src/extension/sessions/catalog/` and `apps/vscode/src/extension/sessions/SessionWorkingDirectories.ts`.
-- Contracts: `apps/vscode/src/extension/sessions/catalog/session-catalog.SPEC.md` and the lifecycle SPEC.
+- Shared Git worktree discovery: `apps/pi-client/src/host/sessions/SessionWorkingDirectories.ts`; history scan/picker: `apps/pi-client/src/host/catalog/`.
+- Tree interaction: `apps/pi-client/src/host/pickers/SessionTreePicker.ts`; tree projection/private bridge: `apps/pi-client/src/core/sessions/tree/`.
+- Pi-side tree/Question artifacts: `apps/pi-client/pi-extensions/`; both products bundle the same sources into their distributions.
+- Catalog contract: `apps/pi-client/src/host/catalog/session-catalog.SPEC.md`.
 
-## Session tree navigation and private extension
+## Conversation projection and transport
 
-- Owner: `apps/vscode/src/extension/sessions/tree/`; packaged adapter: `apps/vscode/pi-extensions/session-tree.ts`.
-- Contract: `apps/vscode/src/extension/sessions/session-lifecycle.SPEC.md`.
+- Projection: `apps/pi-client/src/core/conversation/ConversationProjection.ts`; persisted/live identity is owned with `SessionEntryState.ts` and `SessionViewState.ts`.
+- Contract: `apps/pi-client/src/core/conversation/conversation-projection.SPEC.md`.
+- Pi subprocess/framing/dialects: `packages/pi-rpc/src/`; start with `PiRpcConnection.ts` and `PiRpcApi.ts`. Contracts: `packages/pi-rpc/SPEC.md` and `.dev/docs/protocol/pi-rpc-compatibility.md`.
 
-## Conversation projection
+## Host interface and presentation bridge
 
-- Owner: `apps/vscode/src/extension/conversation/`; state inputs: `apps/vscode/src/extension/sessions/SessionEntryState.ts` and `apps/vscode/src/extension/sessions/SessionViewState.ts`.
-- Contract: `apps/vscode/src/extension/conversation/conversation-projection.SPEC.md`.
+- Finite injected VS Code-shaped services: `apps/pi-client/src/host/clientHost.ts`. Real implementation: `apps/vscode/src/extension/clientHost.ts`; Desktop translation: `apps/desktop/src/main/desktopHost.ts`. Static UI support is declared in `apps/pi-client/src/shared/model/clientUiCapabilities.ts` with Desktop's values in `apps/desktop/src/shared/desktopCapabilities.ts`.
+- Shared authorization/dispatch/synchronization/drafts: `apps/pi-client/src/host/bridge/`; start with `WebviewConnection.ts`, `WebviewActionDispatcher.ts`, and `ComposerDraftCache.ts`.
+- Shared browser bridge and presentation state: `apps/pi-client/src/ui/bridge/` and `state/`.
+- VS Code sidebar/tab assembly: `apps/vscode/src/extension/webview-host/SessionWebviewCoordinator.ts` and `SessionPanelManager.ts`; native browser transport: `apps/vscode/src/webview/bridge/vscodeBridge.ts`.
+- Desktop finite application IPC: `apps/desktop/src/shared/desktopBridge.ts`, `apps/desktop/src/shared/desktopTransport.ts`, `apps/desktop/src/renderer/tauriBridge.ts`.
+- Windows native host: finite browser adapter `apps/desktop/src/renderer/tauriBridge.ts`; private Node transport `apps/desktop/src/main/backend.ts` and `DesktopWire.ts`; native window/process/native operations `apps/desktop/src-tauri/src/`. It authorizes the local window and owns the Node/Pi process tree.
+- Contract: `apps/pi-client/src/shared/bridge/webview-bridge.SPEC.md`.
 
-## Pi RPC transport
+## Shared UI
 
-- Owner: `packages/pi-rpc/src/`; start with `packages/pi-rpc/src/PiRpcConnection.ts`, `packages/pi-rpc/src/PiRpcApi.ts`, and `packages/pi-rpc/src/protocol/JsonlDecoder.ts`.
-- Contracts: `packages/pi-rpc/SPEC.md` and `.dev/docs/protocol/pi-rpc-compatibility.md` for cross-module policy.
+Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 
-## Host–Webview bridge
+- Root/composition: `ClientApp.svelte`, `shell/SidebarShell.svelte`, `shell/SessionInteraction.svelte`; editor availability: `../shared/model/clientUiCapabilities.ts`.
+- Session Header/New/Resume: `features/sessions/SessionHeader.svelte` and `SessionList.svelte`.
+- Composer/mentions/attachments: `features/composer/Composer.svelte` and `composer.SPEC.md`; shared file search: `../host/file-search/`; VS Code editor capture: `apps/vscode/src/extension/composer/`.
+- Conversation/scrolling: `features/conversation/ConversationView.svelte` and `scrolling/`; Markdown: `markdown/renderMarkdown.ts` and `markdown.SPEC.md`.
+- Response annotation: `features/annotation-review/` and its SPEC; shell coordination: `shell/SessionInteraction.svelte`.
+- Models/thinking: `features/models/ModelPicker.svelte`, `thinkingLevels.ts`, and adjacent SPECs.
+- Extension/Question UI: `features/extension-ui/`, `features/question-tool/`; shared coordination: `../core/extension-ui/` and `../core/question-tool/`.
+- Provider usage surface: `features/provider-usage/` and its SPEC; credential/query engine remains `packages/provider-usage/`. Safe reports travel through the common validated bridge.
+- Styles/theme: `styles/`; preserve VS Code variables, FrostPi mappings and Codicons. Desktop palettes: `apps/desktop/src/renderer/theme.css`; application: `apps/desktop/src/renderer/theme.ts`; persisted choice: `desktop.theme` in the Desktop settings schema. Desktop interface typography: `apps/desktop/src/renderer/uiTypography.ts`; native Zoom/shortcuts: `apps/desktop/src/renderer/tauriBridge.ts` plus backend settings writes and `src-tauri/src/native.rs`. Cross-feature requirements: `.dev/docs/design/ui-spec.md`.
+- Desktop-only outer navigation/dialogs: `apps/desktop/src/renderer/DesktopApp.svelte` and `apps/desktop/src/renderer/DesktopShell.svelte`; they mount the same ClientApp, not a second chat implementation.
 
-- Owners: `apps/vscode/src/extension/webview-host/`, `apps/vscode/src/shared/bridge/`, and `apps/vscode/src/webview/bridge/`.
-- Start with `SessionWebviewCoordinator.ts`, `WebviewConnection.ts`, `WebviewActionDispatcher.ts`, and `applyHostMessage.ts`; panel identity/lifecycle lives in `SessionPanelManager.ts`, transient handoff in `ComposerDraftCache.ts`, and synchronization rules in `apps/vscode/src/shared/bridge/webview-bridge.SPEC.md`.
+## Editor, configuration, network, and diagnostics
 
-## Composer, file mentions, and attachments
+- VS Code file/selection/external Composer editor: `apps/vscode/src/extension/composer/`; file/diff navigation: `apps/vscode/src/extension/conversation/openReferencedLocation.ts` and `apps/vscode/src/extension/file-changes/`. Desktop file opening: `apps/desktop/src/main/openReferencedLocation.ts`; pure reference parsing/whitelist: `apps/pi-client/src/shared/files/fileReferences.ts`.
+- Shared setting parsing: `apps/pi-client/src/host/readConfiguration.ts`; Runtime invocation/compatibility: `apps/pi-client/src/core/configuration/`; process proxy calculation: `apps/pi-client/src/core/network/`.
+- Desktop settings storage/import/actions: `apps/desktop/src/main/settings/`; original-key schema additions and finite operations: `apps/desktop/src/shared/desktopSettings.ts`; settings modal/draft coordination: `apps/desktop/src/renderer/SettingsPanel.svelte`; grouped labels: `settingsPresentation.ts`; schema-based draft conversion: `settingsForm.ts`; field controls/key disclosure: `SettingRow.svelte` in the same renderer directory. Contract: `apps/desktop/SPEC.md`.
+- Native proxy configuration/secrets: `apps/vscode/src/extension/network/`. Contract: `proxy-environment.SPEC.md` there; proxy changes require process restart.
+- Pi settings: `apps/pi-client/src/core/_shared/pi-settings/`; cache-miss projection: `apps/pi-client/src/core/conversation/cacheMissDetection.ts`.
+- VS Code diagnostics/status/notifications: `apps/vscode/src/extension/diagnostics/`, `status-bar/`, `notifications/`.
 
-- Owners: `apps/vscode/src/webview/features/composer/`, `apps/vscode/src/extension/composer/`, `apps/vscode/src/extension/fd/` (fd retrieval shared with file-link fallback), and `apps/vscode/src/extension/attachments/`.
-- Entry points/contracts: `apps/vscode/src/webview/features/composer/Composer.svelte`, `apps/vscode/src/extension/fd/WorkspaceFileSearch.ts`, `apps/vscode/src/webview/features/composer/composer.SPEC.md`, and `apps/vscode/src/extension/composer/mentions/file-mentions.SPEC.md`.
+## Verification and packaging
 
-## Conversation rendering, Markdown, and scrolling
-
-- Owner: `apps/vscode/src/webview/features/conversation/`; scrolling lives in `apps/vscode/src/webview/features/conversation/scrolling/`.
-- Entry points/contracts: `apps/vscode/src/webview/features/conversation/ConversationView.svelte`, `apps/vscode/src/webview/features/conversation/markdown/renderMarkdown.ts` (`markdown-it`), `apps/vscode/src/extension/conversation/openReferencedLocation.ts` (file-link open, workspace fallback), and `apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md`; cross-feature scroll ownership is in `.dev/docs/design/ui-spec.md`.
-
-## Response annotation review
-
-- Owner: `apps/vscode/src/webview/features/annotation-review/`; shell coordination is in `apps/vscode/src/webview/shell/SessionInteraction.svelte`.
-- Entry points/contracts: `ResponseAnnotationWorkspace.svelte`, `annotationPrompt.ts`, and `annotation-review.SPEC.md`.
-
-## Models and thinking level
-
-- Owner: `apps/vscode/src/webview/features/models/`; start with `ModelPicker.svelte` and `thinkingLevels.ts`.
-- Contracts: `apps/vscode/src/webview/features/models/thinking-levels.SPEC.md` and `apps/vscode/src/webview/features/models/model-picker.SPEC.md`.
-
-## Extension UI and Question tool
-
-- Owners: `apps/vscode/src/extension/extension-ui/`, `apps/vscode/src/extension/question-tool/`, `apps/vscode/src/shared/question-tool/`, the matching Webview features, and `apps/vscode/pi-extensions/question-tool.ts`.
-- Entry points/contracts: `ExtensionUiCoordinator.ts`, `QuestionToolExtensionBridge.ts`, and `apps/vscode/src/extension/extension-ui/extension-ui.SPEC.md`.
-
-## Network proxy and process environment
-
-- Owner: `apps/vscode/src/extension/network/`; executable configuration starts in `apps/vscode/src/extension/configuration/configuredPiInvocation.ts`.
-- Contracts: `apps/vscode/src/extension/network/proxy-environment.SPEC.md`, `packages/pi-rpc/SPEC.md`, and the Pi compatibility guide.
-
-## Editor, file, and diff integration
-
-- Owners: `apps/vscode/src/extension/composer/ComposerExternalEditor.ts`, `apps/vscode/src/extension/conversation/openReferencedLocation.ts`, and `apps/vscode/src/extension/file-changes/GitBaseContentProvider.ts`.
-- Contracts: Composer and file-mention SPECs; bridge validation is owned by the bridge SPEC.
-
-## Diagnostics, notifications, usage, and status bar
-
-- Owners: `apps/vscode/src/extension/diagnostics/`, `apps/vscode/src/extension/notifications/`, `apps/vscode/src/extension/status-bar/`, and `apps/vscode/src/webview/features/usage/`.
-- Provider-account usage: `packages/provider-usage/` owns discovery/authentication/queries; `apps/vscode/src/webview/features/provider-usage/` owns the sidebar surface. Contracts: package `SPEC.md` and UI `provider-usage.SPEC.md`. `WebviewActionDispatcher.ts` invokes the package; `WebviewConnection.ts` owns request cancellation; the feature-local bridge source feeds the cached metrics popover. Synthetic data exists only in tests.
-- Standalone provider-account usage API: `packages/provider-usage/src/index.ts`; see `packages/provider-usage/SPEC.md` for source/configuration/network boundaries.
-- Pi-configured cache-miss notices are detected and projected by `apps/vscode/src/extension/conversation/cacheMissDetection.ts` and `ConversationProjection.ts`; effective Pi settings come from `apps/vscode/src/extension/_shared/pi-settings/`.
-- Cross-module sensitivity boundary: `.dev/docs/architecture/overview.md`; lifecycle-trigger semantics remain in the lifecycle and extension UI SPECs.
-
-## Build, testing, packaging, and release
-
-- Owners: root `package.json`, package-local manifests, `scripts/`, `.github/workflows/`, and `apps/vscode/test/` / `packages/pi-rpc/test/`.
-- Workflows: `.dev/docs/development.md`, `.dev/docs/testing.md`, and `.dev/docs/release.md`.
+- Workspace drivers (`scripts/`): `workspaces.mjs`, `build.mjs`, `quality.mjs`, `check.mjs`, `clean.mjs`. Product JS compilers: `apps/vscode/build.mjs`, `apps/desktop/build.mjs`. VSIX: `scripts/package-vsix.mjs` and `scripts/verify-vsix.mjs`.
+- Desktop (`apps/desktop/scripts/`): `build.mjs` completes JS + Rust; `packaging.mjs` owns inventory/runtime copies; `package-app.mjs` stages the ZIP; `archive-contract.mjs` defines provenance/hashes; `verify-package.mjs` tests the extracted exe and writes its report; `prepare-release.mjs` validates release evidence; `manual-smoke.mjs` launches controlled human acceptance.
+- Package-local scripts and tests: `apps/pi-client/`, `apps/vscode/`, `apps/desktop/`, `packages/pi-rpc/`, `packages/provider-usage/`.
+- Workflows: `development.md`, `testing.md`, `release.md`. Root scripts orchestrate packages; plugin-local build must not require Desktop.

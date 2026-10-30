@@ -1,0 +1,51 @@
+---
+title: Webview Bridge Compatibility Contract
+description: Host authority, per-presentation synchronization, validation, correlation, and recovery semantics.
+scope:
+  - /apps/pi-client/src/shared/bridge/**
+  - /apps/pi-client/src/host/bridge/**
+  - /apps/pi-client/src/ui/bridge/**
+  - /apps/vscode/src/extension/webview-host/**
+  - /apps/desktop/src/**
+updated: 2026-10-24
+---
+
+# Webview Bridge Compatibility Contract
+
+The backend Host (VS Code Extension Host or Desktop Node service) is authoritative. One sidebar `WebviewConnection` follows `SessionRegistry.activeSessionId`; each Session Tab has an independent Connection pinned to one Session id. Presentation snapshots explicitly carry surface identity, the true sidebar `activeSessionId`, and the Session displayed by that Connection. A pinned Session is never represented by changing or reinterpreting `activeSessionId`.
+
+A mounted Webview sends `ready` and receives a complete presentation snapshot. A panel snapshot also carries its authoritative Host Composer draft; a sidebar snapshot carries a draft only when completing or recovering an externalization handoff. Sidebar selection changes snapshot the sidebar Connection. Same-target updates use deltas. Each Connection computes and caches deltas only for its displayed Session, advances that cache only after successful delivery, and owns one file-search cancellation scope. Hidden, failed, newly visible, or recreated panel projections recover through a fresh authoritative snapshot; browser persistence is not a recovery source.
+
+On `ready` and supported VS Code Chat typography changes, the Host sends `setChatTypography`. Message font settings apply to rendered Markdown, message size also applies to code blocks, editor font family applies to the Composer and code blocks, and editor font size applies to the Composer.
+
+`conversationItems` is one Host-ordered collection per displayed Session. `upsert` requires unchanged prefix order; removal or reordering requires `replace`. Writers replace changed objects rather than mutate them so keyed Webview disclosure state survives reconciliation. `conversationContentRevision` identifies projected conversation-content changes for presentation behavior; scalar Session updates such as stats and runtime status do not advance it.
+
+## Transport assembly
+
+The browser entry connects an explicit transport before mounting the UI and sending `ready`. Feature code uses `hostBridge` without acquiring a VS Code API or installing browser listeners at module import. The VS Code adapter alone owns native API acquisition, once per document. Missing transport is an assembly error, not a successful no-op. One connection serves one presentation document; disconnect releases its subscriptions, and stale cleanup cannot disconnect a later mount. This does not make the existing document-scoped UI stores safe for multiple independent chat roots in one document.
+
+Host `WebviewConnection` consumes a structural message/visibility endpoint, not a complete `vscode.Webview`. Product assembly supplies file search and a typography reader at connection creation; native warning UI and configuration access remain in host assembly. Each `ready` still reads current typography. These internal inputs do not change wire messages, delivery-result semantics, authorization or the bridge version.
+
+## Authorization and validation
+
+`BRIDGE_VERSION` is an opaque identifier compared for exact equality in both directions. Unknown versions are rejected; required-field or delta-semantic changes require a new value. Every Webview action is validated as a complete discriminated union with bounded payloads. Prompt, file-search, Fork, and other request/response flows use correlation ids; stale or unknown responses have no effect. Invalid, oversized, unknown, incompatible, or cross-Session messages perform no Host action.
+
+The Host authorizes actions from immutable Connection context. Panel messages may target only the pinned Session, regardless of any client-supplied id. Sidebar collection-management actions may target any listed Session, while sidebar conversation actions remain scoped to the Session displayed by that Connection. New, Resume, selection, rename, close/restart, externalization, configuration, diagnostics, and other Session-management actions are sidebar-only and are rejected from panels even if manually posted. `/resume` is Host-local and is rejected from a panel with sidebar guidance.
+
+Registry/global Host toasts preserve the former single-Webview behavior and are delivered best-effort to the Sidebar Connection only. Action results, failures, and contention notices return only to their originating Connection.
+
+Fork is a conversation action scoped to that originating Connection. Sidebar-origin Fork selects the result. Session-Tab-origin Fork preserves the sidebar selection and keeps the source tab pinned to the original Session id; the result opens in a distinct Session Tab. Do not retarget the original pinned Connection merely because the live Runtime follows the fork. These placement choices do not change Registry's commit/recovery boundary.
+
+File actions carry validated locations only; relative paths resolve from the Session displayed by the originating Connection. Markdown local-image requests are correlated, bounded, authorized against that same displayed Session, and return only to their originating Connection. The Host reads only ordinary files, identifies supported content independently of its extension, and returns structured inline failures rather than global toasts. Returned image bytes are transient presentation resources: they do not enter conversation projection, drafts, or persistence, and paths/image bytes must not be logged.
+
+Session-tree actions carry stable ids and draft presence only: the Host refetches authoritative entries and owns native interaction. Complete entries, prompt/image content, private tokens, and summary content do not cross that action boundary. Host-projected Fork/tree Composer seeds are non-persisted and applied once per Webview mount until submission.
+
+## Provider account usage
+
+`listUsageProviders`, `queryProviderUsage` and `cancelProviderUsage` are sidebar-only, correlated requests with bounded IDs; unexpected request fields are rejected. The Host chooses the Pi agent directory using the workspace root and Host environment, independently of Session cwd. For each actual query, the Host applies current workspace-scoped FrostPi proxy settings and stored proxy credentials to a local environment copy; this does not mutate or restart Pi. Only safe package descriptors/reports/errors return to the originating Connection. The provider-list response is the complete supported catalog, including unavailable `not-configured` entries, so the browser can distinguish unsupported Providers from inaccessible credentials. Query scope `all` still includes only configured Providers. Descriptors may include optional predefined official-page links; these are navigation metadata, not URLs extracted from provider responses. Usage request allowed fields derive from their schemas, with the common bridge version added; do not maintain a second field definition. Credentials, paths, arbitrary endpoints and environment inputs never come from the browser. The Connection owns one replaceable usage request and cancels it on disposal or matching cancellation; old completions cannot publish or cancel newer work. Unexpected failures produce generic inline errors rather than credential-bearing logs/toasts. Browser snapshots cache by provider, with manual refresh; no usage is written to Session snapshots, conversation or persistence.
+
+## Composer synchronization
+
+An ordinary non-externalized Sidebar Composer remains Webview-local and sends no draft mutations to the Host. Opening a Session Tab transfers one complete revisioned draft to the Host before the externalized mapping commits. While externalized, panel mutations synchronize immediately: text edits carry attachment ids and only newly added attachments carry image bytes, while the Host ignores stale revisions. Panel snapshots and `draftReplacement` messages replace local state without echo. Tab closure hands the latest cached draft back to the Sidebar; the cache retains that handoff state until a later externalization replaces it or the Session is removed.
+
+Panel submission carries the submitted revision. The Host snapshots it, clears the authoritative draft, and retains a failure snapshot. If the tab closes before that submission resolves, Host authority continues only for that pending recovery window, so newer Sidebar edits suppress restoration. Success discards the snapshot; failure restores it only when no newer draft exists. Sidebar submission otherwise keeps the pre-existing Webview-local failure restoration behavior. Session removal and Extension Host disposal release cached handoff state. Drafts are not workspace/session persistence and do not survive Extension Host restart. Scroll, disclosure, Composer expansion, and partially entered Question/extension-form answers remain presentation-local.

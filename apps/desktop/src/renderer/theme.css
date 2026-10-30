@@ -1,0 +1,95 @@
+/* Built-in palettes adapted from VS Code Dark Modern / Light Modern (MIT).
+ * https://github.com/microsoft/vscode/tree/211a00dbedf7a224e0da0a2db3cf9cb6cb7a4bfb/extensions/theme-defaults/themes
+ * Supply the shared Webview variables on html, where --frost-* is resolved.
+ */
+:root {
+  color-scheme: dark;
+  --vscode-sideBar-background: #181818;
+  --vscode-editor-background: #1f1f1f;
+  --vscode-editorWidget-background: #202020;
+  --vscode-quickInput-background: #222222;
+  --vscode-list-hoverBackground: #2a2d2e;
+  --vscode-list-activeSelectionBackground: #04395e;
+  --vscode-foreground: #cccccc;
+  --vscode-descriptionForeground: #9d9d9d;
+  --vscode-widget-border: #313131;
+  --vscode-input-background: #313131;
+  --vscode-input-border: #3c3c3c;
+  --vscode-focusBorder: #0078d4;
+  --vscode-button-background: #0078d4;
+  --vscode-button-hoverBackground: #026ec1;
+  --vscode-button-foreground: #ffffff;
+  /* Shared secondary buttons have no VS Code button.border; retain a solid fill. */
+  --vscode-button-secondaryBackground: #313131;
+  --vscode-button-secondaryHoverBackground: #3c3c3c;
+  --vscode-errorForeground: #f85149;
+  --vscode-editorWarning-foreground: #cca700;
+  --vscode-testing-iconPassed: #89d185;
+  --vscode-textLink-foreground: #4daafc;
+  --vscode-textLink-activeForeground: #4daafc;
+  --vscode-textCodeBlock-background: #2b2b2b;
+  --vscode-editor-selectionBackground: #264f78;
+  --vscode-scrollbarSlider-background: #79797966;
+  --vscode-scrollbarSlider-hoverBackground: #646464b3;
+  --vscode-badge-background: #616161;
+  --vscode-badge-foreground: #f8f8f8;
+  --vscode-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --vscode-editor-font-family: Consolas, monospace;
+  --vscode-font-size: 13px;
+
+  /* The shared highlight.js renderer consumes this bounded token palette,
+   * not TextMate rules. Dark+ / Light+ colors are adjusted where needed
+   * for contrast against the code-block surface.
+   */
+  --vscode-editorLineNumber-foreground: #73a15e;
+  --vscode-symbolIcon-keywordForeground: #c586c0;
+  --vscode-symbolIcon-stringForeground: #ce9178;
+  --vscode-symbolIcon-numberForeground: #b5cea8;
+  --vscode-symbolIcon-functionForeground: #dcdcaa;
+  --vscode-symbolIcon-variableForeground: #9cdcfe;
+  --vscode-symbolIcon-classForeground: #4ec9b0;
+}
+
+body { font-family: var(--font-ui); font-size: var(--font-size-ui); }
+
+:root[data-desktop-theme="light"] {
+  color-scheme: light;
+  --vscode-sideBar-background: #f8f8f8;
+  --vscode-editor-background: #ffffff;
+  --vscode-editorWidget-background: #f8f8f8;
+  --vscode-quickInput-background: #f8f8f8;
+  --vscode-list-hoverBackground: #f2f2f2;
+  --vscode-list-activeSelectionBackground: #e8e8e8;
+  --vscode-foreground: #3b3b3b;
+  --vscode-descriptionForeground: #3b3b3b;
+  --vscode-widget-border: #e5e5e5;
+  --vscode-input-background: #ffffff;
+  --vscode-input-border: #cecece;
+  --vscode-focusBorder: #005fb8;
+  --vscode-button-background: #005fb8;
+  --vscode-button-hoverBackground: #0258a8;
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-secondaryBackground: #e5e5e5;
+  --vscode-button-secondaryHoverBackground: #cccccc;
+  /* Darker status text keeps small labels readable on white surfaces. */
+  --vscode-errorForeground: #b5200d;
+  --vscode-editorWarning-foreground: #855f00;
+  --vscode-testing-iconPassed: #2e7d32;
+  --vscode-textLink-foreground: #005fb8;
+  --vscode-textLink-activeForeground: #005fb8;
+  --vscode-textCodeBlock-background: #f8f8f8;
+  --vscode-editor-selectionBackground: #add6ff;
+  --vscode-scrollbarSlider-background: #64646466;
+  --vscode-scrollbarSlider-hoverBackground: #646464b3;
+  --vscode-badge-background: #cccccc;
+  --vscode-badge-foreground: #3b3b3b;
+  --frost-shadow: 0 12px 34px rgba(0,0,0,.14);
+
+  --vscode-editorLineNumber-foreground: #008000;
+  --vscode-symbolIcon-keywordForeground: #af00db;
+  --vscode-symbolIcon-stringForeground: #a31515;
+  --vscode-symbolIcon-numberForeground: #087d52;
+  --vscode-symbolIcon-functionForeground: #795e26;
+  --vscode-symbolIcon-variableForeground: #001080;
+  --vscode-symbolIcon-classForeground: #23758c;
+}

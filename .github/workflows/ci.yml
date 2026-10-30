@@ -41,10 +41,10 @@ jobs:
           node-version: 22.20.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: xvfb-run -a pnpm --filter frostpi test:e2e
       - run: pnpm package:vsix
       - run: pnpm verify:vsix
+      - run: xvfb-run -a node test/e2e/runTest.cjs
+        working-directory: apps/vscode
       - run: node scripts/check-bundle-size.mjs
       - uses: actions/upload-artifact@v7
         with:

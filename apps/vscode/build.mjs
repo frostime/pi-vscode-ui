@@ -1,0 +1,49 @@
+import { rmSync } from "node:fs";
+
+import esbuild from "esbuild";
+import { build as buildWebview } from "vite";
+
+// Internal product compilation; scripts/build.mjs prepares shared dependencies.
+rmSync("dist", { recursive: true, force: true });
+
+const sourcemap = process.env.FROSTPI_SOURCEMAP === "1";
+
+await Promise.all([
+  esbuild.build({
+    entryPoints: ["src/extension/activate.ts"],
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    target: "node20",
+    outfile: "dist/extension/extension.cjs",
+    minify: !sourcemap,
+    external: ["vscode"],
+    sourcemap,
+    sourcesContent: sourcemap,
+    logLevel: "info",
+  }),
+  esbuild.build({
+    entryPoints: ["../pi-client/pi-extensions/session-tree.ts"],
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    target: "node20",
+    outfile: "dist/pi-extensions/session-tree.js",
+    sourcemap,
+    sourcesContent: sourcemap,
+    logLevel: "info",
+  }),
+  esbuild.build({
+    entryPoints: ["../pi-client/pi-extensions/question-tool.ts"],
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    target: "node20",
+    outfile: "dist/pi-extensions/question-tool.js",
+    sourcemap,
+    sourcesContent: sourcemap,
+    logLevel: "info",
+  }),
+]);
+
+await buildWebview();

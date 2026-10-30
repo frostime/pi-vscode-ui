@@ -8,7 +8,12 @@ artifacts/
 coverage/
 apps/vscode/assets/marketplace/screenshots/*.png
 .frostpi-update-backup/
+.worktrees/
 
 apps/vscode/CHANGELOG.md
 
 .pi-input.md
+
+apps/desktop/src-tauri/target/
+
+apps/desktop/src-tauri/gen/

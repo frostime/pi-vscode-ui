@@ -23,6 +23,8 @@ This extension is published both on **[VsCode marketplace](https://marketplace.v
 
 You can also download `*.vsix` file in Github release and install mannually, if network is constrainet on your machine.
 
+There is also an [experimental Windows Desktop app](#desktop-experimental-windows) for using FrostPi outside VS Code.
+
 ## Why FrostPi
 
 If you already use Pi and have built your own workflow around it, getting a GUI shouldn't mean adopting another one.
@@ -157,7 +159,7 @@ Paste PNG, JPEG, or WebP images directly into the composer.
 
 Use `/` completion for Pi extension commands, prompt templates, skills, and FrostPi-local actions.
 
-For rendering details such as streaming Mermaid behavior, image loading rules, and diff emphasis, see [`apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md`](apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md).
+For rendering details such as streaming Mermaid behavior, image loading rules, and diff emphasis, see [`apps/pi-client/src/ui/features/conversation/markdown/markdown.SPEC.md`](apps/pi-client/src/ui/features/conversation/markdown/markdown.SPEC.md).
 
 Use `@Selection`, `@CurrentFile`, or `@path/to/file` for workspace references. FrostPi inserts path and line information into the prompt; Pi remains responsible for deciding whether and how to read the file.
 
@@ -291,6 +293,20 @@ However, you may not get the complete omp experience in FrostPi — because omp'
 
 Currently, `/` slash commands support only OMP command files (`.omp/commands/*.md`; `prompts/*.md` is not supported yet) and skill commands (`/skill:<name>`). Other slash commands remain unavailable.
 
+### Desktop (experimental, Windows)
+
+Create, resume, and switch between Pi sessions for different projects in one window. Have Pi work on a feature in one project while it updates documentation in another; switching projects keeps the original task running in the background. Think of several Pi terminals, with a GUI for switching between projects and sessions.
+
+Desktop uses your existing Pi configuration, extensions, and session history, and provides project and session management. When you need to inspect files, edit code, or debug, keep using your preferred IDE. We don't plan to put another development environment inside this window.
+
+<p align="center">
+  <img src="assets/screenshots/desktop-preview.png" alt="FrostPi Desktop with a project list, a Pi conversation, and a session running in another project" width="960">
+  <br>
+  <sub>Demo projects and conversation: sessions keep running in the background when you switch projects.</sub>
+</p>
+
+Currently supports **Windows x64** and requires **Node.js 22.19+, Pi, and WebView2**. See the [development guide](.dev/docs/development.md#product-local-work) to build and run from source.
+
 ### Development
 
 ```bash
@@ -298,14 +314,16 @@ pnpm install --frozen-lockfile
 pnpm check
 pnpm package:vsix
 pnpm verify:vsix
-pnpm package:zip
 ```
 
 The workspace contains:
 
 - `packages/pi-rpc` — Pi subprocess transport and typed RPC API.
-- `apps/vscode` — Extension Host, stable Host-Webview contracts, and Svelte UI.
-- `docs` — architecture, protocol, UI, testing, privacy, and release documentation.
+- `packages/provider-usage` — Provider usage queries.
+- `apps/pi-client` — Shared Pi integration, session management, and Svelte UI.
+- `apps/vscode` — VS Code extension and editor integration.
+- `apps/desktop` — Windows desktop app and multi-project management.
+- `.dev/docs` — Architecture, protocol, UI, testing, and release documentation.
 
 Start with [`.dev/docs/index.md`](.dev/docs/index.md). Behavioral compatibility contracts live next to their modules as `*.SPEC.md` or `SPEC.md`.
 

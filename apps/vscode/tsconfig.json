@@ -15,17 +15,25 @@
     "baseUrl": ".",
     "paths": {
       "$shared/*": [
-        "src/shared/*"
+        "../pi-client/src/shared/*"
       ],
-      "$webview/*": [
-        "src/webview/*"
-      ],
+      "$webview/*": ["../pi-client/src/ui/*"],
+      "$ui/*": ["../pi-client/src/ui/*"],
+      "@frostime/pi-client/core": ["../pi-client/src/core/index.ts"],
+      "@frostime/pi-client/core/*": ["../pi-client/src/core/*"],
+      "@frostime/pi-client/host": ["../pi-client/src/host/index.ts"],
+      "@frostime/pi-client/host/*": ["../pi-client/src/host/*"],
+      "@frostime/pi-client/ui": ["../pi-client/src/ui/ClientApp.svelte"],
+      "@frostime/pi-client/ui/*": ["../pi-client/src/ui/*"],
+      "@frostime/pi-client/shared": ["../pi-client/src/shared/index.ts"],
+      "@frostime/pi-client/shared/*": ["../pi-client/src/shared/*"],
       "@frostime/pi-rpc": [
         "../../packages/pi-rpc/src/index.ts"
       ],
       "@frostime/provider-usage": [
         "../../packages/provider-usage/src/index.ts"
-      ]
+      ],
+      "@frostime/provider-usage/types": ["../../packages/provider-usage/src/publicTypes.ts"]
     }
   },
   "include": [

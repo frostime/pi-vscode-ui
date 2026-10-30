@@ -1,6 +1,6 @@
 import type { ProviderUsageDescriptor, ProviderUsageResult } from "@frostime/provider-usage";
 
-import type { ProviderUsageSource } from "../../src/webview/features/provider-usage/providerUsageSource";
+import type { ProviderUsageSource } from "$ui/features/provider-usage/providerUsageSource";
 
 const providers: readonly ProviderUsageDescriptor[] = [
   { providerId: "openai-codex", displayName: "OpenAI Codex", availability: "ready", source: "auth.json", reason: "" },

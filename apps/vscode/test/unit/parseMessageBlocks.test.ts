@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseMessageBlocks } from "../../src/webview/features/conversation/markdown/parseMessageBlocks.js";
+import { parseMessageBlocks } from "$ui/features/conversation/markdown/parseMessageBlocks.js";
 
 describe("parseMessageBlocks", () => {
   it("keeps plain markdown as a single segment", () => {

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { BoundToolCallView, PreparingToolCallView } from "../../src/shared/model/toolCallModel.js";
+import type { BoundToolCallView, PreparingToolCallView } from "@frostime/pi-client/shared/model/toolCallModel";
 import {
   planToolSections,
   sectionToShow,
   type ToolSectionPlan,
-} from "../../src/webview/features/conversation/toolSectionPlan.js";
+} from "$ui/features/conversation/toolSectionPlan.js";
 
 describe("planToolSections", () => {
   it("shows only the streamed arguments while the call is still being prepared", () => {

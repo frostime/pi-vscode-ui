@@ -21,6 +21,10 @@ environment map. It does not discover agent directories itself and has no
 
 ## Public surface
 
+`@frostime/provider-usage/types` exposes only serializable descriptor/result contracts.
+It has no Node transport, credential or filesystem dependency and is the entry used
+by shared bridge definitions. The root entry retains its existing type exports.
+
 - `resolveProviderCredentials(input)` — trusted Node output
   (`ReadyProviderCredential` with the real bearer token, or an explicit
   `UnavailableProviderCredential`). Never hand this result to browser code.
@@ -42,7 +46,7 @@ environment map. It does not discover agent directories itself and has no
   `AbortError`, rather than publishing partial or late results.
 - `maskSecret`, `maskEnvName`, `redactWithSecrets`, `sanitizeDisplayText` —
   mandatory masking before any human-readable output of resolution results.
-- Inspect CLI (`pnpm --filter @frostime/provider-usage inspect -- --agent-dir
+- Inspect CLI (`node packages/provider-usage/dist/inspect.js --agent-dir
   <dir> [provider ...]`) — opt-in development tooling with masked output and
   safe failure output only. Not a test, not CI; run only with explicit
   permission against real configuration. Exit codes: 0 on a masked report,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { BRIDGE_VERSION } from "../../src/shared/bridge/bridgeVersion.js";
-import { webviewToHostSchema } from "../../src/shared/bridge/webviewToHost.js";
+import { BRIDGE_VERSION } from "@frostime/pi-client/shared/bridge/bridgeVersion";
+import { webviewToHostSchema } from "@frostime/pi-client/shared/bridge/webviewToHost";
 
 describe("Webview bridge validation", () => {
   it("accepts a correlated image prompt", () => {

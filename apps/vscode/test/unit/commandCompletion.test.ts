@@ -2,7 +2,7 @@ import { CompletionContext, type CompletionResult } from "@codemirror/autocomple
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 
-import { commandCompletion } from "../../src/webview/features/composer/commandCompletion.js";
+import { commandCompletion } from "$ui/features/composer/commandCompletion.js";
 
 const commands = [
   { name: "review", source: "extension" },

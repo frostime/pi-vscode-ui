@@ -2,7 +2,7 @@
   "name": "frostpi",
   "displayName": "Pi VS Code UI — FrostPi",
   "description": "A visual VS Code UI for Pi Coding Agent that uses your existing Pi configuration, extensions, models, sessions, and workflows.",
-  "version": "0.15.5",
+  "version": "0.16.0",
   "publisher": "frostime",
   "license": "AGPL-3.0-only",
   "private": false,
@@ -305,15 +305,14 @@
     }
   },
   "scripts": {
-    "build": "node esbuild.config.mjs && vite build",
+    "build": "node ../../scripts/build.mjs --scope vscode",
     "clean": "node ../../scripts/clean-dir.mjs dist coverage .vscode-test",
     "typecheck": "tsc -p tsconfig.json --noEmit && svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "node test/e2e/runTest.cjs",
-    "lint": "eslint src pi-extensions test --max-warnings 0"
+    "lint": "eslint src test build.mjs --max-warnings 0"
   },
   "dependencies": {
+    "@frostime/pi-client": "workspace:*",
     "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/state": "^6.7.1",

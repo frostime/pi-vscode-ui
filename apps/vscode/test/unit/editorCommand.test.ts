@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { composerEditorPrefill } from "../../src/webview/features/composer/editorCommand.js";
+import { composerEditorPrefill } from "$ui/features/composer/editorCommand.js";
 
 describe("composerEditorPrefill", () => {
   it("treats bare /editor as an empty external-editor buffer", () => {

@@ -22,6 +22,8 @@ FrostPi 将你现有的 Pi Coding Agent 工作流带入 VS Code，同时保留�
 
 如果你的网络环境无法访问扩展市场，也可以从 [GitHub Releases](https://github.com/frostime/pi-vscode-ui/releases) 下载 `.vsix` 文件并手动安装。
 
+另有[实验性的 Windows Desktop 版](#desktop实验性windows)，可在 VS Code 之外使用。
+
 ## 为什么选择 FrostPi
 
 如果你已经在使用 Pi，并围绕它建立了自己的工作流，那么获得一个图形界面不应该意味着改用另一套工作流。
@@ -154,7 +156,7 @@ Remote SSH、WSL 和 Dev Container 工作区会在远程工作区 Extension Host
 
 使用 `/` 补全来查找 Pi 扩展命令、提示词模板、技能和 FrostPi 本地操作。
 
-流式 Mermaid 行为、图片加载规则、diff 强调等渲染细节见 [`apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md`](apps/vscode/src/webview/features/conversation/markdown/markdown.SPEC.md)。
+流式 Mermaid 行为、图片加载规则、diff 强调等渲染细节见 [`apps/pi-client/src/ui/features/conversation/markdown/markdown.SPEC.md`](apps/pi-client/src/ui/features/conversation/markdown/markdown.SPEC.md)。
 
 使用 `@Selection`、`@CurrentFile` 或 `@path/to/file` 引用工作区内容。FrostPi 会将路径和行号信息插入提示词；至于是否读取文件以及如何读取，仍由 Pi 决定。
 
@@ -288,6 +290,20 @@ FrostPi 还提供上下文指标、诊断导出、严格的 LF 分隔 JSONL 传�
 
 目前，`/` 斜杠命令只支持 OMP 的 command 文件（`.omp/commands/*.md`，暂不支持 `prompts/*.md`）和 skill 命令（`/skill:<名称>`）；其余斜杠命令暂不可用。
 
+### Desktop（实验性，Windows）
+
+在一个窗口里，为不同项目新建、恢复和切换 Pi 会话。你可以让一个项目里的 Pi 改功能，同时让另一个项目里的 Pi 整理文档；切换项目不会停止原来的任务。日常用法就像在终端里多开几个 Pi，只是换成了图形界面。
+
+Desktop 沿用你已有的 Pi 配置、扩展和会话历史，提供项目和会话管理。需要打开文件仔细看代码、编辑或调试时，仍然用你熟悉的 IDE；我们不打算把另一套开发环境塞进这个窗口。
+
+<p align="center">
+  <img src="assets/screenshots/desktop-preview.png" alt="FrostPi Desktop：左侧切换项目，右侧查看 Pi 对话，另一个项目的会话在后台运行" width="960">
+  <br>
+  <sub>演示项目与对话：切换项目时，其他会话继续在后台运行。</sub>
+</p>
+
+当前支持 **Windows x64**，需要 **Node.js 22.19+、Pi 和 WebView2**。源码构建与启动方式见[开发指南](.dev/docs/development.md#product-local-work)。
+
 ### 开发
 
 ```bash
@@ -295,14 +311,16 @@ pnpm install --frozen-lockfile
 pnpm check
 pnpm package:vsix
 pnpm verify:vsix
-pnpm package:zip
 ```
 
 工作区包含：
 
 - `packages/pi-rpc` — Pi 子进程传输和类型化 RPC API。
-- `apps/vscode` — Extension Host、稳定的 Host-Webview 契约和 Svelte UI。
-- `docs` — 架构、协议、UI、测试、隐私和发布文档。
+- `packages/provider-usage` — Provider 用量查询。
+- `apps/pi-client` — 共享的 Pi 交互、会话管理和 Svelte UI。
+- `apps/vscode` — VS Code 扩展和编辑器集成。
+- `apps/desktop` — Windows 桌面程序和多项目管理。
+- `.dev/docs` — 架构、协议、UI、测试和发布文档。
 
 请从 [`.dev/docs/index.md`](.dev/docs/index.md) 开始。行为兼容性契约位于各模块旁边的 `*.SPEC.md` 或 `SPEC.md` 文件中。
 

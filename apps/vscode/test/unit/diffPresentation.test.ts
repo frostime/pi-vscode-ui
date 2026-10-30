@@ -6,7 +6,7 @@ import {
   presentDiff,
   renderDiffHtml,
   type DiffLinePresentation,
-} from "../../src/webview/features/conversation/diffPresentation.js";
+} from "$ui/features/conversation/diffPresentation.js";
 
 function editedLines(source: string): DiffLinePresentation[] {
   return presentDiff(source).filter((line) => line.kind === "addition" || line.kind === "deletion");

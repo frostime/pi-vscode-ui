@@ -10,7 +10,7 @@ import {
   pruneAnnotationReviews,
   savePendingAnnotation,
   setPendingAnnotationComment,
-} from "../../src/webview/features/annotation-review/annotationReviewStore.svelte.js";
+} from "$ui/features/annotation-review/annotationReviewStore.svelte.js";
 
 describe("response annotation review drafts", () => {
   beforeEach(() => annotationReviewDrafts.set({}));
