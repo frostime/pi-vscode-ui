@@ -1,0 +1,55 @@
+name: probe-webview2
+
+# Temporary diagnostic: does the hosted Windows runner carry the WebView2 Runtime?
+# Delete this file once the Desktop release environment question is answered.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    steps:
+      - name: Probe WebView2 runtime, Edge, and temp-directory spelling
+        shell: pwsh
+        run: |
+          "OS: " + (Get-CimInstance Win32_OperatingSystem).Caption
+          "ImageOS: $env:ImageOS  ImageVersion: $env:ImageVersion"
+          ""
+          "--- WebView2 runtime registry (machine, per-machine, per-user) ---"
+          $keys = @(
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+            'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+            'HKCU:\Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          )
+          foreach ($key in $keys) {
+            if (Test-Path $key) {
+              "FOUND  $key  name=" + (Get-ItemProperty $key).name + "  pv=" + (Get-ItemProperty $key).pv
+            } else {
+              "MISSING $key"
+            }
+          }
+          ""
+          "--- WebView2 install folders ---"
+          foreach ($path in @("${env:ProgramFiles(x86)}\Microsoft\EdgeWebView\Application", "$env:ProgramFiles\Microsoft\EdgeWebView\Application")) {
+            if (Test-Path $path) {
+              "FOUND  $path"
+              Get-ChildItem $path -Directory | ForEach-Object { "       version dir: " + $_.Name }
+            } else {
+              "MISSING $path"
+            }
+          }
+          ""
+          "--- msedgewebview2.exe ---"
+          $exe = Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft\EdgeWebView" -Recurse -Filter msedgewebview2.exe -ErrorAction SilentlyContinue |
+            Select-Object -First 3 -ExpandProperty FullName
+          if ($exe) { $exe } else { "not found under EdgeWebView" }
+          ""
+          "--- Edge browser (for contrast) ---"
+          (Get-Item "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe" -ErrorAction SilentlyContinue).VersionInfo.ProductVersion
+          ""
+          "--- temp directory spelling ---"
+          "TEMP=$env:TEMP"
+          "short=" + (New-Object -ComObject Scripting.FileSystemObject).GetFolder($env:TEMP).ShortPath
