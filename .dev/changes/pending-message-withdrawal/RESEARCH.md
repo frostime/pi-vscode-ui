@@ -2,6 +2,8 @@
 
 Status: initial product scope accepted; interactive prototype under review. No production withdrawal UI, RPC helper or runtime capability has been implemented. Original request: https://github.com/frostime/pi-vscode-ui/issues/10.
 
+Start with `.dev/changes/pending-message-withdrawal/pending-message-withdrawal.TARGET-SPEC.md` for goals, accepted boundaries and acceptance criteria. The implementation-shape draft is `.dev/changes/pending-message-withdrawal/pending-message-withdrawal.SHAPE.md`; it predicts the diff around the agreed `QueuedPromptRecovery` class and records the unresolved late-user-event projection rule. Neither the UI proposal nor SHAPE is locked. This research file supplies evidence, not a separate product contract.
+
 ## User direction
 
 Investigate Pi TUI's existing dequeue interaction before requiring a new upstream API. FrostPi must also support OMP; prefer conservative behavior and support both runtimes when feasible. Do not substitute Stop/abort for an operation intended to leave the active run running. The issue author accepts a withdraw-all action if reliable per-message withdrawal is unavailable.
