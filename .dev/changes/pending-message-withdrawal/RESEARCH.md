@@ -13,7 +13,7 @@ Installed packages inspected in this session:
 - Pi `@earendil-works/pi-coding-agent` **1.4.0**, at `C:/Users/EEG/AppData/Roaming/npm/node_modules/@earendil-works/pi-coding-agent`.
 - OMP `@oh-my-pi/pi-coding-agent` **18.12.6**, at `C:/Users/EEG/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent`.
 
-Paths below are relative to those package roots, not the FrostPi workspace. Re-resolve the user's executable/package before implementation: the installed versions are evidence, not a new minimum-version promise. Source inspection establishes the TUI/RPC mechanisms. A provider-free Pi experiment additionally established the drain/clear race below. No real TUI, full RPC withdrawal, provider or GUI acceptance was run.
+Paths below are relative to those package roots, not the FrostPi workspace. Re-resolve the user's executable/package before implementation: the installed versions are evidence, not a new minimum-version promise. Source inspection establishes the TUI mechanisms. On 2026-10-31, real RPC subprocess experiments against both installed executables used synthetic provider streams, isolated agent/home/session directories and network-API guards. They confirmed pending withdrawal and the Pi drain/clear race below. No external model, real-account, TUI or FrostPi GUI acceptance was run. FrostPi was at `0f2889f`; product source was unchanged during the experiments.
 
 ## The TUI operations are real, but not identical
 
@@ -43,9 +43,26 @@ clear returned: {"steering":["withdraw-me"],"followUp":[]}
 later delivered user messages: ["initial","withdraw-me"]
 ```
 
-This is a component-level race reproduction, not a full Session/RPC test. It explains how ordinary TUI dequeue can genuinely remove still-pending inputs while its returned text is not proof that every restored input will be suppressed. Do not report confirmed cancellation solely because Pi returned its text.
+That initial experiment covered the component boundary. The later real-RPC compaction experiment below reproduced the same behavior without patching the installed runtime. Ordinary TUI dequeue can genuinely remove still-pending inputs, but its returned text is not proof that every restored input will be suppressed. Do not report confirmed cancellation solely because Pi returned its text.
 
 OMP's ordinary removal selects actual pending queues and returns `removed:false` when no match remains. Its displayed steering list can also include already live-steered messages (`getQueuedMessages`, `src/session/agent-session.ts:9920-9930`); they are not removable through `takeQueuedMessage`. Its interrupt path explicitly handles undelivered selected batches, unlike ordinary removal (`src/session/agent-session.ts:9876`; sibling `pi-agent-core/src/agent.ts:1119`).
+
+## Real RPC experiment results
+
+The fixture registered a synthetic provider through the public extension API. Each synthetic assistant stream waited for an explicit file barrier, so the parent could edit queues during an active turn. Both runtimes were checked to use that synthetic API before any prompt. No fixture sent `abort`; both children exited normally. Network guards recorded zero attempted calls for Pi and 12 blocked startup network-API calls per OMP launch. These counts do not represent external model requests.
+
+| Experiment | Observed result |
+| --- | --- |
+| Pi, held assistant stream; 2 duplicate Steers and 2 Queue inputs, one with an image | `clear_queue` returned all four texts and no image data. After releasing the assistant, only the initial user input appeared and only one synthetic model request ran. The run remained streaming until explicitly released. |
+| OMP, same pending inputs | Removing the image input returned `removed:true` and one image, with no `imagesDropped`. Three sequential removals of the duplicate text returned `true`, `true`, `false`. The untouched follow-up still executed in its original queue; removing it after consumption returned `false`. Two synthetic requests ran, without interruption. |
+| Pi and OMP, async `input` hook held before enqueue | A concurrent clear/remove found nothing. Neither runtime had acknowledged that prompt yet. Releasing preprocessing produced the queue update and prompt acknowledgement; subsequent removal succeeded and the delayed input never executed. |
+| Pi, queued Steer already selected, next-turn auto-compaction held in `session_before_compact` | Before any user event for the selected Steer, `clear_queue` returned its text. Releasing compaction then emitted that user message and started the third synthetic model request. Clearing did not suppress the selected message. |
+
+The compaction scenario seeded one completed turn, made the next synthetic assistant report threshold-crossing usage, and held the ordinary extension compaction hook. It supplied a synthetic summary when released; no summary model was called. This reached the installed session's real `prepareNextTurn`/RPC boundary, rather than invoking `clearQueue` from inside an agent test callback.
+
+**Admission conclusion:** for the tested plain-prompt paths, both installed versions acknowledge after input admission. OMP source explicitly awaits `dispatchOrderedUserInput` before responding (`src/modes/rpc/rpc-mode.ts:1904-1927`, comment “Ack after admission”). Earlier investigation described OMP's background dispatch too broadly; it does not mean this prompt response precedes admission. FrostPi can wait for its outstanding same-session submissions before requesting withdrawal, without waiting for the active agent turn to finish. Acknowledgement still does not prove a message remains queued: consumption or input handling can intervene.
+
+Disposable fixture sources and summaries remain under ignored `tmp/queue-recovery-spike/`. The successful commands were `python tmp/queue-recovery-spike/run.py`, `python tmp/queue-recovery-spike/admission.py`, and `python tmp/queue-recovery-spike/pi-compaction-race.py`; each exited 0. These local paths are experiment evidence, not a maintained test suite or installed-runtime compatibility promise.
 
 ## Conservative candidates, not accepted implementation
 
@@ -63,8 +80,8 @@ Alternatively, expose different explicit capabilities: OMP can offer confirmed f
 ## Before selecting or implementing a candidate
 
 1. Decide whether TUI-level best-effort recovery is an acceptable user-visible operation. The user requested conservative research, not approval of this weaker guarantee or an attachment-dropping policy.
-2. Run isolated, provider-free RPC experiments against both selected executables. Test pending versus already-drained input, transformed/duplicate text, image-only messages and a lost response. No real user session or credentials are needed.
-3. Establish admission ordering. Both runtimes admit input asynchronously; ordinary prompt acknowledgement is not a universal proof that an input is in a cancellable queue. Test delayed admission followed by removal, including OMP's background ordered-input dispatch (`src/modes/rpc/rpc-mode.ts:435-494,1764`).
-4. Test FrostPi reconciliation when a recovered Pi message subsequently emits a user event. It must not consume a different newly queued local bubble or imply the message never ran. Test Composer recovery with a newer draft and attachments.
+2. Before promising more than the tested plain-input behavior, cover transformed slash/skill input, image-only messages, OMP live steering, dropped/oversized image responses and an ambiguous/lost response. These cases remain untested; the pending/consumed, duplicate-text, small-image and delayed-admission experiments above do not settle them.
+3. Keep submission admission and queue editing ordered within the owning SessionRuntime. The tested prompt acknowledgements give an admission barrier, not a continued-membership guarantee. Recheck the actual selected runtime/version before relying on that contract.
+4. Test FrostPi reconciliation when a recovered Pi message subsequently emits a user event. It must not consume a different newly queued local bubble or imply the message never ran. Test Composer recovery with a newer draft and attachments. The real RPC tests exercised runtimes directly, not FrostPi's local projection or draft recovery.
 
 FrostPi entry points: `apps/pi-client/src/core/sessions/SessionRuntime.ts:205-259` submits and locally projects pending prompts; `apps/pi-client/src/core/conversation/ConversationProjection.ts` owns local FIFO promotion; `packages/pi-rpc/src/PiRpcApi.ts` currently has no withdrawal helper. Follow `.dev/docs/architecture/omp-compatibility.md` before adding APIs: non-isomorphic queue recovery belongs in product compatibility, not a transport alias that silently promises Pi and OMP mean the same thing.
