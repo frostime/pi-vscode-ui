@@ -1,6 +1,6 @@
 # Issue #10: pending-message withdrawal research
 
-Status: research only. No withdrawal UI, RPC helper or runtime capability has been implemented. Original request: https://github.com/frostime/pi-vscode-ui/issues/10.
+Status: initial product scope accepted; interactive prototype under review. No production withdrawal UI, RPC helper or runtime capability has been implemented. Original request: https://github.com/frostime/pi-vscode-ui/issues/10.
 
 ## User direction
 
@@ -64,22 +64,21 @@ The compaction scenario seeded one completed turn, made the next synthetic assis
 
 Disposable fixture sources and summaries remain under ignored `tmp/queue-recovery-spike/`. The successful commands were `python tmp/queue-recovery-spike/run.py`, `python tmp/queue-recovery-spike/admission.py`, and `python tmp/queue-recovery-spike/pi-compaction-race.py`; each exited 0. These local paths are experiment evidence, not a maintained test suite or installed-runtime compatibility promise.
 
-## Conservative candidates, not accepted implementation
+## Accepted initial scope; prototype review pending
 
-**Do not implement cross-runtime per-bubble withdrawal by clearing and re-submitting other messages.** That changes timing and can rerun input hooks, templates or commands. Neither inspected runtime offers shared per-ID withdrawal semantics.
+The user accepted a conservative first release with a single **restore all pending content** action covering Steer and Queue on both runtimes. Do not add per-message controls or emulate single removal by clearing and re-submitting other messages. The issue explicitly accepts withdraw-all as a fallback to its requested per-bubble controls.
 
-The smallest candidate is a single **recover pending text** action, explicitly best-effort rather than a guarantee that recovered text will not execute:
-
-- Pi uses its TUI-equivalent clear-all operation.
-- OMP removes a bounded snapshot of pending user inputs through its first-match operation, without re-submitting untouched messages. This is multiple requests, not an atomic clear-all; already selected/live-steered inputs can remain.
+- Pi uses its TUI-equivalent clear-all operation with explicit best-effort feedback, not a guarantee that already-selected input cannot execute.
+- OMP removes a bounded snapshot through its first-match operation and restores only confirmed removals. This is multiple requests, not an atomic clear-all; already selected/live-steered inputs remain in the conversation.
 - Neither path calls abort. Never retry text-based removal automatically after an ambiguous/lost response: another identical message might be removed.
-- Do not silently overwrite a newer Composer draft, drop attachments, or label an unconfirmed removal successful. Pi image recovery needs a demonstrated local-to-runtime correlation; the current RPC text result alone cannot supply that.
+- Restore into the owning session's Composer, preserve its existing draft, and do not auto-send. The proposed interaction combines recovered texts before the current draft with blank lines; it does not reconstruct their individual delivery types on resend.
+- Do not silently lose images. OMP restores returned attachments; Pi's first release disables the bulk action when pending inputs include attachments. Oversized/dropped OMP attachment responses still need explicit handling.
 
-Alternatively, expose different explicit capabilities: OMP can offer confirmed first-match removal, while Pi offers best-effort recover-all. This preserves the stronger OMP result but adds product/UI asymmetry. If the product instead requires the original issue's strict per-message success/failure contract for both runtimes, Pi needs a stronger queue boundary/API and OMP still needs an identity policy for duplicate text.
+Review artifact: `.dev/changes/pending-message-withdrawal/prototype.html` opens directly in a browser. It compares the existing queued bubbles with one group-level Restore all entry, an editable draft, pending feedback, already-consumed content and attachment restrictions. Pi/OMP, light/dark and 300/430/740px controls are prototype scaffolding. All backend outcomes are simulated. The user has not yet approved button placement, draft insertion behavior or feedback treatment.
 
-## Before selecting or implementing a candidate
+## Remaining work before implementation is complete
 
-1. Decide whether TUI-level best-effort recovery is an acceptable user-visible operation. The user requested conservative research, not approval of this weaker guarantee or an attachment-dropping policy.
+1. Review the interaction prototype, then implement the accepted behavior end-to-end in the existing `feat/pending-message-recovery` task branch. Do not create branches for research, prototype, implementation or verification steps.
 2. Before promising more than the tested plain-input behavior, cover transformed slash/skill input, image-only messages, OMP live steering, dropped/oversized image responses and an ambiguous/lost response. These cases remain untested; the pending/consumed, duplicate-text, small-image and delayed-admission experiments above do not settle them.
 3. Keep submission admission and queue editing ordered within the owning SessionRuntime. The tested prompt acknowledgements give an admission barrier, not a continued-membership guarantee. Recheck the actual selected runtime/version before relying on that contract.
 4. Test FrostPi reconciliation when a recovered Pi message subsequently emits a user event. It must not consume a different newly queued local bubble or imply the message never ran. Test Composer recovery with a newer draft and attachments. The real RPC tests exercised runtimes directly, not FrostPi's local projection or draft recovery.
