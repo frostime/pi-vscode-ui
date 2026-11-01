@@ -67,10 +67,12 @@ describe("Restore all across shared UI, Host, Runtime and actual child transport
     await waitFor(() => expect(registry.sessionView(sessionId)?.queuedPromptRecovery.state).toBe("recovering"));
 
     const editor = EditorView.findFromDOM(view.container.querySelector(".cm-editor")!)!;
-    editor.dispatch({ changes: { from: editor.state.doc.length, insert: " edited while waiting" } });
-    await waitFor(() => expect(getDraft(sessionId).text).toBe("existing draft edited while waiting"));
+    expect(editor.contentDOM.getAttribute("contenteditable")).toBe("false");
+    editor.dispatch({ changes: { from: editor.state.doc.length, insert: " blocked edit" } });
+    expect(getDraft(sessionId).text).toBe("existing draft");
     await writeFile(join(fixture.directory, "clear"), "1");
-    await waitFor(() => expect(getDraft(sessionId).text).toBe("steer from child\n\nqueue from child\n\nexisting draft edited while waiting"));
+    await waitFor(() => expect(getDraft(sessionId).text).toBe("steer from child\n\nqueue from child\n\nexisting draft"));
+    await waitFor(() => expect(editor.contentDOM.getAttribute("contenteditable")).toBe("true"));
     await waitFor(() => expect(view.queryByRole("button", { name: "Restore all" })).toBeNull());
     await waitFor(() => expect(view.container.querySelector(".cm-editor")?.contains(document.activeElement)).toBe(true));
     expect(registry.sessionView(sessionId)?.isStreaming).toBe(true);

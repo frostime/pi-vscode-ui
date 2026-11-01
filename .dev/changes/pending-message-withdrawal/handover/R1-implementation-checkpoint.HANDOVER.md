@@ -1,7 +1,7 @@
 ---
 title: Pending recovery implementation checkpoint
 created: 2026-11-01T20:42:33+08:00
-consumed: false # Reader: set to true once you have read this. Questions about missing context go under "Clarifications".
+consumed: true # Consumed for branch review and the subsequent approved input-lock fix; current progress is in PLAN.
 ---
 
 # Pending recovery handover

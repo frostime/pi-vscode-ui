@@ -39,7 +39,7 @@ describe("per-presentation Webview synchronization", () => {
         piAvailable: true,
       }),
     };
-    const drafts = { get: () => ({ revision: 0, text: "", images: [] }) };
+    const drafts = { get: () => ({ revision: 0, text: "", images: [] }), hasPendingRecovery: () => false };
     const logger = { error: vi.fn(), info: vi.fn() };
     const endpointA = fakeEndpoint("a");
     const endpointB = fakeEndpoint("b");
@@ -109,7 +109,7 @@ describe("per-presentation Webview synchronization", () => {
       }),
     };
     const endpoint = fakeEndpoint("sidebar", "sidebar");
-    const drafts = { get: vi.fn(), getIfPresent: vi.fn(() => null), insertText: vi.fn() };
+    const drafts = { get: vi.fn(), getIfPresent: vi.fn(() => null), insertText: vi.fn(), hasPendingRecovery: () => false };
     const connection = new WebviewConnection(
       registry as never,
       endpoint.endpoint,
@@ -163,7 +163,7 @@ describe("per-presentation Webview synchronization", () => {
       singleSessionRegistry(() => view) as never,
       endpoint.endpoint,
       { dispatch: vi.fn() } as never,
-      { get: () => ({ revision: 0, text: "", images: [] }) } as never,
+      { get: () => ({ revision: 0, text: "", images: [] }), hasPendingRecovery: () => false } as never,
       { error: vi.fn(), info: vi.fn() },
       () => true,
       () => true,
@@ -199,13 +199,44 @@ describe("per-presentation Webview synchronization", () => {
     connection.dispose();
   });
 
+  it("delivers the recovered draft before unlocking even when an older snapshot is still in flight", async () => {
+    const endpoint = fakeEndpoint("panel");
+    let finishDelivery!: (delivered: boolean) => void;
+    endpoint.setDeliveryResult(new Promise<boolean>((resolve) => { finishDelivery = resolve; }));
+    let recovering = true;
+    let draft = { revision: 1, text: "before recovery", images: [] };
+    const view = { ...sessionView("panel", []), queuedPromptRecovery: { state: "ready" } };
+    const connection = new WebviewConnection(
+      singleSessionRegistry(() => view) as never, endpoint.endpoint, { dispatch: vi.fn() } as never,
+      { get: () => draft, hasPendingRecovery: () => recovering } as never,
+      { error: vi.fn(), info: vi.fn() }, () => true, () => true, hostInputs(),
+    );
+    endpoint.receive({ type: "ready", bridgeVersion: BRIDGE_VERSION });
+    await waitFor(() => endpoint.messages.length === 1);
+    expect(endpoint.messages[0]).toMatchObject({ type: "snapshot", presentation: {
+      displayedSession: { queuedPromptRecovery: { state: "recovering" } },
+    } });
+
+    draft = { ...draft, revision: 2, text: "recovered\n\nbefore recovery" };
+    recovering = false;
+    connection.refreshDraftOwnership("panel");
+    endpoint.setDeliveryResult(true);
+    finishDelivery(true);
+    await waitFor(() => endpoint.messages.length >= 3);
+    expect(endpoint.messages[2]).toMatchObject({
+      type: "snapshot", draft: { text: "recovered\n\nbefore recovery" },
+      presentation: { displayedSession: { queuedPromptRecovery: { state: "ready" } } },
+    });
+    connection.dispose();
+  });
+
   it("retains Composer delivery and focus until its snapshot succeeds", async () => {
     const endpoint = fakeEndpoint("panel");
     const connection = new WebviewConnection(
       singleSessionRegistry(() => sessionView("panel", [])) as never,
       endpoint.endpoint,
       { dispatch: vi.fn() } as never,
-      { get: () => ({ revision: 0, text: "", images: [] }) } as never,
+      { get: () => ({ revision: 0, text: "", images: [] }), hasPendingRecovery: () => false } as never,
       { error: vi.fn(), info: vi.fn() },
       () => true,
       () => true,
@@ -256,7 +287,7 @@ describe("per-presentation Webview synchronization", () => {
       registry as never,
       endpoint.endpoint,
       { dispatch: vi.fn() } as never,
-      { get: () => ({ revision: 0, text: "", images: [] }) } as never,
+      { get: () => ({ revision: 0, text: "", images: [] }), hasPendingRecovery: () => false } as never,
       { error: vi.fn(), info: vi.fn() },
       () => true,
       () => true,
@@ -316,7 +347,7 @@ function hostInputs() {
 function fakeEndpoint(sessionId: string, kind: "panel" | "sidebar" = "panel") {
   let receiveListener: ((message: unknown) => void) | undefined;
   let visible = true;
-  let deliveryResult: boolean | Error = true;
+  let deliveryResult: boolean | Error | Promise<boolean> = true;
   const visibilityListeners = new Set<(visible: boolean) => void>();
   const messages: unknown[] = [];
   const endpoint: WebviewEndpoint = {
@@ -338,7 +369,7 @@ function fakeEndpoint(sessionId: string, kind: "panel" | "sidebar" = "panel") {
   return {
     messages,
     endpoint,
-    setDeliveryResult: (result: boolean | Error) => { deliveryResult = result; },
+    setDeliveryResult: (result: boolean | Error | Promise<boolean>) => { deliveryResult = result; },
     receive: (message: unknown) => receiveListener?.(message),
     setVisible: (next: boolean) => {
       visible = next;

@@ -77,7 +77,7 @@ describe("queued recovery through the real Host and child-process path", () => {
     }
   });
 
-  it("keeps Host draft authority after tab closure and merges once into newer Sidebar edits", async () => {
+  it("keeps the draft locked across tab closure and delivers the merged draft before unlocking", async () => {
     const fixture = await queuedRecoveryHost("pi", (dir) => ["--recovery-clear-release", join(dir, "clear")]);
     fixtures.push(fixture);
     const { registry, drafts, sessionId } = fixture;
@@ -88,6 +88,10 @@ describe("queued recovery through the real Host and child-process path", () => {
     panel.send({ type: "ready" });
     await registry.sendPrompt(sessionId, "active", []);
     await registry.sendPrompt(sessionId, "recover me", [], "steer");
+    // Immediate draft mutations posted before the recovery request must be included.
+    panel.send({ type: "updateComposerDraft", sessionId, draft: {
+      revision: 6, text: "typed just before recovery", imageIds: [], addedImages: [],
+    } });
     panel.send({ type: "restoreQueuedPrompts", sessionId, requestId: "panel-recovery", draftImageCount: 0 });
     await waitForRecovery(() => drafts.hasPendingRecovery(sessionId));
     panel.send({ type: "restoreQueuedPrompts", sessionId, requestId: "duplicate", draftImageCount: 0 });
@@ -95,18 +99,35 @@ describe("queued recovery through the real Host and child-process path", () => {
     expect(recoveryResult(panel.messages, "duplicate")).toMatchObject({ ok: false });
     expect(drafts.hasPendingRecovery(sessionId)).toBe(true);
     panel.close();
-    sidebar.send({ type: "updateComposerDraft", sessionId, draft: {
-      revision: 6, text: "typed after close", imageIds: [], addedImages: [],
-    } });
-    await waitForRecovery(() => drafts.get(sessionId).text === "typed after close");
+    await waitForRecovery(() => sidebar.messages.some((message) => message.type === "snapshot"
+      && message.presentation.displayedSession?.queuedPromptRecovery.state === "recovering"));
+    const closedAt = sidebar.messages.length;
 
-    sidebar.send({ type: "sendPrompt", sessionId, requestId: "competing-send", text: "typed after close", images: [], draftRevision: 6, streamingBehavior: "steer" });
+    sidebar.send({ type: "sendPrompt", sessionId, requestId: "competing-send", text: "typed just before recovery", images: [], draftRevision: 6, streamingBehavior: "steer" });
     await waitForRecovery(() => sidebar.messages.some((message) => message.type === "promptResult" && message.requestId === "competing-send"));
     expect(sidebar.messages).toContainEqual(expect.objectContaining({ type: "promptResult", requestId: "competing-send", ok: false }));
-    expect(drafts.get(sessionId).text).toBe("typed after close");
+    expect(drafts.get(sessionId).text).toBe("typed just before recovery");
+    // Native reference insertion must respect the surviving Host draft authority,
+    // rather than enqueueing local Sidebar edits behind the recovered replacement.
+    sidebar.connection.insertPromptText("@first");
+    sidebar.connection.insertPromptText("@second");
+    expect(drafts.get(sessionId).text).toBe("typed just before recovery\n\n@first\n\n@second");
+    const restoredText = "recover me\n\ntyped just before recovery\n\n@first\n\n@second";
     await writeFile(join(fixture.directory, "clear"), "1");
-    await waitForRecovery(() => drafts.get(sessionId).text === "recover me\n\ntyped after close" && !drafts.hasPendingRecovery(sessionId));
-    expect(sidebar.messages.filter((message) => message.type === "draftReplacement").at(-1)?.draft.text).toBe("recover me\n\ntyped after close");
+    await waitForRecovery(() => sidebar.messages.some((message) => message.type === "snapshot"
+      && message.presentation.displayedSession?.queuedPromptRecovery.state === "ready"
+      && message.draft?.text === restoredText));
+    let displayedDraft = "typed just before recovery";
+    for (const message of sidebar.messages.slice(closedAt)) {
+      if (message.type === "draftReplacement") displayedDraft = message.draft.text;
+      if (message.type === "snapshot" && message.draft) displayedDraft = message.draft.text;
+      const state = message.type === "snapshot" ? message.presentation.displayedSession?.queuedPromptRecovery.state
+        : message.type === "presentationDelta" ? message.presentation.displayedSession?.base.queuedPromptRecovery.state : undefined;
+      // Every unlocked presentation must already carry or follow the final draft, including
+      // refresh work enqueued by Runtime before the Host merged and released ownership.
+      if (state === "ready") expect(displayedDraft).toBe(restoredText);
+    }
+    expect(drafts.hasPendingRecovery(sessionId)).toBe(false);
     expect(sidebar.messages.some((message) => message.type === "restoreQueuedPromptsResult")).toBe(false);
     expect(registry.sessionView(sessionId)?.isStreaming).toBe(true);
     expect(fixture.errors).toEqual([]);

@@ -13,6 +13,7 @@ import type { SessionSummaryView, SessionViewModel } from "$shared/model/session
 import type { WebviewPresentationView } from "$shared/model/webviewPresentationModel";
 import ClientApp from "$ui/ClientApp.svelte";
 import { applyHostMessage } from "$ui/bridge/applyHostMessage";
+import { annotationReviewDrafts } from "$ui/features/annotation-review/annotationReviewStore.svelte";
 import { connectHostBridge, onHostMessage } from "$ui/bridge/hostBridge";
 import { composerDrafts, getDraft, type DraftImage } from "$ui/features/composer/composerDraftStore.svelte";
 import { setDraft } from "$ui/features/composer/composerDraftSync";
@@ -27,6 +28,7 @@ let unsubscribeHostMessages: (() => void) | undefined;
 beforeEach(() => {
   postMessage.mockClear();
   composerDrafts.set({});
+  annotationReviewDrafts.set({});
   queuedPromptRecoveryRequests.set({});
   queuedPromptRecoveryFeedback.set({});
   toastStore.set([]);
@@ -171,7 +173,7 @@ describe("pending message recovery entry", () => {
 });
 
 describe("pending message recovery results", () => {
-  it("prepends the result to the latest edited draft, focuses the Composer, and never submits", async () => {
+  it("locks draft editing until the result is merged, then restores editing without submitting", async () => {
     presentationStore.set(presentation("sidebar", session()));
     setDraft("session", "webview", { text: "keep me", images: [draftImage("draft-image")] });
     const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
@@ -181,12 +183,17 @@ describe("pending message recovery results", () => {
     await fireEvent.click(view.getByRole("button", { name: /Restore all/ }));
     const { requestId } = restoreRequest();
 
-    // Text editing stays available while the request is pending.
+    const content = view.container.querySelector<HTMLElement>(".cm-content")!;
+    expect(content.getAttribute("contenteditable")).toBe("false");
     const editor = EditorView.findFromDOM(view.container.querySelector(".cm-editor")!)!;
-    editor.dispatch({ changes: { from: editor.state.doc.length, insert: " later" } });
-    await waitFor(() => expect(getDraft("session").text).toBe("keep me later"));
+    // Read-only must block editing transactions too (undo/completion), not just DOM typing.
+    editor.dispatch({ changes: { from: editor.state.doc.length, insert: " should not appear" } });
+    await tick();
+    expect(editor.state.doc.toString()).toBe("keep me");
+    expect(getDraft("session").text).toBe("keep me");
+    expect(view.getByRole("button", { name: "Remove draft-image.png" })).toHaveProperty("disabled", true);
 
-    // Sending and new attachments are blocked, not text editing.
+    // Sending and attachments stay blocked until the recovered draft is displayed.
     expect(view.queryByRole("button", { name: /Send as/ })).toBeNull();
     await fireEvent.paste(view.container.querySelector(".cm-content")!, {
       clipboardData: { files: [new File(["synthetic"], "pasted.png", { type: "image/png" })] },
@@ -207,7 +214,7 @@ describe("pending message recovery results", () => {
     });
 
     await waitFor(() => expect(getDraft("session")).toMatchObject({
-      text: "first recovered\n\nsecond recovered\n\nkeep me later",
+      text: "first recovered\n\nsecond recovered\n\nkeep me",
       images: [{ id: "recovered-image" }, { id: "draft-image" }],
     }));
     expect(getDraft("session").images[0]?.dataUrl).toBe("data:image/png;base64,AA==");
@@ -220,8 +227,32 @@ describe("pending message recovery results", () => {
     // The best-effort sentences already carry the delivery limit; do not repeat it as a warning.
     expect(text).not.toContain("uncertain");
     expect(postMessage.mock.calls.map(([message]) => message.type)).not.toContain("sendPrompt");
-    // Sending becomes available again once the result is merged.
+    // Editing and sending become available only after the result is merged.
+    expect(content.getAttribute("contenteditable")).toBe("true");
+    editor.dispatch({ changes: { from: editor.state.doc.length, insert: " after recovery" } });
+    await waitFor(() => expect(getDraft("session").text).toBe("first recovered\n\nsecond recovered\n\nkeep me after recovery"));
     expect(view.getByRole("button", { name: "Send as Steer" })).toBeTruthy();
+  });
+
+  it("keeps annotation insertion from editing a locked draft without discarding the review", async () => {
+    presentationStore.set(presentation("sidebar", session()));
+    setDraft("session", "webview", { text: "existing", images: [] });
+    const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
+    await fireEvent.click(view.getByRole("button", { name: /Restore all/ }));
+    const { requestId } = restoreRequest();
+    annotationReviewDrafts.set({ session: {
+      source: "Answer", annotations: [{ id: "note", start: 0, end: 6, comment: "Review this", createdOrder: 0 }],
+      pending: null, activeAnnotationId: null, nextCreatedOrder: 1,
+    } });
+    await tick();
+    await fireEvent.click(view.getByRole("button", { name: "Insert into Composer" }));
+    expect(getDraft("session").text).toBe("existing");
+    expect(get(annotationReviewDrafts).session?.annotations[0]?.comment).toBe("Review this");
+    deliver(mergeResult(requestId, "recovered"));
+    await tick();
+    await fireEvent.click(view.getByRole("button", { name: "Insert into Composer" }));
+    await waitFor(() => expect(getDraft("session").text).toContain("Review this"));
+    expect(getDraft("session").text).toContain("recovered\n\nexisting");
   });
 
   it("ignores stale, mismatched and duplicate results before they reach a draft", async () => {
@@ -256,8 +287,14 @@ describe("pending message recovery results", () => {
     await fireEvent.click(view.getByRole("button", { name: /Restore all/ }));
     const { requestId } = restoreRequest();
 
+    // Runtime completion can precede delivery. The local request must keep the editor locked.
+    deliver({ type: "snapshot", presentation: presentation("panel", session()), draft: null });
+    await tick();
+    const content = view.container.querySelector<HTMLElement>(".cm-content")!;
+    expect(content.getAttribute("contenteditable")).toBe("false");
     deliver({ type: "draftReplacement", sessionId: "session", draft: { revision: 4, text: "host merged", images: [] } });
     await tick();
+    expect(content.getAttribute("contenteditable")).toBe("false");
     deliver({
       type: "restoreQueuedPromptsResult", requestId, sessionId: "session", ok: true, draftTarget: "host-applied",
       outcome: { certainty: "confirmed", recoveredCount: 1, notRemovedCount: 0, warnings: imagesDropped ? ["images-dropped"] : [] },
@@ -267,6 +304,7 @@ describe("pending message recovery results", () => {
       ? "Removed 1 pending message. Image recovery was incomplete. Nothing was sent."
       : "Restored 1 pending message into the Composer. Nothing was sent."));
     expect(getDraft("session").text).toBe("host merged");
+    expect(content.getAttribute("contenteditable")).toBe("true");
     expect(view.container.querySelectorAll(".recovery-notice")).toHaveLength(1);
     expect(postMessage.mock.calls.map(([message]) => message.type)).not.toContain("sendPrompt");
   });
@@ -308,6 +346,7 @@ describe("pending message recovery results", () => {
       displayedSession: session("other-session", { queued: [] }),
     }));
     await tick();
+    expect(view.container.querySelector(".cm-content")?.getAttribute("contenteditable")).toBe("true");
 
     deliver(mergeResult(requestId, "recovered for origin"));
     await waitFor(() => expect(getDraft("session").text).toBe("recovered for origin"));
@@ -326,7 +365,8 @@ describe("pending message recovery results", () => {
     await waitFor(() => expect(view.container.textContent).toContain("Could not confirm recovery."));
     expect(view.container.textContent).toContain("The runtime did not confirm queue recovery.");
     expect(view.container.textContent).not.toContain("were not restored");
-    // The request is answered, so the pending group is actionable again.
+    // Failure must release both the input lock and the recovery action.
+    expect(view.container.querySelector(".cm-content")?.getAttribute("contenteditable")).toBe("true");
     expect(restoreButton(view.container).disabled).toBe(false);
   });
 

@@ -8,17 +8,30 @@
 
 1. **RPC、恢复协调和实际内容投影 — 实现及聚焦验证完成。** [I1][I2]：专用 class、原始 API、Runtime 接线和恢复模式均已接入。核心/Projection/Runtime/OMP 聚焦运行曾通过 76 项。
 2. **Host 草稿交付和共享 UI — 实现及聚焦验证完成。** [I3][I4]：来源授权、最新草稿、tab 关闭交接、关联结果及共享入口接通。受控子进程经真实 Host→Runtime 路径的测试及 root DOM 集成通过；真实安装 Pi/OMP 的 Runtime 验证通过。
-3. **最终验收与漂移审查 — 暂停，待用户下一步安排。** [I5] << CURRENT
-   - 用户明确允许以当前实现阶段完成为 checkpoint，不要求本轮继续全仓检查或 GUI。
-   - 后续合并/发布前仍应完成全仓回归和真实 GUI 验收；不能将此次暂停写成检查已通过。
+3. **审查后修复与最终验收。** [I5] << CURRENT
+   - `1b9146b` 为实现阶段 checkpoint，不是最终验收。
+   - 用户审查后批准：取回期间锁定输入框，替代并发编辑，解决 Host 回填与本地 revision 竞争。
+   - 后续合并/发布前仍应完成全仓回归和真实 GUI 验收；不能将 checkpoint 写成检查已通过。
 
 ## Current Phase
 
-**Now：** 按用户要求保存 handover，将实现、测试、契约和工作记录一起 commit。停止新增功能/验证；不合并、不推送。
+**Now：** 修复审查发现的草稿竞争并做验证；不合并、不推送。此前 handover 的“保持暂停”已被本轮用户安排取代。
 
-当前完成定义为“功能实现与聚焦验证完成”，不是“最终验收完成/可发布”。用户不再判断内部队列细节；只在新事实改变目标、数据安全或核心架构时升级讨论。
+本轮沿既有草稿归属与桥接实现锁定，不增加并发合并、重试或持久恢复机制。用户不再判断内部队列细节；只在新事实改变目标、数据安全或核心架构时升级讨论。
 
-### 已取得的证据
+### 审查后修复
+
+- 审查 `quasi-main..1b9146b`：生产源码 27 文件、净新增 850 行，整体仍符合 locked SHAPE；UI correlation/feedback store 比预测大。SHAPE 保持原始 locked 预测，不追改。
+- 用现有 `ComposerDraftCache` 复现：Host 回填到 revision N+1 后，界面尚未收到结果时的一次编辑会被覆盖；两次编辑会覆盖已取回内容。日常频率未知。
+- 用户批准取回期间锁定。Composer/CodeMirror 阻止文本修改、撤销/补全修改及附件增删；来源请求持续锁到结果处理。Host 草稿归属窗口覆盖关闭 tab，桥接投影在窗口内保持 recovering；归属变化使用包含草稿的 snapshot 解锁，防止 Runtime 提前 ready 和旧 snapshot 在途时丢失失效信号。
+- 测试先红：旧实现 UI 3 项失败（仍可编辑），Host 交接用例失败（没有最终草稿与解锁的原子 snapshot）。新增在途 snapshot 反例，并覆盖失败解锁、其他会话仍可编辑、锁定时不插入批注、关闭 tab 后 native 引用插入沿 Host 草稿归属运行。
+- 独立只读审查未发现已确认的正确性问题。按证据补了 Host-owned Sidebar 的 native 文本插入归属；归属 snapshot 只影响对应会话，不刷新无关会话。无并发重放或新的持久状态。
+- 最终 `pnpm check` 全部通过：version、5 包 lint/typecheck、149 个测试文件及根脚本共 1065 tests、共享 client 与两端 JS build、bundle gate。日志 `tmp/recovery-lock-full-check-r2.log`，exit `0`。保留既有 a11y、Mermaid URL、chunk size 和 Node shell deprecation 警告；真实 native GUI 未运行。
+- 首次完整 gate 停在 CSS 预算（160163/160000 bytes）。本功能反馈关闭按钮改用现有 IconButton，未调整预算；最终 CSS 159950 bytes。
+
+以下为 checkpoint 时证据；不自动涵盖本轮修复。
+
+### checkpoint 时已取得的证据
 
 - `pnpm --dir packages/pi-rpc build`、共享 core TypeScript 检查曾通过；`pnpm --dir apps/pi-client build` 通过。
 - 核心/Runtime/Projection/OMP 聚焦：4 文件、76 tests 通过。
@@ -30,7 +43,7 @@
 - `node tmp/queue-recovery-spike/client-runtime.mjs pi` / `omp` 最终均通过：实际安装 SDK + 实际 FrostPi Runtime + 合成 provider，3 条取回、admission、有序恢复、不停止活动流、持久 entry takeover；OMP 恢复实际返回 WebP，Pi 图片拒绝未删除输入。不是 GUI 验证。
 - 独立只读审查未报告 Critical/Warning；审查不是全量验证替代。
 
-### 尚未通过的完整 gate
+### checkpoint 时未完成的完整 gate（本轮自动化已补齐）
 
 两次 `pnpm check` 均在 lint 停止：第一轮新增 TS/test lint，第二轮 Desktop 测试 matcher 的 no-unsafe-assignment。已修正，但未再跑完整检查。日志：`tmp/pending-recovery-check.log`、`tmp/pending-recovery-check-r2.log`。不要使用子代理摘要里的“version 未运行”：root driver 实际先做版本检查，查看日志判断完成阶段。
 
@@ -64,5 +77,5 @@
 
 ### I5 · 最终验收不能以实验或局部单测代替
 
-- Status：pending，按用户要求暂停本轮。
-- 下一轮先核对 handover 中最后未重跑的修正，再执行合并前必要检查。只修实际发现的问题，不为测试数量扩张功能，不重开队列责任讨论。
+- Status：自动化验收完成，真实 GUI 待做。本轮草稿竞争已按用户批准的锁定方案修复，完整 gate 通过；不等于原生 GUI 验收通过或已授权合并/发布。
+- 只修实际发现的问题，不为测试数量扩张功能，不重开队列责任讨论。

@@ -63,7 +63,7 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
       registry.onDidToast((toast) => this.#sidebar?.post({ type: "toast", ...toast })),
       registry.onDidSetComposerText(({ sessionId, text }) => this.#routeComposerText(sessionId, text)),
       this.#drafts.onDidChange(({ sessionId, draft }) => this.#draftChanged(sessionId, draft)),
-      this.#drafts.onDidOwnershipChange(() => this.#refreshConnections()),
+      this.#drafts.onDidOwnershipChange((sessionId) => this.#forEachConnection((connection) => connection.refreshDraftOwnership(sessionId))),
       this.#panels.onDidChange(() => this.#panelsChanged()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (!chatTypographyChanged(event)) return;

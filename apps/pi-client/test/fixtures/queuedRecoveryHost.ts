@@ -79,7 +79,7 @@ export async function queuedRecoveryHost(runtime: "pi" | "oh-my-pi" = "pi", flag
     if (panel) panel.draftChanged(sessionId);
     else sidebar?.post({ type: "draftReplacement", sessionId, draft });
   });
-  drafts.onDidOwnershipChange(() => { for (const connection of connections) connection.refresh(); });
+  drafts.onDidOwnershipChange((sessionId) => { for (const connection of connections) connection.refreshDraftOwnership(sessionId); });
   const sessionId = await registry.createSession();
   if (!sessionId) throw new Error("Test session was not created.");
 

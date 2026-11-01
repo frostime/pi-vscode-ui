@@ -8,7 +8,7 @@
   import type { LocalComposerCommands } from "../features/composer/frostPiCommands";
   import type { ProviderUsageSource } from "../features/provider-usage/providerUsageSource";
   import { prefixDraftText } from "../features/composer/composerDraftSync";
-  import { requestQueuedPromptRecovery } from "../features/composer/queuedPromptRecoveryStore.svelte";
+  import { isQueuedPromptRecoveryPending, requestQueuedPromptRecovery } from "../features/composer/queuedPromptRecoveryStore.svelte";
   import ConversationView from "../features/conversation/ConversationView.svelte";
   import ExtensionUiHost from "../features/extension-ui/ExtensionUiHost.svelte";
   import { showToast } from "../state/sessionViewStore.svelte";
@@ -36,6 +36,10 @@
   const belowWidgets = $derived(session.extensionWidgets.filter((widget) => widget.placement === "below"));
 
   async function insertAnnotations(prompt: string): Promise<void> {
+    if (isQueuedPromptRecoveryPending(session.id) || session.queuedPromptRecovery.state === "recovering") {
+      showToast("info", "Wait for pending message recovery to finish before inserting annotations.");
+      return;
+    }
     prefixDraftText(session.id, draftAuthority, prompt);
     discardAnnotationReview(session.id);
     await tick();

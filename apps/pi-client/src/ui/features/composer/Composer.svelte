@@ -21,6 +21,7 @@
   import AttachmentStrip from "./AttachmentStrip.svelte";
   import PromptEditor from "./PromptEditor.svelte";
   import StreamingSendButton from "./StreamingSendButton.svelte";
+  import IconButton from "../../primitives/IconButton.svelte";
 
   let {
     session,
@@ -51,7 +52,7 @@
     session.status === "queued" || session.status === "starting" || session.status === "stopping" || session.status === "failed"
     || session.historyStatus === "queued" || session.historyStatus === "loading" || session.isCompacting || session.isForking || session.isNavigatingTree,
   );
-  // Recovery blocks sending and new attachments, never text editing.
+  // Keep the draft unchanged from request admission through result application.
   const recoveryBusy = $derived(
     $queuedPromptRecoveryRequests[session.id] !== undefined || session.queuedPromptRecovery.state === "recovering",
   );
@@ -111,7 +112,12 @@
   });
 
   function setText(text: string): void {
-    setDraftText(session.id, draftAuthority, text);
+    if (!recoveryBusy) setDraftText(session.id, draftAuthority, text);
+  }
+
+  function removeImage(id: string): void {
+    if (recoveryBusy) return;
+    updateDraft(session.id, draftAuthority, (current) => ({ ...current, images: current.images.filter((image) => image.id !== id) }));
   }
 
   function setExpanded(next: boolean): void {
@@ -193,7 +199,10 @@
 </script>
 
 <div class="composer-shell" class:composer-expanded={expanded}>
-  <AttachmentStrip images={draft.images} onremove={(id) => updateDraft(session.id, draftAuthority, (current) => ({ ...current, images: current.images.filter((image) => image.id !== id) }))} />
+  <AttachmentStrip images={draft.images} disabled={recoveryBusy} onremove={removeImage} />
+  {#if recoveryBusy}
+    <div class="composer-warning" role="status">Restoring pending messages… Editing resumes when the draft is ready.</div>
+  {/if}
   {#if draft.images.length && session.model && !supportsImages}
     <div class="composer-warning"><span class="codicon codicon-warning"></span> The selected model may not accept images.</div>
   {/if}
@@ -206,9 +215,7 @@
           <div class="recovery-notice-detail">{detail}</div>
         {/each}
       </div>
-      <button class="recovery-notice-dismiss" type="button" aria-label="Dismiss recovery notice" title="Dismiss" onclick={() => dismissQueuedPromptRecoveryFeedback(session.id)}>
-        <span class="codicon codicon-close" aria-hidden="true"></span>
-      </button>
+      <IconButton icon="close" label="Dismiss recovery notice" onclick={() => dismissQueuedPromptRecoveryFeedback(session.id)} />
     </div>
   {/if}
   <div class="composer-box" class:composer-running={session.isStreaming}>
@@ -226,6 +233,7 @@
       bind:this={editor}
       sessionId={session.id}
       value={draft.text}
+      readOnly={recoveryBusy}
       {commands}
       placeholder={session.isNavigatingTree ? "Switching conversation branch…" : session.isStreaming || session.queuedSteers.length > 0 || session.queuedFollowUps.length > 0 ? "Steer or queue a message…" : "Ask Pi about this workspace…"}
       onchange={setText}
@@ -323,19 +331,6 @@
 .recovery-notice-body { min-width: 0; }
 .recovery-notice-headline { color: var(--frost-text); font-weight: 600; overflow-wrap: anywhere; }
 .recovery-notice-detail { margin-top: 2px; overflow-wrap: anywhere; }
-.recovery-notice-dismiss {
-  align-self: start;
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--frost-muted);
-  cursor: pointer;
-}
-.recovery-notice-dismiss:hover { background: var(--frost-hover); color: var(--frost-text); }
-.recovery-notice-dismiss :global(.codicon) { font-size: 12px; }
+.recovery-notice > :global(.icon-button) { align-self: start; width: 18px; height: 18px; }
+.recovery-notice > :global(.icon-button .codicon) { font-size: 12px; }
 </style>
