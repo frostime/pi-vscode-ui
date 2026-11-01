@@ -10,6 +10,8 @@ While the same Session remains selected, sidebar hide/resize, theme/zoom changes
 
 Closing the main window hides it to the Windows tray; it must not dispose the backend, stop Pi children or remount ClientApp. The first close in each launch explains the tray behavior. Tray left-click and Show restore the same window and its drafts. Hidden windows report invisible to the backend so restoring them refreshes the shared presentation.
 
+One Live process owns a data profile: a second launch over that profile wakes the owner (through the same restore path) and exits quietly, before creating backend state. The claim is decided before the tray or backend start and dies with the process, so an owner killed without cleanup does not block the next launch. Exclusion is scoped per profile, so differently profiled instances may run side by side; a duplicate instance never races over `state.json`, WebView2 storage or Pi children.
+
 Only explicit Exit ends normal application lifetime. Node checks activity across all Projects, including pending input and process/session operations; the native shell asks for confirmation when that work would be interrupted. Cancelling leaves tasks running. Approval uses the same bounded stop/metadata-drain path as before; renderer/browser failure still terminates through that path rather than hiding a broken window. Exit checks travel over the private shell/backend wire, not the renderer bridge.
 
 ## Persistence
