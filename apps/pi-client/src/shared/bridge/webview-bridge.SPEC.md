@@ -7,7 +7,7 @@ scope:
   - /apps/pi-client/src/ui/bridge/**
   - /apps/vscode/src/extension/webview-host/**
   - /apps/desktop/src/**
-updated: 2026-10-24
+updated: 2026-11-01
 ---
 
 # Webview Bridge Compatibility Contract
@@ -47,5 +47,9 @@ Session-tree actions carry stable ids and draft presence only: the Host refetche
 ## Composer synchronization
 
 An ordinary non-externalized Sidebar Composer remains Webview-local and sends no draft mutations to the Host. Opening a Session Tab transfers one complete revisioned draft to the Host before the externalized mapping commits. While externalized, panel mutations synchronize immediately: text edits carry attachment ids and only newly added attachments carry image bytes, while the Host ignores stale revisions. Panel snapshots and `draftReplacement` messages replace local state without echo. Tab closure hands the latest cached draft back to the Sidebar; the cache retains that handoff state until a later externalization replaces it or the Session is removed.
+
+Pending-message recovery is origin/session-correlated. A `webview-merge` result prepends into that Session's latest local draft only after matching a live request; a `host-applied` result omits content and must not merge again. Host-owned recovery keeps draft authority through tab closure until the latest cached draft is updated; Sidebar edits during that window still synchronize to the Host. An unresolved authoritative submission is not admitted to recovery, and competing sends use the existing submission rollback rather than overwriting the recovering draft. Ordinary Sidebar recovery remains document-local; its pending result prevents externalization before the local merge, not a new durable handoff protocol.
+
+A result exceeding Desktop's finite transport must still settle its request: omit returned images with an explicit warning when text fits, otherwise send a small correlated failure. Queue mutation may already have happened; never replace this with an unrelated toast or automatic retry.
 
 Panel submission carries the submitted revision. The Host snapshots it, clears the authoritative draft, and retains a failure snapshot. If the tab closes before that submission resolves, Host authority continues only for that pending recovery window, so newer Sidebar edits suppress restoration. Success discards the snapshot; failure restores it only when no newer draft exists. Sidebar submission otherwise keeps the pre-existing Webview-local failure restoration behavior. Session removal and Extension Host disposal release cached handoff state. Drafts are not workspace/session persistence and do not survive Extension Host restart. Scroll, disclosure, Composer expansion, and partially entered Question/extension-form answers remain presentation-local.

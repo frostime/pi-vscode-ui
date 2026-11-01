@@ -1,4 +1,4 @@
-import type { ComposerDraftContent, ComposerDraftView } from "$shared/model/composerDraftModel";
+import { prependComposerDraftContent, type ComposerDraftContent, type ComposerDraftView } from "$shared/model/composerDraftModel";
 
 import { postToHost } from "../../bridge/hostBridge";
 import { getDraft, replaceDraftLocally, type DraftImage, type SessionDraft } from "./composerDraftStore.svelte";
@@ -43,6 +43,14 @@ export function setDraft(
 
 export function clearDraft(sessionId: string, authority: DraftAuthority): SessionDraft {
   return updateDraft(sessionId, authority, () => ({ text: "", images: [] }));
+}
+
+/** Prepend Host-returned recovered content to the latest Webview draft; the caller applies it once. */
+export function mergeRecoveredDraftContent(sessionId: string, recovered: ComposerDraftContent): SessionDraft {
+  return updateDraft(sessionId, "webview", (current) => {
+    const merged = prependComposerDraftContent({ text: current.text, images: current.images }, recovered);
+    return { text: merged.text, images: merged.images.map((image) => localImage(image)) };
+  });
 }
 
 export function clearDraftForSubmission(sessionId: string): number {

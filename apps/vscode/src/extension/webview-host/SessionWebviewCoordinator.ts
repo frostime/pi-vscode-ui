@@ -240,7 +240,7 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
   }
 
   #hostOwnsDraft(sessionId: string): boolean {
-    return this.#panels.has(sessionId) || this.#drafts.hasPendingSubmission(sessionId);
+    return this.#panels.has(sessionId) || this.#drafts.hasPendingSubmission(sessionId) || this.#drafts.hasPendingRecovery(sessionId);
   }
 
   #queueSidebarComposerText(sessionId: string, text: string): void {

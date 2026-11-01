@@ -8,6 +8,7 @@
   import type { LocalComposerCommands } from "../features/composer/frostPiCommands";
   import type { ProviderUsageSource } from "../features/provider-usage/providerUsageSource";
   import { prefixDraftText } from "../features/composer/composerDraftSync";
+  import { requestQueuedPromptRecovery } from "../features/composer/queuedPromptRecoveryStore.svelte";
   import ConversationView from "../features/conversation/ConversationView.svelte";
   import ExtensionUiHost from "../features/extension-ui/ExtensionUiHost.svelte";
   import { showToast } from "../state/sessionViewStore.svelte";
@@ -28,6 +29,7 @@
     draftAuthority: "webview" | "host";
   } = $props();
   let composer = $state<Composer>();
+  let submissionPending = $state(false);
 
   const review = $derived($annotationReviewDrafts[session.id] ?? null);
   const aboveWidgets = $derived(session.extensionWidgets.filter((widget) => widget.placement === "above"));
@@ -39,6 +41,14 @@
     await tick();
     composer?.focusAtEnd();
     showToast("info", "Annotations inserted into Composer. Nothing was sent.");
+  }
+
+  function restoreQueuedPrompts(): void {
+    requestQueuedPromptRecovery(session, submissionPending);
+  }
+
+  function trackPendingSubmission(pending: boolean): void {
+    submissionPending = pending;
   }
 </script>
 
@@ -52,12 +62,12 @@
     </div>
   {/if}
 {:else}
-  {#key session.id}<ConversationView {session} />{/key}
+  {#key session.id}<ConversationView {session} onrestore={restoreQueuedPrompts} {submissionPending} />{/key}
   <div class="composer-region">
     <SessionMetrics {session} {providerUsageSource} />
     <ExtensionWidgets widgets={aboveWidgets} />
     <ExtensionUiHost sessionId={session.id} requests={session.pendingExtensionUi} />
-    <Composer bind:this={composer} {session} {localCommands} {restoreFailedSubmissionLocally} {draftAuthority} />
+    <Composer bind:this={composer} {session} {localCommands} {restoreFailedSubmissionLocally} {draftAuthority} onpendingsubmissionchange={trackPendingSubmission} />
     <ExtensionWidgets widgets={belowWidgets} />
   </div>
 {/if}

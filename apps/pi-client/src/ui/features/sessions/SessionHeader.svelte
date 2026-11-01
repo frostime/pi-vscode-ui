@@ -4,7 +4,9 @@
 
   import { postToHost } from "../../bridge/hostBridge";
   import { clientCapabilities } from "../../state/clientCapabilities.svelte";
+  import { showToast } from "../../state/sessionViewStore.svelte";
   import { draftForHost } from "../composer/composerDraftSync";
+  import { isQueuedPromptRecoveryPending } from "../composer/queuedPromptRecoveryStore.svelte";
   import IconButton from "../../primitives/IconButton.svelte";
   import StatusDot from "./StatusDot.svelte";
   import SessionList from "./SessionList.svelte";
@@ -98,6 +100,12 @@
 
   function openSessionPanel(sessionId?: string): void {
     const targetId = sessionId ?? active.id;
+    // Do not hand a possibly stale Webview draft to a new panel before its recovery result merges.
+    if (isQueuedPromptRecoveryPending(targetId)) {
+      closeMenus();
+      showToast("info", "Wait for the pending message recovery to finish before opening this Session in an editor tab.");
+      return;
+    }
     closeMenus();
     postToHost({ type: "openSessionPanel", sessionId: targetId, draft: draftForHost(targetId) });
   }

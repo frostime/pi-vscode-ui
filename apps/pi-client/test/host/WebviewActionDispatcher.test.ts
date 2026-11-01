@@ -26,6 +26,7 @@ describe("Session Tab Host authorization", () => {
       beginSubmission: vi.fn(),
       resolveSubmission: vi.fn(),
       hasPendingSubmission: vi.fn(() => false),
+      hasPendingRecovery: vi.fn(() => false),
     };
     const dispatcher = new WebviewActionDispatcher({
       registry: registry as never,
@@ -47,6 +48,7 @@ describe("Session Tab Host authorization", () => {
       finishProviderUsageRequest: vi.fn(() => true),
       post: (message: unknown) => posted.push(message),
       insertPromptText: vi.fn(),
+      deliverQueuedPromptRecovery: vi.fn(),
     };
     const sidebarConnection = {
       ...connection,
@@ -247,6 +249,7 @@ describe("unsupported host editor actions", () => {
       finishProviderUsageRequest: vi.fn(() => true),
       post: (message: unknown) => posted.push(message),
       insertPromptText: vi.fn(),
+      deliverQueuedPromptRecovery: vi.fn(),
     };
     const dispatcher = new WebviewActionDispatcher({
       host: fakeHost(),
@@ -258,6 +261,7 @@ describe("unsupported host editor actions", () => {
         beginSubmission: vi.fn(),
         resolveSubmission: vi.fn(),
         hasPendingSubmission: vi.fn(() => false),
+        hasPendingRecovery: vi.fn(() => false),
       } as never,
       openPanel: vi.fn(),
       revealPanel: vi.fn(),

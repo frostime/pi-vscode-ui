@@ -358,6 +358,67 @@ describe("ConversationProjection", () => {
     expect(projection.read().queuedFollowUps).toEqual([]);
   });
 
+  it("keeps late recovered deliveries and new images authoritative without borrowing queued content", () => {
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("initial", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "initial", timestamp: 1 } });
+    const oldId = projection.enqueueSteer("old", [], 2);
+    projection.beginQueueRecovery();
+    projection.removeQueuedPrompt(oldId);
+    const data = "aGVsbG8=";
+    projection.enqueueSteer("new", [{ id: "new-image", name: "new.png", mimeType: "image/png", data, size: 5 }], 3);
+
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "old", timestamp: 2 } });
+    const delivered = turns(projection.read().items);
+    expect(delivered.map(userText)).toEqual(["initial", "old"]);
+    expect(delivered[1]?.userMessage?.blocks).toEqual([{ type: "text", text: "old" }]);
+    // Queue membership at this race boundary is not a cancellation acknowledgement.
+    // A full persisted refresh during the run must not restore the old content policy.
+    projection.replaceEntries([userEntry("u1", null, "initial", 1), userEntry("u2", "u1", "old", 2)], []);
+    const newContent = [{ type: "text", text: "new" }, { type: "image", mimeType: "image/png", data }];
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: newContent, timestamp: 3 } });
+    projection.reconcileEntries([userEntry("u3", "u2", newContent, 3)], []);
+
+    const finalTurns = turns(projection.read().items);
+    expect(finalTurns.map(userText)).toEqual(["initial", "old", "new"]);
+    expect(finalTurns.map((turn) => turn.userMessage?.sourceEntryId)).toEqual(["u1", "u2", "u3"]);
+    expect(finalTurns[2]?.userMessage?.blocks.some((block) => block.type === "images" && block.images.length === 1)).toBe(true);
+  });
+
+  it("does not lose a recovered delivery when there is no new queued prompt", () => {
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("initial", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "initial", timestamp: 1 } });
+    const id = projection.enqueueFollowUp("late", [], 2);
+    projection.beginQueueRecovery();
+    projection.removeQueuedPrompt(id);
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "late", timestamp: 2 } });
+    expect(turns(projection.read().items).map(userText)).toEqual(["initial", "late"]);
+  });
+
+  it("adopts an awaiting initial prompt, avoids phantom retry turns, and restores normal next-run promotion", () => {
+    const projection = new ConversationProjection();
+    const initialId = projection.appendUserPrompt("initial", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.beginQueueRecovery();
+    projection.enqueueFollowUp("queued", [], 2);
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "initial", timestamp: 1 } });
+    projection.applyEvent({ type: "agent_start" });
+    expect(turns(projection.read().items).map((turn) => turn.id)).toEqual([initialId]);
+    expect(projection.read().queuedFollowUps.map((prompt) => prompt.text)).toEqual(["queued"]);
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "queued", timestamp: 2 } });
+    expect(turns(projection.read().items).map(userText)).toEqual(["initial", "queued"]);
+    projection.applyEvent({ type: "agent_settled" });
+
+    projection.enqueueFollowUp("/template args", [], 3);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "expanded prompt", timestamp: 3 } });
+    expect(turns(projection.read().items).map(userText)).toEqual(["initial", "queued", "/template args"]);
+    expect(projection.read().queuedFollowUps).toEqual([]);
+  });
+
   it("does not reuse a completed turn's assistant correlation for the next turn", () => {
     const projection = new ConversationProjection();
     const firstTurnId = projection.appendUserPrompt("first", [], 1);
@@ -1286,7 +1347,7 @@ function userText(turn: AgentTurnView): string {
     .join("") ?? "";
 }
 
-function userEntry(id: string, parentId: string | null, content: string, timestamp: number): RpcSessionEntry {
+function userEntry(id: string, parentId: string | null, content: string | unknown[], timestamp: number): RpcSessionEntry {
   return {
     type: "message",
     id,

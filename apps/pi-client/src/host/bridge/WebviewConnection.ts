@@ -4,6 +4,7 @@ import { webviewToHostSchema } from "../../shared/bridge/webviewToHost.js";
 import type { ChatTypographyView } from "../../shared/model/chatTypography.js";
 import type { ConversationItemView } from "../../shared/model/conversationModel.js";
 import type { SessionViewModel } from "../../shared/model/sessionViewModel.js";
+import { fitRecoveryImagesToDraft, type QueuedPromptRecoveryOutcome } from "../../shared/model/queuedPromptRecoveryModel.js";
 import type { WebviewPresentationView } from "../../shared/model/webviewPresentationModel.js";
 import type { WorkspaceFileSearch } from "../file-search/WorkspaceFileSearch.js";
 import type { RuntimeLogger } from "../../core/diagnostics/RuntimeLogger.js";
@@ -112,6 +113,19 @@ export class WebviewConnection {
     this.focusComposer();
   }
 
+  deliverQueuedPromptRecovery(requestId: string, sessionId: string, outcome: QueuedPromptRecoveryOutcome): void {
+    if (this.#hostOwnsDraft(sessionId) || this.#drafts.hasPendingRecovery(sessionId)) {
+      const session = this.#registry.sessionView(sessionId);
+      if (!session) throw new Error("This FrostPi Session no longer exists.");
+      const fitted = fitRecoveryImagesToDraft(outcome, this.#drafts.get(sessionId).images.length, session.attachmentLimits.maxImages);
+      this.#drafts.prependContent(sessionId, fitted.content);
+      const { certainty, recoveredCount, notRemovedCount, warnings } = fitted;
+      this.post({ type: "restoreQueuedPromptsResult", sessionId, requestId, ok: true, draftTarget: "host-applied", outcome: { certainty, recoveredCount, notRemovedCount, warnings } });
+    } else {
+      this.post({ type: "restoreQueuedPromptsResult", sessionId, requestId, ok: true, draftTarget: "webview-merge", outcome });
+    }
+  }
+
   queueComposerText(sessionId: string, text: string, delivered: () => void): void {
     this.#pendingComposerText.set(sessionId, { text, delivered });
     this.refresh();
@@ -188,6 +202,7 @@ export class WebviewConnection {
         finishProviderUsageRequest: (id, signal) => this.finishProviderUsageRequest(id, signal),
         post: (message) => this.post(message),
         insertPromptText: (text) => this.insertPromptText(text),
+        deliverQueuedPromptRecovery: (requestId, sessionId, outcome) => this.deliverQueuedPromptRecovery(requestId, sessionId, outcome),
       };
       await this.#dispatcher.dispatch(parsed.data, context);
     } catch (error) {

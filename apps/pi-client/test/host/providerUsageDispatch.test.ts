@@ -36,7 +36,7 @@ function setup(kind: "sidebar" | "panel" = "sidebar") {
   const posted: HostToWebviewPayload[] = [];
   const connection = {
     surface: kind === "sidebar" ? { kind: "sidebar" as const } : { kind: "panel" as const, sessionId: "session" },
-    sessionId: "session", fileSearch: {} as never, insertPromptText: vi.fn(),
+    sessionId: "session", fileSearch: {} as never, insertPromptText: vi.fn(), deliverQueuedPromptRecovery: vi.fn(),
     post: (message: HostToWebviewPayload) => posted.push(message),
     beginProviderUsageRequest(id: string) { pending?.controller.abort(); pending = { id, controller: new AbortController() }; return pending.controller.signal; },
     cancelProviderUsageRequest(id: string) { if (pending?.id === id) { pending.controller.abort(); pending = undefined; } },

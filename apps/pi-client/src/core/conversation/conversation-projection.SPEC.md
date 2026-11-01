@@ -5,7 +5,7 @@ scope:
   - /apps/pi-client/src/core/conversation/**
   - /apps/pi-client/src/core/sessions/SessionEntryState.ts
   - /apps/pi-client/src/shared/model/conversationModel.ts
-updated: 2026-10-11
+updated: 2026-11-01
 ---
 
 # Conversation Projection
@@ -33,6 +33,8 @@ A branch control represents an active parent-child tree edge. Its identity is de
 ## Live reconciliation
 
 Optimistic prompts, streaming assistant content, tools, queued steering/follow-up prompts, and notices appear before persistence refresh. A live turn becomes eligible for persisted user identity only after Pi emits its user message event. Eligible live turns pair with newly appended user entries in protocol FIFO order; text and timestamp equality are never identity rules. Rejected prompts and immediate extension commands without a Pi user event remain ineligible.
+
+Bulk recovery invalidates optimistic queue-to-delivery correspondence. For the rest of that run, delivered user content comes from the actual user event, not the next queued bubble's text/images; the initial unconfirmed optimistic turn may still adopt its first user event. `agent_start` alone must not pre-promote a queued user turn in this mode. Persistence refresh keeps this content policy; normalized settlement or process/abort queue reset ends it. Local queue bookkeeping remains best effort in Pi's selected-but-undelivered race and is not a cancellation acknowledgement; do not add text/timestamp matching, a shadow remote queue or count-based repair to make it exact.
 
 Live `message_end` events with `message.role: "custom"` project displayed custom messages immediately, inside the active turn or at top level while idle. They use the same text/image validation as persisted custom entries. Custom events never consume queued user prompts, change turn status, or enter/reset assistant delta assembly. Hidden custom messages reserve an invisible reconciliation slot. Pi may queue extension messages until a tool/turn boundary; FrostPi displays them when Pi emits delivery events, not when an extension enqueues them.
 
