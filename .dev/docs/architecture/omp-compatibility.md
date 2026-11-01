@@ -4,7 +4,7 @@ description: Why Oh My Pi support is split into transport and product compatibil
 scope:
   - /packages/pi-rpc/**
   - /apps/pi-client/**
-updated: 2026-10-24
+updated: 2026-11-01
 ---
 
 # OMP Compatibility Architecture
@@ -36,7 +36,7 @@ This is not a plugin or adapter framework. OMP is one declared profile with a bo
 
 ## The bounded supported surface
 
-FrostPi supports launching the installed `omp` with `--mode rpc`, ordinary conversation and tool calls, model and thinking-level changes, discovery and resume of OMP sessions, discovered Markdown command files and skills, and FrostPi's Question tool when settings enable it.
+FrostPi supports launching the installed `omp` with `--mode rpc`, ordinary conversation and tool calls, model and thinking-level changes, discovery and resume of OMP sessions, discovered Markdown command files and skills, non-aborting bulk pending-message recovery, and FrostPi's Question tool when settings enable it. Recovery uses a bounded snapshot of first-text-match removals, returns confirmed content/available images, and reports partial or uncertain results; it is neither atomic clear-all nor per-id withdrawal.
 
 It does not support OMP's full RPC or TUI surface, session-tree navigation, fork, builtin/extension/custom/MCP runtime commands, or separate `prompts/` templates. OMP's built-in `ask` tool is not registered in the ordinary `--mode rpc` launch, and FrostPi does not implement the separate `rpc-ui` / `set_ask_dialog` path. FrostPi's Question tool is a different mechanism: it is injected as an extension and answers through `extension_ui_request`. Neither tool's availability says anything about the other.
 
@@ -65,9 +65,9 @@ Protocol version selection belongs to the transport; using v1 or v2 creates no p
 
 ## Layer two: the product behavior
 
-Whatever fails the isomorphism test stays visible to the product layer and is implemented in an explicit OMP module selected at runtime assembly. [`OmpPromptCompatibility.ts`](../../../apps/pi-client/src/core/sessions/OmpPromptCompatibility.ts) is the current module; `SessionRuntime` creates it only for the `oh-my-pi` profile. The module owns the complete behavior and returns explicit outcomes to the shared lifecycle. Do not scatter runtime-identity conditionals through session and projection code, and do not let the transport learn about queued prompts, turn status or UI state to compensate.
+Whatever fails the isomorphism test stays visible to a product module owning that complete behavior, with runtime semantics selected by the assembled profile. [`OmpPromptCompatibility.ts`](../../../apps/pi-client/src/core/sessions/OmpPromptCompatibility.ts) owns OMP prompt/skill/completion interpretation; `SessionRuntime` creates it only for `oh-my-pi`. [`QueuedPromptRecovery.ts`](../../../apps/pi-client/src/core/sessions/QueuedPromptRecovery.ts) owns bulk recovery for both profiles, including Pi clear-all versus OMP confirmed removals. It returns one product outcome without claiming equivalent cancellation guarantees; UI and projection do not inspect runtime identity. Neither module takes over the other's state or turns the dialect into a stateful recovery service. Do not scatter runtime-identity conditionals through session and projection code, and do not let the transport learn about queued prompts, turn status or UI state to compensate.
 
-The module owns three decisions the transport cannot make: whether a discovered command may be submitted, how a runtime skill invocation is presented, and when a prompt result completes the session. Admission is a product decision because discovery is not authorization. Presentation must show the user's original invocation while leaving the persisted entry and OMP's persistence authority intact. Completion must follow OMP's explicit session-settled signal, because a prompt ending is not necessarily a session ending. Command admission and visible invocation rules are in the [Composer contract](../../../apps/pi-client/src/ui/features/composer/composer.SPEC.md). Session completion and persisted/live identity follow the [session lifecycle](../../../apps/pi-client/src/host/session-lifecycle.SPEC.md) and [conversation projection](../../../apps/pi-client/src/core/conversation/conversation-projection.SPEC.md) contracts; request correlation stays local to `OmpPromptCompatibility.ts`.
+`OmpPromptCompatibility` owns three decisions the transport cannot make: whether a discovered command may be submitted, how a runtime skill invocation is presented, and when a prompt result completes the session. Admission is a product decision because discovery is not authorization. Presentation must show the user's original invocation while leaving the persisted entry and OMP's persistence authority intact. Completion must follow OMP's explicit session-settled signal, because a prompt ending is not necessarily a session ending. Command admission and visible invocation rules are in the [Composer contract](../../../apps/pi-client/src/ui/features/composer/composer.SPEC.md). Session completion and persisted/live identity follow the [session lifecycle](../../../apps/pi-client/src/host/session-lifecycle.SPEC.md) and [conversation projection](../../../apps/pi-client/src/core/conversation/conversation-projection.SPEC.md) contracts; request correlation stays local to `OmpPromptCompatibility.ts`.
 
 The module's checks are compatibility rules for a trusted runtime, not a security boundary or a lock against concurrent runtime changes.
 

@@ -77,6 +77,7 @@ export class ConversationProjection {
   readonly #assistantMessageAdapter = new PiAssistantMessageAdapter();
   #queuedSteers: QueuedPromptView[] = [];
   #queuedFollowUps: QueuedPromptView[] = [];
+  #recoveringQueueContent = false;
   #activeTurnId: string | null = null;
   #persistedTurn: PersistedTurnState | null = null;
   #pendingLiveErrorTurnId: string | null = null;
@@ -207,7 +208,13 @@ export class ConversationProjection {
     return id;
   }
 
+  /** Keep content authoritative after recovery invalidates optimistic queue correspondence. */
+  beginQueueRecovery(): void {
+    this.#recoveringQueueContent = true;
+  }
+
   clearQueuedPrompts(): void {
+    this.#recoveringQueueContent = false;
     if (this.#queuedSteers.length === 0 && this.#queuedFollowUps.length === 0) return;
     this.#queuedSteers = [];
     this.#queuedFollowUps = [];
@@ -272,6 +279,7 @@ export class ConversationProjection {
       case "message_start":
         if (
           !this.#applyCustomMessageEvent(event)
+          && !this.#applyRecoveredUserMessage(event)
           && !this.#alignActiveTurnAwaitingUserMessage(event)
           && !this.#tryPromoteQueuedUserMessage(event)
           && !this.#alignActiveUserMessage(event)
@@ -488,6 +496,11 @@ export class ConversationProjection {
   }
 
   #startAgentTurn(): void {
+    if (this.#recoveringQueueContent) {
+      const active = this.#activeTurn();
+      if (active) this.#setTurnStatus(active.id, "running");
+      return;
+    }
     let active = this.#activeTurn();
     if (this.#hasQueuedPrompts() && active?.status === "running" && active.items.length === 0) {
       this.#store.removeTopLevelItem(active.id);
@@ -520,6 +533,7 @@ export class ConversationProjection {
   }
 
   #settleAgentTurn(): void {
+    this.#recoveringQueueContent = false;
     this.#store.finalizeUnresolvedTools();
     if (this.#activeTurnId) {
       const turn = this.#turn(this.#activeTurnId);
@@ -724,6 +738,39 @@ export class ConversationProjection {
     return this.#alignActiveUserMessage(event);
   }
 
+  #applyRecoveredUserMessage(event: RpcEvent): boolean {
+    const message = event.message;
+    if (!this.#recoveringQueueContent || !isRecord(message) || message.role !== "user") return false;
+    const active = this.#activeTurn();
+    const timestamp = numericValue(message.timestamp) ?? Date.now();
+    // An initial optimistic prompt can still await its first user event. Adopt that
+    // structural slot, never a queued prompt identified by content or timestamp.
+    if (active?.userMessage && !active.userMessage.sourceEntryId && !this.#eligibleLiveTurnIdSet.has(active.id)) {
+      this.#replaceTurn({
+        ...active,
+        startedAt: timestamp,
+        userMessage: {
+          ...active.userMessage,
+          timestamp,
+          blocks: this.#validatedBlocks(message.content, message.attachments, active.userMessage.id),
+        },
+      });
+      this.#markLiveTurnEligible(active.id);
+      return true;
+    }
+    // Keep existing display-queue bookkeeping, without claiming exact membership
+    // in Pi's selected-but-undelivered race. It must not supply transcript content.
+    this.#takeNextQueuedPrompt();
+    if (active?.status === "running") this.#setTurnStatus(active.id, "completed", timestamp);
+    this.#resetStreamingAssistant();
+    const turn = this.#createUserTurn("", [], timestamp);
+    turn.userMessage.blocks = this.#validatedBlocks(message.content, message.attachments, turn.userMessage.id);
+    this.#store.appendItem(turn);
+    this.#activeTurnId = turn.id;
+    this.#markLiveTurnEligible(turn.id);
+    return true;
+  }
+
   #tryPromoteQueuedUserMessage(event: RpcEvent): boolean {
     if (!this.#hasQueuedPrompts()) return false;
     const message = event.message;
@@ -879,7 +926,7 @@ export class ConversationProjection {
     text: string,
     images: readonly WebviewImageInput[] | readonly ImageAttachmentView[],
     timestamp: number,
-  ): AgentTurnView {
+  ): AgentTurnView & { userMessage: ConversationMessageView } {
     const blocks: MessageBlockView[] = [];
     if (text) blocks.push({ type: "text", text });
     const resolvedImages = toImageViews(images);

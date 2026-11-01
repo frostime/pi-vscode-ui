@@ -1,6 +1,8 @@
 # Issue #10: pending-message withdrawal research
 
-Status: research only. No withdrawal UI, RPC helper or runtime capability has been implemented. Original request: https://github.com/frostime/pi-vscode-ui/issues/10.
+Status: implementation and focused verification checkpoint complete; final all-workspace regression and real GUI acceptance remain pending. The accepted boundary keeps actual conversation accuracy but does not internalize exact Pi queue-display synchronization during recovery races. Production withdrawal UI, RPC helpers, runtime capability and Host draft delivery are implemented. Execution evidence and current gate status are in `pending-message-withdrawal.PLAN.md`. Original request: https://github.com/frostime/pi-vscode-ui/issues/10.
+
+Start with `.dev/changes/pending-message-withdrawal/pending-message-withdrawal.TARGET-SPEC.md` for goals, accepted boundaries and acceptance criteria. The locked implementation shape is `.dev/changes/pending-message-withdrawal/pending-message-withdrawal.SHAPE.md`; it predicts the diff around the agreed `QueuedPromptRecovery` class. The user approved the consolidated scope and implementation. SHAPE is now locked; `pending-message-withdrawal.PLAN.md` owns execution status. This is not a request for the user to choose private queue mechanisms. This research file supplies evidence, not a separate product contract.
 
 ## User direction
 
@@ -64,24 +66,62 @@ The compaction scenario seeded one completed turn, made the next synthetic assis
 
 Disposable fixture sources and summaries remain under ignored `tmp/queue-recovery-spike/`. The successful commands were `python tmp/queue-recovery-spike/run.py`, `python tmp/queue-recovery-spike/admission.py`, and `python tmp/queue-recovery-spike/pi-compaction-race.py`; each exited 0. These local paths are experiment evidence, not a maintained test suite or installed-runtime compatibility promise.
 
-## Conservative candidates, not accepted implementation
+## Post-recovery projection spike (FrostPi a359994)
 
-**Do not implement cross-runtime per-bubble withdrawal by clearing and re-submitting other messages.** That changes timing and can rerun input hooks, templates or commands. Neither inspected runtime offers shared per-ID withdrawal semantics.
+Four real Pi 1.4.0 RPC scenarios were captured: selected old input followed by different new input; selected old input followed by same-text new input with an image; selected old input without new input; and a control where clearing really removed the old input before selection. All children used the isolated synthetic provider and exited 0 with zero network attempts. No abort or installed-runtime patch was used.
 
-The smallest candidate is a single **recover pending text** action, explicitly best-effort rather than a guarantee that recovered text will not execute:
+The selected-message scenarios held a public `turn_start` extension hook after compaction completed. Both recovery and the new submission occurred with `isCompacting:false`, `isStreaming:true`; simply disabling recovery during compaction would not exclude this case. A file barrier made this valid async-hook interleaving deterministic; it is not a claim about its frequency with ordinary extensions.
 
-- Pi uses its TUI-equivalent clear-all operation.
-- OMP removes a bounded snapshot of pending user inputs through its first-match operation, without re-submitting untouched messages. This is multiple requests, not an atomic clear-all; already selected/live-steered inputs can remain.
+Each real trace was replayed through the current production `ConversationProjection` source and disposable candidate variants. The variants were generated under ignored `tmp/`; production source was not modified. Three results matter:
+
+| Route | Observed result |
+| --- | --- |
+| Current local FIFO promotion | The late old event consumes the new bubble and displays the new text/images as the old delivery. Without a new bubble, the old user input can be absent until a persisted refresh. |
+| Render post-recovery user turns from actual events; stop borrowing queued content | Correct user text/images in all four captured scenarios, including incremental persisted reconciliation. This alone leaves already-delivered new bubbles stale, so it is only a partial route. |
+| Actual-event rendering plus blind synchronization from runtime queue counts | Works for the different-text and control cases, but removes the same-text new bubble too early because Pi itself reports an empty display queue. Ruled out as an exact membership solution. |
+| Actual-event rendering with existing local FIFO bookkeeping | Follow-up replay preserved correct text/images at every checkpoint and correct ordinary clear/resubmit behavior. Late-event scenarios still clear a new bubble early, and are reported as such; the four captured runs converged at settled. This is evidence for the bounded content route, not exact queue synchronization or universal convergence. |
+
+The same-text case exposed an upstream boundary distinct from FrostPi's FIFO bug:
+
+```text
+old A has been selected but not emitted
+→ clear_queue returns A
+→ new B with the same text, but a new image, is admitted after compaction
+→ A emits; Pi's text-matched bookkeeping removes B from its display list
+→ get_state.pendingMessageCount == 0
+→ releasing the current synthetic response still causes B to emit in the next request
+```
+
+The image distinguishes B from A in the actual events; this is not inferred from matching text/timestamps. Pi's actual queue still contained B while its display queue said zero. Source: installed `dist/core/agent-session.js:729-749` searches the display arrays with `indexOf(messageText)` before broadcasting the user event. `queue_update` contains text arrays; `get_state` counts those same arrays, not the selected local batch. Neither is a shared local-prompt identity.
+
+The durable user entry is created only at `message_end`, after broadcasting `message_start` (`agent-session.js:753-772`). Entry ids are independent of text/timestamps. A persisted refresh remains authoritative for conversation history, but does not supply the missing link from a newly queued local bubble to an already emitted user event.
+
+Reproduction: `python -B tmp/queue-recovery-spike/projection-traces.py`, then `node tmp/queue-recovery-spike/projection-replay.mjs`; both exited 0. The assertions require the current failures and candidate limitations to be observable, rather than accepting every route as successful. Disposable outputs: `projection-traces.json`, `projection-results.json`. Earlier iterations also reproduced the gap while compaction was held; the final run specifically moved recovery and resubmission after compaction.
+
+**Current consolidated direction:** the user asked Agent to settle the technical choices under the what-done-means criteria, considering probability, avoidance, understandable failures and lifecycle cost. The draft now selects actual-event content plus existing queue bookkeeping, disables recovery during compaction, and explains that recovery does not guarantee cancellation and resending creates new input. It deliberately excludes exact Pi race-time bubble synchronization, unconfirmed-bubble states, a second queue model and automatic compensation. This is an explicit responsibility decision recorded in TARGET-SPEC, not a claim that the previous exact-sync route passed.
+
+The follow-up `actual-events-existing-fifo` replay asserts correct content, ordinary queue behavior and the continued visibility of residual race-time membership failures in the evidence. No new real RPC launches were needed. It does not verify initial-user/retry/reset integration, OMP, Host/draft handling or the real FrostPi GUI. Those are implementation checks, not grounds for further generic research. There is no natural-use frequency estimate; the async gate proves possibility, and the compaction guard does not cover every long extension hook.
+
+## Accepted initial scope and prototype
+
+The user accepted a conservative first release with a single **restore all pending content** action covering Steer and Queue on both runtimes. Do not add per-message controls or emulate single removal by clearing and re-submitting other messages. The issue explicitly accepts withdraw-all as a fallback to its requested per-bubble controls.
+
+- Pi uses its TUI-equivalent clear-all operation with explicit best-effort feedback, not a guarantee that already-selected input cannot execute. The consolidated draft avoids compaction, preserves actual conversation content, and accepts imperfect race-time pending bubbles rather than adding a compensating state machine.
+- OMP removes a bounded snapshot through its first-match operation and restores only confirmed removals. This is multiple requests, not an atomic clear-all; already selected/live-steered inputs remain in the conversation.
 - Neither path calls abort. Never retry text-based removal automatically after an ambiguous/lost response: another identical message might be removed.
-- Do not silently overwrite a newer Composer draft, drop attachments, or label an unconfirmed removal successful. Pi image recovery needs a demonstrated local-to-runtime correlation; the current RPC text result alone cannot supply that.
+- Restore into the owning session's Composer, preserve its existing draft, and do not auto-send. The approved interaction combines recovered texts before the current draft with blank lines; it does not reconstruct their individual delivery types on resend.
+- Do not silently lose images. OMP restores returned attachments; Pi's first release disables the bulk action when pending inputs include attachments. Oversized/dropped OMP attachment responses still need explicit handling.
 
-Alternatively, expose different explicit capabilities: OMP can offer confirmed first-match removal, while Pi offers best-effort recover-all. This preserves the stronger OMP result but adds product/UI asymmetry. If the product instead requires the original issue's strict per-message success/failure contract for both runtimes, Pi needs a stronger queue boundary/API and OMP still needs an identity policy for duplicate text.
+Review artifact: `.dev/changes/pending-message-withdrawal/prototype.html` opens directly in a browser. It compares the existing queued bubbles with one group-level Restore all entry, an editable draft, pending feedback, already-consumed content and attachment restrictions. Pi/OMP, light/dark and 300/430/740px controls are prototype scaffolding. All backend outcomes are simulated. The user has approved button placement, draft insertion behavior and feedback treatment. This does not approve any new unconfirmed-queue state proposed after the projection spike.
 
-## Before selecting or implementing a candidate
+## Implemented checkpoint and remaining evidence limits
 
-1. Decide whether TUI-level best-effort recovery is an acceptable user-visible operation. The user requested conservative research, not approval of this weaker guarantee or an attachment-dropping policy.
-2. Before promising more than the tested plain-input behavior, cover transformed slash/skill input, image-only messages, OMP live steering, dropped/oversized image responses and an ambiguous/lost response. These cases remain untested; the pending/consumed, duplicate-text, small-image and delayed-admission experiments above do not settle them.
-3. Keep submission admission and queue editing ordered within the owning SessionRuntime. The tested prompt acknowledgements give an admission barrier, not a continued-membership guarantee. Recheck the actual selected runtime/version before relying on that contract.
-4. Test FrostPi reconciliation when a recovered Pi message subsequently emits a user event. It must not consume a different newly queued local bubble or imply the message never ran. Test Composer recovery with a newer draft and attachments. The real RPC tests exercised runtimes directly, not FrostPi's local projection or draft recovery.
+The implementation now uses `QueuedPromptRecovery` with raw `PiRpcApi.clearQueue` / `removeOmpQueuedMessage`, actual-event transcript content after recovery, transient Host draft ownership and a correlated shared UI flow. See PLAN for exact focused tests, last unrerun corrections and the paused full-check gate. Do not reopen exact Pi queue synchronization as a prerequisite.
 
-FrostPi entry points: `apps/pi-client/src/core/sessions/SessionRuntime.ts:205-259` submits and locally projects pending prompts; `apps/pi-client/src/core/conversation/ConversationProjection.ts` owns local FIFO promotion; `packages/pi-rpc/src/PiRpcApi.ts` currently has no withdrawal helper. Follow `.dev/docs/architecture/omp-compatibility.md` before adding APIs: non-isomorphic queue recovery belongs in product compatibility, not a transport alias that silently promises Pi and OMP mean the same thing.
+The final Runtime probes used the actual installed Pi/OMP with an isolated synthetic provider through the implemented FrostPi `SessionRuntime`: both restored three admitted inputs while the active run continued, then adopted persisted user entry identities. OMP normalized the supplied PNG into WebP; the client correctly restored those returned bytes, not the local PNG. Pi rejected queued images without clearing them. `node tmp/queue-recovery-spike/client-runtime.mjs pi` and `omp` both exited 0. No external model calls or real credentials were used; Pi recorded zero network attempts, OMP recorded 12 blocked startup attempts. Initial OMP probe incorrectly required original PNG bytes; another ended before asynchronous persisted refresh completed. The final probes checked returned format and waited for persisted takeover before shutdown; no normal-operation or shutdown warnings remained.
+
+Live local summaries are in ignored `tmp/queue-recovery-spike/client-pi-n2Pp4O/client-summary.json` and `client-omp-hGvXuI/client-summary.json`. These are machine-local evidence, not a maintained test suite or GUI acceptance. Root DOM integration connects the real shared UI/Host/Runtime to controlled children; it does not establish actual native host layout or focus behavior.
+
+Transformed slash/skill input, image-only and OMP live steering have not received new real-installed-runtime coverage. Dropped/oversized images and ambiguous responses are covered by focused controlled tests, not all real runtime variants. These evidence boundaries do not authorize expanding the feature or claiming universal compatibility. If they become material to a reported normal-use failure, inspect that path rather than adding speculative mechanisms.
+
+FrostPi entry points: `apps/pi-client/src/core/sessions/QueuedPromptRecovery.ts`, `ConversationProjection.ts`, and the Host/Composer paths listed in PLAN. Non-isomorphic queue recovery belongs in the product owner, not a transport alias. The current task remains on `feat/pending-message-recovery`; no merge or push has been requested.

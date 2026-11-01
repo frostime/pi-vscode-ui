@@ -9,6 +9,7 @@ export interface RuntimeCapabilities {
   readonly fork: boolean;
   readonly slashCommands: boolean;
   readonly questionTool: boolean;
+  readonly queuedPromptRecovery: boolean;
 }
 
 export interface RuntimeCompatibilityProfile {
@@ -29,6 +30,7 @@ const PI_PROFILE: RuntimeCompatibilityProfile = {
     fork: true,
     slashCommands: true,
     questionTool: true,
+    queuedPromptRecovery: true,
   },
   defaultSessionRoot: () => join(homedir(), ".pi", "agent", "sessions"),
 };
@@ -42,6 +44,7 @@ const OH_MY_PI_PROFILE: RuntimeCompatibilityProfile = {
     fork: false,
     slashCommands: true,
     questionTool: true,
+    queuedPromptRecovery: true,
   },
   defaultSessionRoot: () => join(homedir(), ".omp", "agent", "sessions"),
 };

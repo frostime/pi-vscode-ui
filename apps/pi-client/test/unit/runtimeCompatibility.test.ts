@@ -15,6 +15,7 @@ describe("runtime compatibility profiles", () => {
       fork: true,
       slashCommands: true,
       questionTool: true,
+      queuedPromptRecovery: true,
     });
     expect(profile.defaultSessionRoot()).toBe(join(homedir(), ".pi", "agent", "sessions"));
     expect(configuredPiInvocation(undefined, "pi")).toEqual({});
@@ -31,6 +32,7 @@ describe("runtime compatibility profiles", () => {
         fork: false,
         slashCommands: true,
         questionTool: true,
+        queuedPromptRecovery: true,
       },
     });
     expect(configuredPiInvocation(undefined, "oh-my-pi")).toEqual({ command: expectedCommand });

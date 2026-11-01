@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 import ClientApp from "$ui/ClientApp.svelte";
+import { BRIDGE_VERSION } from "$shared/bridge/bridgeVersion";
 import type { HostToWebviewMessage } from "$shared/bridge/hostToWebview";
 import type { SessionSummaryView } from "$shared/model/sessionViewModel";
 
@@ -61,7 +62,7 @@ function activeSession(id = "session"): SessionViewModel {
     collapseTurnTrace: false, composerStreamingBehavior: "steer",
     networkProxy: { mode: "direct", label: "Direct", restartRequired: false },
     questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
-    conversationItems: [], queuedSteers: [], queuedFollowUps: [], pendingExtensionUi: [], extensionStatuses: [], extensionWidgets: [],
+    conversationItems: [], queuedSteers: [], queuedFollowUps: [], queuedPromptRecovery: { state: "ready" }, pendingExtensionUi: [], extensionStatuses: [], extensionWidgets: [],
     sessionTreeAvailable: false, isNavigatingTree: false, isSummarizingTree: false, conversationContentRevision: 0,
     stats: {
       userMessages: 0, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 0,
@@ -226,7 +227,7 @@ describe("explicit client UI capabilities", () => {
 
   it("drops editor mention specials from workspace suggestions when the host lacks editor mentions", () => {
     const message: HostToWebviewMessage = {
-      bridgeVersion: "3.3",
+      bridgeVersion: BRIDGE_VERSION,
       type: "workspaceFileSuggestions",
       requestId: "request",
       items: [{ path: "src/a.ts", name: "a.ts", directory: "src", score: 800, isDirectory: false }],

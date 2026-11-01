@@ -4,7 +4,7 @@ description: Product features, owning code, and nearest contracts.
 scope:
   - /apps/**
   - /packages/**
-updated: 2026-10-30
+updated: 2026-11-01
 ---
 
 # Feature → Code Map
@@ -48,6 +48,7 @@ Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 - Root/composition: `ClientApp.svelte`, `shell/SidebarShell.svelte`, `shell/SessionInteraction.svelte`; editor availability: `../shared/model/clientUiCapabilities.ts`.
 - Session Header/New/Resume: `features/sessions/SessionHeader.svelte` and `SessionList.svelte`.
 - Composer/mentions/attachments: `features/composer/Composer.svelte` and `composer.SPEC.md`; shared file search: `../host/file-search/`; VS Code editor capture: `apps/vscode/src/extension/composer/`.
+- Pending-message recovery: `../core/sessions/QueuedPromptRecovery.ts` owns backend ordering/results; `features/composer/queuedPromptRecoveryStore.svelte.ts` owns UI correlation/feedback. Group entry: `features/conversation/ConversationView.svelte`; draft authority: bridge contract, not a second queue.
 - Conversation/scrolling: `features/conversation/ConversationView.svelte` and `scrolling/`; Markdown: `markdown/renderMarkdown.ts` and `markdown.SPEC.md`.
 - Response annotation: `features/annotation-review/` and its SPEC; shell coordination: `shell/SessionInteraction.svelte`.
 - Models/thinking: `features/models/ModelPicker.svelte`, `thinkingLevels.ts`, and adjacent SPECs.

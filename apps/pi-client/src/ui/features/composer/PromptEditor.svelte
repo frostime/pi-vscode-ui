@@ -26,6 +26,7 @@
     currentStreamingBehavior,
     onsubmit,
     onpasteimages,
+    readOnly = false,
   }: {
     sessionId: string;
     value: string;
@@ -35,6 +36,7 @@
     currentStreamingBehavior: StreamingBehavior;
     onsubmit: (streamingBehavior: StreamingBehavior) => void;
     onpasteimages: (files: File[]) => void | Promise<void>;
+    readOnly?: boolean;
   } = $props();
 
   let host: HTMLDivElement;
@@ -43,6 +45,7 @@
   let configuredCompletionKey: string | null = null;
   const syntaxCompartment = new Compartment();
   const completionCompartment = new Compartment();
+  const editingCompartment = new Compartment();
 
   export function focus(): void {
     view?.focus();
@@ -88,6 +91,18 @@
     });
   });
 
+  $effect(() => {
+    view?.dispatch({ effects: editingCompartment.reconfigure(editingExtensions(readOnly)) });
+  });
+
+  function editingExtensions(locked: boolean) {
+    return [
+      EditorState.readOnly.of(locked),
+      EditorView.editable.of(!locked),
+      EditorView.contentAttributes.of({ "aria-readonly": String(locked) }),
+    ];
+  }
+
   function createEditor(): EditorView {
     return new EditorView({ state: createState(value), parent: host });
   }
@@ -97,6 +112,10 @@
       doc,
       extensions: [
         history(),
+        editingCompartment.of(editingExtensions(readOnly)),
+        // Keep returned drafts writable by the Host, but reject user-originated changes
+        // from undo, completion or an already queued input transaction while locked.
+        EditorState.changeFilter.of(() => applyingExternal || !readOnly),
         // Mount completion outside the editor so composer/editor geometry cannot clip long lists.
         tooltips({ parent: document.body }),
         keymap.of([

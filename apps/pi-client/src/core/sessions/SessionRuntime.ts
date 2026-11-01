@@ -20,6 +20,7 @@ import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
 import type { QuestionDraftSubmission } from "../../shared/question-tool/questionToolProtocol.js";
 import type { AgentTurnView, ImageAttachmentView } from "../../shared/model/conversationModel.js";
 import type { ComposerSeedView, SessionViewModel } from "../../shared/model/sessionViewModel.js";
+import type { QueuedPromptRecoveryOutcome } from "../../shared/model/queuedPromptRecoveryModel.js";
 import { canonicalPath } from "../_shared/canonicalPath.js";
 import { loadPiSettings, showCacheMissNoticesEnabled } from "../_shared/pi-settings/loadPiSettings.js";
 import { normalizeImageAttachments, validateProjectedImageAttachments } from "../attachments/normalizeImageAttachment.js";
@@ -47,6 +48,7 @@ import { SessionEntryState } from "./SessionEntryState.js";
 import { resolvePiModelScope } from "../models/resolvePiModelScope.js";
 import { SessionViewState } from "./SessionViewState.js";
 import { OmpPromptCompatibility } from "./OmpPromptCompatibility.js";
+import { QueuedPromptRecovery } from "./QueuedPromptRecovery.js";
 
 export interface SessionRuntimeHost {
   readonly clientVersion: string;
@@ -79,6 +81,7 @@ export class SessionRuntime {
   #connection: PiRpcConnection | null = null;
   #api: PiRpcApi | null = null;
   #ompPrompts: OmpPromptCompatibility | null = null;
+  #queuedPromptRecovery: QueuedPromptRecovery | null = null;
   #extensionUi: ExtensionUiCoordinator | null = null;
   #starting: Promise<void> | null = null;
   #historyLoading: Promise<void> | null = null;
@@ -137,7 +140,7 @@ export class SessionRuntime {
   }
 
   get view(): Readonly<SessionViewModel> {
-    return this.#viewState.read(this.#conversation.read());
+    return this.#viewState.read(this.#conversation.read(), this.#queuedPromptRecovery?.view);
   }
 
   get snapshot(): SessionViewModel {
@@ -171,6 +174,7 @@ export class SessionRuntime {
 
   async stop(): Promise<void> {
     this.#lifecycleVersion += 1;
+    this.#queuedPromptRecovery?.dispose();
     this.#conversation.finalizeLiveState();
     this.#viewState.setStatus("stopping");
     this.#stopLiveStatsRefresh();
@@ -184,6 +188,7 @@ export class SessionRuntime {
     this.#connection = null;
     this.#api = null;
     this.#ompPrompts = null;
+    this.#queuedPromptRecovery = null;
     this.#extensionUi = null;
     this.#historyEventBuffer = null;
     this.#entries.reset();
@@ -227,26 +232,29 @@ export class SessionRuntime {
     }
     let requestId: string | undefined;
     const extensionCommand = await this.#resolveImmediateExtensionCommand(message);
+    if (api !== this.#api || this.#disposed) throw new Error("The session process changed before submission.");
     // Park while streaming or while an earlier prompt still awaits promotion; otherwise an idle-gap
     // appendUserPrompt can steal the next agent_start and leave queue bubbles stuck.
     const hasQueuedPrompts = this.view.queuedSteers.length > 0 || this.view.queuedFollowUps.length > 0;
     const queuePrompt = !extensionCommand && (this.view.isStreaming || hasQueuedPrompts);
 
     if (queuePrompt) {
+      const recovery = this.#queuedPromptRecovery;
+      if (!recovery) throw new Error("The session is not ready to accept queued messages.");
       const streamingBehavior = requestedStreamingBehavior ?? configuration.streamingBehavior;
       const queuedId = streamingBehavior === "steer"
         ? this.#conversation.enqueueSteer(message, images)
         : this.#conversation.enqueueFollowUp(message, images);
       this.#notifyChange();
       try {
-        await api.prompt(message, {
+        await recovery.admitQueuedPrompt(() => api.prompt(message, {
           ...(normalizedImages.length ? { images: normalizedImages } : {}),
           streamingBehavior,
           ...(ompPrompts ? { onRequestId: (id: string) => {
             requestId = id;
             ompPrompts.track(id, { queuedId });
           } } : {}),
-        });
+        }));
       } catch (error) {
         if (requestId) ompPrompts?.forget(requestId);
         this.#conversation.removeQueuedPrompt(queuedId);
@@ -285,6 +293,11 @@ export class SessionRuntime {
       this.#notifyChange();
       throw error;
     }
+  }
+
+  async restoreQueuedPrompts(): Promise<QueuedPromptRecoveryOutcome> {
+    if (!this.#queuedPromptRecovery) throw new Error("The session is not available for pending-message recovery.");
+    return this.#queuedPromptRecovery.recoverAll();
   }
 
   async compact(customInstructions?: string): Promise<void> {
@@ -646,6 +659,13 @@ export class SessionRuntime {
     this.#ompPrompts = compatibilityProfile.id === "oh-my-pi" ? new OmpPromptCompatibility() : null;
     this.#connection = connection;
     this.#api = api;
+    const queueRecovery = new QueuedPromptRecovery({
+      api, runtime: compatibilityProfile.id, conversation: this.#conversation,
+      readAvailability: () => compatibilityProfile.capabilities.queuedPromptRecovery ? this.#viewState.queueRecoveryAvailability() : "unavailable",
+      getAttachmentLimits: () => ({ maxImageBytes: this.#configurationProvider().maxImageBytes, maxImages: 12 }),
+      onChange: () => this.#notifyChange(),
+    });
+    this.#queuedPromptRecovery = queueRecovery;
     this.#extensionUi = new ExtensionUiCoordinator(api, {
       onChange: () => {
         this.#syncExtensionUiSnapshot();
@@ -668,6 +688,7 @@ export class SessionRuntime {
       this.#notifyChange();
     });
     connection.onFailure((error) => {
+      queueRecovery.dispose();
       this.#logger.error(`Session ${this.id} failed`, error);
       this.#stopLiveStatsRefresh();
       this.#conversation.finalizeLiveState();

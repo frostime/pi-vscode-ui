@@ -7,9 +7,10 @@ import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
 import { clientCapabilities } from "../state/clientCapabilities.svelte";
 import { applyComposerSeed } from "../features/composer/composerSeedClient";
-import { applyHostDraft, insertDraftText, setDraftText } from "../features/composer/composerDraftSync";
+import { applyHostDraft, insertDraftText, mergeRecoveredDraftContent, setDraftText } from "../features/composer/composerDraftSync";
 import { deliverWorkspaceFileSuggestions } from "../features/composer/fileSuggestionClient";
 import { promptSubmissionResult } from "../features/composer/promptSubmissionStore.svelte";
+import { claimQueuedPromptRecoveryResult } from "../features/composer/queuedPromptRecoveryStore.svelte";
 import { resolveForkResult } from "../features/conversation/forkMessageClient";
 import { deliverMarkdownImageResult } from "../features/conversation/markdown/markdownImageClient";
 import { composerFocusTick, presentationStore, showToast } from "../state/sessionViewStore.svelte";
@@ -60,6 +61,16 @@ export function applyHostMessage(message: HostToWebviewMessage): void {
       promptSubmissionResult.set(message);
       if (!message.ok && message.error) showToast("error", message.error);
       break;
+    case "restoreQueuedPromptsResult": {
+      // Validate correlation first: stale or duplicated replies must not touch a draft.
+      const claim = claimQueuedPromptRecoveryResult(message);
+      if (claim.kind === "ignored") break;
+      if (claim.merge) mergeRecoveredDraftContent(claim.sessionId, claim.merge);
+      if (claim.focus && get(presentationStore).displayedSession?.id === claim.sessionId) {
+        composerFocusTick.update((value) => value + 1);
+      }
+      break;
+    }
     case "markdownImageResult":
       deliverMarkdownImageResult(message.requestId, message.sessionId, message.result);
       break;

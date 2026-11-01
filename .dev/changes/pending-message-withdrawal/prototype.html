@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FrostPi · 批量取回交互原型</title>
+<style>
+:root{font-family:"Segoe UI","Microsoft YaHei",sans-serif;color-scheme:dark;--page:#141619;--bg:#1e1f22;--surface:#26282d;--raised:#30333a;--text:#d8dbe1;--muted:#939ba8;--border:#393d45;--link:#8ab4f8;--hover:#343944;--active:#314664;--green:#9ac18d;--warning:#dfbd80;--shadow:0 18px 60px #0003}
+body.light{color-scheme:light;--page:#f0f1f4;--bg:#fff;--surface:#f5f6f8;--raised:#fff;--text:#2c313a;--muted:#687281;--border:#d8dce4;--link:#2768b5;--hover:#edf1f7;--active:#dce9fa;--green:#487c3c;--warning:#885a15;--shadow:0 18px 60px #243b5312}
+*{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--text);font-size:13px;line-height:1.55}button,select,textarea{font:inherit}button,select{color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:5px}button{cursor:pointer;padding:5px 9px}button:hover:not(:disabled){background:var(--hover)}button:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--link);outline-offset:2px}button:disabled{cursor:default;opacity:.45}[hidden]{display:none!important}
+.review{max-width:1120px;margin:auto;padding:25px 24px 12px}.eyebrow{color:var(--link);font-size:11px;letter-spacing:.1em}h1{font-size:20px;font-weight:600;line-height:1.4;margin:6px 0}p{margin:7px 0}.intro{color:var(--muted);font-size:12px}.controls{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:end;padding:16px 0 0}.controls label{display:grid;gap:4px;font-size:11px;color:var(--muted)}select{height:30px;min-width:100px;padding:3px 7px}.reset{height:30px;margin-left:auto}.workspace{max-width:1120px;margin:0 auto;padding:20px 24px 32px;display:flex;align-items:flex-start;justify-content:center;gap:34px}.mock{width:430px;flex:none;max-width:100%;background:var(--bg);border:1px solid var(--border);border-radius:9px;box-shadow:var(--shadow);overflow:hidden;transition:width .15s}.mock.narrow{width:300px}.mock.wide{width:740px}.session-header{display:flex;align-items:center;gap:9px;padding:12px 13px;border-bottom:1px solid var(--border)}.pi-logo{font:23px Georgia,serif;color:var(--link);width:20px}.session-name{font-weight:600;font-size:12px}.session-path{color:var(--muted);font-size:10px}.runtime{margin-left:auto;padding:1px 5px;border:1px solid var(--border);border-radius:4px;font-size:10px;color:var(--muted)}.conversation{padding:17px 13px 8px}.user-message{display:flex;justify-content:flex-end;padding-left:12%;margin-bottom:13px}.bubble{max-width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:12px 12px 4px 12px;background:color-mix(in srgb,var(--surface) 82%,var(--active));font-size:12px;overflow-wrap:anywhere}.assistant{padding:0 1px 16px;font-size:12px}.assistant p{margin:0 0 9px}.working{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:11px}.pulse{display:inline-block;width:6px;height:6px;background:var(--green);border-radius:50%;box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 10%,transparent)}.trace{color:var(--muted);font:11px Consolas,monospace;padding:6px 8px;border-left:2px solid var(--border);margin:8px 0 12px}.pending{margin:1px 0 8px}.pending-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 8px;min-height:25px}.pending-label{font-size:10px;color:var(--muted)}.restore{display:inline-flex;align-items:center;gap:5px;flex:none;font-size:11px;line-height:1.5;padding:2px 6px;color:var(--muted);border:0;background:transparent;white-space:nowrap}.restore:hover:not(:disabled){color:var(--text)}.restore svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.5}.restore[aria-busy="true"] svg{animation:spin 1s linear infinite}.queued{margin-bottom:8px;padding-left:12%;display:flex;justify-content:flex-end;opacity:.88}.queued .bubble{border-style:dashed;background:color-mix(in srgb,var(--surface) 70%,transparent);box-shadow:none}.badge{margin-top:6px;display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)}.badge.steer{color:var(--link)}.tiny-pulse{width:4px;height:4px;display:inline-block;background:currentColor;border-radius:50%}.image-count{color:var(--muted);font-size:10px;margin-top:5px}.disabled-reason{font-size:10px;color:var(--muted);margin:-2px 0 10px;text-align:right}.notice{position:relative;margin:7px 0 8px;padding:7px 24px 7px 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);font-size:11px;color:var(--muted)}.notice.warning{color:var(--warning)}.dismiss{position:absolute;right:3px;top:3px;padding:0 4px;border:0;background:transparent;color:var(--muted)}.composer-region{padding:5px 11px 12px}.metrics{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:10px;color:var(--muted)}.metric-right{display:flex;align-items:center;gap:9px}.ring{width:11px;height:11px;border:1.5px solid var(--border);border-top-color:var(--link);border-right-color:var(--link);border-radius:50%;display:inline-block;vertical-align:-2px;margin-right:3px}.composer{border:1px solid var(--border);border-radius:8px;background:var(--surface);transition:border-color .15s}.composer:focus-within{border-color:var(--link)}textarea{display:block;resize:vertical;width:100%;min-height:86px;max-height:240px;border:0;outline:none!important;background:transparent;color:var(--text);padding:11px;line-height:1.65;font-size:12px;font-family:Consolas,"Microsoft YaHei",monospace}.attachments{padding:0 9px 5px}.attachment{display:inline-flex;align-items:center;gap:5px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:10px;color:var(--muted)}.attachment svg{width:18px;height:15px;fill:var(--active);stroke:var(--link);stroke-width:1}.toolbar{display:flex;align-items:center;gap:6px;min-height:34px;padding:3px 8px 7px;color:var(--muted);font-size:10px}.model{font-size:10px;padding:2px 5px;background:var(--bg);border:1px solid var(--border);border-radius:4px}.send{margin-left:auto;color:var(--link);font-size:11px}.stop{border:1px solid var(--border);border-radius:4px;font-size:9px;padding:2px 6px}.draft-hint{color:var(--muted);font-size:10px;padding:5px 2px 0}.review-notes{max-width:270px;color:var(--muted);font-size:12px;padding-top:8px}.review-notes h2{font-size:13px;font-weight:600;color:var(--text);margin:0 0 10px}.review-notes ol{padding-left:19px}.review-notes li{margin:0 0 11px}.review-notes .boundary{border-top:1px solid var(--border);padding-top:12px;font-size:11px}.wide-layout .review-notes{display:none}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:740px){.review{padding:18px 15px 8px}.workspace{padding:15px;flex-direction:column;align-items:center;gap:12px}.review-notes{max-width:430px;padding-top:0}.reset{margin-left:0}.mock.wide{width:100%}.controls{gap:9px}.review-notes li{margin-bottom:6px}}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="review">
+  <div class="eyebrow">FROSTPI · INTERACTION PROTOTYPE</div>
+  <h1>一次性取回待处理消息</h1>
+  <p class="intro">只评审新增入口及取回后的变化。消息、等待和后端结果均为模拟；不会连接 Pi、发送消息或保存数据。</p>
+  <div class="controls" aria-label="原型控制，不属于产品界面">
+    <label>对照<select id="view"><option value="proposal">建议交互</option><option value="baseline">当前界面（对照）</option></select></label>
+    <label>运行时<select id="backend"><option value="pi">Pi</option><option value="omp">OMP</option></select></label>
+    <label>场景<select id="scenario"><option value="normal">普通文本</option><option value="consumed">部分内容已被取走</option><option value="images">包含图片附件</option></select></label>
+    <label>宽度<select id="width"><option value="normal">侧栏 · 430px</option><option value="narrow">窄侧栏 · 300px</option><option value="wide">编辑器 · 740px</option></select></label>
+    <label>主题<select id="theme"><option value="dark">深色</option><option value="light">浅色</option></select></label>
+    <button class="reset" id="reset" type="button">重置演示</button>
+  </div>
+</header>
+<main class="workspace">
+  <section class="mock" aria-label="FrostPi 会话原型">
+    <header class="session-header"><span class="pi-logo" aria-hidden="true">π</span><div><div class="session-name">Pending message recovery</div><div class="session-path">FrostPi / playground</div></div><span class="runtime" id="runtime-name">Pi</span></header>
+    <div class="conversation">
+      <div class="user-message"><div class="bubble">请检查会话状态处理，并补充必要的测试。</div></div>
+      <div class="assistant"><p>我先核对当前实现，保留现有的行为边界。</p><div class="trace">⌕ read · SessionRuntime.ts</div><div class="working"><span class="pulse" aria-hidden="true"></span><span>Working…</span></div></div>
+      <div id="delivered" hidden></div>
+      <section class="pending" id="pending" aria-label="待处理消息">
+        <div class="pending-head" id="pending-head"><span class="pending-label" id="pending-count"></span><button class="restore" id="restore" type="button" title="取回全部待处理内容，不停止当前运行"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 3 2.5 7l4 4M3 7h6a4 4 0 0 1 0 8" transform="translate(0 -2)"/></svg><span id="restore-label">Restore all</span></button></div>
+        <p class="disabled-reason" id="disabled-reason" hidden>Pi 暂不支持可靠取回图片附件。</p>
+        <div id="queued-list"></div>
+      </section>
+      <div class="notice" id="notice" role="status" aria-live="polite" hidden><span id="notice-text"></span><button class="dismiss" type="button" id="dismiss" aria-label="关闭提示">×</button></div>
+    </div>
+    <div class="composer-region">
+      <div class="metrics"><span id="run-state">● Agent is running</span><span class="metric-right"><span>▥ Usage</span><span><i class="ring" aria-hidden="true"></i>28%</span></span></div>
+      <div class="composer"><textarea id="draft" aria-label="消息输入框" spellcheck="false"></textarea><div class="attachments" id="attachments" hidden><span class="attachment"><svg viewBox="0 0 18 15" aria-hidden="true"><rect x="1" y="1" width="16" height="13" rx="2"/><path d="m3 11 4-4 3 3 2-2 3 3"/></svg>layout.png</span></div><div class="toolbar" aria-hidden="true"><span>＋</span><span class="model">GPT-5.4⌄</span><span class="model">High⌄</span><span class="send">Steer ↑</span><span class="stop">■</span></div></div>
+      <div class="draft-hint" id="draft-hint">已有草稿可以直接编辑。取回不会自动发送。</div>
+    </div>
+  </section>
+  <aside class="review-notes">
+    <h2>这次主要看三件事</h2>
+    <ol><li><strong>入口：</strong>在待处理气泡组顶部统一放「Restore all」，而不是每条消息增加一个按钮。</li><li><strong>落点：</strong>取回内容放到输入框前面，原有草稿保留在后面，输入框获得焦点。</li><li><strong>反馈：</strong>Working 状态不变。切换「已被取走」或「图片附件」看看边界提示。</li></ol>
+    <p class="boundary">多条消息以空行合并为一份草稿。重发时使用当前 Steer / Queue 选项，不自动重建原先的多条投递。</p>
+    <p>上方控件用于造场景，不属于正式 UI。按钮文字、提示文案与最终视觉细节仍可调整。</p>
+  </aside>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const initialDraft = '顺便检查一下窄侧栏的布局。';
+const fixtures = [
+  { text: '先不要改配置文件，保留现有默认值。', delivery: 'Steer' },
+  { text: '完成后补充相关测试。', delivery: 'Queue' },
+  { text: '最后检查一下类型错误。', delivery: 'Queue' },
+];
+let pending = [], busy = false, generation = 0;
+const controls = ['view', 'backend', 'scenario', 'width', 'theme'];
+const params = new URLSearchParams(location.search);
+for (const id of controls) {
+  if ([...$(id).options].some((option) => option.value === params.get(id))) $(id).value = params.get(id);
+}
+function syncPresentation() {
+  document.body.classList.toggle('light', $('theme').value === 'light');
+  document.querySelector('.mock').className = `mock ${$('width').value}`;
+  document.querySelector('.workspace').classList.toggle('wide-layout', $('width').value === 'wide');
+  $('runtime-name').textContent = $('backend').value === 'pi' ? 'Pi' : 'OMP';
+  $('pending-head').hidden = $('view').value === 'baseline';
+  const url = new URL(location.href);
+  controls.forEach((id) => url.searchParams.set(id, $(id).value));
+  history.replaceState(null, '', url);
+}
+function renderPending() {
+  $('pending').hidden = pending.length === 0;
+  $('pending-count').textContent = `Pending · ${pending.length}`;
+  $('queued-list').replaceChildren();
+  pending.forEach((item) => {
+    const row = document.createElement('article');
+    row.className = 'queued';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    const text = document.createElement('div');
+    text.textContent = item.text;
+    bubble.append(text);
+    if (item.image) {
+      const image = document.createElement('div');
+      image.className = 'image-count';
+      image.textContent = '▧ layout.png · 1 image';
+      bubble.append(image);
+    }
+    const badge = document.createElement('div');
+    badge.className = `badge ${item.delivery === 'Steer' ? 'steer' : ''}`;
+    badge.innerHTML = '<span class="tiny-pulse" aria-hidden="true"></span>';
+    const label = document.createElement('span');
+    label.textContent = item.delivery;
+    badge.append(label);
+    bubble.append(badge);
+    row.append(bubble);
+    $('queued-list').append(row);
+  });
+  const unsupportedImage = $('backend').value === 'pi' && pending.some((item) => item.image);
+  $('restore').disabled = busy || unsupportedImage;
+  $('restore').setAttribute('aria-busy', String(busy));
+  $('restore-label').textContent = busy ? 'Restoring…' : 'Restore all';
+  $('restore').title = unsupportedImage ? 'Pi 暂不支持可靠取回图片附件' : '取回全部待处理内容，不停止当前运行';
+  $('disabled-reason').hidden = !unsupportedImage || $('view').value === 'baseline';
+}
+function reset() {
+  generation++;
+  busy = false;
+  pending = fixtures.map((item, index) => ({ ...item, image: $('scenario').value === 'images' && index === 1 }));
+  $('draft').value = initialDraft;
+  $('draft').style.height = '86px';
+  $('attachments').hidden = true;
+  $('notice').hidden = true;
+  $('delivered').hidden = true;
+  $('delivered').replaceChildren();
+  $('draft-hint').textContent = '已有草稿可以直接编辑。取回不会自动发送。';
+  syncPresentation();
+  renderPending();
+}
+$('restore').addEventListener('click', () => {
+  if (busy || $('restore').disabled || !pending.length) return;
+  busy = true;
+  const token = generation, backend = $('backend').value, scenario = $('scenario').value;
+  const snapshot = pending.map((item) => ({ ...item }));
+  renderPending();
+  $('notice').hidden = true;
+  // Simulated request latency only. No backend, persistence, or execution takes place.
+  setTimeout(() => {
+    if (token !== generation) return;
+    const consumed = scenario === 'consumed' ? snapshot.slice(0, 1) : [];
+    const recovered = backend === 'omp' && consumed.length ? snapshot.slice(1) : snapshot;
+    if (consumed.length) {
+      const row = document.createElement('div');
+      row.className = 'user-message';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = consumed[0].text;
+      row.append(bubble);
+      $('delivered').append(row);
+      $('delivered').hidden = false;
+    }
+    const recoveredText = recovered.map((item) => item.text).join('\n\n');
+    // Read the current draft at completion, including edits made during the simulated wait.
+    $('draft').value = [recoveredText, $('draft').value].filter((text) => text.trim()).join('\n\n');
+    $('attachments').hidden = !recovered.some((item) => item.image);
+    pending = [];
+    busy = false;
+    renderPending();
+    $('notice').className = `notice ${backend === 'pi' || consumed.length ? 'warning' : ''}`;
+    $('notice-text').textContent = backend === 'pi'
+      ? `已取回 ${recovered.length} 段待处理文本。Pi 仍可能执行其中已开始投递的内容。`
+      : `已取回 ${recovered.length} 条待处理消息。${consumed.length ? '1 条已投递，保留在对话中。' : '当前运行未停止。'}`;
+    $('notice').hidden = false;
+    $('draft-hint').textContent = '已放回输入框，尚未发送。多条内容合并为一份草稿。';
+    $('draft').style.height = 'auto';
+    $('draft').style.height = `${Math.min(210, $('draft').scrollHeight)}px`;
+    $('draft').focus({ preventScroll: true });
+    $('draft').setSelectionRange(0, 0);
+  }, 850);
+});
+controls.forEach((id) => $(id).addEventListener('change', () => {
+  if (id === 'theme' || id === 'width') syncPresentation();
+  else reset();
+}));
+$('reset').addEventListener('click', reset);
+$('dismiss').addEventListener('click', () => { $('notice').hidden = true; });
+reset();
+</script>
+</body>
+</html>

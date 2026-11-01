@@ -3,7 +3,7 @@ title: Pi RPC Transport Contract
 description: Stable process, framing, request-correlation, and failure semantics for the Pi subprocess client.
 scope:
   - /packages/pi-rpc/**
-updated: 2026-10-04
+updated: 2026-11-01
 ---
 
 # Pi RPC Transport Contract
@@ -23,6 +23,8 @@ OMP `get_commands` is sent as `get_available_commands`. Discovery returns only M
 Discovery does not authorize execution: the Host validates leading slash submissions against fresh discovery. OMP skill messages, persisted custom entries, and `prompt_result` facts remain unchanged on the wire; their presentation, correlation, and completion interpretation belong to the Host.
 
 Assistant `message_update` records are forwarded unchanged whether they contain a cumulative `message` or only an indexed `assistantMessageEvent`. This package must not assemble deltas or synthesize legacy events. Custom `message_start`/`message_end` records with `message.role: "custom"` are likewise forwarded unchanged, including `customType`, `content`, `display`, `details`, and the event timestamp; transcript display and persisted-entry adoption belong to the conversation projection. Boundary `entry_appended` events are also forwarded unchanged, including their complete entry and entry ID; they are not synthesized into custom delivery events.
+
+`PiRpcApi.clearQueue` exposes Pi's text-only `clear_queue`; `removeOmpQueuedMessage` exposes OMP's first-text-match `remove_queued_message`, preserving `removed`, returned images and `imagesDropped`. They are not aliases: no dialect emulates bulk recovery or interprets cancellation success. Admission ordering, bounded OMP removal, partial results and Composer recovery belong to the product layer.
 
 ## Framing invariants
 

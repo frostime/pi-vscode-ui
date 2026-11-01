@@ -1,10 +1,12 @@
 import type { PiRpcConnection } from "./PiRpcConnection.js";
 import type {
+  RpcClearQueueResult,
   RpcCommandDescriptor,
   RpcExtensionUiResponse,
   RpcForkResult,
   RpcImageContent,
   RpcModel,
+  RpcRemoveQueuedMessageResult,
   RpcSessionEntry,
   RpcSessionState,
   RpcSessionStats,
@@ -44,6 +46,15 @@ export class PiRpcApi {
 
   followUp(message: string, images?: RpcImageContent[]): Promise<void> {
     return this.connection.request({ type: "follow_up", message, ...(images?.length ? { images } : {}) });
+  }
+
+  clearQueue(): Promise<RpcClearQueueResult> {
+    return this.connection.request({ type: "clear_queue" });
+  }
+
+  /** OMP's confirmed first-text-match removal, not an alias for Pi clear_queue. */
+  removeOmpQueuedMessage(message: string, queue: "steering" | "followUp"): Promise<RpcRemoveQueuedMessageResult> {
+    return this.connection.request({ type: "remove_queued_message", message, queue });
   }
 
   abort(): Promise<void> {
