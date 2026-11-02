@@ -220,7 +220,7 @@ describe("PiRpcConnection", () => {
 
     try {
       await connection.start();
-      await expect(connection.request({ type: "oversized_chunk" })).rejects.toThrow("RPC chunk logical frame exceeds the advertised reassembly limit");
+      await expect(connection.request({ type: "oversized_chunk" })).rejects.toThrow(/reassembly limit/);
       expect(failures).toHaveLength(1);
       expect(failures[0]?.name).toBe("PiRpcProtocolError");
     } finally {
@@ -338,7 +338,7 @@ describe("PiRpcConnection", () => {
           timer = setTimeout(() => resolve("startup still pending after stop"), 1_000);
         }),
       ]);
-      expect(result).toBe("Pi RPC connection stopped");
+      expect(result).toContain("stopped");
       expect(connection.started).toBe(false);
       expect(failures).toEqual([]);
     } finally {

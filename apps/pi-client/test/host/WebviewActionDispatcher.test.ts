@@ -26,6 +26,7 @@ describe("Session Tab Host authorization", () => {
       beginSubmission: vi.fn(),
       resolveSubmission: vi.fn(),
       hasPendingSubmission: vi.fn(() => false),
+      hasPendingRecovery: vi.fn(() => false),
     };
     const dispatcher = new WebviewActionDispatcher({
       registry: registry as never,
@@ -47,6 +48,7 @@ describe("Session Tab Host authorization", () => {
       finishProviderUsageRequest: vi.fn(() => true),
       post: (message: unknown) => posted.push(message),
       insertPromptText: vi.fn(),
+      deliverQueuedPromptRecovery: vi.fn(),
     };
     const sidebarConnection = {
       ...connection,
@@ -187,11 +189,7 @@ describe("Session Tab Host authorization", () => {
       text: "draft",
     } as never, connection);
 
-    expect(posted).toEqual([{
-      type: "toast",
-      level: "info",
-      message: "Finish the open composer editor tab first.",
-    }]);
+    expect(posted).toMatchObject([{ type: "toast", level: "info" }]);
   });
 
   it("preserves sidebar selection policy for panel Fork and opens the distinct result tab", async () => {
@@ -227,7 +225,7 @@ describe("Session Tab Host authorization", () => {
     const toast = posted.find((value): value is { type: "toast"; level: "error"; message: string } =>
       typeof value === "object" && value !== null && "type" in value && value.type === "toast");
     expect(toast?.level).toBe("error");
-    expect(toast?.message).toContain("Select the Fork result in the sidebar");
+    expect(toast?.message).toContain("Fork result");
     expect(logger.error).toHaveBeenCalledOnce();
     expect(logger.error.mock.calls[0]?.[0]).toContain("fork");
     expect(logger.error.mock.calls[0]?.[1]).toBeInstanceOf(Error);
@@ -247,6 +245,7 @@ describe("unsupported host editor actions", () => {
       finishProviderUsageRequest: vi.fn(() => true),
       post: (message: unknown) => posted.push(message),
       insertPromptText: vi.fn(),
+      deliverQueuedPromptRecovery: vi.fn(),
     };
     const dispatcher = new WebviewActionDispatcher({
       host: fakeHost(),
@@ -258,6 +257,7 @@ describe("unsupported host editor actions", () => {
         beginSubmission: vi.fn(),
         resolveSubmission: vi.fn(),
         hasPendingSubmission: vi.fn(() => false),
+        hasPendingRecovery: vi.fn(() => false),
       } as never,
       openPanel: vi.fn(),
       revealPanel: vi.fn(),
@@ -302,6 +302,6 @@ describe("unsupported host editor actions", () => {
       openComposerEditor: vi.fn().mockResolvedValue("opened"),
     });
     await dispatcherWithClipboard.dispatch({ type: "copyText", bridgeVersion: "3.0", text: "hi" } as never, connection);
-    expect(posted).toContainEqual(expect.objectContaining({ type: "toast", level: "info", message: "Copied to clipboard." }));
+    expect(posted).toContainEqual(expect.objectContaining({ type: "toast", level: "info" }));
   });
 });

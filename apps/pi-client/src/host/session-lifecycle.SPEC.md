@@ -5,7 +5,7 @@ scope:
   - /apps/pi-client/src/core/sessions/**
   - /apps/pi-client/src/host/**
   - /apps/vscode/src/extension/webview-host/**
-updated: 2026-10-24
+updated: 2026-11-01
 ---
 
 # Pi Session Lifecycle
@@ -36,7 +36,7 @@ Input/failure attention is separate from normal completion: notify on the first 
 
 Some runtime commands finish without agent-turn events. Their classification and idle reconciliation are local to `SessionRuntime.#resolveImmediateExtensionCommand` and `#finishImmediateExtensionCommand`. If a known extension command exceeds the prompt deadline while its process remains live, report completion as unconfirmed, not a failed process or proven completion. OMP's per-submission results likewise cannot settle other queued work; its stateful adapter is `apps/pi-client/src/core/sessions/OmpPromptCompatibility.ts`. Command admission and visible invocation rules belong to the [Composer contract](../ui/features/composer/composer.SPEC.md), not transport aliases.
 
-Steer/Queue bubbles are local projections of Pi-owned delivery, not independently cancellable jobs. The current RPC surface has no per-message dequeue/clear operation; removing a bubble cannot claim to cancel Pi-side delivery. Abort, stop and process failure clear the transient queue projection. Promotion/turn ordering follows the [turn-lifecycle contract](../core/conversation/conversation-projection.SPEC.md#turn-lifecycle); keyboard bindings stay in the Composer contract.
+Steer/Queue bubbles are local projections of runtime-owned delivery, not independently cancellable jobs. Bulk recovery is owned by one process-scoped `QueuedPromptRecovery`: it orders admitted queue submissions before mutation, blocks duplicate recovery without locking an agent turn, and rejects old-process results. Pi clear-all is best effort and text-only; OMP first-match removals restore only confirmed results, retaining earlier successes after a later failure and never retrying an ambiguous mutation. Recovery cannot start during compaction or start a stopped child, and it does not abort or rebuild a queue. Removing a local bubble or receiving Pi's text does not prove cancellation. Abort, stop and process failure clear the transient queue projection. Promotion/turn ordering follows the [turn-lifecycle contract](../core/conversation/conversation-projection.SPEC.md#turn-lifecycle); keyboard bindings stay in the Composer contract.
 
 Blocking extension input belongs to its Runtime/request, never whichever Session is now visible. Answering, timeout or explicit cancellation resolves it; hiding its UI does not. Abort/stop/restart cancel pending input rather than auto-confirming it. The [extension UI contract](../core/extension-ui/extension-ui.SPEC.md) owns method-specific responses and presentation.
 

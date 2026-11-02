@@ -2,6 +2,7 @@ import type { RpcCommandDescriptor, RpcModel, RpcSessionStats, StreamingBehavior
 
 import type { ConversationItemView, ImageAttachmentView, QueuedPromptView } from "./conversationModel.js";
 import type { ExtensionStatusView, ExtensionWidgetView, PendingExtensionUiView } from "./extensionUiModel.js";
+import type { QueuedPromptRecoveryView } from "./queuedPromptRecoveryModel.js";
 
 export type SessionRuntimeStatus = "queued" | "starting" | "ready" | "running" | "stopping" | "stopped" | "failed";
 export type SessionHistoryStatus = "loaded" | "queued" | "loading" | "deferred" | "failed";
@@ -78,6 +79,7 @@ export interface SessionViewModel {
   queuedSteers: QueuedPromptView[];
   /** Follow-ups accepted while streaming; shown at the conversation tail until promoted. */
   queuedFollowUps: QueuedPromptView[];
+  queuedPromptRecovery: QueuedPromptRecoveryView;
   pendingExtensionUi: PendingExtensionUiView[];
   extensionStatuses: ExtensionStatusView[];
   extensionWidgets: ExtensionWidgetView[];

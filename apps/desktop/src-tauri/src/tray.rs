@@ -53,7 +53,7 @@ pub fn install(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn restore(app: &tauri::AppHandle) -> tauri::Result<()> {
+pub fn restore(app: &tauri::AppHandle) -> tauri::Result<()> {
     if app.state::<Backend>().0.closing.load(Ordering::Acquire) {
         return Ok(());
     }

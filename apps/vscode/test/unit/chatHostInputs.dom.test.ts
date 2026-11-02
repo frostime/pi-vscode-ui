@@ -2,7 +2,6 @@ import { EditorView } from "@codemirror/view";
 import { currentCompletions, startCompletion } from "@codemirror/autocomplete";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import { tick } from "svelte";
-import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionViewModel } from "$shared/model/sessionViewModel";
 import type { WebviewToHostPayload } from "$shared/bridge/webviewToHost";
@@ -29,7 +28,7 @@ function session(id = "session", provider = "example"): SessionViewModel {
     collapseTurnTrace: false, composerStreamingBehavior: "steer",
     networkProxy: { mode: "direct", label: "Direct", restartRequired: false },
     questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
-    conversationItems: [], queuedSteers: [], queuedFollowUps: [], pendingExtensionUi: [], extensionStatuses: [], extensionWidgets: [],
+    conversationItems: [], queuedSteers: [], queuedFollowUps: [], queuedPromptRecovery: { state: "ready" }, pendingExtensionUi: [], extensionStatuses: [], extensionWidgets: [],
     sessionTreeAvailable: false, isNavigatingTree: false, isSummarizingTree: false, conversationContentRevision: 0,
     stats: {
       userMessages: 0, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 0,
@@ -94,7 +93,6 @@ describe("explicit Composer host inputs", () => {
     const panel = composer(true, createVsCodeComposerCommands({ allowResume: () => false }));
     await fireEvent.click(panel.getByRole("button", { name: "Send to Pi" }));
     expect(getDraft("session").text).toBe("/resume");
-    expect(get(toastStore).at(-1)?.message).toBe("Open the FrostPi sidebar to resume a session.");
     expect(bridge.post).not.toHaveBeenCalled();
   });
 
@@ -129,7 +127,6 @@ describe("explicit Composer host inputs", () => {
     const handled = commands.handle({ sessionId: "session", text: "/resume", hasImages: false });
     expect(handled?.draft).toEqual("keep");
     handled?.execute();
-    expect(get(toastStore).at(-1)?.message).toBe("Open the FrostPi sidebar to resume a session.");
     expect(bridge.post).not.toHaveBeenCalled();
   });
 

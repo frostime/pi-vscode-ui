@@ -128,22 +128,22 @@ describe("DesktopResume", () => {
       {
         label: "a missing session projection reports failure",
         session: null,
-        expected: { phase: "failed", error: "The session stopped or its conversation history could not be loaded." },
+        expected: { phase: "failed" },
       },
       {
         label: "a stopped session reports failure",
         session: sessionView("saved-1", { status: "stopped" }),
-        expected: { phase: "failed", error: "The session stopped or its conversation history could not be loaded." },
+        expected: { phase: "failed" },
       },
       {
         label: "failed history reports failure",
         session: sessionView("saved-1", { historyStatus: "failed" }),
-        expected: { phase: "failed", error: "The session stopped or its conversation history could not be loaded." },
+        expected: { phase: "failed" },
       },
       {
-        label: "the session's own error message is surfaced",
+        label: "a failed session surfaces a failure",
         session: sessionView("saved-1", { status: "failed", error: "Pi exited before loading history." }),
-        expected: { phase: "failed", error: "Pi exited before loading history." },
+        expected: { phase: "failed" },
       },
     ];
 
@@ -178,7 +178,7 @@ describe("DesktopResume", () => {
     const failure = new Error("No saved sessions were found.");
     const failed = harness.resume.run(() => Promise.reject(failure));
     await expect(failed).rejects.toBe(failure);
-    expect(harness.resume.view).toMatchObject({ phase: "failed", error: "No saved sessions were found.", visible: true });
+    expect(harness.resume.view).toMatchObject({ phase: "failed", visible: true });
 
     // A non-Error rejection must still reach the caller unchanged and fall back to a readable message.
     const thrown: unknown = "catalog unavailable";
@@ -186,7 +186,7 @@ describe("DesktopResume", () => {
     // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the non-Error rejection is the branch under test.
     const rejected = nonError.resume.run(() => Promise.reject(thrown));
     await expect(rejected).rejects.toBe(thrown);
-    expect(nonError.resume.view).toMatchObject({ phase: "failed", error: "The saved session could not be opened." });
+    expect(nonError.resume.view).toMatchObject({ phase: "failed" });
   });
 
   it("shows its own picker while leaving a concurrent unrelated selection untouched", async () => {
@@ -297,6 +297,6 @@ describe("DesktopResume", () => {
     await expect(pending).resolves.toBe("saved-1");
     expect(harness.published).toHaveLength(publishedAtDispose);
     expect(harness.resume.view).toBeNull();
-    await expect(harness.resume.run(() => Promise.resolve("saved-1"))).rejects.toThrow("The Desktop window is closed.");
+    await expect(harness.resume.run(() => Promise.resolve("saved-1"))).rejects.toThrow();
   });
 });

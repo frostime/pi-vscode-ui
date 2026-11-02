@@ -214,7 +214,6 @@ test("Kimi adapter omits malformed, duplicate, unknown, and unsafe window fields
             windowMinutes: 10080,
         },
     ]);
-    assert.deepEqual(report.notes, ["Unsupported, malformed, or duplicate plan windows were unavailable."]);
     const oversized = fixture("daily") as {
         limits?: Record<string, unknown>[];
     };

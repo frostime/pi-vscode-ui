@@ -8,7 +8,8 @@
   const stats = $derived(session.stats);
   const context = $derived(stats?.contextUsage);
   const contextPercent = $derived(context?.percent != null && Number.isFinite(context.percent) ? context.percent : null);
-  const contextLabel = $derived(contextPercent === null ? "Context usage unavailable" : `Context usage: ${Math.round(contextPercent)}%`);
+  const contextReading = $derived(contextPercent === null ? "—" : `${Math.round(contextPercent)}%`);
+  const contextLabel = $derived(contextPercent === null ? "Context usage unavailable" : `Context usage: ${contextReading}`);
   const modelLabel = $derived(session.model ? `${session.model.name ?? session.model.id}` : "—");
 
   function show(): void {
@@ -29,7 +30,7 @@
         <circle class="context-ring-progress" cx="8" cy="8" r="5.3" pathLength="100" stroke-dasharray={`${clamp(contextPercent)} 100`} transform="rotate(-90 8 8)" />
       {/if}
     </svg>
-    <span>Context</span>
+    <span>{contextReading}</span>
   </button>
   {#if open && stats}
     <div class="context-usage-popover" role="dialog" tabindex="-1" aria-label="Context and session usage" onmouseenter={show} onmouseleave={scheduleClose}>
@@ -38,7 +39,7 @@
           <strong>Context window</strong>
           <span>{session.isCompacting ? "Compacting" : session.status}</span>
         </div>
-        <strong class="usage-percent">{context?.percent == null ? "—" : `${Math.round(context.percent)}%`}</strong>
+        <strong class="usage-percent">{contextReading}</strong>
       </div>
       <div class="usage-current">
         <div class="usage-current-line">

@@ -29,5 +29,5 @@ let toastId = 0;
 export function showToast(level: ToastItem["level"], message: string): void {
   const id = ++toastId;
   toastStore.update((items) => [...items, { id, level, message }].slice(-4));
-  window.setTimeout(() => toastStore.update((items) => items.filter((item) => item.id !== id)), 5_000);
+  window.setTimeout(() => toastStore.update((items) => items.filter((item) => item.id !== id)), 4_000);
 }

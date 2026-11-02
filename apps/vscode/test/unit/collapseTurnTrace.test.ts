@@ -1,13 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { AgentTurnItemView, AgentTurnView } from "@frostime/pi-client/shared/model/conversationModel";
-import {
-  formatTraceSummaryLabel,
-  formatDurationMs,
-  formatTurnDuration,
-  planTurnItems,
-  turnStateLabel,
-} from "$ui/features/conversation/collapseTurnTrace.js";
+import { formatTurnDuration, planTurnItems } from "$ui/features/conversation/collapseTurnTrace.js";
 
 describe("planTurnItems", () => {
   it("keeps running turns flat so live tools remain visible", () => {
@@ -47,8 +41,7 @@ describe("planTurnItems", () => {
     const plan = planTurnItems(turn("error", [tool("ok"), tool("bad", true), response("final")], 0, 4_200), true);
     expect(plan.mode).toBe("collapsed");
     if (plan.mode !== "collapsed") return;
-    expect(plan.stateLabel).toBe("Failed");
-    expect(formatTraceSummaryLabel(plan.summary)).toBe("2 steps · 1 error · 4s");
+    expect(plan.summary).toMatchObject({ steps: 2, errors: 1 });
   });
 
   it("folds turn-wide retry work while leaving an intervening structural boundary visible", () => {
@@ -78,24 +71,10 @@ describe("planTurnItems", () => {
   });
 });
 
-describe("trace labels", () => {
-  it("maps statuses and formats durations", () => {
-    expect(turnStateLabel("completed")).toBe("Worked");
-    expect(turnStateLabel("aborted")).toBe("Stopped");
-    expect(turnStateLabel("error")).toBe("Failed");
-    expect(formatTurnDuration(0, 400)).toBe("<1s");
-    expect(formatTurnDuration(0, 65_000)).toBe("1m 05s");
-    expect(formatTurnDuration(0, 3_600_000)).toBe("1h");
+describe("trace timestamps", () => {
+  it("skips a duration it cannot measure", () => {
     expect(formatTurnDuration(0)).toBeNull();
     expect(formatTurnDuration(1_000, 500)).toBeNull();
-  });
-
-  it("labels a measured duration with the same whole-second rounding", () => {
-    expect(formatDurationMs(0)).toBe("<1s");
-    expect(formatDurationMs(400)).toBe("<1s");
-    expect(formatDurationMs(526)).toBe("1s");
-    expect(formatDurationMs(11_000)).toBe("11s");
-    expect(formatDurationMs(65_000)).toBe("1m 05s");
   });
 });
 

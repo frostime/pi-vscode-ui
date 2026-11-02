@@ -6,6 +6,7 @@
   import { composerDrafts, getDraft, type DraftImage, type SessionDraft } from "../../features/composer/composerDraftStore.svelte";
   import { clearDraft, clearDraftForSubmission, setDraft, setDraftText, updateDraft } from "./composerDraftSync";
   import { promptSubmissionResult } from "../../features/composer/promptSubmissionStore.svelte";
+  import { queuedPromptRecoveryRequests } from "./queuedPromptRecoveryStore.svelte";
   import { composerStreamingBehaviors, setComposerStreamingBehavior } from "../../features/composer/composerStreamingBehaviorStore.svelte";
   import { composerFocusTick, showToast } from "../../state/sessionViewStore.svelte";
   import { createId } from "../../utils/createId";
@@ -22,14 +23,18 @@
     localCommands,
     restoreFailedSubmissionLocally,
     draftAuthority,
+    onpendingsubmissionchange,
   }: {
     session: SessionViewModel;
     localCommands: LocalComposerCommands;
     restoreFailedSubmissionLocally: boolean;
     draftAuthority: "webview" | "host";
+    /** Tracks the accepted-but-unanswered submission whose draft was already cleared. */
+    onpendingsubmissionchange?: ((pending: boolean) => void) | undefined;
   } = $props();
   let editor: PromptEditor;
   let pendingRequestId = $state<string | null>(null);
+  let pendingRequestSessionId = $state<string | null>(null);
   let pendingSubmittedDraft = $state<SessionDraft | null>(null);
   let pendingClearedRevision: number | null = null;
   let expanded = $state(false);
@@ -42,7 +47,11 @@
     session.status === "queued" || session.status === "starting" || session.status === "stopping" || session.status === "failed"
     || session.historyStatus === "queued" || session.historyStatus === "loading" || session.isCompacting || session.isForking || session.isNavigatingTree,
   );
-  const canSend = $derived((draft.text.trim().length > 0 || draft.images.length > 0) && !unavailable && !pendingRequestId);
+  // Keep the draft unchanged from request admission through result application.
+  const recoveryBusy = $derived(
+    $queuedPromptRecoveryRequests[session.id] !== undefined || session.queuedPromptRecovery.state === "recovering",
+  );
+  const canSend = $derived((draft.text.trim().length > 0 || draft.images.length > 0) && !unavailable && !pendingRequestId && !recoveryBusy);
   const supportsImages = $derived(modelSupportsImages(session.model));
 
   export function focusAtEnd(): void {
@@ -77,11 +86,17 @@
   });
 
   $effect(() => {
+    // Only the Session that owns the unresolved submission is blocked from recovery.
+    onpendingsubmissionchange?.(pendingRequestId !== null && pendingRequestSessionId === session.id);
+  });
+
+  $effect(() => {
     const result = $promptSubmissionResult;
     if (!result || result.requestId !== pendingRequestId) return;
     const submitted = pendingSubmittedDraft;
     const clearedRevision = pendingClearedRevision;
     pendingRequestId = null;
+    pendingRequestSessionId = null;
     pendingSubmittedDraft = null;
     pendingClearedRevision = null;
     if (result.ok || !restoreFailedSubmissionLocally || !submitted || clearedRevision === null) return;
@@ -91,7 +106,12 @@
   });
 
   function setText(text: string): void {
-    setDraftText(session.id, draftAuthority, text);
+    if (!recoveryBusy) setDraftText(session.id, draftAuthority, text);
+  }
+
+  function removeImage(id: string): void {
+    if (recoveryBusy) return;
+    updateDraft(session.id, draftAuthority, (current) => ({ ...current, images: current.images.filter((image) => image.id !== id) }));
   }
 
   function setExpanded(next: boolean): void {
@@ -110,6 +130,7 @@
     }
     const requestId = createId("prompt");
     pendingRequestId = requestId;
+    pendingRequestSessionId = session.id;
     pendingSubmittedDraft = {
       revision: draft.revision,
       text: draft.text,
@@ -131,6 +152,10 @@
   }
 
   async function handlePastedImages(files: File[]): Promise<void> {
+    if (recoveryBusy) {
+      showToast("info", "Wait for pending message recovery to finish before adding images.");
+      return;
+    }
     const accepted: DraftImage[] = [];
     for (const file of files) {
       if (!isSupportedMime(file.type)) {
@@ -152,6 +177,11 @@
       });
     }
     if (!accepted.length) return;
+    // Reading files is asynchronous: recovery may have started while this paste was in flight.
+    if (recoveryBusy) {
+      showToast("info", "Wait for pending message recovery to finish before adding images.");
+      return;
+    }
     updateDraft(session.id, draftAuthority, (current) => {
       const images = [...current.images, ...accepted].slice(0, session.attachmentLimits.maxImages);
       if (current.images.length + accepted.length > session.attachmentLimits.maxImages) {
@@ -163,7 +193,10 @@
 </script>
 
 <div class="composer-shell" class:composer-expanded={expanded}>
-  <AttachmentStrip images={draft.images} onremove={(id) => updateDraft(session.id, draftAuthority, (current) => ({ ...current, images: current.images.filter((image) => image.id !== id) }))} />
+  <AttachmentStrip images={draft.images} disabled={recoveryBusy} onremove={removeImage} />
+  {#if recoveryBusy}
+    <div class="composer-warning" role="status">Restoring pending messages… Editing resumes when the draft is ready.</div>
+  {/if}
   {#if draft.images.length && session.model && !supportsImages}
     <div class="composer-warning"><span class="codicon codicon-warning"></span> The selected model may not accept images.</div>
   {/if}
@@ -182,6 +215,7 @@
       bind:this={editor}
       sessionId={session.id}
       value={draft.text}
+      readOnly={recoveryBusy}
       {commands}
       placeholder={session.isNavigatingTree ? "Switching conversation branch…" : session.isStreaming || session.queuedSteers.length > 0 || session.queuedFollowUps.length > 0 ? "Steer or queue a message…" : "Ask Pi about this workspace…"}
       onchange={setText}

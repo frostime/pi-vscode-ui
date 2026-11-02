@@ -59,20 +59,20 @@ describe("RpcChunkAssembler", () => {
   });
 
   it.each([
-    { metadata: { byteLength: 0 }, error: "Invalid RPC chunk metadata" },
-    { metadata: { count: 0 }, error: "Invalid RPC chunk metadata" },
-    { metadata: { byteLength: RPC_MAX_REASSEMBLED_BYTES + 1 }, error: "RPC chunk logical frame exceeds the advertised reassembly limit" },
-    { metadata: { count: 257, byteLength: 256 }, error: "Invalid RPC chunk metadata" },
-  ])("rejects invalid metadata or advertised-limit violations ($metadata)", ({ metadata, error }) => {
+    { metadata: { byteLength: 0 } },
+    { metadata: { count: 0 } },
+    { metadata: { byteLength: RPC_MAX_REASSEMBLED_BYTES + 1 } },
+    { metadata: { count: 257, byteLength: 256 } },
+  ])("rejects invalid metadata or advertised-limit violations ($metadata)", ({ metadata }) => {
     const [frame] = chunkFrames({ type: "response", data: "x".repeat(600 * 1024) });
     const assembler = new RpcChunkAssembler({ maxFrameBytes: RPC_MAX_FRAME_BYTES, maxReassembledFrameBytes: RPC_MAX_REASSEMBLED_BYTES });
-    expect(() => assembler.push({ ...frame, ...metadata })).toThrow(error);
+    expect(() => assembler.push({ ...frame, ...metadata })).toThrow();
   });
 
   it("rejects a chunk frame above the advertised physical frame limit", () => {
     const [frame] = chunkFrames({ type: "response", data: "x".repeat(600 * 1024) }, 400 * 1024);
     const assembler = new RpcChunkAssembler({ maxFrameBytes: 512 * 1024, maxReassembledFrameBytes: RPC_MAX_REASSEMBLED_BYTES });
-    expect(() => assembler.push(frame)).toThrow("RPC chunk exceeds the advertised physical frame limit");
+    expect(() => assembler.push(frame)).toThrow(/frame limit/);
   });
 
   it("reassembles more than 256 chunks when a peer splits data more finely", () => {

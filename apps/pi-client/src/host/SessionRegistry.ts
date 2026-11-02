@@ -390,6 +390,12 @@ export class SessionRegistry {
     }
   }
 
+  async restoreQueuedPrompts(sessionId: string) {
+    this.#assertSessionOutsideFork(sessionId);
+    // A recovery request must not start/restart a process with an empty queue.
+    return this.#requireRuntime(sessionId).restoreQueuedPrompts();
+  }
+
   async abort(sessionId = this.#requireActiveId()): Promise<void> {
     this.#assertSessionOutsideFork(sessionId);
     await this.#requireRuntime(sessionId).abort();

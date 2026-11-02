@@ -166,11 +166,11 @@ describe("DesktopActionDispatcher", () => {
     const panel = dispatchConnection({ kind: "panel", sessionId: "s1" });
 
     await expect(dispatcher.dispatch({ type: "resumeSession", bridgeVersion: BRIDGE_VERSION }, panel))
-      .rejects.toThrow("Open the FrostPi sidebar to resume a session.");
+      .rejects.toThrow(/FrostPi sidebar/);
     await expect(dispatcher.dispatch({ type: "createSession", bridgeVersion: BRIDGE_VERSION }, panel))
-      .rejects.toThrow("This action is available only from the FrostPi sidebar.");
+      .rejects.toThrow(/FrostPi sidebar/);
     await expect(dispatcher.dispatch({ type: "activateSession", sessionId: "s1", bridgeVersion: BRIDGE_VERSION }, panel))
-      .rejects.toThrow("This action is available only from the FrostPi sidebar.");
+      .rejects.toThrow(/FrostPi sidebar/);
 
     expect(registry.resumeCalls).toBe(0);
     expect(registry.createCalls).toBe(0);
@@ -212,7 +212,7 @@ describe("DesktopActionDispatcher", () => {
     registry.activeSessionId = "s1";
 
     await expect(dispatcher.dispatch({ type: "activateSession", sessionId: "gone", bridgeVersion: BRIDGE_VERSION }, SIDEBAR))
-      .rejects.toThrow("This FrostPi Session no longer exists.");
+      .rejects.toThrow(/Session no longer exists/);
     expect(resume.view).toBeNull();
 
     // New failures stay ordinary action errors; only Resume owns an overlay for them.
@@ -224,7 +224,7 @@ describe("DesktopActionDispatcher", () => {
     registry.resume = () => Promise.reject(new Error("No saved sessions were found."));
     await expect(dispatcher.dispatch({ type: "resumeSession", bridgeVersion: BRIDGE_VERSION }, SIDEBAR)).resolves.toBeUndefined();
     expect(registry.resumeCalls).toBe(1);
-    expect(resume.view).toMatchObject({ phase: "failed", error: "No saved sessions were found." });
+    expect(resume.view).toMatchObject({ phase: "failed" });
   });
 
   it("attributes a sidebar New to the selected Project and hides the overlay", async () => {

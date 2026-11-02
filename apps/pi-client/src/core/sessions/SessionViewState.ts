@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import type { RpcEvent, RpcSessionState } from "@frostime/pi-rpc";
 
 import type { ConversationProjectionSnapshot } from "../conversation/ConversationProjection.js";
+import { UNAVAILABLE_QUEUED_PROMPT_RECOVERY, type QueuedPromptRecoveryView } from "../../shared/model/queuedPromptRecoveryModel.js";
 import type {
   AttachmentLimitsView,
   SessionRuntimeStatus,
@@ -11,7 +12,7 @@ import type {
 
 type SessionScalarView = Omit<
   SessionViewModel,
-  "conversationItems" | "queuedSteers" | "queuedFollowUps" | "conversationContentRevision"
+  "conversationItems" | "queuedSteers" | "queuedFollowUps" | "conversationContentRevision" | "queuedPromptRecovery"
 >;
 
 export class SessionViewState {
@@ -54,9 +55,17 @@ export class SessionViewState {
     };
   }
 
-  read(conversation: ConversationProjectionSnapshot): SessionViewModel {
+  queueRecoveryAvailability(): "ready" | "compacting" | "unavailable" {
+    if (this.#view.isCompacting) return "compacting";
+    if ((this.#view.status !== "ready" && this.#view.status !== "running")
+      || this.#view.historyStatus !== "loaded" || this.#view.isForking || this.#view.isNavigatingTree) return "unavailable";
+    return "ready";
+  }
+
+  read(conversation: ConversationProjectionSnapshot, recovery: QueuedPromptRecoveryView = UNAVAILABLE_QUEUED_PROMPT_RECOVERY): SessionViewModel {
     return {
       ...this.#view,
+      queuedPromptRecovery: recovery,
       conversationItems: [...conversation.items],
       queuedSteers: [...conversation.queuedSteers],
       queuedFollowUps: [...conversation.queuedFollowUps],

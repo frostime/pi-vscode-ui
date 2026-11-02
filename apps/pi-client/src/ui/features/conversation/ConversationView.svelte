@@ -4,6 +4,8 @@
 
   import NewUpdatesButton from "./scrolling/NewUpdatesButton.svelte";
   import { INITIAL_SCROLL_FOLLOW_STATE, reduceScrollFollow } from "./scrolling/scrollFollowState";
+  import { composerDrafts } from "../composer/composerDraftStore.svelte";
+  import { queuedPromptRecoveryAction, queuedPromptRecoveryRequests } from "../composer/queuedPromptRecoveryStore.svelte";
   import AgentTurn from "./AgentTurn.svelte";
   import BranchPointControl from "./BranchPointControl.svelte";
   import BranchSummaryBlock from "./BranchSummaryBlock.svelte";
@@ -11,7 +13,12 @@
   import CustomBlock from "./CustomBlock.svelte";
   import SessionNotice from "./SessionNotice.svelte";
 
-  let { session }: { session: SessionViewModel } = $props();
+  let { session, onrestore, submissionPending = false }: {
+    session: SessionViewModel;
+    onrestore: () => void;
+    /** The displayed Composer has an accepted submission whose result is still outstanding. */
+    submissionPending?: boolean;
+  } = $props();
   let scroller: HTMLDivElement;
   let content: HTMLDivElement;
   let followState = $state({ ...INITIAL_SCROLL_FOLLOW_STATE });
@@ -25,6 +32,13 @@
     ...session.queuedSteers.map((item) => ({ item, delivery: "Steer" as const })),
     ...session.queuedFollowUps.map((item) => ({ item, delivery: "Queue" as const })),
   ]);
+  const recoveryPending = $derived($queuedPromptRecoveryRequests[session.id] !== undefined);
+  const recoveryAction = $derived(queuedPromptRecoveryAction(
+    session,
+    $composerDrafts[session.id]?.images.length ?? 0,
+    recoveryPending,
+    submissionPending,
+  ));
 
   onMount(() => {
     resizeObserver = new ResizeObserver(() => {
@@ -115,6 +129,25 @@
       {/if}
       {#if queuedPrompts.length}
         <div class="queued-follow-ups" aria-label="Queued prompts">
+          <div class="pending-head">
+            <span class="pending-label">Pending · {queuedPrompts.length}</span>
+            <button
+              class="pending-restore"
+              type="button"
+              aria-busy={recoveryAction.busy}
+              disabled={!recoveryAction.canRestore}
+              title={recoveryAction.busy
+                ? "Restoring pending messages…"
+                : recoveryAction.disabledReason ?? "Restore all pending content into the Composer without stopping this run"}
+              onclick={onrestore}
+            >
+              <span class="codicon codicon-history" aria-hidden="true"></span>
+              <span>{recoveryAction.busy ? "Restoring…" : "Restore all"}</span>
+            </button>
+          </div>
+          {#if recoveryAction.disabledReason}
+            <p class="pending-reason">{recoveryAction.disabledReason}</p>
+          {/if}
           {#each queuedPrompts as queued (queued.item.id)}
             <article class="message message-user message-queued">
               <div class="user-bubble queued-bubble">
@@ -169,6 +202,29 @@
 }
 .conversation-inner { padding-top: 14px; padding-bottom: 34px; }
 .queued-follow-ups { display: grid; gap: 8px; margin: 4px 0 10px; }
+.pending-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; }
+.pending-label { color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3px); }
+.pending-restore {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--frost-muted);
+  font-size: calc(var(--font-size-ui) - 3px);
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pending-restore:hover:not(:disabled) { background: var(--frost-hover); color: var(--frost-text); }
+.pending-restore:disabled { opacity: .5; cursor: default; }
+.pending-restore :global(.codicon) { font-size: 12px; }
+.pending-restore[aria-busy="true"] :global(.codicon) { animation: pending-spin 1s linear infinite; }
+@keyframes pending-spin { to { transform: rotate(360deg); } }
+.pending-reason { margin: -2px 0 0; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3.5px); line-height: 1.4; text-align: right; overflow-wrap: anywhere; }
 .message-queued { opacity: 0.88; }
 .queued-bubble {
   position: relative;

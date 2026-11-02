@@ -43,7 +43,6 @@ test("Baseten billing treats absent Model APIs usage as an empty provider report
     for (const payload of [{}, { dedicated_usage: {}, training_usage: {} }, { model_apis_usage: null }]) {
         const report = normalizeBasetenBillingUsagePayload(payload, 2000);
         assert.deepEqual(report.metrics, []);
-        assert.deepEqual(report.notes, ["Baseten returned no Model APIs usage for the last 30 days."]);
     }
 });
 

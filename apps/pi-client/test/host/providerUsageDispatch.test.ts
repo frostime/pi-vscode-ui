@@ -36,7 +36,7 @@ function setup(kind: "sidebar" | "panel" = "sidebar") {
   const posted: HostToWebviewPayload[] = [];
   const connection = {
     surface: kind === "sidebar" ? { kind: "sidebar" as const } : { kind: "panel" as const, sessionId: "session" },
-    sessionId: "session", fileSearch: {} as never, insertPromptText: vi.fn(),
+    sessionId: "session", fileSearch: {} as never, insertPromptText: vi.fn(), deliverQueuedPromptRecovery: vi.fn(),
     post: (message: HostToWebviewPayload) => posted.push(message),
     beginProviderUsageRequest(id: string) { pending?.controller.abort(); pending = { id, controller: new AbortController() }; return pending.controller.signal; },
     cancelProviderUsageRequest(id: string) { if (pending?.id === id) { pending.controller.abort(); pending = undefined; } },
@@ -79,8 +79,8 @@ describe("provider usage Host boundary", () => {
     expect(webviewToHostSchema.safeParse({ ...request, bridgeVersion: "old" }).success).toBe(false);
   });
 
-  it("returns safe descriptors and results only to the requesting sidebar", async () => {
-    const { dispatcher, connection, posted } = setup();
+  it.each(["sidebar", "panel"] as const)("returns safe descriptors and results to the requesting %s", async (kind) => {
+    const { dispatcher, connection, posted } = setup(kind);
     await dispatcher.dispatch({ type: "listUsageProviders", requestId: "list", bridgeVersion: BRIDGE_VERSION }, connection);
     await dispatcher.dispatch({ type: "queryProviderUsage", requestId: "query", scope: "deepseek", bridgeVersion: BRIDGE_VERSION }, connection);
     expect(posted).toEqual([
@@ -109,12 +109,12 @@ describe("provider usage Host boundary", () => {
     expect(JSON.stringify(posted).includes(credentials.password)).toBe(false);
   });
 
-  it("does not start a query cancelled while proxy credentials are being read", async () => {
+  it.each(["sidebar", "panel"] as const)("does not start a query cancelled by its %s while reading proxy credentials", async (kind) => {
     let complete!: (value: undefined) => void;
     settings.mode = "custom";
     settings.endpoint = "127.0.0.1:7890";
     settings.getProxyCredentials.mockImplementation(() => new Promise((resolve) => complete = resolve));
-    const { dispatcher, connection, posted } = setup();
+    const { dispatcher, connection, posted } = setup(kind);
     const pending = dispatcher.dispatch({ type: "queryProviderUsage", requestId: "old", scope: "deepseek", bridgeVersion: BRIDGE_VERSION }, connection);
     await vi.waitFor(() => expect(settings.getProxyCredentials).toHaveBeenCalled());
     await dispatcher.dispatch({ type: "cancelProviderUsage", requestId: "old", bridgeVersion: BRIDGE_VERSION }, connection);
@@ -124,10 +124,7 @@ describe("provider usage Host boundary", () => {
     expect(posted).toEqual([]);
   });
 
-  it("rejects panel requests and unconfigured provider IDs before querying", async () => {
-    const panel = setup("panel");
-    await expect(panel.dispatcher.dispatch({ type: "listUsageProviders", requestId: "p", bridgeVersion: BRIDGE_VERSION }, panel.connection)).rejects.toThrow("sidebar");
-    expect(usage.listProviders).not.toHaveBeenCalled();
+  it("rejects unconfigured provider IDs before querying", async () => {
     const sidebar = setup();
     await sidebar.dispatcher.dispatch({ type: "queryProviderUsage", requestId: "q", scope: "unknown", bridgeVersion: BRIDGE_VERSION }, sidebar.connection);
     expect(usage.queryUsage).not.toHaveBeenCalled();

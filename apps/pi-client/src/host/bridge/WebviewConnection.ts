@@ -4,6 +4,7 @@ import { webviewToHostSchema } from "../../shared/bridge/webviewToHost.js";
 import type { ChatTypographyView } from "../../shared/model/chatTypography.js";
 import type { ConversationItemView } from "../../shared/model/conversationModel.js";
 import type { SessionViewModel } from "../../shared/model/sessionViewModel.js";
+import { fitRecoveryImagesToDraft, type QueuedPromptRecoveryOutcome } from "../../shared/model/queuedPromptRecoveryModel.js";
 import type { WebviewPresentationView } from "../../shared/model/webviewPresentationModel.js";
 import type { WorkspaceFileSearch } from "../file-search/WorkspaceFileSearch.js";
 import type { RuntimeLogger } from "../../core/diagnostics/RuntimeLogger.js";
@@ -37,6 +38,7 @@ export class WebviewConnection {
   #usageRequest: { id: string; controller: AbortController } | undefined;
   #ready = false;
   #dirty = true;
+  #draftOwnershipVersion = 0;
   #pendingFocus = false;
   #disposed = false;
   #cachedSessionId: string | null = null;
@@ -95,6 +97,14 @@ export class WebviewConnection {
     });
   }
 
+  /** Publish ownership and its draft atomically, including work already queued by Runtime. */
+  refreshDraftOwnership(sessionId: string): void {
+    if (sessionId !== this.sessionId) return;
+    this.#draftOwnershipVersion += 1;
+    this.#dirty = true;
+    this.refresh();
+  }
+
   draftChanged(sessionId: string): void {
     if (!this.#ready || sessionId !== this.sessionId) return;
     if (!this.#endpoint.isVisible()) {
@@ -107,9 +117,22 @@ export class WebviewConnection {
   insertPromptText(text: string): void {
     const sessionId = this.sessionId;
     if (!sessionId) return;
-    if (this.surface.kind === "panel") this.#drafts.insertText(sessionId, text);
+    if (this.#hostOwnsDraft(sessionId)) this.#drafts.insertText(sessionId, text);
     else this.post({ type: "insertPromptText", sessionId, text });
     this.focusComposer();
+  }
+
+  deliverQueuedPromptRecovery(requestId: string, sessionId: string, outcome: QueuedPromptRecoveryOutcome): void {
+    if (this.#hostOwnsDraft(sessionId) || this.#drafts.hasPendingRecovery(sessionId)) {
+      const session = this.#registry.sessionView(sessionId);
+      if (!session) throw new Error("This FrostPi Session no longer exists.");
+      const fitted = fitRecoveryImagesToDraft(outcome, this.#drafts.get(sessionId).images.length, session.attachmentLimits.maxImages);
+      this.#drafts.prependContent(sessionId, fitted.content);
+      const { certainty, recoveredCount, notRemovedCount, warnings } = fitted;
+      this.post({ type: "restoreQueuedPromptsResult", sessionId, requestId, ok: true, draftTarget: "host-applied", outcome: { certainty, recoveredCount, notRemovedCount, warnings } });
+    } else {
+      this.post({ type: "restoreQueuedPromptsResult", sessionId, requestId, ok: true, draftTarget: "webview-merge", outcome });
+    }
   }
 
   queueComposerText(sessionId: string, text: string, delivered: () => void): void {
@@ -188,6 +211,7 @@ export class WebviewConnection {
         finishProviderUsageRequest: (id, signal) => this.finishProviderUsageRequest(id, signal),
         post: (message) => this.post(message),
         insertPromptText: (text) => this.insertPromptText(text),
+        deliverQueuedPromptRecovery: (requestId, sessionId, outcome) => this.deliverQueuedPromptRecovery(requestId, sessionId, outcome),
       };
       await this.#dispatcher.dispatch(parsed.data, context);
     } catch (error) {
@@ -198,6 +222,7 @@ export class WebviewConnection {
   }
 
   async #sendSnapshot(): Promise<void> {
+    const ownershipVersion = this.#draftOwnershipVersion;
     const presentation = this.#presentation();
     const displayedSessionId = presentation.displayedSession?.id;
     const delivered = await this.#post({
@@ -213,7 +238,9 @@ export class WebviewConnection {
       this.#dirty = true;
       return;
     }
-    this.#dirty = false;
+    // An in-flight snapshot must not consume a later ownership change. Its draft
+    // and lock state were captured before that change and cannot unlock safely.
+    this.#dirty = ownershipVersion !== this.#draftOwnershipVersion;
     this.#resetCache(presentation.displayedSession);
   }
 
@@ -261,7 +288,12 @@ export class WebviewConnection {
 
   #presentation(): WebviewPresentationView {
     const workspace = this.#registry.snapshot();
-    const displayedSession = this.sessionId ? this.#registry.sessionView(this.sessionId) : null;
+    const session = this.sessionId ? this.#registry.sessionView(this.sessionId) : null;
+    // Runtime may finish before the Host has applied the recovered draft. A tab
+    // closing in that window must not expose an editable Sidebar Composer.
+    const displayedSession = session && this.#drafts.hasPendingRecovery(session.id)
+      ? { ...session, queuedPromptRecovery: { state: "recovering" as const } }
+      : session;
     const piError = displayedSession?.status === "failed" ? displayedSession.error : undefined;
     return {
       surface: this.surface,

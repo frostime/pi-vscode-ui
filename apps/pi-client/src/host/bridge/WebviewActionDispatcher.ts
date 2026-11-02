@@ -5,6 +5,7 @@ import { resolvePiAgentDirectory } from "../../core/_shared/pi-settings/loadPiSe
 import type { HostToWebviewPayload } from "../../shared/bridge/hostToWebview.js";
 import type { WebviewToHostMessage } from "../../shared/bridge/webviewToHost.js";
 import type { ComposerDraftView } from "../../shared/model/composerDraftModel.js";
+import type { QueuedPromptRecoveryOutcome } from "../../shared/model/queuedPromptRecoveryModel.js";
 import { buildProviderUsageEnvironment } from "../../core/network/buildPiProcessEnvironment.js";
 import type { ProxyCredentials } from "../../core/network/proxyCredentials.js";
 import type { RuntimeLogger } from "../../core/diagnostics/RuntimeLogger.js";
@@ -24,6 +25,7 @@ export interface DispatchConnection extends ConnectionContext {
   finishProviderUsageRequest(id: string, signal: AbortSignal): boolean;
   post(message: HostToWebviewPayload): void;
   insertPromptText(text: string): void;
+  deliverQueuedPromptRecovery(requestId: string, sessionId: string, outcome: QueuedPromptRecoveryOutcome): void;
 }
 
 export interface WebviewActionDispatcherDependencies {
@@ -38,9 +40,6 @@ export interface WebviewActionDispatcherDependencies {
 }
 
 const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
-  "listUsageProviders",
-  "queryProviderUsage",
-  "cancelProviderUsage",
   "openFolder",
   "createSession",
   "createSessionWithArguments",
@@ -104,6 +103,10 @@ export class WebviewActionDispatcher {
       throw new Error(message.type === "resumeSession"
         ? "Open the FrostPi sidebar to resume a session."
         : "This action is available only from the FrostPi sidebar.");
+    }
+    if (message.type === "restoreQueuedPrompts") {
+      await this.#restoreQueuedPrompts(message, connection);
+      return;
     }
     if (message.type === "loadMarkdownImage") {
       await this.#loadMarkdownImage(message, connection);
@@ -175,7 +178,8 @@ export class WebviewActionDispatcher {
         await this.#revealPanel(message.sessionId);
         return;
       case "updateComposerDraft":
-        if (connection.surface.kind !== "panel" && !this.#drafts.hasPendingSubmission(message.sessionId)) {
+        if (connection.surface.kind !== "panel" && !this.#drafts.hasPendingSubmission(message.sessionId)
+          && !this.#drafts.hasPendingRecovery(message.sessionId)) {
           throw new Error("Only an externalized Composer synchronizes drafts to the Host.");
         }
         this.#drafts.applyMutation(message.sessionId, message.draft);
@@ -202,7 +206,7 @@ export class WebviewActionDispatcher {
       }
       case "sendPrompt": {
         const hostOwnsDraft = connection.surface.kind === "panel"
-          || this.#drafts.hasPendingSubmission(message.sessionId);
+          || this.#drafts.hasPendingSubmission(message.sessionId) || this.#drafts.hasPendingRecovery(message.sessionId);
         try {
           const submitted = hostOwnsDraft
             ? this.#drafts.beginSubmission(message.sessionId, message.requestId, {
@@ -211,12 +215,21 @@ export class WebviewActionDispatcher {
                 images: message.images,
               })
             : { text: message.text, images: message.images };
+          // Reject synchronously so the existing submission rollback preserves the draft.
+          if (this.#drafts.hasPendingRecovery(message.sessionId)) {
+            throw new Error("Wait for pending-message recovery before sending another message.");
+          }
           await this.#registry.sendPrompt(message.sessionId, submitted.text, submitted.images, message.streamingBehavior);
           if (hostOwnsDraft) this.#drafts.resolveSubmission(message.sessionId, message.requestId, true);
           connection.post({ type: "promptResult", requestId: message.requestId, ok: true });
         } catch (error) {
           const errorText = error instanceof Error ? error.message : String(error);
-          if (hostOwnsDraft) this.#drafts.resolveSubmission(message.sessionId, message.requestId, false);
+          if (hostOwnsDraft) {
+            this.#drafts.resolveSubmission(message.sessionId, message.requestId, false);
+            if (this.#drafts.hasPendingRecovery(message.sessionId)) {
+              connection.post({ type: "draftReplacement", sessionId: message.sessionId, draft: this.#drafts.get(message.sessionId) });
+            }
+          }
           connection.post({ type: "promptResult", requestId: message.requestId, ok: false, error: errorText });
         }
         return;
@@ -344,6 +357,38 @@ export class WebviewActionDispatcher {
       case "retryStart":
         await this.#registry.retrySession(message.sessionId);
         return;
+    }
+  }
+
+  async #restoreQueuedPrompts(
+    message: Extract<WebviewToHostMessage, { type: "restoreQueuedPrompts" }>,
+    connection: DispatchConnection,
+  ): Promise<void> {
+    let release: (() => void) | undefined;
+    try {
+      this.#authorizeSessionTarget(message, connection);
+      if (this.#drafts.hasPendingSubmission(message.sessionId)) {
+        throw new Error("Wait for the current prompt submission before recovering pending messages.");
+      }
+      const session = this.#registry.sessionView(message.sessionId);
+      if (!session) throw new Error("This FrostPi Session no longer exists.");
+      const hostOwnsDraft = connection.surface.kind === "panel" || this.#drafts.hasPendingRecovery(message.sessionId);
+      const draftImages = hostOwnsDraft ? this.#drafts.get(message.sessionId).images.length : message.draftImageCount;
+      const pendingImages = [...session.queuedSteers, ...session.queuedFollowUps].reduce((count, prompt) => count + prompt.images.length, 0);
+      if (draftImages + pendingImages > session.attachmentLimits.maxImages) {
+        throw new Error("Pending images and the current draft exceed the Composer image limit. Pending messages were not changed.");
+      }
+      if (hostOwnsDraft) release = this.#drafts.beginRecovery(message.sessionId);
+      const outcome = await this.#registry.restoreQueuedPrompts(message.sessionId);
+      if (!this.#registry.hasSession(message.sessionId)) throw new Error("This FrostPi Session no longer exists.");
+      connection.deliverQueuedPromptRecovery(message.requestId, message.sessionId, outcome);
+    } catch (error) {
+      connection.post({
+        type: "restoreQueuedPromptsResult", sessionId: message.sessionId, requestId: message.requestId,
+        ok: false, error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      release?.();
     }
   }
 

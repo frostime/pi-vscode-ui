@@ -3,6 +3,7 @@ import type { ChatTypographyView } from "../model/chatTypography.js";
 import type { ComposerDraftView } from "../model/composerDraftModel.js";
 import type { ConversationItemView } from "../model/conversationModel.js";
 import type { SessionViewModel } from "../model/sessionViewModel.js";
+import type { QueuedPromptRecoveryOutcome } from "../model/queuedPromptRecoveryModel.js";
 import type { WebviewPresentationView } from "../model/webviewPresentationModel.js";
 import type { EditorMentionSpecialView, WorkspaceFileCandidateView } from "../model/workspaceFileModel.js";
 
@@ -36,7 +37,18 @@ export interface PresentationDeltaView extends Omit<WebviewPresentationView, "di
   } | null;
 }
 
+export type RestoreQueuedPromptsResult = {
+  type: "restoreQueuedPromptsResult";
+  requestId: string;
+  sessionId: string;
+} & (
+  | { ok: true; draftTarget: "host-applied"; outcome: Omit<QueuedPromptRecoveryOutcome, "content"> }
+  | { ok: true; draftTarget: "webview-merge"; outcome: QueuedPromptRecoveryOutcome }
+  | { ok: false; error: string }
+);
+
 export type HostToWebviewPayload =
+  | RestoreQueuedPromptsResult
   | { type: "usageProvidersResult"; requestId: string; providers: readonly ProviderUsageDescriptor[] }
   | { type: "providerUsageResult"; requestId: string; results: readonly ProviderUsageResult[] }
   | { type: "providerUsageError"; requestId: string; message: string }

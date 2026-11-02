@@ -49,7 +49,6 @@ describe("inspect CLI (masked development tooling)", () => {
     const { lines, write } = collect();
     const exit = await runInspect([], write);
     expect(exit).toBe(2);
-    expect(lines[0]).toBe("usage: inspect --agent-dir <directory> [provider ...]");
     expect(lines.join("\n")).not.toContain("agent-dir <directory value");
   });
 

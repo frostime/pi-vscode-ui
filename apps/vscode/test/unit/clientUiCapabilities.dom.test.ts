@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 import ClientApp from "$ui/ClientApp.svelte";
+import { BRIDGE_VERSION } from "$shared/bridge/bridgeVersion";
 import type { HostToWebviewMessage } from "$shared/bridge/hostToWebview";
 import type { SessionSummaryView } from "$shared/model/sessionViewModel";
 
@@ -13,7 +14,6 @@ import type { ToolActivityView } from "$shared/model/conversationModel";
 import { clientCapabilities } from "$ui/state/clientCapabilities.svelte";
 import SessionHeader from "$ui/features/sessions/SessionHeader.svelte";
 import SessionList from "$ui/features/sessions/SessionList.svelte";
-import SidebarShell from "$ui/shell/SidebarShell.svelte";
 import type { SessionViewModel } from "$shared/model/sessionViewModel";
 import type { ProviderUsageSource } from "$ui/features/provider-usage/providerUsageSource";
 import { composerDrafts } from "$ui/features/composer/composerDraftStore.svelte";
@@ -62,7 +62,7 @@ function activeSession(id = "session"): SessionViewModel {
     collapseTurnTrace: false, composerStreamingBehavior: "steer",
     networkProxy: { mode: "direct", label: "Direct", restartRequired: false },
     questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
-    conversationItems: [], queuedSteers: [], queuedFollowUps: [], pendingExtensionUi: [], extensionStatuses: [], extensionWidgets: [],
+    conversationItems: [], queuedSteers: [], queuedFollowUps: [], queuedPromptRecovery: { state: "ready" }, pendingExtensionUi: [], extensionStatuses: [], extensionWidgets: [],
     sessionTreeAvailable: false, isNavigatingTree: false, isSummarizingTree: false, conversationContentRevision: 0,
     stats: {
       userMessages: 0, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 0,
@@ -75,15 +75,6 @@ const stubCommands = { completions: (commands: never[]) => commands, handle: () 
 
 // jsdom has no ResizeObserver; ConversationView only needs the observe lifecycle.
 vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
-
-function sidebarShell(providerUsageSource: ProviderUsageSource | undefined) {
-  return render(SidebarShell, {
-    props: {
-      sessions: [summary()], session: activeSession(), externalized: false,
-      draftAuthority: "webview", localCommands: stubCommands, providerUsageSource,
-    },
-  });
-}
 
 describe("optional sidebar navigation roster", () => {
   it.each([false, true])("keeps the complete session lifetime while a filtered roster is enabled=%s", async (filtered) => {
@@ -110,16 +101,33 @@ describe("optional sidebar navigation roster", () => {
 });
 
 describe("injected provider usage source", () => {
-  it("threads the ClientApp-injected source into session metrics instead of forcing the bridge source", async () => {
-    clientCapabilities.set(VSCODE_CLIENT_UI_CAPABILITIES);
+  it.each(["sidebar", "panel"] as const)("opens provider usage from the ClientApp %s surface", async (kind) => {
     composerDrafts.set({});
     toastStore.set([]);
-    const listProviders = vi.fn(() => Promise.resolve([]));
-
-    const view = sidebarShell({ listProviders, queryUsage: () => Promise.resolve([]) });
-    await fireEvent.click(view.getByRole("button", { name: "Provider usage" }));
-    await waitFor(() => expect(listProviders).toHaveBeenCalled());
-    view.unmount();
+    presentationStore.set({
+      ...EMPTY_PRESENTATION, workspaceName: "Project", workspacePath: "/synthetic",
+      surface: kind === "panel" ? { kind, sessionId: "session" } : { kind },
+      sessions: [summary()], activeSessionId: "session", displayedSession: activeSession(),
+      composerDraftAuthority: kind === "panel" ? "host" : "webview",
+    });
+    const providerUsageSource: ProviderUsageSource = {
+      listProviders: () => Promise.resolve([{ providerId: "example", displayName: "Example", availability: "ready", source: "auth.json", reason: "" }]),
+      queryUsage: () => Promise.resolve([{
+        providerId: "example", source: "auth.json", status: "ready",
+        report: {
+          providerId: "example", providerName: "Example", capturedAt: 1_700_000_000_000, source: "synthetic",
+          semantics: { kind: "api-key", label: "Synthetic" }, buckets: [], notes: [],
+          metrics: [{ id: "balance", label: "Balance", value: "42 credits" }],
+        },
+      }]),
+    };
+    try {
+      const view = render(ClientApp, { props: { localComposerCommands: stubCommands, providerUsageSource } });
+      await fireEvent.click(view.getByRole("button", { name: "Provider usage" }));
+      await waitFor(() => expect(view.getByText("42 credits")).toBeTruthy());
+      await fireEvent.click(view.getByRole("button", { name: "Close provider usage" }));
+      expect(view.queryByText("42 credits")).toBeNull();
+    } finally { presentationStore.set(EMPTY_PRESENTATION); }
   });
 });
 
@@ -219,7 +227,7 @@ describe("explicit client UI capabilities", () => {
 
   it("drops editor mention specials from workspace suggestions when the host lacks editor mentions", () => {
     const message: HostToWebviewMessage = {
-      bridgeVersion: "3.3",
+      bridgeVersion: BRIDGE_VERSION,
       type: "workspaceFileSuggestions",
       requestId: "request",
       items: [{ path: "src/a.ts", name: "a.ts", directory: "src", score: 800, isDirectory: false }],

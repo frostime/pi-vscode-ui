@@ -2,10 +2,15 @@
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
   import type { LocalComposerCommands } from "../features/composer/frostPiCommands";
+  import type { ProviderUsageSource } from "../features/provider-usage/providerUsageSource";
 
   import SessionInteraction from "./SessionInteraction.svelte";
 
-  let { session, localCommands }: { session: SessionViewModel; localCommands: LocalComposerCommands } = $props();
+  let { session, localCommands, providerUsageSource }: {
+    session: SessionViewModel;
+    localCommands: LocalComposerCommands;
+    providerUsageSource?: ProviderUsageSource | undefined;
+  } = $props();
 </script>
 
 <div class="app-shell panel-shell" class:panel-failed={session.status === "failed"}>
@@ -16,7 +21,7 @@
       <p>{session.error ?? "This Session's Pi process stopped. Use the FrostPi sidebar to manage or restart it."}</p>
     </section>
   {:else}
-    <SessionInteraction {session} {localCommands} restoreFailedSubmissionLocally={false} draftAuthority="host" />
+    <SessionInteraction {session} {localCommands} {providerUsageSource} restoreFailedSubmissionLocally={false} draftAuthority="host" />
   {/if}
 </div>
 

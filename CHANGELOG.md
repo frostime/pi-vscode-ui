@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-02
+
+### Added
+
+- Restore all queued Steer and Queue messages into the Composer without stopping the running turn. (#10)
+
+### Fixed
+
+- Show provider usage in Session Tabs, not only the sidebar, and display the context percentage beside its ring again instead of only inside the popover. (#11)
+- Allow one Desktop instance per data profile: a second launch brings the existing window forward instead of starting a competing backend and tray, while development and packaged builds keep separate profiles.
+
 ## [0.16.0] - 2026-10-28
 
 ### Added
@@ -515,7 +526,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.1...HEAD
+[0.16.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.5...v0.16.0
 [0.15.5]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.4...v0.15.5
 [0.15.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.3...v0.15.4

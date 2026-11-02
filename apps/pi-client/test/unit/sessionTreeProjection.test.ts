@@ -98,7 +98,7 @@ describe("session tree projection", () => {
     expect(projectEditableTarget(entries[1]!)).toBeNull();
   });
 
-  it("uses bounded type and id labels when a branch end has no displayable content", () => {
+  it("still offers a branch end that has no displayable content", () => {
     const metadata: RpcSessionEntry = {
       type: "model_change",
       id: "123456789",
@@ -107,10 +107,7 @@ describe("session tree projection", () => {
     };
     const index = buildSessionTreeIndex([metadata], metadata.id);
 
-    expect(projectBranchEndChoices(index, null)[0]).toMatchObject({
-      label: "model_change · 12345678",
-      detail: "Ends with model_change: model_change · 12345678",
-    });
+    expect(projectBranchEndChoices(index, null)).toMatchObject([{ targetId: metadata.id }]);
   });
 });
 

@@ -1,6 +1,6 @@
 import type { ClientHost, HostEventEmitter } from "../clientHost.js";
 
-import type { ComposerDraftContent, ComposerDraftView } from "../../shared/model/composerDraftModel.js";
+import { prependComposerDraftContent, type ComposerDraftContent, type ComposerDraftView } from "../../shared/model/composerDraftModel.js";
 
 interface FailedSubmission {
   requestId: string;
@@ -11,6 +11,7 @@ interface FailedSubmission {
 export class ComposerDraftCache {
   readonly #drafts = new Map<string, ComposerDraftView>();
   readonly #failedSubmissions = new Map<string, FailedSubmission>();
+  readonly #pendingRecoveries = new Map<string, Set<symbol>>();
   readonly #changeEmitter: HostEventEmitter<{ sessionId: string; draft: ComposerDraftView }>;
   readonly #ownershipChangeEmitter: HostEventEmitter<string>;
 
@@ -35,6 +36,31 @@ export class ComposerDraftCache {
 
   hasPendingSubmission(sessionId: string): boolean {
     return this.#failedSubmissions.has(sessionId);
+  }
+
+  hasPendingRecovery(sessionId: string): boolean {
+    return this.#pendingRecoveries.has(sessionId);
+  }
+
+  /** Keep an already Host-owned draft authoritative even if its tab closes while awaiting RPC. */
+  beginRecovery(sessionId: string): () => void {
+    const token = Symbol();
+    const pending = this.#pendingRecoveries.get(sessionId) ?? new Set<symbol>();
+    const first = pending.size === 0;
+    pending.add(token);
+    this.#pendingRecoveries.set(sessionId, pending);
+    if (first) this.#ownershipChangeEmitter.fire(sessionId);
+    return () => {
+      const current = this.#pendingRecoveries.get(sessionId);
+      if (!current?.delete(token) || current.size > 0) return;
+      this.#pendingRecoveries.delete(sessionId);
+      this.#ownershipChangeEmitter.fire(sessionId);
+    };
+  }
+
+  prependContent(sessionId: string, recovered: ComposerDraftContent): void {
+    const current = this.get(sessionId);
+    this.#set(sessionId, { ...prependComposerDraftContent(current, recovered), revision: current.revision + 1 });
   }
 
   beginHandoff(sessionId: string, draft: ComposerDraftView): () => void {
@@ -119,11 +145,13 @@ export class ComposerDraftCache {
   release(sessionId: string): void {
     this.#drafts.delete(sessionId);
     this.#failedSubmissions.delete(sessionId);
+    this.#pendingRecoveries.delete(sessionId);
   }
 
   dispose(): void {
     this.#drafts.clear();
     this.#failedSubmissions.clear();
+    this.#pendingRecoveries.clear();
     this.#changeEmitter.dispose();
     this.#ownershipChangeEmitter.dispose();
   }

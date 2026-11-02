@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { DraftImage } from "../../features/composer/composerDraftStore.svelte";
 
-  let { images, onremove }: { images: DraftImage[]; onremove: (id: string) => void } = $props();
+  let { images, onremove, disabled = false }: { images: DraftImage[]; onremove: (id: string) => void; disabled?: boolean } = $props();
 </script>
 
 {#if images.length}
@@ -10,7 +10,7 @@
       <div class="attachment-item" title={`${image.name} (${formatSize(image.size)})`}>
         <img src={image.dataUrl} alt={image.name} />
         <div class="attachment-meta"><span>{image.name}</span><small>{formatSize(image.size)}</small></div>
-        <button type="button" aria-label={`Remove ${image.name}`} title={`Remove ${image.name}`} onclick={() => onremove(image.id)}><span class="codicon codicon-close"></span></button>
+        <button type="button" {disabled} aria-label={`Remove ${image.name}`} title={`Remove ${image.name}`} onclick={() => onremove(image.id)}><span class="codicon codicon-close"></span></button>
       </div>
     {/each}
   </div>

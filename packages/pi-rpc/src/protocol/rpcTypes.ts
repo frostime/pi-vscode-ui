@@ -4,6 +4,17 @@ export interface RpcImageContent {
   mimeType: string;
 }
 
+export interface RpcClearQueueResult {
+  steering: string[];
+  followUp: string[];
+}
+
+export interface RpcRemoveQueuedMessageResult {
+  removed: boolean;
+  images?: RpcImageContent[];
+  imagesDropped?: boolean;
+}
+
 export type StreamingBehavior = "steer" | "followUp";
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 

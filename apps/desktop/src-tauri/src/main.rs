@@ -1,9 +1,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::sync::OnceLock;
+
 mod native;
 mod node_backend;
 mod process_tree;
+mod single_instance;
 mod tray;
+
+/// Owning-launch wake handles stay alive for the whole run; dropping them early
+/// would re-open the profile to a second instance.
+static WAKE_KEPT: OnceLock<single_instance::Wake> = OnceLock::new();
 
 use serde_json::{json, Value};
 use std::{
@@ -472,13 +479,22 @@ fn watch_webview(
 
 fn publish_window_state(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
-        let visible = window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false);
+        let visible =
+            window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false);
         let backend = app.state::<Backend>();
         let _ = backend.send(json!({"kind":"window","focused":visible && window.is_focused().unwrap_or(false),"visible":visible}));
     }
 }
 
 fn main() {
+    // Decide launch ownership before touching the profile, the backend or the tray,
+    // so the rejected runner exits before creating kernel state of its own.
+    match single_instance::claim(&profile_directory()) {
+        single_instance::Claim::Second => return,
+        single_instance::Claim::First { wake } => {
+            let _ = WAKE_KEPT.set(wake);
+        }
+    }
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![desktop_connect, desktop_request])
         .setup(|app| {
@@ -493,6 +509,14 @@ fn main() {
             let handle = app.handle().clone();
             tray::install(app)?;
             watch_webview(&window, backend, handle)?;
+            if let Some(wake) = WAKE_KEPT.get() {
+                let surface = app.handle().clone();
+                std::thread::spawn(move || {
+                    while wake.wait() {
+                        let _ = tray::restore(&surface);
+                    }
+                });
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

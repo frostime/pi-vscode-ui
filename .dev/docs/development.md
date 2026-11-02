@@ -28,7 +28,7 @@ Commands below run from the repository root. Choose checks in [testing.md](testi
 |---|---|---|
 | Build the extension | `pnpm build:vscode` | Shared dependencies and extension JS; no Desktop work |
 | Build Desktop | `pnpm build:desktop` | JS/renderer, Rust exe and current backend/Pi extensions beside the exe; does not launch |
-| Run Desktop | `pnpm --dir apps/desktop start` | Launches the existing exe with the development profile; does not build |
+| Run Desktop | `pnpm --dir apps/desktop start` | Launches the existing exe detached with the development profile and returns immediately; does not build. Stop the app from its tray Exit menu — a launcher Ctrl+C no longer reaches it, which also preserves its exit cleanup |
 | Debug the extension | `.vscode/launch.json` | `build:debug` runs the extension build with `FROSTPI_SOURCEMAP=1` for Host maps/unminified output; production stays minified for the bundle budget |
 
 The product-local `pnpm --dir apps/vscode build` and `pnpm --dir apps/desktop build` have the same complete-build behavior as the root shortcuts. Desktop's exe is `apps/desktop/src-tauri/target/release/frostpi-desktop.exe`. Native compilation requires Windows x64, Rust MSVC and Visual Studio C++ build tools/Windows SDK. Running Desktop additionally requires Node 22.19+, Pi and WebView2; Pi can impose a newer Node minimum.
