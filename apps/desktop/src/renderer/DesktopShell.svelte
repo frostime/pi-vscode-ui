@@ -572,8 +572,11 @@
 
   <!-- Mounted at shell level: `position: fixed` cannot escape the transformed drawer or a scrolled row list. -->
   {#if menu}
-    <ProjectActionMenu anchor={menu.anchor} projectName={menu.projectName}
-      actions={projectActions} onaction={runMenuAction} onremove={runMenuRemove} onclose={() => menu = null} />
+    <!-- Keyed by anchor: switching triggers without a pointer event must remount, not reuse the old position. -->
+    {#key menu.anchor}
+      <ProjectActionMenu anchor={menu.anchor} projectName={menu.projectName}
+        actions={projectActions} onaction={runMenuAction} onremove={runMenuRemove} onclose={() => menu = null} />
+    {/key}
   {/if}
 </div>
 

@@ -1,6 +1,6 @@
 import { constants } from "node:fs";
 import { access } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import type { DesktopProjectActionView } from "../shared/desktopBridge.js";
 
@@ -34,6 +34,8 @@ interface ProjectActionDeps {
 
 interface ToolActionDefinition {
   id: string;
+  /** Product name used in failure messages, independent of the menu label wording. */
+  tool: string;
   label: string;
   icon: string;
   /** Order is preference: an earlier name wins over an earlier directory. */
@@ -66,7 +68,8 @@ async function findExecutable(
     .filter((directory) => directory.length > 0);
   for (const candidate of candidates) {
     for (const directory of directories) {
-      const path = join(directory, candidate);
+      // Absolute, so the shell never runs a second PATH search of its own.
+      const path = resolve(join(directory, candidate));
       if (await environment.exists(path)) return path;
     }
   }
@@ -85,8 +88,13 @@ function toolAction(definition: ToolActionDefinition): ProjectAction {
       return executable !== undefined;
     },
     async invoke(context) {
-      if (!executable) throw new Error(`${definition.label} is not available on this machine.`);
-      await context.launch(executable, definition.arguments(context.root));
+      if (!executable) throw new Error(`${definition.tool} is not available on this machine.`);
+      try {
+        await context.launch(executable, definition.arguments(context.root));
+      } catch {
+        // The native transport cannot carry the Windows error code, so name the tool instead.
+        throw new Error(`Could not start ${definition.tool}.`);
+      }
     },
   };
 }
@@ -105,13 +113,18 @@ function builtInActions(): ProjectAction[] {
     },
     toolAction({
       id: "vscode",
+      tool: "VS Code",
       label: "Open in VS Code",
       icon: "codicon-vscode",
+      // Only the `code.cmd` shim implements the CLI flags; `Code.exe` ignores `-n`.
+      // The shim is parsed by cmd, so arguments are quoted and a `%NAME%` pair in a path
+      // cannot be passed through intact.
       candidates: ["code.cmd", "code.exe"],
       arguments: (root) => ["-n", root],
     }),
     toolAction({
       id: "zed",
+      tool: "Zed",
       label: "Open in Zed",
       icon: "codicon-zap",
       candidates: ["zed.exe"],
@@ -119,6 +132,7 @@ function builtInActions(): ProjectAction[] {
     }),
     toolAction({
       id: "terminal",
+      tool: "Windows Terminal",
       label: "Open in Windows Terminal",
       icon: "codicon-terminal",
       candidates: ["wt.exe"],

@@ -84,12 +84,20 @@
       if (menuElement?.contains(target) || anchor.contains(target)) return;
       close(false);
     };
+    // A scrolled row list would otherwise leave the fixed menu pointing at another Project.
+    const dismissOnScroll = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Node && menuElement?.contains(target)) return;
+      close(false);
+    };
     const dismissOnResize = () => close(false);
     document.addEventListener("pointerdown", dismissOutside, true);
+    document.addEventListener("scroll", dismissOnScroll, true);
     window.addEventListener("keydown", menuKeyDown, true);
     window.addEventListener("resize", dismissOnResize);
     return () => {
       document.removeEventListener("pointerdown", dismissOutside, true);
+      document.removeEventListener("scroll", dismissOnScroll, true);
       window.removeEventListener("keydown", menuKeyDown, true);
       window.removeEventListener("resize", dismissOnResize);
     };

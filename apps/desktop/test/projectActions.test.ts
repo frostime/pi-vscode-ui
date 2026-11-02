@@ -110,4 +110,13 @@ describe("ProjectActions", () => {
     openPath.mockResolvedValueOnce("Could not open file");
     await expect(actions.run("reveal", "C:/project")).rejects.toThrow("Could not open file");
   });
+
+  it("names the tool when the native launch fails", async () => {
+    const bin = await binDirectory(["code.cmd"]);
+    const launch = vi.fn(() => Promise.reject(new Error("The native Desktop operation failed.")));
+    const actions = new ProjectActions({ launch, openPath: vi.fn(() => Promise.resolve("")) });
+    await actions.initialize(environment(bin));
+
+    await expect(actions.run("vscode", "C:/project")).rejects.toThrow("Could not start VS Code.");
+  });
 });

@@ -196,28 +196,21 @@ fn shell_execute(target: &str, parameters: Option<&str>) -> Result<(), ()> {
     Ok(())
 }
 
-/// Accepts an absolute path or a bare file name. The shell resolves a bare name through PATH,
-/// which is how Windows Terminal's Store alias stays reachable.
+/// Program targets are absolute: the Node registry already resolves them through PATH, so the
+/// shell must not run a second, differently ordered search.
 fn is_launch_target(target: &str) -> bool {
-    if target.is_empty()
-        || target.len() > MAX_LAUNCH_TARGET_BYTES
-        || target.contains(['\0', '\r', '\n'])
-    {
-        return false;
-    }
-    let path = std::path::Path::new(target);
-    if path.is_absolute() {
-        return true;
-    }
-    !target.contains('/') && !target.contains('\\') && !target.contains("..")
+    !target.is_empty()
+        && target.len() <= MAX_LAUNCH_TARGET_BYTES
+        && !target.contains(['\0', '\r', '\n'])
+        && std::path::Path::new(target).is_absolute()
 }
 
 /// Quotes one command-line argument the way `CreateProcess` expects; the shell passes our
 /// parameter string through unchanged.
 fn quote_argument(value: &str) -> String {
-    if !value.is_empty() && !value.contains([' ', '\t', '"']) {
-        return value.to_string();
-    }
+    // Always quoted on purpose: a batch shim such as `code.cmd` receives the parameter string
+    // through the command interpreter, where an unquoted `&` splits the argument. A path
+    // containing a `%NAME%` pair still expands there; that case cannot be represented.
     let mut quoted = String::with_capacity(value.len() + 2);
     quoted.push('"');
     let mut backslashes = 0usize;
