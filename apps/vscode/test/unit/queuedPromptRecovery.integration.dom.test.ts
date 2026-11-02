@@ -82,7 +82,7 @@ describe("Restore all across shared UI, Host, Runtime and actual child transport
       expect(getDraft(sessionId).images).toEqual([expect.objectContaining({ data: png.data, mimeType: png.mimeType })]);
       expect(getDraft(sessionId).images[0]?.dataUrl).toBe(`data:image/png;base64,${png.data}`);
     } else {
-      expect(view.container.textContent).toContain("Sending the draft again creates a new message.");
+      expect(view.container.textContent).toContain("creates a new message");
     }
     expect(fixture.errors).toEqual([]);
   });

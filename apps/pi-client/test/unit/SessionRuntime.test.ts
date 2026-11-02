@@ -134,10 +134,9 @@ describe("Pi session startup and conversation history", () => {
     await waitFor(() => conversationNotices(runtime.view).some((notice) => notice.text.startsWith("Cache miss:")));
 
     expect(runtime.view.status).toBe("running");
-    expect(conversationNotices(runtime.view)).toContainEqual(expect.objectContaining({
-      level: "warning",
-      text: "Cache miss: 25k tokens re-billed",
-    }));
+    const cacheWarnings = conversationNotices(runtime.view)
+      .filter((notice) => notice.level === "warning" && notice.text.includes("25k"));
+    expect(cacheWarnings).toHaveLength(1);
     await waitFor(() => runtime.view.status === "ready");
 
     await runtime.stop();

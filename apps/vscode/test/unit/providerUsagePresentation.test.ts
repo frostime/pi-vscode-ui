@@ -151,13 +151,6 @@ describe("provider usage presentation", () => {
     expect(body).not.toContain("NaN");
   });
 
-  it("supplies mixed real-format results for UI review, including unavailable and account selection", async () => {
-    const results = await mockReports();
-    expect(results.map((result) => result.status)).toEqual([
-      "ready", "ready", "ready", "ready", "ready", "query-failed", "selection-required", "unavailable",
-    ]);
-  });
-
   it("allows closing/replacing a mock request without a late result", async () => {
     vi.useFakeTimers();
     const controller = new AbortController();

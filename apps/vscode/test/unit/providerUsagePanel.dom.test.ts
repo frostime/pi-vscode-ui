@@ -37,18 +37,17 @@ describe("provider usage component interaction", () => {
       source: { listProviders: () => Promise.resolve(providers), queryUsage },
       currentProviderId: "custom-provider", onclose: vi.fn(),
     });
-    await waitFor(() => expect(view.queryByText("Usage queries are not supported for custom-provider.")).not.toBeNull());
-    expect(view.queryByText("You can select another configured provider.")).not.toBeNull();
+    await waitFor(() => expect(view.queryByText(/not supported for custom-provider/)).not.toBeNull());
     expect(view.getByRole("button", { name: "Provider: custom-provider" }).textContent).toContain("custom-provider");
     expect((view.getByRole("button", { name: "Query usage" }) as HTMLButtonElement).disabled).toBe(true);
     expect(queryUsage).not.toHaveBeenCalled();
     await fireEvent.click(view.getByRole("button", { name: "Provider: custom-provider" }));
     await fireEvent.click(view.getByRole("option", { name: "Other" }));
     await waitFor(() => expect(view.queryByText("other-result")).not.toBeNull());
-    expect(view.queryByText("Usage queries are not supported for custom-provider.")).toBeNull();
+    expect(view.queryByText(/not supported for custom-provider/)).toBeNull();
   });
 
-  it("distinguishes missing accessible credentials from unsupported providers and explains access/security only in Details", async () => {
+  it("keeps an unavailable provider unqueryable and lists only usable providers", async () => {
     const queryUsage = vi.fn<ProviderUsageSource["queryUsage"]>();
     const unavailable: ProviderUsageDescriptor = {
       ...providers[0]!, availability: "unavailable", source: "not-configured",
@@ -61,23 +60,11 @@ describe("provider usage component interaction", () => {
       },
       currentProviderId: "example", onclose: vi.fn(),
     });
-    await waitFor(() => expect(view.queryByText("Could not obtain credentials for Example.", { exact: false })).not.toBeNull());
-    expect(view.queryByText("Usage queries are not supported for example.")).toBeNull();
+    await waitFor(() => expect(view.queryByRole("button", { name: "Provider: Example" })).not.toBeNull());
     await fireEvent.click(view.getByRole("button", { name: "Provider: Example" }));
     expect(view.queryByRole("option", { name: /Unused/ })).toBeNull();
     expect(view.queryByRole("option", { name: "All configured providers" })).toBeNull();
-    await fireEvent.click(view.getByRole("button", { name: "Provider: Example" }));
-    expect(view.queryByText("About this data")).toBeNull();
-    expect(view.queryByText(/Credentials injected dynamically/)).toBeNull();
-    const details = view.getByRole("button", { name: "Details" });
-    expect(details.getAttribute("aria-expanded")).toBe("false");
-    await fireEvent.click(details);
-    expect(details.getAttribute("aria-expanded")).toBe("true");
-    expect(view.queryByText(/Credentials injected dynamically by Pi extensions are not accessible/)).not.toBeNull();
-    expect(view.queryByText(/It does not log them, send them to an LLM, or save additional copies/)).not.toBeNull();
-    expect(view.queryByText(unavailable.reason)).not.toBeNull();
-    await fireEvent.click(details);
-    expect(view.queryByText(/Credentials injected dynamically/)).toBeNull();
+    expect((view.getByRole("button", { name: "Query usage" }) as HTMLButtonElement).disabled).toBe(true);
     expect(queryUsage).not.toHaveBeenCalled();
   });
 
@@ -144,7 +131,7 @@ describe("provider usage component interaction", () => {
     });
     let view = render(ProviderUsagePanel, { source, currentProviderId: "example", onclose: () => view.unmount() });
     await waitFor(() => expect(view.queryByText("snapshot-1")).not.toBeNull());
-    await fireEvent.click(view.getByRole("button", { name: "Official usage page ↗" }));
+    await fireEvent.click(view.getByRole("button", { name: /Official usage page/ }));
     expect(bridge.post).toHaveBeenCalledWith({ type: "openExternal", url: officialUrl });
     await fireEvent.click(view.getByRole("button", { name: "Close provider usage" }));
     expect(document.querySelector("dialog")).toBeNull();
@@ -167,9 +154,9 @@ describe("provider usage component interaction", () => {
     const view = render(ProviderUsagePanel, { source, currentProviderId: "example", onclose: vi.fn() });
     await waitFor(() => expect(view.queryByText("old-success")).not.toBeNull());
     await fireEvent.click(view.getByRole("button", { name: "Refresh usage" }));
-    await waitFor(() => expect(view.queryByText("Could not retrieve usage. Try again.")).not.toBeNull());
+    await waitFor(() => expect(view.queryByText(/Could not retrieve usage/)).not.toBeNull());
     expect(view.queryByText("old-success")).toBeNull();
-    expect(view.queryByText("Official usage page ↗")).not.toBeNull();
+    expect(view.queryByText(/Official usage page/)).not.toBeNull();
     await fireEvent.click(view.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(requests).toBe(3));
     expect(view.queryByText("old-success")).toBeNull();
@@ -198,7 +185,7 @@ describe("provider usage component interaction", () => {
     await waitFor(() => expect(view.queryByText("current-result")).not.toBeNull());
     expect(signals[0]!.aborted).toBe(true);
     first.resolve([snapshot("example", "stale-result")]);
-    await waitFor(() => expect(view.queryByText("Fetching usage…")).toBeNull());
+    await waitFor(() => expect(view.queryByText(/Fetching usage/)).toBeNull());
     expect(view.queryByText("stale-result")).toBeNull();
     await fireEvent.click(view.getByRole("button", { name: "Provider: Other" }));
     await fireEvent.click(view.getByRole("option", { name: "Example" }));

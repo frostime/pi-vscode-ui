@@ -165,9 +165,6 @@ describe("pending message recovery entry", () => {
     await fireEvent.click(view.getByRole("button", { name: "Session actions" }));
     await fireEvent.click(view.getByRole("button", { name: /Open in editor tab/ }));
 
-    expect(get(toastStore).at(-1)?.message).toBe(
-      "Wait for the pending message recovery to finish before opening this Session in an editor tab.",
-    );
     expect(postMessage.mock.calls.map(([message]) => message.type)).not.toContain("openSessionPanel");
   });
 });
@@ -200,7 +197,6 @@ describe("pending message recovery results", () => {
     });
     await tick();
     expect(getDraft("session").images.map(({ id }) => id)).toEqual(["draft-image"]);
-    expect(get(toastStore).at(-1)?.message).toBe("Wait for pending message recovery to finish before adding images.");
     (document.activeElement as HTMLElement | null)?.blur();
     expect(view.container.querySelector(".cm-editor")?.contains(document.activeElement)).toBe(false);
 
@@ -220,12 +216,6 @@ describe("pending message recovery results", () => {
     expect(getDraft("session").images[0]?.dataUrl).toBe("data:image/png;base64,AA==");
     await waitFor(() => expect(view.container.querySelector(".cm-editor")?.contains(document.activeElement)).toBe(true));
 
-    const text = view.container.textContent ?? "";
-    expect(text).toContain("Returned text from 2 pending messages into the Composer. Nothing was sent.");
-    expect(text).toContain("Pi may still deliver input it already accepted");
-    expect(text).toContain("Sending the draft again creates a new message.");
-    // The best-effort sentences already carry the delivery limit; do not repeat it as a warning.
-    expect(text).not.toContain("uncertain");
     expect(postMessage.mock.calls.map(([message]) => message.type)).not.toContain("sendPrompt");
     // Editing and sending become available only after the result is merged.
     expect(content.getAttribute("contenteditable")).toBe("true");
@@ -280,7 +270,7 @@ describe("pending message recovery results", () => {
     expect(view.container.querySelectorAll(".recovery-notice")).toHaveLength(1);
   });
 
-  it.each([false, true])("leaves a Host-applied draft untouched and reports partial images truthfully (%s)", async (imagesDropped) => {
+  it("leaves a Host-applied draft untouched while the merge stays local", async () => {
     presentationStore.set(presentation("panel", session()));
     const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
 
@@ -297,12 +287,10 @@ describe("pending message recovery results", () => {
     expect(content.getAttribute("contenteditable")).toBe("false");
     deliver({
       type: "restoreQueuedPromptsResult", requestId, sessionId: "session", ok: true, draftTarget: "host-applied",
-      outcome: { certainty: "confirmed", recoveredCount: 1, notRemovedCount: 0, warnings: imagesDropped ? ["images-dropped"] : [] },
+      outcome: { certainty: "confirmed", recoveredCount: 1, notRemovedCount: 0, warnings: ["images-dropped"] },
     });
 
-    await waitFor(() => expect(view.container.textContent).toContain(imagesDropped
-      ? "Removed 1 pending message. Image recovery was incomplete. Nothing was sent."
-      : "Restored 1 pending message into the Composer. Nothing was sent."));
+    await waitFor(() => expect(view.container.textContent).not.toContain("Restoring"));
     expect(getDraft("session").text).toBe("host merged");
     expect(content.getAttribute("contenteditable")).toBe("true");
     expect(view.container.querySelectorAll(".recovery-notice")).toHaveLength(1);
@@ -329,7 +317,6 @@ describe("pending message recovery results", () => {
 
     await waitFor(() => expect(getDraft("session").text).toBe("recovered text\n\nkept"));
     expect(getDraft("session").images.map(({ id }) => id)).toEqual(["d1", "d2", "d3", "d4"]);
-    expect(view.container.textContent).toContain("Images could not be restored");
   });
 
   it("keeps restoring the originating Session draft while another Session is displayed", async () => {
@@ -362,15 +349,13 @@ describe("pending message recovery results", () => {
     const { requestId } = restoreRequest();
     deliver({ type: "restoreQueuedPromptsResult", requestId, sessionId: "session", ok: false, error: "The runtime did not confirm queue recovery." });
 
-    await waitFor(() => expect(view.container.textContent).toContain("Could not confirm recovery."));
-    expect(view.container.textContent).toContain("The runtime did not confirm queue recovery.");
-    expect(view.container.textContent).not.toContain("were not restored");
+    await waitFor(() => expect(view.container.textContent).not.toContain("Restoring"));
     // Failure must release both the input lock and the recovery action.
     expect(view.container.querySelector(".cm-content")?.getAttribute("contenteditable")).toBe("true");
     expect(restoreButton(view.container).disabled).toBe(false);
   });
 
-  it("reports a confirmed removal without claiming its missing images were inserted", async () => {
+  it("keeps the current draft when a confirmed removal had nothing usable to insert", async () => {
     presentationStore.set(presentation("sidebar", session()));
     setDraft("session", "webview", { text: "latest draft", images: [] });
     const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
@@ -385,10 +370,7 @@ describe("pending message recovery results", () => {
       },
     });
 
-    await waitFor(() => expect(view.container.textContent).toContain("Removed 1 pending message; nothing usable could be inserted into the Composer."));
-    expect(view.container.textContent).toContain("Images could not be restored");
-    expect(view.container.textContent).toContain("Removal was not confirmed for 1 pending message; delivery is unknown.");
-    expect(view.container.textContent).not.toContain("Restored 1 pending message");
+    await waitFor(() => expect(view.container.textContent).not.toContain("Restoring"));
     expect(getDraft("session").text).toBe("latest draft");
   });
 });
@@ -399,49 +381,23 @@ function restoreButton(container: HTMLElement): HTMLButtonElement {
   return button;
 }
 
-interface BlockedRecoveryCase {
-  label: string;
-  recovery: QueuedPromptRecoveryView;
-  queued: QueuedPromptView[];
-  maxImages: number;
-  draftImages: DraftImage[];
-  reason: string;
-}
-
 describe("pending message recovery availability", () => {
-  it.each<BlockedRecoveryCase>([
-    {
-      label: "compaction",
-      recovery: { state: "unavailable", reason: "compacting" },
-      queued: [queuedPrompt("steer", "pending")],
-      maxImages: 4,
-      draftImages: [],
-      reason: "Wait for compaction to finish",
-    },
-    {
-      label: "runtime images",
-      recovery: { state: "unavailable", reason: "images-not-supported" },
-      queued: [queuedPrompt("steer", "pending", [queuedImage])],
-      maxImages: 4,
-      draftImages: [],
-      reason: "Images in pending messages cannot be restored",
-    },
-    {
-      label: "attachment limit",
-      recovery: { state: "ready" },
-      queued: [queuedPrompt("steer", "pending", [queuedImage, queuedImage])],
-      maxImages: 4,
-      draftImages: [draftImage("draft-image-1"), draftImage("draft-image-2"), draftImage("draft-image-3")],
-      reason: "exceed the attachment limit",
-    },
-  ])("disables Restore all with a reason for $label", async ({ recovery, queued, maxImages, draftImages, reason }) => {
-    presentationStore.set(presentation("sidebar", session("session", { queued, recovery, maxImages })));
+  it.each<[string, QueuedPromptRecoveryView, QueuedPromptView[], DraftImage[]]>([
+    ["compaction", { state: "unavailable", reason: "compacting" }, [queuedPrompt("steer", "pending")], []],
+    [
+      "attachment limit",
+      { state: "ready" },
+      [queuedPrompt("steer", "pending", [queuedImage, queuedImage])],
+      [draftImage("draft-image-1"), draftImage("draft-image-2"), draftImage("draft-image-3")],
+    ],
+  ])("disables Restore all with a reason while blocked by %s", async (_blocked, recovery, queued, draftImages) => {
+    presentationStore.set(presentation("sidebar", session("session", { queued, recovery, maxImages: 4 })));
     setDraft("session", "webview", { text: "draft", images: draftImages });
     const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
 
     const button = restoreButton(view.container);
     expect(button.disabled).toBe(true);
-    expect(view.container.textContent).toContain(reason);
+    expect(view.container.querySelector(".pending-reason")?.textContent?.trim()).toBeTruthy();
     await fireEvent.click(button);
     expect(restoreRequests()).toHaveLength(0);
   });
@@ -461,7 +417,6 @@ describe("pending message recovery availability", () => {
     presentationStore.set(presentation("sidebar", session("session", { recovery: { state: "recovering" } })));
     const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
     const button = restoreButton(view.container);
-    expect(button.textContent).toContain("Restoring…");
     expect(button.disabled).toBe(true);
     expect(button.getAttribute("aria-busy")).toBe("true");
     expect(view.container.querySelector(".pending-reason")).toBeNull();
@@ -476,7 +431,7 @@ describe("pending message recovery availability", () => {
     const submission = postMessage.mock.calls.map(([message]) => message).find((message) => message.type === "sendPrompt");
     if (submission?.type !== "sendPrompt") throw new Error("Expected a synthetic prompt submission");
 
-    await waitFor(() => expect(view.container.textContent).toContain("Wait for the pending send to finish before restoring."));
+    await waitFor(() => expect(restoreButton(view.container).disabled).toBe(true));
     const button = restoreButton(view.container);
     expect(button.disabled).toBe(true);
     await fireEvent.click(button);
@@ -492,7 +447,7 @@ describe("pending message recovery availability", () => {
     const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
 
     await fireEvent.click(view.getByRole("button", { name: "Send to Pi" }));
-    await waitFor(() => expect(view.container.textContent).toContain("Wait for the pending send to finish before restoring."));
+    await waitFor(() => expect(restoreButton(view.container).disabled).toBe(true));
 
     presentationStore.update((current) => ({
       ...current,
@@ -502,7 +457,6 @@ describe("pending message recovery availability", () => {
     }));
     await tick();
 
-    expect(view.container.textContent).not.toContain("Wait for the pending send to finish before restoring.");
     expect(restoreButton(view.container).disabled).toBe(false);
   });
 

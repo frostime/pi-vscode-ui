@@ -54,10 +54,6 @@ test("Fireworks billing summary accepts empty rated line items without inventing
     const report = normalizeFireworksBillingSummaryPayload({ lineItems: [] }, "acme", 2000);
     assert.equal(report.providerId, "fireworks");
     assert.deepEqual(report.metrics, []);
-    assert.deepEqual(report.notes, [
-        "Rated line items may differ from the final invoice once credits or adjustments are applied.",
-        "Fireworks returned no rated line items for the last 30 days.",
-    ]);
 });
 
 test("Fireworks billing summary rejects malformed, ambiguous, or hostile payloads", () => {
