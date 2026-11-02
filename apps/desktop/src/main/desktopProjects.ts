@@ -83,6 +83,24 @@ export class DesktopProjects {
     this.#emitChange();
   }
 
+  /**
+   * Reorders only the Map's own order. `index` is the target position after the moved Project is removed,
+   * and an out-of-range index is an error rather than a clamp.
+   */
+  moveProject(id: string, index: number): void {
+    const entries = [...this.#projects.entries()];
+    const current = entries.findIndex(([candidate]) => candidate === id);
+    if (current < 0) throw new Error(`Unknown FrostPi Project: ${id}`);
+    if (!Number.isInteger(index) || index < 0 || index >= entries.length) {
+      throw new Error(`Invalid Project position: ${String(index)}`);
+    }
+    if (current === index) return;
+    entries.splice(index, 0, ...entries.splice(current, 1));
+    this.#projects.clear();
+    for (const [key, project] of entries) this.#projects.set(key, project);
+    this.#emitChange();
+  }
+
   get selected(): DesktopProject | null {
     return this.#selectedId ? this.#projects.get(this.#selectedId) ?? null : null;
   }

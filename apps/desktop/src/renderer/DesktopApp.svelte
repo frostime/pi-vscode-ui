@@ -112,6 +112,8 @@
   onproject={(id) => window.frostpiDesktop.selectProject(id)}
   onadd={() => window.frostpiDesktop.addProject()}
   onremove={(id) => window.frostpiDesktop.removeProject(id)}
+  onmove={(id, index) => window.frostpiDesktop.moveProject(id, index)}
+  onaction={(id, action) => window.frostpiDesktop.projectAction(id, action)}
   onsettings={() => showSettings()}
   {theme} themeBusy={settingsBusy} themeSetupRequired={settingsView?.firstRun ?? true}
   ontheme={() => settingsAction({ type: "setTheme", theme: theme === "dark" ? "light" : "dark" })}

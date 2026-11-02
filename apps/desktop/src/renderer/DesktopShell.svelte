@@ -4,12 +4,14 @@
   import { DESKTOP_SIDEBAR_WIDTH } from "../shared/desktopBridge.js";
   import { desktopThemes, type DesktopTheme } from "../shared/desktopSettings.js";
   import type {
+    DesktopProjectActionView,
     DesktopProjectActivity,
     DesktopProjectsView,
     DesktopResumeView,
     DesktopSidebarLayout,
   } from "../shared/desktopBridge.js";
   import type { SessionSummaryView } from "@frostime/pi-client/shared/model/sessionViewModel";
+  import ProjectActionMenu from "./ProjectActionMenu.svelte";
 
   const DEFAULT_WIDTH = DESKTOP_SIDEBAR_WIDTH.default;
   const MIN_WIDTH = DESKTOP_SIDEBAR_WIDTH.min;
@@ -18,6 +20,11 @@
   const NARROW_WIDTH = 640;
   const clampWidth = (value: number): number =>
     Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(value)));
+
+  /** Which trigger opened the Project action menu; the shell owns only this state. */
+  type ProjectMenuTarget = { anchor: HTMLElement; projectId: string; projectName: string };
+  /** Half of the hovered row that would receive the dragged Project. */
+  type DropTarget = { id: string; after: boolean };
 
   let {
     view,
@@ -29,6 +36,8 @@
     onproject,
     onadd,
     onremove,
+    onmove,
+    onaction,
     onsettings,
     theme,
     themeBusy,
@@ -47,6 +56,8 @@
     onproject: (id: string) => void;
     onadd: () => void;
     onremove: (id: string) => void;
+    onmove: (id: string, index: number) => void;
+    onaction: (id: string, action: string) => void;
     onsettings: () => void;
     theme: DesktopTheme;
     themeBusy: boolean;
@@ -59,6 +70,7 @@
 
   let shell = $state<HTMLElement | null>(null);
   let projectsButton = $state<HTMLButtonElement | null>(null);
+  let contextButton = $state<HTMLButtonElement | null>(null);
   let drawerClose = $state<HTMLButtonElement | null>(null);
   let chooseDetails = $state<HTMLDetailsElement | null>(null);
   let width = $state(untrack(() => clampWidth(view.navigation?.sidebar.width ?? DEFAULT_WIDTH)));
@@ -67,6 +79,10 @@
   let dragging = $state(false);
   let narrow = $state(false);
   let drawer = $state(false);
+  let tooltip = $state(false);
+  let menu = $state<ProjectMenuTarget | null>(null);
+  let dragId = $state<string | null>(null);
+  let dropTarget = $state<DropTarget | null>(null);
   let resizeStart: { x: number; width: number } | null = null;
   let keyboardDirty = false;
 
@@ -77,7 +93,9 @@
   const activeProject = $derived(view.projects.find((project) => project.id === view.activeProjectId) ?? null);
   const activeSession = $derived(sessions.find((session) => session.id === activeSessionId));
   const differentDirectory = $derived(activeSession && activeProject && activeSession.cwd !== activeProject.cwd ? activeSession.cwd : null);
-  const contextTitle = $derived(activeProject ? `Project: ${activeProject.cwd}${differentDirectory ? `\nPi: ${differentDirectory}` : ""}` : "");
+  const projectActions = $derived<DesktopProjectActionView[]>(view.actions ?? []);
+  // The menu replaces the path tooltip while it is open.
+  const tooltipVisible = $derived(tooltip && menu === null && activeProject !== null);
   const sidebarVisible = $derived(!narrow && !hidden);
   const sidebarAvailable = $derived(sidebarVisible || (narrow && drawer));
   const showChoose = $derived(activeProject !== null && activeSessionId === null && sessions.length > 0);
@@ -115,6 +133,14 @@
     if (!narrow) drawer = false;
   });
 
+  // A removed Project must not leave its action menu anchored to a gone row.
+  $effect(() => {
+    const open = menu;
+    if (!open) return;
+    if (view.projects.some((project) => project.id === open.projectId)) return;
+    menu = null;
+  });
+
   onMount(() => {
     let observer: ResizeObserver | null = null;
     if (shell) {
@@ -131,6 +157,8 @@
     // Capture Escape so the drawer cannot also collapse the shared Composer underneath.
     const dismissOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      // An open Project menu owns Escape and restores focus to its trigger.
+      if (menu) return;
       if (chooseDetails?.open) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -211,6 +239,102 @@
   function selectProject(id: string): void {
     if (narrow && drawer) closeDrawer();
     onproject(id);
+  }
+
+  function menuFor(id: string): boolean {
+    return menu?.projectId === id;
+  }
+
+  function toggleMenu(anchor: HTMLElement, project: { id: string; name: string }): void {
+    if (menu?.anchor === anchor) { menu = null; return; }
+    menu = { anchor, projectId: project.id, projectName: project.name };
+  }
+
+  function runMenuAction(action: string): void {
+    const target = menu;
+    if (!target) return;
+    menu = null;
+    target.anchor.focus();
+    onaction(target.projectId, action);
+  }
+
+  function runMenuRemove(): void {
+    const target = menu;
+    if (!target) return;
+    menu = null;
+    target.anchor.focus();
+    onremove(target.projectId);
+  }
+
+  // `index` is the target position once the dragged Project is removed, so it is
+  // computed on the list that no longer contains the source row.
+  function targetIndex(ids: string[], sourceId: string, targetId: string, after: boolean): number | null {
+    const remaining = ids.filter((id) => id !== sourceId);
+    const target = remaining.indexOf(targetId);
+    if (target < 0) return null;
+    return after ? target + 1 : target;
+  }
+
+  function isLowerHalf(event: DragEvent): boolean {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    return event.clientY > rect.top + rect.height / 2;
+  }
+
+  function dropLineFor(id: string): "above" | "below" | null {
+    if (dropTarget?.id !== id) return null;
+    return dropTarget.after ? "below" : "above";
+  }
+
+  function startDrag(event: DragEvent, id: string): void {
+    dragId = id;
+    dropTarget = null;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", id);
+    }
+  }
+
+  function dragOverRow(event: DragEvent, id: string): void {
+    if (!dragId || dragId === id) { dropTarget = null; return; }
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    dropTarget = { id, after: isLowerHalf(event) };
+  }
+
+  function dragLeaveRow(event: DragEvent, id: string): void {
+    if (dropTarget?.id !== id) return;
+    const next = event.relatedTarget;
+    const row = event.currentTarget;
+    // Moving onto a child of the same row is not leaving it.
+    if (next instanceof Node && row instanceof Node && row.contains(next)) return;
+    dropTarget = null;
+  }
+
+  function clearDrag(): void {
+    dragId = null;
+    dropTarget = null;
+  }
+
+  function dropOnRow(event: DragEvent, id: string): void {
+    const source = dragId;
+    if (!source) return;
+    event.preventDefault();
+    const after = dropTarget?.id === id ? dropTarget.after : isLowerHalf(event);
+    const index = targetIndex(view.projects.map((project) => project.id), source, id, after);
+    clearDrag();
+    // The host echoes the new order; the renderer never reorders locally.
+    if (index !== null) onmove(source, index);
+  }
+
+  function moveByKeyboard(event: KeyboardEvent, id: string): void {
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const delta = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
+    if (delta === 0) return;
+    const from = view.projects.findIndex((project) => project.id === id);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= view.projects.length) return;
+    event.preventDefault();
+    onmove(id, to);
   }
 
   function selectSession(id: string): void {
@@ -302,13 +426,24 @@
       {/if}
     </div>
 
-    <div class="project-list">
+    <div class="project-list" role={view.projects.length > 0 ? "list" : undefined}>
       {#each view.projects as project (project.id)}
         {@const activity = activityFor(project.id)}
-        <div class="project-row" class:active={project.id === view.activeProjectId}>
+        {@const dropLine = dropLineFor(project.id)}
+        <div class="project-row" role="listitem" class:active={project.id === view.activeProjectId}
+          class:dragging={dragId === project.id}
+          class:drop-above={dropLine === "above"}
+          class:drop-below={dropLine === "below"}
+          draggable="true"
+          ondragstart={(event) => startDrag(event, project.id)}
+          ondragover={(event) => dragOverRow(event, project.id)}
+          ondragleave={(event) => dragLeaveRow(event, project.id)}
+          ondrop={(event) => dropOnRow(event, project.id)}
+          ondragend={clearDrag}>
           <button type="button" class="project-select" title={project.cwd}
             aria-current={project.id === view.activeProjectId ? "true" : undefined}
-            onclick={() => selectProject(project.id)}>
+            onclick={() => selectProject(project.id)}
+            onkeydown={(event) => moveByKeyboard(event, project.id)}>
             <span class="codicon codicon-folder" aria-hidden="true"></span>
             <span class="project-copy">
               <span class="project-name">{project.name}</span>
@@ -325,9 +460,10 @@
                 <span>{activity.waitingSessionIds.length}</span>
               </button>
             {/if}
-            <button type="button" class="icon-button remove-project" title="Remove Project"
-              aria-label={`Remove Project ${project.name}`} onclick={() => onremove(project.id)}>
-              <span class="codicon codicon-trash" aria-hidden="true"></span>
+            <button type="button" class="icon-button row-action" title="Project actions"
+              aria-label={`Project actions for ${project.name}`} aria-haspopup="menu" aria-expanded={menuFor(project.id)}
+              onclick={(event) => toggleMenu(event.currentTarget, project)}>
+              <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
             </button>
           </div>
         </div>
@@ -405,13 +541,26 @@
         </details>
       {/if}
 
-      <div class="project-context" title={contextTitle}>
-        <span class="context-heading">
-          <span class="codicon codicon-folder" aria-hidden="true"></span>
-          <span class="context-name">{activeProject?.name ?? "No Project"}</span>
-        </span>
-        {#if activeProject}<span class="context-path">{differentDirectory ? `Pi: ${differentDirectory}` : activeProject.cwd}</span>{/if}
-      </div>
+      <button type="button" class="project-context"
+        aria-haspopup="menu" aria-expanded={menu !== null && menu.anchor === contextButton}
+        aria-describedby={tooltipVisible ? "project-path-tooltip" : undefined}
+        disabled={!activeProject} aria-label={activeProject ? `Project ${activeProject.name}` : "No Project"}
+        bind:this={contextButton}
+        onmouseenter={() => tooltip = true} onmouseleave={() => tooltip = false}
+        onfocus={() => tooltip = true} onblur={() => tooltip = false}
+        onclick={() => { if (activeProject && contextButton) toggleMenu(contextButton, activeProject); }}>
+        <span class="codicon codicon-folder context-icon" aria-hidden="true"></span>
+        <span class="context-name">{activeProject?.name ?? "No Project"}</span>
+        <span class="codicon codicon-chevron-down context-chevron" aria-hidden="true"></span>
+      </button>
+      {#if tooltipVisible && activeProject}
+        <div class="project-tooltip" id="project-path-tooltip" role="tooltip">
+          <span class="tip-line"><span class="tip-label">Project</span><span class="tip-path">{activeProject.cwd}</span></span>
+          {#if differentDirectory}
+            <span class="tip-line"><span class="tip-label">Pi</span><span class="tip-path">{differentDirectory}</span></span>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     <div class="client-region">{@render children()}</div>
@@ -419,6 +568,12 @@
 
   {#if narrow && drawer}
     <button type="button" class="drawer-scrim" tabindex="-1" aria-label="Close Projects" onclick={closeDrawer}></button>
+  {/if}
+
+  <!-- Mounted at shell level: `position: fixed` cannot escape the transformed drawer or a scrolled row list. -->
+  {#if menu}
+    <ProjectActionMenu anchor={menu.anchor} projectName={menu.projectName}
+      actions={projectActions} onaction={runMenuAction} onremove={runMenuRemove} onclose={() => menu = null} />
   {/if}
 </div>
 
@@ -459,6 +614,13 @@
     content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px;
     border-radius: 2px; background: var(--frost-focus);
   }
+  .project-row.dragging { opacity: .35; }
+  .project-row.drop-above::after, .project-row.drop-below::after {
+    content: ""; position: absolute; left: 4px; right: 4px; height: 2px;
+    border-radius: 2px; background: var(--frost-focus); pointer-events: none;
+  }
+  .project-row.drop-above::after { top: -1px; }
+  .project-row.drop-below::after { bottom: -1px; }
   .project-select {
     min-width: 0; display: flex; align-items: flex-start; gap: 7px; padding: 6px 4px 6px 8px;
     border-radius: 5px; background: transparent; color: var(--frost-text); text-align: left; cursor: pointer;
@@ -476,10 +638,11 @@
     color: var(--frost-faint); font-size: calc(var(--font-size-ui) - 3.5px); line-height: 1.3;
   }
   .project-actions { display: flex; align-items: center; padding-right: 3px; }
-  .remove-project { color: var(--frost-faint); opacity: 0; pointer-events: none; }
-  .project-row:hover .remove-project,
-  .remove-project:focus-visible { opacity: 1; pointer-events: auto; }
-  .remove-project:hover { color: var(--frost-error); }
+  .row-action { color: var(--frost-muted); opacity: 0; pointer-events: none; }
+  .project-row:hover .row-action,
+  .row-action:focus-visible,
+  .row-action[aria-expanded="true"] { opacity: 1; pointer-events: auto; }
+  .row-action[aria-expanded="true"] { color: var(--frost-text); background: var(--frost-hover); }
   .waiting-button {
     align-self: center; display: inline-flex; align-items: center; gap: 3px; min-height: 20px;
     margin: 0 4px 0 1px; padding: 0 4px; border-radius: 3px;
@@ -546,18 +709,30 @@
   .attention-label { font-weight: 500; }
   .project-context {
     flex: 0 1 auto; min-width: 0; max-width: min(60%, 480px); margin-left: auto;
-    display: flex; flex-direction: column; align-items: flex-end; justify-content: center; text-align: right;
+    display: flex; align-items: center; gap: 5px; min-height: 24px; padding: 0 5px 0 7px;
+    border-radius: 4px; color: var(--frost-text); background: transparent;
+    font-size: calc(var(--font-size-ui) - 1.5px); text-align: left; cursor: pointer;
   }
-  .context-heading { min-width: 0; max-width: 100%; display: flex; align-items: center; gap: 6px; }
-  .context-heading > .codicon { flex: none; color: var(--frost-muted); font-size: 14px; line-height: 1; }
+  .project-context:hover:not(:disabled), .project-context[aria-expanded="true"] { background: var(--frost-hover); }
+  .project-context:focus-visible { outline: 1px solid var(--frost-focus); outline-offset: -1px; }
+  .project-context:disabled { cursor: default; }
+  .context-icon { flex: none; color: var(--frost-muted); font-size: 14px; line-height: 1; }
   .context-name {
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     color: var(--frost-text); font-size: calc(var(--font-size-ui) - 1.5px); font-weight: 600; line-height: max(16px, 1.3em);
   }
-  .context-path {
-    min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: var(--frost-faint); font-family: var(--font-mono); font-size: calc(var(--font-size-ui) - 3.5px); line-height: max(12px, 1.25em);
+  .context-chevron { flex: none; color: var(--frost-faint); font-size: 12px; }
+  .project-tooltip {
+    position: absolute; top: calc(100% + 3px); right: 10px; z-index: 60;
+    max-width: min(460px, calc(100% - 20px)); padding: 5px 8px;
+    display: flex; flex-direction: column; gap: 1px;
+    border: 1px solid var(--frost-border); border-radius: 5px;
+    background: var(--frost-surface-raised); box-shadow: var(--frost-shadow);
+    font-size: calc(var(--font-size-ui) - 3.5px); line-height: 1.45; pointer-events: none;
   }
+  .tip-line { min-width: 0; display: flex; align-items: baseline; gap: 6px; }
+  .tip-label { flex: none; color: var(--frost-muted); }
+  .tip-path { min-width: 0; color: var(--frost-text); font-family: var(--font-mono); overflow-wrap: anywhere; }
   .choose { flex: none; }
   .choose summary { list-style: none; }
   .choose summary::-webkit-details-marker { display: none; }
@@ -588,7 +763,6 @@
   }
   @media (max-width: 640px) {
     .project-bar { gap: 4px; padding-inline: 6px; }
-    .project-context { flex: 1 1 0; max-width: none; }
     .bar-button, .choose-trigger { padding-inline: 5px; }
   }
   @media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }

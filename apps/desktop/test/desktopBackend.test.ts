@@ -7,6 +7,7 @@ import { createDesktopBackend } from "../src/main/createDesktopBackend.js";
 import type { DesktopBackendOptions } from "../src/main/createDesktopBackend.js";
 import type { DesktopNative, DesktopTransport } from "../src/main/desktopNative.js";
 import { DesktopSettingsStore } from "../src/main/settings/DesktopSettingsStore.js";
+import type { DesktopProjectsView } from "../src/shared/desktopBridge.js";
 
 const disposals: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const dispose of disposals.splice(0).reverse()) await dispose(); });
@@ -23,7 +24,7 @@ async function fixture(overrides: Partial<DesktopBackendOptions> = {}, firstRun 
   const events: Array<{ channel: string; value: unknown }> = [];
   const native = {
     focused: () => true, message: vi.fn(), confirm: vi.fn(), openFiles: vi.fn(), chooseDirectory: vi.fn(),
-    writeClipboard: vi.fn(), openExternal: vi.fn(), openPath: vi.fn(), appearance: vi.fn(),
+    writeClipboard: vi.fn(), openExternal: vi.fn(), openPath: vi.fn(), launch: vi.fn(), appearance: vi.fn(),
   } satisfies DesktopNative;
   const transport: DesktopTransport = {
     publish: (channel, value) => { events.push({ channel, value }); return true; },
@@ -31,7 +32,12 @@ async function fixture(overrides: Partial<DesktopBackendOptions> = {}, firstRun 
     handle: (channel, action) => { handlers.set(channel, action); return () => { handlers.delete(channel); }; },
     visible: () => true, onVisibility: () => () => undefined,
   };
-  const options = { profile: directory, artifacts: resolve("dist"), clientVersion: "test", directories: [project], settingsStore, native, transport, ...overrides };
+  const options = {
+    profile: directory, artifacts: resolve("dist"), clientVersion: "test", directories: [project], settingsStore, native, transport,
+    // Detection must be deterministic: no tool from the host's real PATH is enabled.
+    projectActionEnvironment: { PATH: "", exists: () => Promise.resolve(false) },
+    ...overrides,
+  };
   const backend = await createDesktopBackend(options);
   disposals.push(backend.dispose);
   const send = async (channel: string, ...values: unknown[]) => { await listeners.get(channel)?.(...values); };
@@ -110,5 +116,40 @@ describe("Desktop backend assembly", () => {
     expect(await readFile(source, "utf8")).toBe(original);
     expect((await action({ type: "importVscode" }) as { ok: boolean }).ok).toBe(false);
     await backend.dispose();
+  });
+  it("reorders Projects over the bridge and persists the new order", async () => {
+    const { backend, directory, events, send } = await fixture();
+    await backend.projects.addProject(await mkdtemp(join(directory, "second-")));
+    await backend.projects.addProject(await mkdtemp(join(directory, "third-")));
+    const [first, second, third] = backend.projects.list();
+    const view = (): DesktopProjectsView => events.filter((event) => event.channel === "frostpi:projects:view").at(-1)?.value as DesktopProjectsView;
+
+    await send("frostpi:projects:move", third!.id, 0);
+
+    const expected = [third!.id, first!.id, second!.id];
+    expect(backend.projects.list().map((project) => project.id)).toEqual(expected);
+    expect(view().projects.map((project) => project.id)).toEqual(expected);
+    await backend.stateStore.flush();
+    const saved = JSON.parse(await readFile(join(directory, "state.json"), "utf8")) as { projects: Array<{ id: string }> };
+    expect(saved.projects.map((project) => project.id)).toEqual(expected);
+  });
+  it("runs a Project action for the project cwd and reports an unknown action as a toast", async () => {
+    const { backend, native, events, send } = await fixture();
+    const project = backend.projects.list()[0]!;
+    await send("frostpi:projects:request");
+    const view = events.filter((event) => event.channel === "frostpi:projects:view").at(-1)?.value as DesktopProjectsView;
+    expect(view.actions).toEqual([{ id: "reveal", label: "Open in File Explorer", icon: "codicon-folder-opened" }]);
+
+    await send("frostpi:projects:action", project.id, "reveal");
+    await vi.waitFor(() => expect(native.openPath).toHaveBeenCalledWith(project.cwd));
+
+    // A stale or forged action id must surface as a toast, not escape the listener.
+    await expect(send("frostpi:projects:action", project.id, "unknown")).resolves.toBeUndefined();
+    await vi.waitFor(() => expect(events.some((event) => {
+      const value = event.value as { type?: string; level?: string; message?: string } | null;
+      return event.channel === "frostpi:client:out" && value?.type === "toast" && value.level === "error"
+        && value.message === "Unknown Project action: unknown";
+    })).toBe(true));
+    expect(native.launch).not.toHaveBeenCalled();
   });
 });

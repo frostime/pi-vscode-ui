@@ -11,6 +11,7 @@ import { DesktopActionDispatcher } from "./DesktopActionDispatcher.js";
 import { DesktopProjectNavigation } from "./DesktopProjectNavigation.js";
 import { createDesktopHost } from "./desktopHost.js";
 import { DesktopProjects } from "./desktopProjects.js";
+import { ProjectActions, type ProjectActionEnvironment } from "./projectActions.js";
 import type { DesktopProjectsView } from "../shared/desktopBridge.js";
 import { DesktopSettingsStore } from "./settings/DesktopSettingsStore.js";
 import { DesktopSettingsController } from "./settings/DesktopSettingsController.js";
@@ -33,6 +34,8 @@ export interface DesktopBackendOptions {
   vscodeSettingsPath?: string;
   /** Trusted main-process seam for controlled discovery delays/failures. */
   discoverWorkingDirectories?: SessionRegistryOptions["discoverWorkingDirectories"];
+  /** Trusted main-process seam for deterministic Project action detection; never accepted over IPC. */
+  projectActionEnvironment?: ProjectActionEnvironment;
 }
 
 export async function createDesktopBackend(options: DesktopBackendOptions) {
@@ -49,6 +52,11 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
   });
   const stateStore = options.stateStore ?? await DesktopStateStore.open(join(options.profile, "state.json"));
   const projects = new DesktopProjects();
+  const projectActions = new ProjectActions({
+    launch: (executable, args) => native.launch(executable, args),
+    openPath: (path) => native.openPath(path),
+  });
+  await projectActions.initialize(options.projectActionEnvironment);
   await projects.restore(stateStore.projects);
   let firstStartupProject: string | undefined;
   for (const directory of options.directories ?? []) {
@@ -140,6 +148,7 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
   const projectsView = (): DesktopProjectsView => ({
     ...projectState(),
     navigation: navigation.view,
+    actions: projectActions.view,
     ...(stateStore.error ? { stateError: `${stateStore.error} State file: ${stateStore.filePath}` } : {}),
   });
   const publishProjects = (): void => {
@@ -209,6 +218,18 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
   });
   listen("frostpi:projects:select", async (id) => {
     if (typeof id === "string" && id.length < 4096) { await navigation.selectProject(id); resume.hide(); }
+  });
+  listen("frostpi:projects:move", (id, index) => {
+    if (typeof id !== "string" || id.length >= 4096) return;
+    // Number.isInteger also rejects NaN and Infinity.
+    if (typeof index !== "number" || !Number.isInteger(index)) return;
+    projects.moveProject(id, index);
+  });
+  listen("frostpi:projects:action", async (id, action) => {
+    if (typeof id !== "string" || typeof action !== "string") return;
+    const project = projects.list().find((candidate) => candidate.id === id);
+    if (!project) throw new Error("This Desktop Project is no longer available.");
+    await projectActions.run(action, project.cwd);
   });
   listen("frostpi:sidebar:set", (layout) => navigation.setSidebar(layout));
   listen("frostpi:dialog:response", (id, value) => interactions.respond(id, value));

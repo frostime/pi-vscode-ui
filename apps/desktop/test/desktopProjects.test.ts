@@ -152,4 +152,38 @@ describe("DesktopProjects", () => {
 
     expect(() => projects.selectProject("unknown")).toThrow("Unknown FrostPi Project");
   });
+
+  it("reorders Projects by the target position after removal, leaving selection and metadata alone", async () => {
+    const projects = new DesktopProjects();
+    const add = async (name: string) => projects.addProject(await realpath(await mkdtemp(join(tmpdir(), `frostpi-move-${name}-`))));
+    const a = await add("a");
+    const b = await add("b");
+    const c = await add("c");
+    projects.selectProject(b.id);
+    const notifications: number[] = [];
+    projects.onDidChange(() => notifications.push(projects.list().length));
+
+    projects.moveProject(c.id, 0);
+    expect(projects.list().map((project) => project.id)).toEqual([c.id, a.id, b.id]);
+    expect(projects.list()[0]).toEqual(c);
+    expect(projects.selected).toEqual(b);
+    expect(notifications).toEqual([3]);
+
+    // Index 1 means "second position after c is removed", not "the current index of b".
+    projects.moveProject(c.id, 1);
+    expect(projects.list().map((project) => project.id)).toEqual([a.id, c.id, b.id]);
+    expect(projects.selected).toEqual(b);
+    expect(notifications).toEqual([3, 3]);
+
+    projects.moveProject(c.id, 1);
+    expect(projects.list().map((project) => project.id)).toEqual([a.id, c.id, b.id]);
+    expect(notifications).toEqual([3, 3]);
+
+    expect(() => projects.moveProject("unknown", 0)).toThrow("Unknown FrostPi Project");
+    expect(() => projects.moveProject(a.id, 3)).toThrow("Invalid Project position");
+    expect(() => projects.moveProject(a.id, -1)).toThrow("Invalid Project position");
+    expect(() => projects.moveProject(a.id, 1.5)).toThrow("Invalid Project position");
+    expect(projects.list().map((project) => project.id)).toEqual([a.id, c.id, b.id]);
+    expect(notifications).toEqual([3, 3]);
+  });
 });

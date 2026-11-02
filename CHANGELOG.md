@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Reorder Desktop Projects by dragging a row or pressing Alt+Up/Alt+Down, and open a Project's folder, VS Code, Zed or Windows Terminal from its new action menu. Only installed programs appear in the menu, and the full Project path moved from the top bar into a hover tooltip.
+
+### Changed
+
+- Opening folders, files and links with the default program no longer starts a PowerShell process first, so these opens appear immediately; a replaced default file manager is still honoured.
+
 ## [0.16.1] - 2026-11-02
 
 ### Added

@@ -1,5 +1,11 @@
 use serde_json::{json, Value};
 use tauri::Manager;
+use windows_sys::Win32::UI::Shell::{ShellExecuteExW, SHELLEXECUTEINFOW};
+
+const MAX_LAUNCH_TARGET_BYTES: usize = 4096;
+const MAX_LAUNCH_ARGUMENTS: usize = 16;
+const MAX_LAUNCH_ARGUMENT_BYTES: usize = 4096;
+const SEE_MASK_NOASYNC: u32 = 0x0000_0100;
 
 pub fn execute(app: &tauri::AppHandle, packet: &Value) -> Result<Value, String> {
     let window = app
@@ -43,11 +49,38 @@ pub fn execute(app: &tauri::AppHandle, packet: &Value) -> Result<Value, String> 
             {
                 return Err("Unsupported external URL".into());
             }
-            open::that_detached(url).map_err(|_| "Could not open URL")?;
+            shell_execute(url, None).map_err(|_| "Could not open URL")?;
+            Ok(Value::Null)
+        }
+        Some("launch") => {
+            let target = text(0)?;
+            let arguments = args
+                .get(1)
+                .and_then(Value::as_array)
+                .ok_or("Invalid launch arguments")?;
+            if arguments.len() > MAX_LAUNCH_ARGUMENTS {
+                return Err("Too many launch arguments".into());
+            }
+            let mut parts = Vec::with_capacity(arguments.len());
+            for argument in arguments {
+                let value = argument.as_str().ok_or("Invalid launch argument")?;
+                if value.len() > MAX_LAUNCH_ARGUMENT_BYTES
+                    || value.contains(['\0', '\r', '\n'])
+                {
+                    return Err("Invalid launch argument".into());
+                }
+                parts.push(quote_argument(value));
+            }
+            if !is_launch_target(target) {
+                return Err("Unsupported launch target".into());
+            }
+            let parameters = parts.join(" ");
+            shell_execute(target, Some(&parameters))
+                .map_err(|_| "Could not start the program".to_string())?;
             Ok(Value::Null)
         }
         Some("openPath") => {
-            open::that_detached(text(0)?).map_err(|_| "Could not open file")?;
+            shell_execute(text(0)?, None).map_err(|_| "Could not open file")?;
             Ok(json!(""))
         }
         Some("chooseDirectory") => Ok(rfd::FileDialog::new()
@@ -132,4 +165,86 @@ pub fn execute(app: &tauri::AppHandle, packet: &Value) -> Result<Value, String> 
         }
         _ => Err("Unknown native operation".into()),
     }
+}
+
+/// Opens a file, folder or URL through the shell's default action.
+///
+/// The verb and class stay unset on purpose: an explicit `open` verb or the `explore` verb
+/// bypasses a replaced default handler (for example a third-party file manager), which is a
+/// behaviour regression for the user rather than an implementation detail.
+fn shell_execute(target: &str, parameters: Option<&str>) -> Result<(), ()> {
+    if target.is_empty()
+        || target.len() > MAX_LAUNCH_TARGET_BYTES
+        || target.contains(['\0', '\r', '\n'])
+    {
+        return Err(());
+    }
+    let file = wide(target);
+    let parameters = parameters.map(wide);
+    let parameters_ptr = parameters
+        .as_ref()
+        .map_or(std::ptr::null(), |value| value.as_ptr());
+    let mut info: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
+    info.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
+    info.fMask = SEE_MASK_NOASYNC;
+    info.lpFile = file.as_ptr();
+    info.lpParameters = parameters_ptr;
+    info.nShow = 1; // SW_SHOWNORMAL
+    if unsafe { ShellExecuteExW(&mut info) } == 0 {
+        return Err(());
+    }
+    Ok(())
+}
+
+/// Accepts an absolute path or a bare file name. The shell resolves a bare name through PATH,
+/// which is how Windows Terminal's Store alias stays reachable.
+fn is_launch_target(target: &str) -> bool {
+    if target.is_empty()
+        || target.len() > MAX_LAUNCH_TARGET_BYTES
+        || target.contains(['\0', '\r', '\n'])
+    {
+        return false;
+    }
+    let path = std::path::Path::new(target);
+    if path.is_absolute() {
+        return true;
+    }
+    !target.contains('/') && !target.contains('\\') && !target.contains("..")
+}
+
+/// Quotes one command-line argument the way `CreateProcess` expects; the shell passes our
+/// parameter string through unchanged.
+fn quote_argument(value: &str) -> String {
+    if !value.is_empty() && !value.contains([' ', '\t', '"']) {
+        return value.to_string();
+    }
+    let mut quoted = String::with_capacity(value.len() + 2);
+    quoted.push('"');
+    let mut backslashes = 0usize;
+    for character in value.chars() {
+        match character {
+            '\\' => {
+                backslashes += 1;
+                quoted.push('\\');
+            }
+            '"' => {
+                quoted.push_str(&"\\".repeat(backslashes + 1));
+                quoted.push('"');
+                backslashes = 0;
+            }
+            _ => {
+                backslashes = 0;
+                quoted.push(character);
+            }
+        }
+    }
+    if backslashes > 0 {
+        quoted.push_str(&"\\".repeat(backslashes));
+    }
+    quoted.push('"');
+    quoted
+}
+
+fn wide(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
 }

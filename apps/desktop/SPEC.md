@@ -6,6 +6,16 @@ Store Session-to-Project associations in Desktop navigation metadata. Reassignin
 
 While the same Session remains selected, sidebar hide/resize, theme/zoom changes and Resume/transport-limit overlays must not remount ClientApp or Composer or discard its draft. Hiding the Resume overlay alone must not cancel the pending Resume request. Attribute any later result to the Project that initiated that request, even if another Project is now selected.
 
+## Projects, order and external tools
+
+Project order is user-owned. It is the order of the `projects` array in `state.json`, changes only through an explicit move, and survives restart. Reordering must not change a Project's id, name, cwd, the selected Project, or any Session's Project association.
+
+The Project action menu is projected from one main-process registry (`apps/desktop/src/main/projectActions.ts`). That registry owns which actions exist, their order, labels, icons and startup availability; the renderer renders the projected list and returns only `(projectId, actionId)`. The root directory is resolved in the main process and never travels from the renderer. Detection decides menu visibility only: it is not persisted, not exposed as settings, and never re-run from the renderer.
+
+Opening a folder, file or URL uses the shell's default action (`native.rs::shell_execute`, verb and class unset). Never pass an explicit `open` verb, the `explore` verb, or `SHOpenFolderAndSelectItems`: each of them bypasses a replaced default handler, for example a third-party file manager registered as the default verb for folders.
+
+External programs are started by the native shell, never by Node. The Node backend runs inside a `KILL_ON_JOB_CLOSE` job object, so any process it spawns dies with the application; a launched editor or terminal must outlive FrostPi.
+
 ## Window and application lifetime
 
 Closing the main window hides it to the Windows tray; it must not dispose the backend, stop Pi children or remount ClientApp. The first close in each launch explains the tray behavior. Tray left-click and Show restore the same window and its drafts. Hidden windows report invisible to the backend so restoring them refreshes the shared presentation.
