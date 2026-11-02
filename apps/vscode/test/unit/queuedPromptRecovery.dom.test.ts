@@ -17,7 +17,7 @@ import { annotationReviewDrafts } from "$ui/features/annotation-review/annotatio
 import { connectHostBridge, onHostMessage } from "$ui/bridge/hostBridge";
 import { composerDrafts, getDraft, type DraftImage } from "$ui/features/composer/composerDraftStore.svelte";
 import { setDraft } from "$ui/features/composer/composerDraftSync";
-import { queuedPromptRecoveryFeedback, queuedPromptRecoveryRequests } from "$ui/features/composer/queuedPromptRecoveryStore.svelte";
+import { queuedPromptRecoveryRequests } from "$ui/features/composer/queuedPromptRecoveryStore.svelte";
 import { EMPTY_PRESENTATION, presentationStore, toastStore } from "$ui/state/sessionViewStore.svelte";
 
 const postMessage = vi.fn<(message: WebviewToHostPayload) => void>();
@@ -30,7 +30,6 @@ beforeEach(() => {
   composerDrafts.set({});
   annotationReviewDrafts.set({});
   queuedPromptRecoveryRequests.set({});
-  queuedPromptRecoveryFeedback.set({});
   toastStore.set([]);
   presentationStore.set(EMPTY_PRESENTATION);
   disconnectHost = connectHostBridge({
@@ -134,13 +133,12 @@ function mergeResult(requestId: string, text: string, sessionId = "session"): Ho
 }
 
 describe("pending message recovery entry", () => {
-  it.each(["sidebar", "panel"] as const)("sends one correlated restore request from the %s pending group", async (kind) => {
-    presentationStore.set(presentation(kind, session()));
+  it("sends one correlated restore request from the pending group", async () => {
+    presentationStore.set(presentation("sidebar", session()));
     const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
 
     await fireEvent.click(view.getByRole("button", { name: /Restore all/ }));
     expect(restoreRequest()).toMatchObject({ type: "restoreQueuedPrompts", sessionId: "session", draftImageCount: 0 });
-    expect(restoreRequest().requestId.length).toBeGreaterThan(0);
 
     // A second click while the result is pending must not start another destructive operation.
     await fireEvent.click(view.getByRole("button", { name: /Restoring/ }));
@@ -224,6 +222,25 @@ describe("pending message recovery results", () => {
     expect(view.getByRole("button", { name: "Send as Steer" })).toBeTruthy();
   });
 
+  it("shows one result toast that expires automatically", async () => {
+    presentationStore.set(presentation("sidebar", session()));
+    const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
+    await fireEvent.click(view.getByRole("button", { name: /Restore all/ }));
+    const { requestId } = restoreRequest();
+    vi.useFakeTimers();
+    try {
+      deliver(mergeResult(requestId, "recovered"));
+      await tick();
+      expect(view.container.querySelectorAll(".toast")).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(5_000);
+      await tick();
+      expect(view.container.querySelector(".toast")).toBeNull();
+      expect(getDraft("session").text).toBe("recovered");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps annotation insertion from editing a locked draft without discarding the review", async () => {
     presentationStore.set(presentation("sidebar", session()));
     setDraft("session", "webview", { text: "existing", images: [] });
@@ -258,6 +275,7 @@ describe("pending message recovery results", () => {
     await tick();
     expect(getDraft("session").text).toBe("local draft");
     expect(getDraft("other-session").text).toBe("");
+    expect(view.container.querySelectorAll(".toast")).toHaveLength(0);
     // Replies that do not match the registered request leave it pending.
     expect(view.getByRole("button", { name: /Restoring/ })).toBeTruthy();
 
@@ -267,7 +285,7 @@ describe("pending message recovery results", () => {
     deliver(mergeResult(requestId, "recovered"));
     await tick();
     expect(getDraft("session").text).toBe("recovered\n\nlocal draft");
-    expect(view.container.querySelectorAll(".recovery-notice")).toHaveLength(1);
+    expect(view.container.querySelectorAll(".toast")).toHaveLength(1);
   });
 
   it("leaves a Host-applied draft untouched while the merge stays local", async () => {
@@ -290,33 +308,30 @@ describe("pending message recovery results", () => {
       outcome: { certainty: "confirmed", recoveredCount: 1, notRemovedCount: 0, warnings: ["images-dropped"] },
     });
 
-    await waitFor(() => expect(view.container.textContent).not.toContain("Restoring"));
+    await waitFor(() => expect(content.getAttribute("contenteditable")).toBe("true"));
     expect(getDraft("session").text).toBe("host merged");
-    expect(content.getAttribute("contenteditable")).toBe("true");
-    expect(view.container.querySelectorAll(".recovery-notice")).toHaveLength(1);
+    expect(view.container.querySelectorAll(".toast-warning")).toHaveLength(1);
     expect(postMessage.mock.calls.map(([message]) => message.type)).not.toContain("sendPrompt");
   });
 
-  it("keeps the latest draft attachments when returned images no longer fit", async () => {
+  it("preserves existing attachments when the backend returns more images than fit", async () => {
     presentationStore.set(presentation("sidebar", session("session", { maxImages: 4 })));
+    setDraft("session", "webview", { text: "kept", images: ["d1", "d2", "d3"].map(draftImage) });
     const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
 
     await fireEvent.click(view.getByRole("button", { name: /Restore all/ }));
     const { requestId } = restoreRequest();
-
-    // Images added while waiting consume the capacity the request was sized against.
-    setDraft("session", "webview", { text: "kept", images: ["d1", "d2", "d3", "d4"].map(draftImage) });
     deliver({
       type: "restoreQueuedPromptsResult", requestId, sessionId: "session", ok: true, draftTarget: "webview-merge",
       outcome: {
         certainty: "best-effort",
-        content: { text: "recovered text", images: [recoveredImage] },
+        content: { text: "recovered text", images: [recoveredImage, { ...recoveredImage, id: "second-returned-image" }] },
         recoveredCount: 1, notRemovedCount: 0, warnings: [],
       },
     });
 
     await waitFor(() => expect(getDraft("session").text).toBe("recovered text\n\nkept"));
-    expect(getDraft("session").images.map(({ id }) => id)).toEqual(["d1", "d2", "d3", "d4"]);
+    expect(getDraft("session").images.map(({ id }) => id)).toEqual(["d1", "d2", "d3"]);
   });
 
   it("keeps restoring the originating Session draft while another Session is displayed", async () => {
@@ -338,10 +353,10 @@ describe("pending message recovery results", () => {
     deliver(mergeResult(requestId, "recovered for origin"));
     await waitFor(() => expect(getDraft("session").text).toBe("recovered for origin"));
     expect(getDraft("other-session").text).toBe("");
-    expect(view.container.textContent).not.toContain("Returned text from");
+    expect(view.container.querySelectorAll(".toast")).toHaveLength(1);
   });
 
-  it("does not claim pending input survived an unconfirmed recovery", async () => {
+  it("unlocks the Composer and recovery action after a failed result", async () => {
     presentationStore.set(presentation("sidebar", session()));
     const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
 
@@ -349,29 +364,9 @@ describe("pending message recovery results", () => {
     const { requestId } = restoreRequest();
     deliver({ type: "restoreQueuedPromptsResult", requestId, sessionId: "session", ok: false, error: "The runtime did not confirm queue recovery." });
 
-    await waitFor(() => expect(view.container.textContent).not.toContain("Restoring"));
+    await waitFor(() => expect(restoreButton(view.container).disabled).toBe(false));
     // Failure must release both the input lock and the recovery action.
     expect(view.container.querySelector(".cm-content")?.getAttribute("contenteditable")).toBe("true");
-    expect(restoreButton(view.container).disabled).toBe(false);
-  });
-
-  it("keeps the current draft when a confirmed removal had nothing usable to insert", async () => {
-    presentationStore.set(presentation("sidebar", session()));
-    setDraft("session", "webview", { text: "latest draft", images: [] });
-    const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
-
-    await fireEvent.click(view.getByRole("button", { name: /Restore all/ }));
-    const { requestId } = restoreRequest();
-    deliver({
-      type: "restoreQueuedPromptsResult", requestId, sessionId: "session", ok: true, draftTarget: "webview-merge",
-      outcome: {
-        certainty: "confirmed", content: { text: "", images: [] },
-        recoveredCount: 1, notRemovedCount: 1, warnings: ["images-dropped", "not-removed"],
-      },
-    });
-
-    await waitFor(() => expect(view.container.textContent).not.toContain("Restoring"));
-    expect(getDraft("session").text).toBe("latest draft");
   });
 });
 
@@ -465,17 +460,27 @@ describe("pending message recovery availability", () => {
     setDraft("session", "webview", { text: "start", images: [] });
     const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
 
-    // The paste handler reaches FileReader before the recovery request is registered.
-    void fireEvent.paste(view.container.querySelector(".cm-content")!, {
-      clipboardData: { files: [new File(["synthetic"], "pasted.png", { type: "image/png" })] },
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- Called below with the original reader via call().
+    const nativeRead = FileReader.prototype.readAsDataURL;
+    let finishReading: (() => Promise<void>) | undefined;
+    const read = vi.spyOn(FileReader.prototype, "readAsDataURL").mockImplementation(function (this: FileReader, file: Blob) {
+      finishReading = () => new Promise<void>((resolve) => {
+        this.addEventListener("loadend", () => resolve(), { once: true });
+        nativeRead.call(this, file);
+      });
     });
-    await fireEvent.click(view.getByRole("button", { name: /Restore all/ }));
-    expect(restoreRequests()).toHaveLength(1);
-
-    await waitFor(() => expect(get(toastStore).at(-1)?.message).toBe(
-      "Wait for pending message recovery to finish before adding images.",
-    ));
-    expect(getDraft("session").images).toEqual([]);
-    expect(getDraft("session").text).toBe("start");
+    try {
+      await fireEvent.paste(view.container.querySelector(".cm-content")!, {
+        clipboardData: { files: [new File(["synthetic"], "pasted.png", { type: "image/png" })] },
+      });
+      if (!finishReading) throw new Error("Expected the paste to start reading an image");
+      await fireEvent.click(view.getByRole("button", { name: /Restore all/ }));
+      await finishReading();
+      await tick();
+      expect(getDraft("session").images).toEqual([]);
+      expect(getDraft("session").text).toBe("start");
+    } finally {
+      read.mockRestore();
+    }
   });
 });

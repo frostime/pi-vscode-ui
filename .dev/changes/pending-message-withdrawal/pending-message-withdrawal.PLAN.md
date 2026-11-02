@@ -15,9 +15,17 @@
 
 ## Current Phase
 
-**Now：** 修复审查发现的草稿竞争并做验证；不合并、不推送。此前 handover 的“保持暂停”已被本轮用户安排取代。
+**Now：** 用户实测后要求将常驻取回结果卡片降级为现有自动消失 toast，已完成；按用户指示在当前 `quasi-main` 做此小改动，不另开分支、不提交或推送。
+
+### 结果提示呈现收敛
+
+- 仅改变呈现方式：复用 `showToast` 的既有自动消失生命周期；删除 Composer 卡片、样式和每会话反馈 store，不新增通知组件或计时机制。保留原有结果判定、说明、回填和锁定。
+- DOM 与真实 child 接入最初共 22 tests 通过，包含自动消失与重复/过期结果不重复通知；共享 client / VS Code typecheck 和改动文件 lint 通过（既有 a11y warning 保留）。日志 `tmp/recovery-toast-*.log`。本次未重跑全仓 gate 或原生 GUI，下面的全仓通过记录属于此前锁定修复。
+- 随后按 `write-the-right-tests` 清理：删重复 surface 参数和空结果用例、旧 CSS 选择器及冗余集成断言；超量图片改测真实后端结果，异步粘贴以受控 FileReader 完成时序替代整句提示依赖。仅改测试及本记录；2 文件 20 tests、VS Code typecheck、改动测试 lint 和 diff check 通过，日志 `tmp/recovery-test-prune*.log`。
 
 本轮沿既有草稿归属与桥接实现锁定，不增加并发合并、重试或持久恢复机制。用户不再判断内部队列细节；只在新事实改变目标、数据安全或核心架构时升级讨论。
+
+- 用户随后确认精简结果文案：只保留取回数量、原消息可能继续执行、未确认部分与图片缺失等可感知结果，移除重发机制说明和原始技术错误。未改 toast 时长或操作逻辑；现有 20 tests、共享 client typecheck、改动文件 lint 与 diff check 通过，未为文案新增精确字符串测试。日志 `tmp/recovery-toast-copy-*.log`。
 
 ### 审查后修复
 

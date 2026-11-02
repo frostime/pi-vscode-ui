@@ -66,6 +66,7 @@ export function applyHostMessage(message: HostToWebviewMessage): void {
       const claim = claimQueuedPromptRecoveryResult(message);
       if (claim.kind === "ignored") break;
       if (claim.merge) mergeRecoveredDraftContent(claim.sessionId, claim.merge);
+      showToast(claim.feedback.level, [claim.feedback.headline, ...claim.feedback.details].join(" "));
       if (claim.focus && get(presentationStore).displayedSession?.id === claim.sessionId) {
         composerFocusTick.update((value) => value + 1);
       }

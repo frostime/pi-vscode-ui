@@ -6,11 +6,7 @@
   import { composerDrafts, getDraft, type DraftImage, type SessionDraft } from "../../features/composer/composerDraftStore.svelte";
   import { clearDraft, clearDraftForSubmission, setDraft, setDraftText, updateDraft } from "./composerDraftSync";
   import { promptSubmissionResult } from "../../features/composer/promptSubmissionStore.svelte";
-  import {
-    dismissQueuedPromptRecoveryFeedback,
-    queuedPromptRecoveryFeedback,
-    queuedPromptRecoveryRequests,
-  } from "./queuedPromptRecoveryStore.svelte";
+  import { queuedPromptRecoveryRequests } from "./queuedPromptRecoveryStore.svelte";
   import { composerStreamingBehaviors, setComposerStreamingBehavior } from "../../features/composer/composerStreamingBehaviorStore.svelte";
   import { composerFocusTick, showToast } from "../../state/sessionViewStore.svelte";
   import { createId } from "../../utils/createId";
@@ -21,7 +17,6 @@
   import AttachmentStrip from "./AttachmentStrip.svelte";
   import PromptEditor from "./PromptEditor.svelte";
   import StreamingSendButton from "./StreamingSendButton.svelte";
-  import IconButton from "../../primitives/IconButton.svelte";
 
   let {
     session,
@@ -56,7 +51,6 @@
   const recoveryBusy = $derived(
     $queuedPromptRecoveryRequests[session.id] !== undefined || session.queuedPromptRecovery.state === "recovering",
   );
-  const recoveryFeedback = $derived($queuedPromptRecoveryFeedback[session.id] ?? null);
   const canSend = $derived((draft.text.trim().length > 0 || draft.images.length > 0) && !unavailable && !pendingRequestId && !recoveryBusy);
   const supportsImages = $derived(modelSupportsImages(session.model));
 
@@ -206,18 +200,6 @@
   {#if draft.images.length && session.model && !supportsImages}
     <div class="composer-warning"><span class="codicon codicon-warning"></span> The selected model may not accept images.</div>
   {/if}
-  {#if recoveryFeedback}
-    <div class={`recovery-notice recovery-notice-${recoveryFeedback.level}`} role="status" aria-live="polite">
-      <span class={`codicon codicon-${feedbackIcon(recoveryFeedback.level)}`} aria-hidden="true"></span>
-      <div class="recovery-notice-body">
-        <div class="recovery-notice-headline">{recoveryFeedback.headline}</div>
-        {#each recoveryFeedback.details as detail (detail)}
-          <div class="recovery-notice-detail">{detail}</div>
-        {/each}
-      </div>
-      <IconButton icon="close" label="Dismiss recovery notice" onclick={() => dismissQueuedPromptRecoveryFeedback(session.id)} />
-    </div>
-  {/if}
   <div class="composer-box" class:composer-running={session.isStreaming}>
     <button
       class="composer-expand-button"
@@ -280,10 +262,6 @@
 </div>
 
 <script lang="ts" module>
-  function feedbackIcon(level: "info" | "warning" | "error"): string {
-    return level === "error" ? "error" : level === "warning" ? "warning" : "info";
-  }
-
   function modelSupportsImages(model: RpcModel | null): boolean {
     return Boolean(model && (model.supportsImages === true || (Array.isArray(model.input) && model.input.includes("image"))));
   }
@@ -310,27 +288,3 @@
     });
   }
 </script>
-
-<style>
-.recovery-notice {
-  display: grid;
-  grid-template-columns: 15px minmax(0, 1fr) 18px;
-  gap: 6px;
-  margin: 0 1px 6px;
-  padding: 6px 4px 6px 8px;
-  border: 1px solid var(--frost-border-soft);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--frost-surface) 78%, transparent);
-  color: var(--frost-muted);
-  font-size: calc(var(--font-size-ui) - 2.5px);
-  line-height: 1.4;
-}
-.recovery-notice > :global(.codicon) { margin-top: 1px; color: var(--frost-link); font-size: 12px; }
-.recovery-notice-warning > :global(.codicon) { color: var(--frost-warning); }
-.recovery-notice-error > :global(.codicon) { color: var(--frost-error); }
-.recovery-notice-body { min-width: 0; }
-.recovery-notice-headline { color: var(--frost-text); font-weight: 600; overflow-wrap: anywhere; }
-.recovery-notice-detail { margin-top: 2px; overflow-wrap: anywhere; }
-.recovery-notice > :global(.icon-button) { align-self: start; width: 18px; height: 18px; }
-.recovery-notice > :global(.icon-button .codicon) { font-size: 12px; }
-</style>

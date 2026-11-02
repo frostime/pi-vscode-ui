@@ -12,10 +12,9 @@ import { getDraft } from "./composerDraftStore.svelte";
 /**
  * Document-local correlation for the pending group's single Restore all action.
  * The Host owns queue recovery; this store only ties one in-flight request per
- * Session to its correlated result and keeps the last outcome near the Composer.
+ * Session to its correlated result. Feedback uses the application's transient toast.
  */
 export const queuedPromptRecoveryRequests = writable<Record<string, QueuedPromptRecoveryRequest>>({});
-export const queuedPromptRecoveryFeedback = writable<Record<string, QueuedPromptRecoveryFeedback>>({});
 
 export interface QueuedPromptRecoveryRequest {
   requestId: string;
@@ -23,7 +22,7 @@ export interface QueuedPromptRecoveryRequest {
   maxImages: number;
 }
 
-export interface QueuedPromptRecoveryFeedback {
+interface QueuedPromptRecoveryFeedback {
   level: "info" | "warning" | "error";
   headline: string;
   details: string[];
@@ -67,11 +66,6 @@ export function requestQueuedPromptRecovery(session: SessionViewModel, submissio
   const requestId = createId("recovery");
   const request: QueuedPromptRecoveryRequest = { requestId, maxImages: session.attachmentLimits.maxImages };
   queuedPromptRecoveryRequests.update((current) => ({ ...current, [session.id]: request }));
-  queuedPromptRecoveryFeedback.update((current) => {
-    const next = { ...current };
-    delete next[session.id];
-    return next;
-  });
   postToHost({ type: "restoreQueuedPrompts", requestId, sessionId: session.id, draftImageCount });
   return true;
 }
@@ -84,6 +78,7 @@ export type QueuedPromptRecoveryResultClaim =
       /** Set only when this Webview owns the draft and must prepend recovered content exactly once. */
       merge: ComposerDraftContent | null;
       focus: boolean;
+      feedback: QueuedPromptRecoveryFeedback;
     };
 
 /**
@@ -102,7 +97,7 @@ export function claimQueuedPromptRecoveryResult(result: RestoreQueuedPromptsResu
   let merge: ComposerDraftContent | null = null;
   if (!result.ok) {
     // The request may have failed before or after the runtime changed its queue.
-    feedback = { level: "error", headline: "Could not confirm recovery.", details: [result.error] };
+    feedback = { level: "error", headline: "Could not confirm recovery. Check pending messages.", details: [] };
   } else if (result.draftTarget === "webview-merge") {
     // The latest draft owns its attachments; returned images that no longer fit are omitted, not sliced.
     const fitted = fitRecoveryImagesToDraft(result.outcome, getDraft(result.sessionId).images.length, request.maxImages);
@@ -111,24 +106,15 @@ export function claimQueuedPromptRecoveryResult(result: RestoreQueuedPromptsResu
   } else {
     feedback = outcomeFeedback(result.outcome, true);
   }
-  queuedPromptRecoveryFeedback.update((current) => ({ ...current, [result.sessionId]: feedback }));
-  return { kind: "accepted", sessionId: result.sessionId, merge, focus: result.ok };
-}
-
-export function dismissQueuedPromptRecoveryFeedback(sessionId: string): void {
-  queuedPromptRecoveryFeedback.update((current) => {
-    const next = { ...current };
-    delete next[sessionId];
-    return next;
-  });
+  return { kind: "accepted", sessionId: result.sessionId, merge, focus: result.ok, feedback };
 }
 
 const WARNING_DETAILS: Record<QueuedPromptRecoveryOutcome["warnings"][number], string> = {
-  "delivery-uncertain": "Delivery of the returned content is uncertain.",
-  "not-removed": "Removal was not confirmed for some pending messages.",
-  "images-dropped": "Images could not be restored; the Composer draft does not include them.",
-  "host-size-limit": "The host could not deliver the whole result; returned content may be incomplete.",
-  "request-failed": "The recovery reply may be missing or incomplete; some pending input may not be accounted for here.",
+  "delivery-uncertain": "Original messages may still run.",
+  "not-removed": "Some messages may not have been recovered.",
+  "images-dropped": "Some images could not be recovered.",
+  "host-size-limit": "Some content was too large to recover.",
+  "request-failed": "Some messages may not have been recovered. Check pending messages.",
 };
 
 function unavailableReason(view: QueuedPromptRecoveryView): string {
@@ -159,51 +145,35 @@ function outcomeFeedback(
   const bestEffort = outcome.certainty === "best-effort";
   const warnings = new Set(outcome.warnings);
   const details: string[] = [];
-  if (bestEffort) {
-    details.push("Pi may still deliver input it already accepted; returning text does not cancel it.");
-    details.push("Sending the draft again creates a new message.");
-  }
+  if (bestEffort) details.push(WARNING_DETAILS["delivery-uncertain"]);
   if (outcome.notRemovedCount > 0) {
     // Unknown and unattempted removals are included here; do not claim either outcome.
-    details.push(`Removal was not confirmed for ${count(outcome.notRemovedCount, "pending message")}; delivery is unknown.`);
+    details.push(`Could not confirm recovery for ${outcome.notRemovedCount} message${outcome.notRemovedCount === 1 ? "" : "s"}.`);
   }
   for (const warning of warnings) {
-    // The best-effort sentences above already state the delivery limit.
+    // Avoid repeating a warning already represented by the result or count.
     if (warning === "delivery-uncertain" && bestEffort) continue;
-    if (warning === "not-removed" && outcome.notRemovedCount > 0) continue;
+    if ((warning === "not-removed" || warning === "request-failed") && outcome.notRemovedCount > 0) continue;
     details.push(WARNING_DETAILS[warning]);
   }
   const level = bestEffort || outcome.notRemovedCount > 0 || warnings.size > 0 ? "warning" : "info";
   if (outcome.recoveredCount === 0) {
-    return { level, headline: "No pending content was returned.", details };
+    return { level, headline: "No messages were recovered.", details };
   }
-  const recovered = count(outcome.recoveredCount, "pending message");
   if (!contentReported) {
-    return {
-      level,
-      headline: bestEffort
-        ? `Returned no usable content from ${recovered}.`
-        : `Removed ${recovered}; nothing usable could be inserted into the Composer.`,
-      details,
-    };
+    return { level, headline: "No content could be restored. Check pending messages.", details };
   }
   if (!bestEffort && warnings.has("images-dropped")) {
     // A Host-applied summary deliberately omits content, so insertion cannot be inferred.
-    return { level, headline: `Removed ${recovered}. Image recovery was incomplete. Nothing was sent.`, details };
+    return { level, headline: "Recovery was incomplete.", details };
   }
   return {
     level,
-    headline: bestEffort
-      ? `Returned text from ${recovered} into the Composer. Nothing was sent.`
-      : `Restored ${recovered} into the Composer. Nothing was sent.`,
+    headline: `Restored ${outcome.recoveredCount} message${outcome.recoveredCount === 1 ? "" : "s"} to the message box.`,
     details,
   };
 }
 
 function hasContent(content: ComposerDraftContent): boolean {
   return content.text.length > 0 || content.images.length > 0;
-}
-
-function count(total: number, singular: string): string {
-  return `${total} ${singular}${total === 1 ? "" : "s"}`;
 }
