@@ -158,30 +158,24 @@ export async function resolveSessionRoots(
   piArguments: string[],
   compatibility: RuntimeCompatibility = "pi",
 ): Promise<string[]> {
-  const roots: string[] = [];
   const cli = sessionDirArgument(piArguments);
+  if (cli) return [resolveSessionDir(cli, cwd)];
+
   const profile = runtimeCompatibilityProfile(compatibility);
-  if (cli) roots.push(resolveSessionDir(cli, cwd));
-  if (!profile.usesPiSettings && cli) {
-    return [...new Set(roots.map((root) => normalize(resolve(root))))];
-  }
+  if (!profile.usesPiSettings) return [profile.defaultSessionRoot()];
 
-  if (profile.usesPiSettings) {
-    if (process.env.PI_CODING_AGENT_SESSION_DIR) roots.push(resolveSessionDir(process.env.PI_CODING_AGENT_SESSION_DIR, cwd));
+  const environmentDir = process.env.PI_CODING_AGENT_SESSION_DIR;
+  if (environmentDir) return [resolveSessionDir(environmentDir, cwd)];
 
-    // Catalog discovery includes both configured scopes even when one is not currently effective,
-    // so sessions remain discoverable after trust or launch-argument changes.
-    const settings = await loadPiSettings(cwd, { piArguments });
-    const projectDir = sessionDirSetting(settings.project);
-    const globalDir = sessionDirSetting(settings.global);
-    if (projectDir) roots.push(resolveSessionDir(projectDir, cwd));
-    if (globalDir) roots.push(resolveSessionDir(globalDir, cwd));
-    roots.push(join(resolvePiAgentDirectory(cwd), "sessions"));
-  } else {
-    roots.push(profile.defaultSessionRoot());
-  }
+  const settings = await loadPiSettings(cwd, { piArguments });
+  // Pi reads project sessionDir before trust resolution so it can locate sessions.
+  const configuredDir = sessionDirSetting(settings.project) ?? sessionDirSetting(settings.global);
+  if (configuredDir) return [resolveSessionDir(configuredDir, cwd)];
 
-  return [...new Set(roots.map((root) => normalize(resolve(root))))];
+  // Match Pi SessionManager's internal getDefaultSessionDirPath without importing
+  // its SDK or creating directories. Never widen this to the global sessions root.
+  const encodedCwd = `--${resolve(cwd).replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
+  return [join(resolvePiAgentDirectory(cwd), "sessions", encodedCwd)];
 }
 
 async function findJsonlFiles(roots: string[], limit: number): Promise<string[]> {
