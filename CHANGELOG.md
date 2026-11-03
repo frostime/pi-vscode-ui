@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Opening folders, files and links with the default program no longer starts a PowerShell process first, so these opens appear immediately; a replaced default file manager is still honoured.
+- Limit Resume session discovery to the current workspace and its Git worktrees' effective Pi session directories instead of scanning all projects' default session storage. Sessions in previous configuration locations remain accessible through **Browse for a session file…**.
 
 ## [0.16.1] - 2026-11-02
 
