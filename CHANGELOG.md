@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-11-03
+
 ### Added
 
 - Reorder Desktop Projects by dragging a row, and open a Project's folder, VS Code, Zed or Windows Terminal from its new action menu. Only installed programs appear in the menu, and the full Project path moved from the top bar into a hover tooltip.
@@ -534,7 +536,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.2...HEAD
+[0.16.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.5...v0.16.0
 [0.15.5]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.4...v0.15.5
