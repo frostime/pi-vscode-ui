@@ -6,7 +6,7 @@ updated: 2026-11-03
 
 # Desktop MSI 更新 — SHAPE
 
-目标是 [TARGET-SPEC](desktop-msi-updates.TARGET-SPEC.md) 中的 MSI 安装与分阶段更新，不是实现通用下载器或自制文件替换器。候选设计让 Rust 持有下载文件和 MSI 执行权，让 Node 保留 Session 集合、准入与保存的权威；renderer 只消费更新视图。这些变化集中在 Desktop，保留共享 ClientApp/Registry/Pi RPC 的现有职责。
+目标是 [TARGET-SPEC](desktop-msi-updates.TARGET-SPEC.md) 中的 MSI 安装与分阶段更新，不是实现通用下载器或自制文件替换器。用户已选择方案 B：Rust 持有下载文件和 MSI 执行权，Node 保留 Session 集合、准入与保存的权威；renderer 在现有 Settings Panel 内消费更新视图。这些变化集中在 Desktop，保留共享 ClientApp/Registry/Pi RPC 的现有职责。
 
 本形状基于 `quasi-main` 的 `c29697a`（产品版本 `0.16.2`）。关键入口已检查；Session 入口映射由只读子任务辅助定位，并已回查 Registry、dispatcher 和导航源码。本次只创建文档，没有升级实验或实现；文件名、数量与行数均是待评审预测，不是已接受接口。
 
@@ -20,16 +20,16 @@ A. 直接使用 Tauri updater 的完整安装链
    - Update 持有私有 context，不能假设重启后可直接反序列化恢复
    - Windows install 最终 process::exit，不能自动复用 FrostPi 的异步收尾
 
-B. Tauri 生成并签名 MSI，Desktop 自己持有窄范围更新协调（当前候选）
+B. Tauri 生成并签名 MSI，Desktop 自己持有窄范围更新协调（已选择）
    静态版本清单 → Rust 下载/验签/落盘 → Node 安装门禁与保存 → Windows Installer
    + 本地 MSI 及校验信息不依赖远端 latest 或内存 Update 对象
    + 安装时机和状态保存由 FrostPi 显式控制
    - 需要自己维护少量 HTTP/缓存/验签衔接代码与 Windows 启动参数
 ```
 
-当前建议 B：安装和文件升级仍交给原生 MSI，不自行覆盖程序目录。HTTP、SemVer 和 minisign 使用现成库，不实现密码算法，也不引入第二套 Velopack 打包/启动体系。若实验表明官方插件已有稳定的离线缓存恢复接口，可在同一目标下收敛为 A；不能通过每次安装重新获取 latest 来绕过本地包要求。
+按当前“已下载包独立安装”和“保存完成后才退出”的要求，B 的整体适配更直接，但不保证代码量少于 A。用户据此选择 B：安装和文件升级仍交给原生 MSI，不自行覆盖程序目录；HTTP、SemVer 和 minisign 使用现成库，不实现密码算法，也不引入 Velopack 的另一套打包/启动体系。
 
-这项取舍尚未锁定。源码调研只能确认 API 与退出方式，不能代替本项目两版本 MSI 升级验证。
+路线选择已确认，不再把 A 当作可由实现 Agent 自行切回的候选。完整 SHAPE 仍是 draft：两版本 MSI、缓存、准入及失败恢复需要实验；若实验推翻 B 的前提，应报告证据并重新讨论，而不是更换路线或依赖远端 latest 来绕过本地包要求。
 
 ## 2. 空间 diff 树
 
@@ -42,9 +42,9 @@ apps/desktop/
 │   ├── desktopBridge.ts              modify  +5–10        additive；DesktopApi 更新动作/订阅
 │   └── desktopTransport.ts           modify  +1–3         local edit；登记有限更新通道
 ├── src/renderer/
-│   ├── UpdatePanel.svelte            create  +110–170     additive；独立检查/下载/安装与关闭会话提示
-│   ├── DesktopApp.svelte             modify  +20–35       local edit；面板和视图订阅，不重挂 ClientApp
-│   ├── DesktopShell.svelte           modify  +5–12        local edit；候选侧栏 Updates 入口
+│   ├── UpdateSection.svelte          create  +90–140      additive；Settings 内检查/下载/安装内容，不创建 dialog
+│   ├── SettingsPanel.svelte          modify  +35–65       local edit；Updates 分区、动作与未保存设置保护
+│   ├── DesktopApp.svelte             modify  +15–30       local edit；订阅更新视图并传给 SettingsPanel，不另开面板
 │   └── tauriBridge.ts                modify  +5–12        additive；沿既有 desktop_request 转发
 ├── src/main/
 │   ├── createDesktopBackend.ts       modify  +55–90       local edit；Session 准入门禁、安装资格、复用 dispose
@@ -90,13 +90,14 @@ CHANGELOG.md                         modify  grouped       实现完成后记录
 每棵树的箭头都表示运行时调用。未变化的桥接中间层压缩展示。
 
 ```text
-[NEW] UpdatePanel :: check / download / install
-└──> tauriBridge :: DesktopApi.updates
-     └──> ... desktop_request / backend.ts / createDesktopBackend ...
-          └──> desktopNative :: updateAction
-               └──> native.rs :: updates → updates/mod.rs :: handle
-                    ├──> cache.rs :: 本地包与验签
-                    └──> msi.rs :: Windows Installer
+[KEEP entry] SettingsPanel :: 现有 Settings 对话框
+└──> [NEW] UpdateSection :: check / download / install
+     └──> tauriBridge :: DesktopApi.updates
+          └──> ... desktop_request / backend.ts / createDesktopBackend ...
+               └──> desktopNative :: updateAction
+                    └──> native.rs :: updates → updates/mod.rs :: handle
+                         ├──> cache.rs :: 本地包与验签
+                         └──> msi.rs :: Windows Installer
 
 [NEW] updates/mod.rs :: 安装准备
 └──> main.rs :: Backend.prepare_update（私有 Rust↔Node 请求）
@@ -175,9 +176,16 @@ Rust 的更新 owner 决定下载版本、缓存和操作状态，Node 只合并
 
 ## 5. 实现护栏
 
+### Settings Panel 集成
+
+- UI 入口已确定：沿现有 Settings 按钮打开，在面板内新增 Updates 分区。布局候选是现有分类导航中的 Updates 项，并在窄屏分类选择器中提供同一项；不新增顶部、侧栏按钮或独立更新 dialog，`DesktopShell.svelte` 不在预计 diff 内。
+- `UpdateSection.svelte` 只承载更新内容和操作。`DesktopApp` 订阅宿主更新视图并传给 `SettingsPanel`，不增加单独的更新面板开关；关闭 Settings 不取消下载，重新打开读取宿主状态。
+- 不把更新伪装成 schema setting：不新增更新状态配置键，不让 `settingsPages` 的普通字段计数、搜索或 Save 提交承担更新协议。分类渲染需区分普通配置页与 Updates 内容，保留原有设置搜索与草稿逻辑。
+- 更新按钮使用独立动作，不触发表单 Save。切换分区保留设置草稿；若存在未保存修改，安装先经过现有保存/放弃确认语义，再提交安装请求，不静默丢弃或自动保存。不能为更新再造一套设置草稿存储。
+
 ### Session 与退出
 
-- Registry 中 idle/stopped Session 也阻挡安装，`activeSessionId === null` 不说明集合为空。关闭最后一个 Session 不会自动新建，当前 onboarding 可直接承载更新入口。
+- Registry 中 idle/stopped Session 也阻挡安装，`activeSessionId === null` 不说明集合为空。关闭最后一个 Session 不会自动新建；用户仍可通过既有 Settings 入口安装更新，不在 onboarding 另设更新入口。
 - `DesktopProjectNavigation.#opening` 只按 Project 计数，`run()` 无选中 Project 时直接执行；不能直接复用它声称覆盖了所有未完成准入。候选计数放在 dispatcher 外层，覆盖这条分支，不在导航、Resume 视图和更新模块中各存一份权威。
 - Fork/Retry/Activate 要求已有 identity，因此全部 Session 关闭后本来不可授权；不能为此改共享 SessionRegistry。实现时以现有授权测试核实这一前提。
 - `Backend.close()` 当前会在等待 Node `closed` 后立即 `app.exit`。抽出 drain 时保留普通关闭的边界，但给更新返回真实保存结果：未收到 `closed(ok=true)` 不能启动 MSI。不能简单把普通退出的“报错后仍退出”照搬给更新。
@@ -206,11 +214,11 @@ Rust 的更新 owner 决定下载版本、缓存和操作状态，Node 只合并
 | 项目 | 需要得到的结果 | 对形状的影响 |
 |---|---|---|
 | 两版本 MSI 最小实验 | 真正升级而非并排安装；backend/扩展匹配；安装目录、权限、取消与重启行为可观察 | 决定 WiX 配置、msi.rs 参数和是否需要有限安装器自定义 |
-| 本地包实验 | 下载后断网、应用重新打开、远端版本变化时仍可按本地记录验签并安装；损坏时拒绝 | 决定缓存元数据和是否可以收敛回官方 updater API |
+| 本地包实验 | 下载后断网、应用重新打开、远端版本变化时仍可按本地记录验签并安装；损坏时拒绝 | 确认 B 的缓存元数据与验签边界，不把实验作为自行切回 A 的授权 |
 | Session 准入实验 | 暂停 New/Resume 的 discovery/picker；空集合不能越过该操作；获准后新请求被拒绝 | 确认门禁只需 Desktop dispatcher/backend，不必扩散到共享 Registry |
 | 多 profile / 同一安装目录 | 另一个受支持实例仍打开时，MSI 不静默终止它及其 Pi 任务 | 尚未定案；建议拒绝并要求关闭其他实例，不承诺跨 profile 协调 |
 | 保存/启动失败实验 | flush 失败不启动安装器；MSI 无法启动或用户取消有准确反馈和可执行恢复步骤 | 决定 drain 的返回形态；不默认增加自动回滚系统 |
-| 用户确认 | Updates 入口、自动检查/下载策略、缓存保留、安装范围、升级后是否自动打开、ZIP 发布去留 | 这些不是可由 Agent 补全的需求；确认前不锁定相关行为 |
+| 用户确认 | 自动检查/下载策略、缓存保留、安装范围、升级后是否自动打开、ZIP 发布去留 | B 和 Settings Panel 内入口已确认；其余不能由 Agent 补全 |
 
 验证脚本应复用 `scripts/smoke.mjs` 和 `cdp-client.mjs`，只增加 MSI 驱动，不建立另一套 GUI 自动化。必须隔离 MSI 产品标识、安装目录与 profile，避免在用户实例上测试升级、强杀或卸载。不能把系统安装器是否会强制关程序当作已经满足 Session 门禁的证据。
 
