@@ -36,6 +36,8 @@ export async function connectTauriDesktop(): Promise<void> {
     addProject: () => send("frostpi:projects:add"),
     removeProject: (id) => send("frostpi:projects:remove", id),
     selectProject: (id) => send("frostpi:projects:select", id),
+    moveProject: (id, index) => send("frostpi:projects:move", id, index),
+    projectAction: (id, action) => send("frostpi:projects:action", id, action),
     setSidebar: (layout) => send("frostpi:sidebar:set", layout),
     onProjects: (listener) => subscribe("frostpi:projects:view", listener),
     onDialog: (listener) => subscribe("frostpi:dialog:view", listener),

@@ -32,6 +32,7 @@ const native: DesktopNative = {
   writeClipboard: async (text) => { await nativeCall("writeClipboard", [text]); },
   openExternal: async (url) => { await nativeCall("openExternal", [url]); },
   openPath: async (path) => await nativeCall("openPath", [path]) as string,
+  launch: async (executable, args) => { await nativeCall("launch", [executable, [...args]]); },
   appearance: (theme, background, zoom) => { void nativeCall("appearance", [theme, background, zoom]).catch(() => undefined); },
 };
 const publisher = createDesktopPublisher(wire);

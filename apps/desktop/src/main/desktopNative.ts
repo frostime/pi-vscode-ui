@@ -10,6 +10,8 @@ export interface DesktopNative {
   writeClipboard(text: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   openPath(path: string): Promise<string>;
+  /** Starts a program outside the process Job; only registered Project actions supply the command. */
+  launch(executable: string, args: readonly string[]): Promise<void>;
   appearance(theme: "dark" | "light", background: string, zoom: number): void;
 }
 

@@ -16,7 +16,7 @@ import { createDesktopHost as createHost, type DesktopHostOptions } from "../src
 import type { DesktopNative } from "../src/main/desktopNative.js";
 const native = {
   focused: () => false, message: vi.fn(), confirm: vi.fn(), openFiles: vi.fn(), chooseDirectory: vi.fn(),
-  writeClipboard: vi.fn(), openExternal: vi.fn(), openPath: vi.fn(), appearance: vi.fn(),
+  writeClipboard: vi.fn(), openExternal: vi.fn(), openPath: vi.fn(), launch: vi.fn(), appearance: vi.fn(),
 } satisfies DesktopNative;
 function createDesktopHost(options: Omit<DesktopHostOptions, "native">) {
   return createHost({ ...options, native });
