@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Reorder Desktop Projects by dragging a row or pressing Alt+Up/Alt+Down, and open a Project's folder, VS Code, Zed or Windows Terminal from its new action menu. Only installed programs appear in the menu, and the full Project path moved from the top bar into a hover tooltip.
+- Reorder Desktop Projects by dragging a row, and open a Project's folder, VS Code, Zed or Windows Terminal from its new action menu. Only installed programs appear in the menu, and the full Project path moved from the top bar into a hover tooltip.
 
 ### Changed
 
