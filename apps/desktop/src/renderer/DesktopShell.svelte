@@ -326,17 +326,6 @@
     if (index !== null) onmove(source, index);
   }
 
-  function moveByKeyboard(event: KeyboardEvent, id: string): void {
-    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-    const delta = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
-    if (delta === 0) return;
-    const from = view.projects.findIndex((project) => project.id === id);
-    const to = from + delta;
-    if (from < 0 || to < 0 || to >= view.projects.length) return;
-    event.preventDefault();
-    onmove(id, to);
-  }
-
   function selectSession(id: string): void {
     if (narrow && drawer) closeDrawer();
     onsession(id);
@@ -442,8 +431,7 @@
           ondragend={clearDrag}>
           <button type="button" class="project-select" title={project.cwd}
             aria-current={project.id === view.activeProjectId ? "true" : undefined}
-            onclick={() => selectProject(project.id)}
-            onkeydown={(event) => moveByKeyboard(event, project.id)}>
+            onclick={() => selectProject(project.id)}>
             <span class="codicon codicon-folder" aria-hidden="true"></span>
             <span class="project-copy">
               <span class="project-name">{project.name}</span>

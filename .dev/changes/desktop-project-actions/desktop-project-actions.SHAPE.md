@@ -17,7 +17,7 @@ apps/desktop/
 │   └── desktopTransport.ts       modify  +2/-2         有限通道清单登记两条新通道（易漏点）
 ├── src/renderer/
 │   ├── ProjectActionMenu.svelte  create  +80–100       渲染下发的动作项、fixed 定位测量、键盘导航/关闭
-│   ├── DesktopShell.svelte       modify  +70–95/-30    行尾 ⋯ 入口、拖拽与 Alt+↑/↓、顶栏按钮+悬停提示；中等本地改写
+│   ├── DesktopShell.svelte       modify  +70–95/-30    行尾 ⋯ 入口、拖拽重排、顶栏按钮+悬停提示；中等本地改写
 │   └── tauriBridge.ts            modify  +4            两条通道转发
 ├── src/main/
 │   ├── desktopProjects.ts        modify  +18–25        moveProject：按索引重排 Map 顺序后 emitChange
@@ -56,7 +56,7 @@ DesktopNative :: openPath / openExternal        [KEEP 接口，换实现]
      ├── 替换 [REMOVED] open::that_detached(path)
      └── 替换 [REMOVED] open::that_detached(url)
 
-DesktopShell.svelte :: 拖拽 / Alt+↑↓
+DesktopShell.svelte :: 拖拽重排
 └──> tauriBridge.ts :: moveProject               [NEW: frostpi:projects:move]
      └──> createDesktopBackend.ts :: listen(move)
           └──> DesktopProjects :: moveProject    [NEW]

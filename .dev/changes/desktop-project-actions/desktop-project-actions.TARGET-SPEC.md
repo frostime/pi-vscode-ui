@@ -18,7 +18,6 @@ Desktop 侧边栏的 Project 顺序就是添加顺序，用户无法调整成自
 ### 1. Project 重排
 
 - 侧边栏 Project 行可用鼠标拖拽重排：拖动中的行变淡，落点处显示插入线，松手生效。
-- 同上排布也可用键盘完成：Project 行获得焦点时 `Alt+↑` / `Alt+↓` 上移/下移一位，移动后焦点跟随该行。
 - 顺序在重启后保持。顺序是用户资产，不是当前选中状态或添加顺序的副产品。
 - 重排不改变 Project 的 id、名称、路径、当前选中 Project，也不改变任何 Session 的 Project 归属。
 
@@ -26,7 +25,7 @@ Desktop 侧边栏的 Project 顺序就是添加顺序，用户无法调整成自
 
 - 行尾提供 Action 入口（`⋯`），打开菜单。菜单项固定顺序：`Open in File Explorer` → `Open in VS Code` → `Open in Zed` → `Open in Windows Terminal` → 分隔线 → `Remove Project`。
 - 外部工具项取决于启动时是否探测到该工具：探测不到就**不渲染该项**（不置灰、不占位）。文件管理器入口始终存在。
-- 三个外部工具都以该 Project 的根目录为目标，并在**新窗口**里打开：VS Code `code -n`、Zed `zed -n`、Windows Terminal `wt -d`。
+- 三个外部工具都以该 Project 的根目录为目标；可以复用既有窗口，不强制新窗口。当前启动参数为 VS Code `code -n`、Zed `zed -n`、Windows Terminal `wt -d`。
 - `Remove Project` 从行尾独立按钮移入菜单；现有的"项目内还有 Session 时先确认"对话框与行为保持不变。
 - 菜单可用键盘操作：打开后焦点进入首项，`↑`/`↓` 在项间移动，`Esc` 关闭并把焦点还给触发按钮，点击外部关闭。同一时刻只存在一个菜单。
 
@@ -45,7 +44,7 @@ Desktop 侧边栏的 Project 顺序就是添加顺序，用户无法调整成自
 
 - 不做 Action 的扩展机制（第三方或用户自定义菜单项）。本轮菜单项是固定集合。
 - 不新增设置项：不提供自定义工具路径、不提供工具排序偏好、不提供"默认编辑器"。
-- 不做 Project 分组、嵌套、拖入文件夹。
+- 不做 Project 分组、嵌套、拖入文件夹或键盘重排。
 - 不改 VS Code 扩展：VS Code 侧没有对应需求，也不共享这些 Desktop 外壳交互。
 - 不改 Session 与 Project 的归属规则、会话发现、Pi 进程生命周期。
 
@@ -54,7 +53,6 @@ Desktop 侧边栏的 Project 顺序就是添加顺序，用户无法调整成自
 - `state.json` 的格式版本与字段集合不变；Project 顺序沿用现有 `projects` 数组顺序，不新增平行字段。
 - 删除 Project、切换 Project、Session 归属与恢复的行为不变。
 - 已启动的编辑器/终端窗口在 FrostPi 退出后继续存活（不得随应用退出被清理）。
-- 键位只在 Project 行聚焦时生效，不劫持 Composer、对话区或既有 Desktop 快捷键。
 
 ## 验收与验证归属
 
@@ -67,9 +65,9 @@ Agent 负责的客观检查：
 
 用户负责的不可替代检查：
 
-- 真实窗口里的拖拽手感、插入线位置、`Alt+↑/↓` 手感。
+- 真实窗口里的拖拽手感、插入线位置。
 - 菜单定位在侧边栏窄宽度、窗口底部、窄屏抽屉三种情形下都不越界。
-- `code -n` / `zed -n` / `wt -d` 真的打开到正确的项目目录与**新窗口**，且退出 FrostPi 后窗口仍在。
+- `code -n` / `zed -n` / `wt -d` 真的打开到正确的项目目录，且退出 FrostPi 后窗口仍在。
 - 顶栏提示的观感：字号、位置、两行路径的换行。
 
 ## 未决问题
