@@ -285,6 +285,22 @@ async function verifySettingsAndComposition() {
   await until(() => client.evaluate("Boolean(document.querySelector('.discard-dialog'))"), "unsaved settings close guard");
   await client.evaluate("document.querySelector('.discard-dialog button').click()");
   assert.equal(await client.evaluate("document.getElementById('setting-chat.fontSize').value"), "17");
+  await client.evaluate("[...document.querySelectorAll('.settings-dialog .categories button')].find(b=>b.textContent.includes('Updates')).click()");
+  await until(() => client.evaluate("Boolean(document.querySelector('.settings-dialog .update-section'))"), "Updates inside Settings");
+  const update = await client.evaluate("window.frostpiDesktop.updates({type:'read'})");
+  assert.equal(typeof update.currentVersion, "string");
+  assert.equal(update.checked, false, "Opening Settings must not perform a network update check");
+  assert.equal(update.installBlock?.reason, "sessions");
+  assert.equal(await client.evaluate("[...document.querySelectorAll('.update-section button')].find(b=>b.textContent.includes('Install')).disabled"), true);
+  assert.equal(await client.evaluate("window.frostpiDesktop.updates({type:'install',path:'invalid.msi'}).then(()=>false,()=>true)"), true);
+  for (const command of ["check", "download_and_install"]) {
+    const denied = await client.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:updater|${command}',{rid:0}).then(()=>'',error=>String(error))`);
+    assert.match(denied, /not allowed|denied/i, "Renderer must not bypass Node's Session gate through the updater plugin");
+  }
+  await client.evaluate("[...document.querySelectorAll('.settings-dialog .categories button')].find(b=>b.textContent.includes('Appearance')).click()");
+  await until(() => client.evaluate("Boolean(document.getElementById('setting-chat.fontSize'))"), "return from Updates to settings draft");
+  assert.equal(await client.evaluate("document.getElementById('setting-chat.fontSize').value"), "17");
+  checks.push("Updates stays inside Settings, preserves its draft, blocks open Sessions and denies direct renderer updater commands");
   await client.evaluate("document.querySelector('dialog .save').click()");
   await until(() => client.evaluate("document.querySelector('dialog .save').disabled && document.querySelector('.save-status').textContent.includes('No unsaved')"), "settings UI saves");
   assert.equal((await client.evaluate("window.frostpiDesktop.settings({type:'read'})")).values["chat.fontSize"], 17);

@@ -305,7 +305,9 @@ Desktop uses your existing Pi configuration, extensions, and session history, an
   <sub>Demo projects and conversation: sessions keep running in the background when you switch projects.</sub>
 </p>
 
-Currently supports **Windows x64** and requires **Node.js 22.19+, Pi, and WebView2**. See the [development guide](.dev/docs/development.md#product-local-work) to build and run from source.
+Currently supports **Windows x64** and requires **Node.js 22.19+, Pi, and WebView2**. MSI builds install for all users and request administrator approval. In **Settings → Updates**, check, download and install separately: downloads do not interrupt work, but you must close every session across all projects before installation. Desktop reopens after the update. Exit an existing ZIP-only version before the first manual MSI installation to enter this update chain; portable ZIP builds remain available for manual replacement.
+
+See the [development guide](.dev/docs/development.md#product-local-work) to build and run from source, and [MSI signing setup](.dev/docs/release.md#msi-and-update-signing) for release builds. Ordinary source builds need no signing keys and leave network updates disabled.
 
 ### Development
 

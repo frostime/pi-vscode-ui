@@ -23,6 +23,8 @@ This extension is available on both **[VS Code Marketplace](https://marketplace.
 
 If network restrictions prevent access to the extension registries, you can also download a `.vsix` file from [GitHub Releases](https://github.com/frostime/pi-vscode-ui/releases) and install it manually.
 
+The separate [experimental Windows Desktop app](https://github.com/frostime/pi-vscode-ui#desktop-experimental-windows) has MSI installation and its own Settings → Updates. This extension continues to use VS Code's update mechanism.
+
 ## Why FrostPi
 
 If you already use Pi and have built your own workflow around it, getting a GUI shouldn't mean adopting another one.

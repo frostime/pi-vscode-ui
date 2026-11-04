@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, readFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,6 +37,45 @@ export function productVersion() {
   return JSON.parse(readFileSync(versionSource, "utf8")).version;
 }
 
+/**
+ * The runtime package.json travels beside backend.cjs and the Pi extensions in both
+ * deliveries. Its `type: module` marks the extension files as ESM; do not drop it
+ * from one packaging route.
+ */
+export function runtimePackageMetadata() {
+  return { name: "frostpi-desktop", private: true, type: "module", version: productVersion() };
+}
+
+export function writeRuntimePackageJson(destination) {
+  writeFileSync(destination, `${JSON.stringify(runtimePackageMetadata())}\n`);
+}
+
 export function distributedArchive() {
   return resolve(artifactsRoot, `${productName}-${productVersion()}-${targetPlatform}-${targetArch}.zip`);
+}
+
+// MSI delivery reuses the ZIP's product identity and runtime inventory. The updater
+// target is fixed because the Rust updater selects this exact platform key.
+export const updateTarget = "windows-x86_64-msi";
+export const updateManifestName = "FrostPi-desktop-update.json";
+// Everything the MSI must install beside the bundled executable. package.json is
+// runtime metadata, not a notice, so the inventory keeps an accurate name.
+export const msiSupportFiles = ["LICENSE", "THIRD_PARTY_NOTICES.md", "NATIVE_NOTICES.md", "Cargo.lock", "package.json"];
+export const msiSupportDirectory = resolve(buildOutput, "msi");
+export const msiBundleDirectory = resolve(desktopRoot, "src-tauri/target/release/bundle/msi");
+
+/** Local release assets for one MSI build. The update manifest is shared by versions. */
+export function msiAssetPaths(version = productVersion(), root = artifactsRoot) {
+  const base = resolve(root, `${productName}-${version}-${targetPlatform}-${targetArch}`);
+  return {
+    msi: `${base}.msi`,
+    signature: `${base}.msi.sig`,
+    manifest: resolve(root, updateManifestName),
+  };
+}
+
+/** The versioned release URL clients receive through the update manifest. */
+// Keep the repository/tag shape aligned with plugins.updater.endpoints in tauri.conf.json.
+export function msiDownloadUrl(version = productVersion()) {
+  return `https://github.com/frostime/pi-vscode-ui/releases/download/v${version}/${productName}-${version}-${targetPlatform}-${targetArch}.msi`;
 }

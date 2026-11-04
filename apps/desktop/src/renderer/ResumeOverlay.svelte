@@ -174,6 +174,5 @@
   .picker-footer > span { color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 3px); }
   @keyframes resume-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
   @keyframes resume-scan { from { transform: translateX(-100%); } to { transform: translateX(400%); } }
-  @media (prefers-reduced-motion: reduce) { .resume-card, .resume-activity span { animation: none; } }
   @media (max-width: 600px) { .resume-overlay { padding: 12px; } .resume-card { padding: 14px 12px; } .resume-body { margin-left: 0; } header { flex-wrap: wrap; } .waiting { flex: 1 0 calc(100% - 29px); margin-left: 29px; } .picker-footer > span { display: none; } .picker-footer { justify-content: flex-end; } }
 </style>

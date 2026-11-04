@@ -7,6 +7,7 @@ import { desktopRoot } from "./packaging.mjs";
 const supplemental = {
   "alloc-stdlib@0.3.0": ["alloc-stdlib-0.3.0.txt", "https://github.com/dropbox/rust-alloc-no-stdlib/blob/0a81fd6928ea3b33c8cd484aa4575d50ffb98012/LICENSE"],
   "clipboard-win@5.4.3": ["clipboard-win-5.4.3.txt", "https://github.com/DoumanAsh/clipboard-win/blob/ed27008ae5d1f10cfbb266de039f0fb35fd05a56/LICENSE"],
+  "tauri-plugin@2.7.2": ["tauri-plugin-2.7.2.txt", "https://github.com/tauri-apps/tauri/blob/59b63ab500da9859f12d8888c3298bc29bba0b92/LICENSE-MIT"],
   "selectors@0.38.0": ["MPL-2.0.txt", "https://github.com/servo/stylo/tree/572ecba2d1600e7c3d490586692a209faf703baa/selectors"],
   ...Object.fromEntries(["webview2-com@0.39.1", "webview2-com-sys@0.39.1", "webview2-com-macros@0.8.1"].map((name) => [name, ["webview2-rs.txt", "https://github.com/wravery/webview2-rs/blob/edc2caf886175ccaebe86078c9cfe1ae2a187328/LICENSE"]])),
 };

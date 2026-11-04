@@ -45,6 +45,6 @@ Collapsing or hiding an input panel does not cancel its Host-owned request. Keep
 
 Actions must be keyboard reachable, with visible focus and accessible names for icon-only controls. Status must not rely only on color. Expose transient status through appropriate live text, and keep blocking requests in a meaningful document order with reachable actions.
 
-Maintain contrast across supported themes and honor reduced-motion preferences. Activity feedback should use small, low-stimulation motion rather than animating large content regions; navigation transitions must also respect reduced motion.
+Maintain contrast across supported themes. An indefinite wait must always show activity feedback: do not remove a loading animation because the system requests reduced motion, which leaves the interface looking frozen. Prefer small, low-stimulation motion over animating large content regions, and keep navigation transitions brief.
 
 Read the feature's code and local SPEC comments or adjacent feature SPEC for detailed interaction rules. A separate Markdown SPEC is not required when the constraint already lives beside the implementation. Do not duplicate those contracts or their CSS constants in this global guide.

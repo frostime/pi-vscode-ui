@@ -1,6 +1,7 @@
 import type { HostToWebviewMessage } from "@frostime/pi-client/shared/bridge/hostToWebview";
 import type { WebviewToHostMessage } from "@frostime/pi-client/shared/bridge/webviewToHost";
 import type { DesktopSettingsAction, DesktopSettingsTarget, DesktopSettingsView } from "./desktopSettings.js";
+import type { DesktopUpdateAction, DesktopUpdateView } from "./desktopUpdates.js";
 
 export interface DesktopProject {
   id: string;
@@ -21,6 +22,13 @@ export interface DesktopProjectActivity {
   waitingSessionIds: string[];
 }
 
+/** One menu entry, projected from the main-process Project action registry. */
+export interface DesktopProjectActionView {
+  id: string;
+  label: string;
+  icon: string;
+}
+
 export interface DesktopProjectNavigationView {
   sidebar: DesktopSidebarLayout;
   sessionProjects: Record<string, string>;
@@ -32,6 +40,8 @@ export interface DesktopProjectsView {
   activeProjectId: string | null;
   /** Desktop-only navigation metadata; never copied into the shared Session model. */
   navigation?: DesktopProjectNavigationView;
+  /** Actions detected at startup; transient, never persisted with the Project list. */
+  actions?: DesktopProjectActionView[];
   /** Transient persistence status, never part of the saved Project data. */
   stateError?: string;
 }
@@ -64,6 +74,10 @@ export interface DesktopApi {
   addProject(): void;
   removeProject(id: string): void;
   selectProject(id: string): void;
+  /** Moves a Project to `index`, counted after removing it from its current position. */
+  moveProject(id: string, index: number): void;
+  /** Runs one action from the projected menu; the root directory never comes from the renderer. */
+  projectAction(id: string, action: string): void;
   setSidebar(layout: DesktopSidebarLayout): void;
   onProjects(listener: (view: DesktopProjectsView) => void): () => void;
   onDialog(listener: (request: DesktopDialog | null) => void): () => void;
@@ -75,6 +89,9 @@ export interface DesktopApi {
   settings(action: DesktopSettingsAction): Promise<DesktopSettingsView>;
   onSettings(listener: (view: DesktopSettingsView) => void): () => void;
   onOpenSettings(listener: (target: DesktopSettingsTarget) => void): () => void;
+  /** Finite update actions only; packages, sources and installer options stay in the host. */
+  updates(action: DesktopUpdateAction): Promise<DesktopUpdateView>;
+  onUpdates(listener: (view: DesktopUpdateView) => void): () => void;
 }
 
 declare global {

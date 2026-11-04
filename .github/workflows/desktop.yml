@@ -14,7 +14,7 @@ jobs:
   windows-package:
     name: Package Windows Desktop
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -30,11 +30,21 @@ jobs:
       - name: Select Windows MSVC Rust toolchain
         run: rustup default stable-x86_64-pc-windows-msvc
       - run: pnpm install --frozen-lockfile
-      - run: pnpm package:desktop
+      - name: Package portable ZIP
+        run: pnpm package:desktop
+      - name: Package signed MSI
+        env:
+          FROSTPI_UPDATE_PUBLIC_KEY: ${{ vars.FROSTPI_UPDATE_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm package:desktop:msi
       - name: Check archive integrity and bind release assets to this commit
         if: startsWith(github.ref, 'refs/tags/v')
         run: node apps/desktop/scripts/prepare-release.mjs "$env:GITHUB_REF_NAME"
-      - name: Preserve Desktop package
+      - name: Check MSI release assets
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: node apps/desktop/scripts/prepare-msi-release.mjs "$env:GITHUB_REF_NAME"
+      - name: Preserve Desktop packages
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -42,6 +52,9 @@ jobs:
           path: |
             artifacts/FrostPi-*-win32-x64.zip
             artifacts/FrostPi-*-win32-x64.zip.sha256
+            artifacts/FrostPi-*-win32-x64.msi
+            artifacts/FrostPi-*-win32-x64.msi.sig
+            artifacts/FrostPi-desktop-update.json
           if-no-files-found: warn
 
   publish:
@@ -60,7 +73,8 @@ jobs:
         run: gh run download "$GITHUB_RUN_ID" --name FrostPi-Desktop-Windows-x64-candidate --dir artifacts
       - name: Recheck transferred ZIP checksum
         working-directory: artifacts
-        run: sha256sum --check FrostPi-*-win32-x64.zip.sha256
+        run: |
+          sha256sum --check FrostPi-*-win32-x64.zip.sha256
       - name: Create release if needed, then attach Desktop assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,25 +86,14 @@ jobs:
             if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
               flags+=(--prerelease)
             fi
-            # Extension release may create the same release concurrently; accept that, not other errors.
-            if ! gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes "${flags[@]}"; then
-              gh release view "$TAG" >/dev/null
-            fi
+            gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes "${flags[@]}"
           fi
-          # Recover partial uploads without ever replacing already published bytes.
-          remote_asset=$(mktemp)
-          trap 'rm -f "$remote_asset"' EXIT
-          for asset in artifacts/FrostPi-*-win32-x64.zip artifacts/FrostPi-*-win32-x64.zip.sha256; do
-            name=$(basename "$asset")
-            existing_id=$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq ".assets[] | select(.name == \"$name\") | .id")
-            if [[ -n "$existing_id" ]]; then
-              gh api "repos/$GH_REPO/releases/assets/$existing_id" -H 'Accept: application/octet-stream' > "$remote_asset"
-              if ! cmp --silent "$asset" "$remote_asset"; then
-                echo "::error::Published asset differs: $name. Existing bytes were not replaced."
-                exit 1
-              fi
-              echo "Already published with identical bytes: $name"
-            else
-              gh release upload "$TAG" "$asset"
-            fi
+          # Upload the manifest last, after the signed MSI is available.
+          for asset in \
+            artifacts/FrostPi-*-win32-x64.zip \
+            artifacts/FrostPi-*-win32-x64.zip.sha256 \
+            artifacts/FrostPi-*-win32-x64.msi \
+            artifacts/FrostPi-*-win32-x64.msi.sig \
+            artifacts/FrostPi-desktop-update.json; do
+            gh release upload "$TAG" "$asset"
           done

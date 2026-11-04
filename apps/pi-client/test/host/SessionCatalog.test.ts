@@ -1,8 +1,8 @@
-import { appendFile, mkdir, mkdtemp, realpath, stat, symlink, writeFile } from "node:fs/promises";
+import { access, appendFile, mkdir, mkdtemp, realpath, stat, symlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, normalize, resolve } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { discoverPiSessions, prioritizeSessionRoots, readPiSessionMetadata, resolveSessionRoots } from "../../src/host/catalog/SessionCatalog.js";
 import { buildSessionQuickPickItems } from "../../src/host/catalog/SessionCatalogPicker.js";
@@ -337,70 +337,134 @@ async function completeScan(
 }
 
 describe("session root resolution", () => {
-  it("resolves project sessionDir relative to the workspace cwd, not the settings file directory", async () => {
-    const cwd = await mkdtemp(join(tmpdir(), "frostpi-roots-"));
+  let cwd: string;
+  let agentDirectory: string;
+
+  beforeEach(async () => {
+    const parent = await mkdtemp(join(tmpdir(), "frostpi-roots-"));
+    cwd = join(parent, "project");
+    agentDirectory = join(parent, "agent");
     await mkdir(join(cwd, ".pi"), { recursive: true });
+    await mkdir(agentDirectory);
+    vi.stubEnv("PI_CODING_AGENT_DIR", agentDirectory);
+    vi.stubEnv("PI_CODING_AGENT_SESSION_DIR", undefined);
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("resolves project sessionDir relative to the workspace cwd, not the settings file directory", async () => {
     await writeFile(join(cwd, ".pi", "settings.json"), JSON.stringify({ sessionDir: ".pi/sessions" }));
 
-    const roots = await resolveSessionRoots(cwd, []);
-    expect(roots).toContain(normalize(resolve(cwd, ".pi", "sessions")));
-    expect(roots).not.toContain(normalize(resolve(cwd, ".pi", ".pi", "sessions")));
+    expect(await resolveSessionRoots(cwd, [])).toEqual([join(cwd, ".pi", "sessions")]);
   });
 
-  it("resolves a bare relative project sessionDir against the workspace cwd", async () => {
-    const cwd = await mkdtemp(join(tmpdir(), "frostpi-roots-"));
-    await mkdir(join(cwd, ".pi"), { recursive: true });
-    await writeFile(join(cwd, ".pi", "settings.json"), JSON.stringify({ sessionDir: "sessions" }));
+  it("selects only the highest-priority configured directory", async () => {
+    await writeFile(join(agentDirectory, "settings.json"), JSON.stringify({ sessionDir: "user-sessions" }));
+    await writeFile(join(cwd, ".pi", "settings.json"), JSON.stringify({ sessionDir: "project-sessions" }));
+    vi.stubEnv("PI_CODING_AGENT_SESSION_DIR", "env-sessions");
 
-    const roots = await resolveSessionRoots(cwd, []);
-    expect(roots).toContain(normalize(resolve(cwd, "sessions")));
+    expect(await resolveSessionRoots(cwd, ["--session-dir", "cli-sessions"]))
+      .toEqual([join(cwd, "cli-sessions")]);
+    expect(await resolveSessionRoots(cwd, ["--session-dir=cli-sessions"]))
+      .toEqual([join(cwd, "cli-sessions")]);
+    expect(await resolveSessionRoots(cwd, [])).toEqual([join(cwd, "env-sessions")]);
+
+    vi.stubEnv("PI_CODING_AGENT_SESSION_DIR", undefined);
+    expect(await resolveSessionRoots(cwd, [])).toEqual([join(cwd, "project-sessions")]);
+
+    await writeFile(join(cwd, ".pi", "settings.json"), "{}");
+    expect(await resolveSessionRoots(cwd, [])).toEqual([join(cwd, "user-sessions")]);
   });
 
-  it("resolves --session-dir against the workspace cwd", async () => {
-    const cwd = await mkdtemp(join(tmpdir(), "frostpi-roots-"));
-    const roots = await resolveSessionRoots(cwd, ["--session-dir", "custom-sessions"]);
-    expect(roots).toContain(normalize(resolve(cwd, "custom-sessions")));
+  it("expands home-relative custom directories without adding a cwd suffix", async () => {
+    await writeFile(join(cwd, ".pi", "settings.json"), JSON.stringify({ sessionDir: "~/frostpi-test-sessions" }));
+
+    expect(await resolveSessionRoots(cwd, [])).toEqual([join(homedir(), "frostpi-test-sessions")]);
+  });
+
+  it("matches Pi's default cwd encoding without creating the session directory", async () => {
+    const sampleCwd = process.platform === "win32"
+      ? "C:/__frostpi_catalog_test__/My Project/nested/"
+      : "/__frostpi_catalog_test__/My Project/nested/";
+    const encodedCwd = process.platform === "win32"
+      ? "--C--__frostpi_catalog_test__-My Project-nested--"
+      : "--__frostpi_catalog_test__-My Project-nested--";
+    const expected = join(agentDirectory, "sessions", encodedCwd);
+
+    expect(await resolveSessionRoots(sampleCwd, [])).toEqual([expected]);
+    await expect(access(expected)).rejects.toThrow();
+  });
+
+  it("scans only each worktree's effective directory, not unrelated or old locations", async () => {
+    const linked = join(cwd, "linked");
+    const linkedSessionDir = join(linked, ".pi", "sessions");
+    await mkdir(linkedSessionDir, { recursive: true });
+    await writeFile(join(linked, ".pi", "settings.json"), JSON.stringify({ sessionDir: ".pi/sessions" }));
+    const mainSessionDir = (await resolveSessionRoots(cwd, []))[0]!;
+    expect(mainSessionDir).not.toBe(join(agentDirectory, "sessions"));
+    await mkdir(mainSessionDir, { recursive: true });
+    const oldSessionDir = join(agentDirectory, "sessions", "other-project");
+    await mkdir(oldSessionDir, { recursive: true });
+    for (const [directory, owner, title] of [
+      [mainSessionDir, cwd, "Main"],
+      [linkedSessionDir, linked, "Linked"],
+      [oldSessionDir, cwd, "Old location"],
+      [oldSessionDir, join(cwd, "unrelated"), "Unrelated"],
+    ] as const) {
+      await writeFile(join(directory, `${title}.jsonl`), [
+        JSON.stringify({ type: "session", version: 3, cwd: owner }),
+        JSON.stringify({ type: "session_info", name: title }),
+      ].join("\n"));
+    }
+    const scanFiles = vi.fn((): Promise<SessionFileScanResult> => Promise.resolve({ complete: false }));
+    const sessions = await discoverPiSessions(
+      [workingDirectory(cwd), { ...workingDirectory(linked), isCurrent: false }],
+      [], "pi", resolveSessionRoots, scanFiles,
+    );
+
+    expect(scanFiles).toHaveBeenCalledExactlyOnceWith([linkedSessionDir, mainSessionDir]);
+    expect(sessions.map((session) => session.title).sort()).toEqual(["Linked", "Main"]);
+  });
+
+  it("deduplicates shared custom directories and still filters sessions by cwd", async () => {
+    const shared = join(agentDirectory, "shared");
+    await mkdir(shared);
+    vi.stubEnv("PI_CODING_AGENT_SESSION_DIR", shared);
+    for (const [owner, title] of [[cwd, "Main"], [join(cwd, "linked"), "Linked"], [join(cwd, "other"), "Other"]]) {
+      await writeFile(join(shared, `${title}.jsonl`), [
+        JSON.stringify({ type: "session", version: 3, cwd: owner }),
+        JSON.stringify({ type: "session_info", name: title }),
+      ].join("\n"));
+    }
+    const scanFiles = vi.fn((): Promise<SessionFileScanResult> => Promise.resolve({ complete: false }));
+    const sessions = await discoverPiSessions(
+      [workingDirectory(cwd), { ...workingDirectory(join(cwd, "linked")), isCurrent: false }],
+      [], "pi", resolveSessionRoots, scanFiles,
+    );
+
+    expect(scanFiles).toHaveBeenCalledExactlyOnceWith([shared]);
+    expect(sessions.map((session) => session.title).sort()).toEqual(["Linked", "Main"]);
+  });
+
+  it("does not fall back to global discovery when the configured directory is missing", async () => {
+    const oldSessionDir = join(agentDirectory, "sessions", "old");
+    await mkdir(oldSessionDir, { recursive: true });
+    await writeFile(join(oldSessionDir, "old.jsonl"), JSON.stringify({ type: "session", version: 3, cwd }));
+    const missing = join(cwd, "missing");
+    await writeFile(join(cwd, ".pi", "settings.json"), JSON.stringify({ sessionDir: "missing" }));
+    const scanFiles = vi.fn((): Promise<SessionFileScanResult> => Promise.resolve({ complete: false }));
+
+    expect(await discoverPiSessions([workingDirectory(cwd)], [], "pi", resolveSessionRoots, scanFiles)).toEqual([]);
+    expect(scanFiles).toHaveBeenCalledExactlyOnceWith([missing]);
+    await expect(access(missing)).rejects.toThrow();
   });
 
   it("uses the OMP root without reading Pi settings or Pi environment roots", async () => {
-    const cwd = await mkdtemp(join(tmpdir(), "frostpi-omp-roots-"));
-    await mkdir(join(cwd, ".pi"), { recursive: true });
     await writeFile(join(cwd, ".pi", "settings.json"), JSON.stringify({ sessionDir: "project-sessions" }));
-    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-    const previousSessionDir = process.env.PI_CODING_AGENT_SESSION_DIR;
-    try {
-      process.env.PI_CODING_AGENT_DIR = join(cwd, "pi-agent");
-      process.env.PI_CODING_AGENT_SESSION_DIR = join(cwd, "pi-env-sessions");
-      const roots = await resolveSessionRoots(cwd, [], "oh-my-pi");
-      expect(roots).toEqual([normalize(resolve(homedir(), ".omp", "agent", "sessions"))]);
-      expect(roots.some((root) => root.includes(".pi"))).toBe(false);
-      expect(roots).not.toContain(normalize(resolve(cwd, "project-sessions")));
-      expect(await resolveSessionRoots(cwd, ["--session-dir", "chosen-sessions"], "oh-my-pi"))
-        .toEqual([normalize(resolve(cwd, "chosen-sessions"))]);
-    } finally {
-      if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-      else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
-      if (previousSessionDir === undefined) delete process.env.PI_CODING_AGENT_SESSION_DIR;
-      else process.env.PI_CODING_AGENT_SESSION_DIR = previousSessionDir;
-    }
-  });
+    vi.stubEnv("PI_CODING_AGENT_SESSION_DIR", join(cwd, "pi-env-sessions"));
 
-  it("uses PI_CODING_AGENT_DIR for global settings and the default session root", async () => {
-    const cwd = await mkdtemp(join(tmpdir(), "frostpi-roots-"));
-    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-    try {
-      const agentDirectory = join(cwd, ".config", "pi");
-      await mkdir(agentDirectory, { recursive: true });
-      await writeFile(join(agentDirectory, "settings.json"), JSON.stringify({ sessionDir: "configured-sessions" }));
-      process.env.PI_CODING_AGENT_DIR = agentDirectory;
-
-      const roots = await resolveSessionRoots(cwd, []);
-
-      expect(roots).toContain(normalize(resolve(cwd, "configured-sessions")));
-      expect(roots).toContain(normalize(resolve(agentDirectory, "sessions")));
-    } finally {
-      if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-      else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
-    }
+    expect(await resolveSessionRoots(cwd, [], "oh-my-pi"))
+      .toEqual([normalize(resolve(homedir(), ".omp", "agent", "sessions"))]);
+    expect(await resolveSessionRoots(cwd, ["--session-dir", "chosen-sessions"], "oh-my-pi"))
+      .toEqual([join(cwd, "chosen-sessions")]);
   });
 });

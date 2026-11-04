@@ -5,6 +5,7 @@
   import { presentationStore } from "@frostime/pi-client/ui/state/sessionViewStore.svelte";
   import { withFrostPiCommands, type LocalComposerCommands } from "@frostime/pi-client/ui/features/composer/frostPiCommands";
   import type { DesktopDialog, DesktopProjectsView, DesktopResumeView } from "../shared/desktopBridge.js";
+  import type { DesktopUpdateAction, DesktopUpdateView } from "../shared/desktopUpdates.js";
   import VscodeLabel from "./VscodeLabel.svelte";
   import { quickPickMatches } from "./quickPick.js";
   import SettingsPanel from "./SettingsPanel.svelte";
@@ -22,6 +23,8 @@
   let settingsBusy = $state(false);
   let transportBlocked = $state(false);
   let settingsError = $state("");
+  let updatesView = $state<DesktopUpdateView | null>(null);
+  let updatesError = $state("");
   const theme = $derived(readDesktopTheme(settingsView?.values ?? {}));
 
   let projects = $state<DesktopProjectsView>({ projects: [], activeProjectId: null });
@@ -54,19 +57,23 @@
     const unsubscribeResume = window.frostpiDesktop.onResume((value) => resume = value);
     const unsubscribeSettings = window.frostpiDesktop.onSettings(applySettings);
     const unsubscribeOpenSettings = window.frostpiDesktop.onOpenSettings(showSettings);
+    const unsubscribeUpdates = window.frostpiDesktop.onUpdates((value) => updatesView = value);
     if (initialSettings) {
       applySettings(initialSettings);
       settingsOpen = initialSettings.firstRun || Boolean(initialSettings.error);
     } else settingsError = "Could not load Desktop settings.";
     window.frostpiDesktop.requestProjects();
     window.frostpiDesktop.requestResume();
-    return () => { unsubscribeTransport(); unsubscribeProjects(); unsubscribeDialog(); unsubscribeResume(); unsubscribeSettings(); unsubscribeOpenSettings(); };
+    // Explicit local status read; checking and downloading stay user actions.
+    void updateAction({ type: "read" });
+    return () => { unsubscribeTransport(); unsubscribeProjects(); unsubscribeDialog(); unsubscribeResume(); unsubscribeSettings(); unsubscribeOpenSettings(); unsubscribeUpdates(); };
   });
 
   function showSettings(target: DesktopSettingsTarget = "all"): void {
     settingsTarget = target;
     settingsOpen = true;
     void settingsAction({ type: "read" });
+    void updateAction({ type: "read" });
   }
 
   function applySettings(view: DesktopSettingsView): void {
@@ -96,6 +103,16 @@
     }
   }
 
+  async function updateAction(action: DesktopUpdateAction): Promise<void> {
+    updatesError = "";
+    try {
+      const view = await window.frostpiDesktop.updates(action);
+      if (view) updatesView = view;
+    } catch (error) {
+      updatesError = error instanceof Error ? error.message : "The update operation failed.";
+    }
+  }
+
   function respond(value: string | null): void {
     if (request) window.frostpiDesktop.respondDialog(request.id, value);
   }
@@ -112,6 +129,8 @@
   onproject={(id) => window.frostpiDesktop.selectProject(id)}
   onadd={() => window.frostpiDesktop.addProject()}
   onremove={(id) => window.frostpiDesktop.removeProject(id)}
+  onmove={(id, index) => window.frostpiDesktop.moveProject(id, index)}
+  onaction={(id, action) => window.frostpiDesktop.projectAction(id, action)}
   onsettings={() => showSettings()}
   {theme} themeBusy={settingsBusy} themeSetupRequired={settingsView?.firstRun ?? true}
   ontheme={() => settingsAction({ type: "setTheme", theme: theme === "dark" ? "light" : "dark" })}
@@ -137,7 +156,9 @@
 </DesktopShell>
 
 {#if settingsOpen && settingsView}
-  <SettingsPanel view={settingsView} target={settingsTarget} busy={settingsBusy} error={settingsError} onaction={settingsAction} onclose={() => settingsOpen = false} />
+  <SettingsPanel view={settingsView} target={settingsTarget} busy={settingsBusy} error={settingsError}
+    updateView={updatesView} updateError={updatesError} onaction={settingsAction} onupdate={(action) => void updateAction(action)}
+    onclose={() => settingsOpen = false} />
 {/if}
 
 {#if request && request.id !== resume?.pickerId}

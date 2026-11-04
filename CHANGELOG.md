@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-11-03
+
+### Added
+
+- Install Desktop with a Windows MSI and manage updates in Settings → Updates. Check, download and install separately; downloading leaves sessions running, while installation requires all sessions to be closed and reopens Desktop after updating.
+- Reorder Desktop Projects by dragging a row, and open a Project's folder, VS Code, Zed or Windows Terminal from its new action menu. Only installed programs appear in the menu, and the full Project path moved from the top bar into a hover tooltip.
+
+### Changed
+
+- Opening folders, files and links with the default program no longer starts a PowerShell process first, so these opens appear immediately; a replaced default file manager is still honoured.
+- Limit Resume session discovery to the current workspace and its Git worktrees' effective Pi session directories instead of scanning all projects' default session storage. Sessions in previous configuration locations remain accessible through **Browse for a session file…**.
+
 ## [0.16.1] - 2026-11-02
 
 ### Added
@@ -526,7 +538,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.2...HEAD
+[0.16.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.5...v0.16.0
 [0.15.5]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.4...v0.15.5

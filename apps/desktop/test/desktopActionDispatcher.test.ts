@@ -5,6 +5,7 @@ import type { WebviewSurface } from "@frostime/pi-client/shared/model/webviewPre
 import { describe, expect, it } from "vitest";
 
 import { DesktopActionDispatcher } from "../src/main/DesktopActionDispatcher.js";
+import type { DesktopSessionAdmission } from "../src/main/DesktopActionDispatcher.js";
 import { DesktopProjectNavigation } from "../src/main/DesktopProjectNavigation.js";
 import { DesktopResume } from "../src/main/DesktopResume.js";
 import type { DesktopProjects } from "../src/main/desktopProjects.js";
@@ -129,7 +130,7 @@ interface DispatcherHarness {
   projects: DesktopProjects;
 }
 
-function createHarness(): DispatcherHarness {
+function createHarness(admission: DesktopSessionAdmission = { runSessionOpening: (work) => work() }): DispatcherHarness {
   const projects = fakeProjects(["a", "b"]);
   const registry = new FakeRegistry();
   const resume = new DesktopResume({
@@ -149,6 +150,7 @@ function createHarness(): DispatcherHarness {
     { registry: registry as unknown as WebviewActionDispatcherDependencies["registry"] } as unknown as WebviewActionDispatcherDependencies,
     resume,
     navigation,
+    admission,
   );
   return { dispatcher, resume, navigation, registry, projects };
 }
@@ -249,5 +251,24 @@ describe("DesktopActionDispatcher", () => {
 
     discovery.resolve();
     await overlay;
+  });
+
+  it("refuses New and Resume once update preparation closed admission, without touching the Registry", async () => {
+    const admission: DesktopSessionAdmission = {
+      runSessionOpening: () => Promise.reject(new Error("Desktop is preparing to install an update. New sessions cannot start.")),
+    };
+    const { dispatcher, registry, resume } = createHarness(admission);
+
+    await expect(dispatcher.dispatch({ type: "createSession", bridgeVersion: BRIDGE_VERSION }, SIDEBAR))
+      .rejects.toThrow(/preparing to install/);
+    await expect(dispatcher.dispatch({ type: "createSessionWithArguments", bridgeVersion: BRIDGE_VERSION }, SIDEBAR))
+      .rejects.toThrow(/preparing to install/);
+    // Resume reports the refusal as an ordinary action failure; its overlay stays absent.
+    await expect(dispatcher.dispatch({ type: "resumeSession", bridgeVersion: BRIDGE_VERSION }, SIDEBAR))
+      .rejects.toThrow(/preparing to install/);
+
+    expect(registry.createCalls).toBe(0);
+    expect(registry.resumeCalls).toBe(0);
+    expect(resume.view).toBeNull();
   });
 });

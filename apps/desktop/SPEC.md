@@ -6,13 +6,23 @@ Store Session-to-Project associations in Desktop navigation metadata. Reassignin
 
 While the same Session remains selected, sidebar hide/resize, theme/zoom changes and Resume/transport-limit overlays must not remount ClientApp or Composer or discard its draft. Hiding the Resume overlay alone must not cancel the pending Resume request. Attribute any later result to the Project that initiated that request, even if another Project is now selected.
 
+## Projects, order and external tools
+
+Project order is user-owned. It is the order of the `projects` array in `state.json`, changes only through an explicit move, and survives restart. Reordering must not change a Project's id, name, cwd, the selected Project, or any Session's Project association.
+
+The Project action menu is projected from one main-process registry (`apps/desktop/src/main/projectActions.ts`). That registry owns which actions exist, their order, labels, icons and startup availability; the renderer renders the projected list and returns only `(projectId, actionId)`. The root directory is resolved in the main process and never travels from the renderer. Detection decides menu visibility only: it is not persisted, not exposed as settings, and never re-run from the renderer.
+
+Opening a folder, file or URL uses the shell's default action (`native.rs::shell_execute`, verb and class unset). Never pass an explicit `open` verb, the `explore` verb, or `SHOpenFolderAndSelectItems`: each of them bypasses a replaced default handler, for example a third-party file manager registered as the default verb for folders.
+
+External programs are started by the native shell, never by Node. The Node backend runs inside a `KILL_ON_JOB_CLOSE` job object, so any process it spawns dies with the application; a launched editor or terminal must outlive FrostPi.
+
 ## Window and application lifetime
 
 Closing the main window hides it to the Windows tray; it must not dispose the backend, stop Pi children or remount ClientApp. The first close in each launch explains the tray behavior. Tray left-click and Show restore the same window and its drafts. Hidden windows report invisible to the backend so restoring them refreshes the shared presentation.
 
 One Live process owns a data profile: a second launch over that profile wakes the owner (through the same restore path) and exits quietly, before creating backend state. The claim is decided before the tray or backend start and dies with the process, so an owner killed without cleanup does not block the next launch. Exclusion is scoped per profile, so differently profiled instances may run side by side; a duplicate instance never races over `state.json`, WebView2 storage or Pi children.
 
-Only explicit Exit ends normal application lifetime. Node checks activity across all Projects, including pending input and process/session operations; the native shell asks for confirmation when that work would be interrupted. Cancelling leaves tasks running. Approval uses the same bounded stop/metadata-drain path as before; renderer/browser failure still terminates through that path rather than hiding a broken window. Exit checks travel over the private shell/backend wire, not the renderer bridge.
+Only explicit Exit or user-requested installation of a downloaded update ends normal application lifetime. Node checks activity across all Projects, including pending input and process/session operations; the native shell asks for confirmation when that work would be interrupted. Cancelling leaves tasks running. Approval uses the same bounded stop/metadata-drain path as before; renderer/browser failure still terminates through that path rather than hiding a broken window. Exit checks travel over the private shell/backend wire, not the renderer bridge.
 
 ## Persistence
 
@@ -22,9 +32,19 @@ Report application shutdown as saved only after Registry session metadata and De
 
 ## Settings and initial import
 
-The development launcher isolates only FrostPi-owned settings/state and WebView2 storage. It must not redirect Pi agent/session directories or copy credentials. Normal packaged launches keep the existing profile, and an explicit `FROSTPI_DESKTOP_USER_DATA` takes precedence in both launch paths.
+The development launcher isolates only FrostPi-owned settings/state and WebView2 storage. It must not redirect Pi agent/session directories or copy credentials. Normal packaged launches keep the existing profile, and an explicit `FROSTPI_DESKTOP_USER_DATA` takes precedence in both normal launch paths. A profile must be an absolute Windows path: reject relative paths at native startup, before claiming or opening a profile, with a visible error and nonzero exit. Do not guess a base directory, normalize a relative override or fall back to another profile. The private MSI relaunch argument preserves the updated instance's selected absolute profile.
 
 Store VS Code/FrostPi keys as flat dot-delimited names; reserve `desktop.*` for Desktop-only settings. Types/defaults come from `desktopSettingDefinitions` in `apps/desktop/src/shared/desktopSettings.ts`; UI labels/groups must not redefine them. Saving settings must not stop or restart an existing Pi child.
+
+## Application updates
+
+Updates live inside Settings, not a separate shell entry. Their actions are independent of settings Save, and installing must preserve the existing unsaved-settings confirmation. Reading local update state is not a network check; checking and downloading are explicit user actions and must not interrupt Pi work.
+
+Node owns installation admission: every registered Session across all Projects, including stopped Sessions, must be closed; pending New/Resume discovery and pickers also block admission. A UI hint or the normal Exit activity check is not authority. The synchronous empty-set check closes new Session admission for installation; do not add a cancellation/recovery protocol to resume operation after preparation fails. Updates must not close Sessions for the user.
+
+Rust owns one persisted local installer and its version metadata, using the official updater Rust API. Cache writes must be atomic; partial downloads must not become installable. Never grant updater plugin permissions to the renderer: bypassing the finite Node route would bypass Session admission. Installation after restart must use the displayed local version without fetching latest or downloading another package. Validate external inputs, but do not add package audits or extra signature checks beyond the official tool's own behavior.
+
+Wait for Node's successful metadata-drain acknowledgement before calling the updater's Windows `install`, which exits the process. Its synchronous `on_before_exit` is not a substitute for awaiting persistence. A failed save must not start MSI. The installer must outlive Node's kill-on-close Job and preserve the current absolute data profile on automatic relaunch. MSI uses all-user installation with UAC. Update failures must be explicit; do not add automatic recovery, retries or rollback. Process scanning and cross-instance update locks are outside this feature. Keep updater signing private keys outside the application and its data profiles; only the public key is embedded.
 
 ## Native authority and delivery
 

@@ -10,6 +10,7 @@
     "lint": "eslint src test scripts build.mjs --max-warnings 0",
     "test": "vitest run",
     "package:app": "node scripts/package-app.mjs",
+    "package:msi": "node scripts/package-msi.mjs",
     "verify:package": "node scripts/verify-package.mjs"
   },
   "dependencies": {

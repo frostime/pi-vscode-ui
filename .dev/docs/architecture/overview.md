@@ -5,7 +5,7 @@ scope:
   - /apps/**
   - /packages/pi-rpc/**
   - /packages/provider-usage/**
-updated: 2026-10-27
+updated: 2026-11-03
 ---
 
 # Architecture Overview
@@ -53,13 +53,14 @@ Host adaptation is separate from Pi/OMP runtime compatibility. `apps/pi-client/s
 
 ## Data ownership and lifetime
 
-FrostPi has no telemetry endpoint or hosted account service. Pi/model-provider traffic and explicit Provider Usage queries are external data flows, not a claim that the GUI never uses the network.
+FrostPi has no telemetry endpoint or hosted account service. Pi/model-provider traffic, explicit Provider Usage queries and Desktop update checks/downloads are external data flows, not a claim that the GUI never uses the network.
 
 | Data | Owner and location | Lifetime and boundary |
 |---|---|---|
 | Session index and selection | Shared SessionPersistence through VS Code workspace state or Desktop `state.json` | Metadata only; Provisional/Ephemeral exclusions remain in the lifecycle contract |
 | Desktop Projects and navigation | Desktop `state.json` in the application profile | Includes ownership, last-viewed selection and sidebar layout, not conversation bodies or running-task snapshots |
 | User settings | VS Code configuration or Desktop `settings.json` | Original keys; Desktop import is a preview until Save and is not ongoing sync |
+| Downloaded Desktop update | Rust shell; `%LOCALAPPDATA%/FrostPi/updates/<profile-key>/` | One atomically persisted installer and release metadata, independent of settings and Pi history; install the local version after restart without requesting latest. Official updater behavior is retained without extra package audits. Private signing keys remain with the release operator/CI |
 | Conversation and runtime state | Pi process and its configured session files | Pi owns writes, migration and restoration; storage paths vary with runtime and session-directory settings |
 | Composer text and images | Browser state and Host draft cache | In-memory interaction state, not a cross-restart draft store |
 | File-mention candidates | Host-side search/cache | Path metadata; mentions do not inject file contents. Explicit file/image operations have separate validated Host paths |

@@ -7,10 +7,12 @@ mod node_backend;
 mod process_tree;
 mod single_instance;
 mod tray;
+mod updates;
 
 /// Owning-launch wake handles stay alive for the whole run; dropping them early
 /// would re-open the profile to a second instance.
 static WAKE_KEPT: OnceLock<single_instance::Wake> = OnceLock::new();
+static PROFILE_KEPT: OnceLock<std::path::PathBuf> = OnceLock::new();
 
 use serde_json::{json, Value};
 use std::{
@@ -66,7 +68,7 @@ impl Backend {
             "Desktop backend is unavailable or busy".to_string()
         })
     }
-    async fn exit_confirmation_required(&self) -> Result<bool, String> {
+    async fn lifecycle_request(&self, kind: &str) -> Result<Value, String> {
         let id = self.0.serial.fetch_add(1, Ordering::Relaxed);
         let (sender, receiver) = oneshot::channel();
         {
@@ -76,17 +78,19 @@ impl Backend {
             }
             pending.insert(id, sender);
         }
-        if let Err(error) = self.send(json!({"kind":"exitCheck","id":id})) {
+        if let Err(error) = self.send(json!({"kind":kind,"id":id})) {
             self.0.pending.lock().unwrap().remove(&id);
             return Err(error);
         }
         let result = tokio::time::timeout(Duration::from_secs(15), receiver).await;
         self.0.pending.lock().unwrap().remove(&id);
         result
-            .map_err(|_| "Desktop exit check timed out".to_string())?
-            .map_err(|_| "Desktop exit check cancelled".to_string())??
-            .as_bool()
-            .ok_or_else(|| "Invalid Desktop exit check".to_string())
+            .map_err(|_| "Desktop lifecycle check timed out".to_string())?
+            .map_err(|_| "Desktop lifecycle check cancelled".to_string())?
+    }
+    async fn exit_confirmation_required(&self) -> Result<bool, String> {
+        self.lifecycle_request("exitCheck").await?
+            .as_bool().ok_or_else(|| "Invalid Desktop exit check".to_string())
     }
     fn publish(&self, value: Value) {
         if let Some(channel) = self.0.channel.lock().unwrap().as_ref() {
@@ -104,19 +108,24 @@ impl Backend {
         }
         let backend = self.clone();
         std::thread::spawn(move || {
-            let _ = backend.send(json!({"kind":"close"}));
-            let (lock, changed) = &backend.0.closed;
-            let (closed, _) = changed
-                .wait_timeout_while(lock.lock().unwrap(), Duration::from_secs(15), |v| {
-                    v.is_none()
-                })
-                .unwrap();
-            if *closed != Some(true) {
+            let saved = backend.drain();
+            if saved.is_err() {
                 rfd::MessageDialog::new().set_title("FrostPi Desktop state").set_description("Desktop could not finish saving its state. Existing files were not reset. Check the FrostPi profile before reopening.").set_level(rfd::MessageLevel::Error).show();
             }
-            let _ = backend.0.child.lock().unwrap().kill();
-            app.exit(if *closed == Some(true) { 0 } else { 1 });
+            app.exit(if saved.is_ok() { 0 } else { 1 });
         });
+    }
+    /// Caller claims `closing` first. Both Exit and updates await the same Node
+    /// persistence acknowledgement; only Exit may continue after a failed save.
+    fn drain(&self) -> Result<(), String> {
+        let sent = self.send(json!({"kind":"close"}));
+        let saved = if sent.is_ok() {
+            let (lock, changed) = &self.0.closed;
+            let (closed, _) = changed.wait_timeout_while(lock.lock().unwrap(), Duration::from_secs(15), |value| value.is_none()).unwrap();
+            *closed == Some(true)
+        } else { false };
+        let _ = self.0.child.lock().unwrap().kill();
+        if saved { Ok(()) } else { Err("Desktop state was not saved.".into()) }
     }
 }
 
@@ -313,6 +322,11 @@ fn start_backend(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>
                     let result = native::execute(&handle, &packet);
                     let _ = reader.send(json!({"kind":"nativeResult","id":packet["id"],"ok":result.is_ok(),"value":null}));
                 }
+                Some("native") if packet["operation"] == "updates" => {
+                    let backend = reader.clone();
+                    let app = handle.clone();
+                    std::thread::spawn(move || updates::dispatch(app, backend, packet));
+                }
                 Some("native") => {
                     let backend = reader.clone();
                     let app = handle.clone();
@@ -348,13 +362,26 @@ fn start_backend(app: &tauri::App) -> Result<Backend, Box<dyn std::error::Error>
     Ok(backend)
 }
 
+// Used only to preserve a custom data profile through MSI's automatic relaunch.
+const PROFILE_ARGUMENT: &str = "--frostpi-user-data=";
 fn profile_directory() -> PathBuf {
-    std::env::var_os("FROSTPI_DESKTOP_USER_DATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            PathBuf::from(std::env::var_os("APPDATA").expect("APPDATA must be defined"))
-                .join("FrostPi")
-        })
+    PROFILE_KEPT.get_or_init(|| {
+        // MSI can change the working directory and inherited environment. Its
+        // private argument names the original instance's already-resolved profile.
+        let profile = std::env::args().skip(1)
+            .find_map(|arg| arg.strip_prefix(PROFILE_ARGUMENT).map(PathBuf::from))
+            .or_else(|| std::env::var_os("FROSTPI_DESKTOP_USER_DATA").map(PathBuf::from))
+            .unwrap_or_else(|| PathBuf::from(std::env::var_os("APPDATA").expect("APPDATA must be defined")).join("FrostPi"));
+        if !profile.is_absolute() {
+            rfd::MessageDialog::new()
+                .set_title("FrostPi data directory is invalid")
+                .set_description("FrostPi requires an absolute Windows data directory, for example D:\\FrostPiData. Set FROSTPI_DESKTOP_USER_DATA to an absolute path. Relative paths are not supported; no profile was opened and no default directory was substituted.")
+                .set_level(rfd::MessageLevel::Error)
+                .show();
+            std::process::exit(1);
+        }
+        profile
+    }).clone()
 }
 fn local_url(url: &tauri::Url) -> bool {
     url.port().is_none()
@@ -384,7 +411,7 @@ async fn desktop_connect(
     *state.0.channel.lock().unwrap() = Some(channel);
     if !state.0.started.swap(true, Ordering::SeqCst) {
         let profile = profile_directory();
-        state.send(json!({"kind":"init","profile":profile,"version":app.package_info().version.to_string(),"directories":std::env::args().skip(1).collect::<Vec<_>>()}))?;
+        state.send(json!({"kind":"init","profile":profile,"version":app.package_info().version.to_string(),"directories":std::env::args().skip(1).filter(|arg| !arg.starts_with(PROFILE_ARGUMENT)).collect::<Vec<_>>()}))?;
     }
     for _ in 0..300 {
         if state.0.ready.load(Ordering::Acquire) {
@@ -496,8 +523,13 @@ fn main() {
         }
     }
     tauri::Builder::default()
+        // Rust updater API only. No updater permissions are granted to the webview.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![desktop_connect, desktop_request])
         .setup(|app| {
+            let config = serde_json::from_value::<tauri_plugin_updater::Config>(app.config().plugins.0.get("updater").cloned().unwrap_or_else(|| json!({"pubkey":""})))?;
+            let cache = app.path().local_data_dir()?.join("FrostPi/updates").join(single_instance::profile_key(&profile_directory()));
+            app.manage(updates::Updates::new(app.package_info().version.to_string(), cache, config));
             let backend = start_backend(app)?;
             app.manage(backend);
             let window = tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
@@ -528,6 +560,6 @@ fn main() {
             }
         })
         .build(tauri::generate_context!())
-        .unwrap_or_else(|_| { rfd::MessageDialog::new().set_title("FrostPi Desktop could not start").set_description("Check the following, then open FrostPi again:\n\n1. Install Node.js 22.19 or newer and make sure node is on the Windows PATH. If a newly installed Node.js is still not found, sign out of Windows and sign in again to refresh the desktop environment.\n2. Install or repair Microsoft Edge WebView2 Runtime.\n3. Extract the entire FrostPi ZIP. Keep FrostPi.exe, backend.cjs and the pi-extensions folder together.\n\nPi is installed separately. If Pi is missing, the app will show setup instructions when you start a session.").set_level(rfd::MessageLevel::Error).show(); std::process::exit(1); })
+        .unwrap_or_else(|_| { rfd::MessageDialog::new().set_title("FrostPi Desktop could not start").set_description("Check the following, then open FrostPi again:\n\n1. Install Node.js 22.19 or newer and make sure node is on the Windows PATH. If a newly installed Node.js is still not found, sign out of Windows and sign in again to refresh the desktop environment.\n2. Install or repair Microsoft Edge WebView2 Runtime.\n3. Repair the FrostPi MSI installation, or extract the entire portable ZIP. Keep the Desktop executable, backend.cjs and the pi-extensions folder together.\n\nPi is installed separately. If Pi is missing, the app will show setup instructions when you start a session.").set_level(rfd::MessageLevel::Error).show(); std::process::exit(1); })
         .run(|app, event| { if let tauri::RunEvent::ExitRequested { api, .. } = event { let backend = app.state::<Backend>(); if !backend.0.closing.load(Ordering::Acquire) { api.prevent_exit(); tray::request_exit(app); } } });
 }
