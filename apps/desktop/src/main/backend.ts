@@ -2,6 +2,7 @@ import { writeSync } from "node:fs";
 import { DesktopWire } from "./DesktopWire.js";
 import { createDesktopBackend } from "./createDesktopBackend.js";
 import type { DesktopNative, DesktopTransport } from "./desktopNative.js";
+import type { DesktopUpdateNativeView } from "../shared/desktopUpdates.js";
 import { createDesktopPublisher } from "./publishDesktopEvent.js";
 import { DESKTOP_MESSAGE_LIMIT_ERROR, isDesktopRequest } from "../shared/desktopTransport.js";
 
@@ -33,6 +34,7 @@ const native: DesktopNative = {
   openExternal: async (url) => { await nativeCall("openExternal", [url]); },
   openPath: async (path) => await nativeCall("openPath", [path]) as string,
   launch: async (executable, args) => { await nativeCall("launch", [executable, [...args]]); },
+  updates: async (action) => await nativeCall("updates", [action]) as DesktopUpdateNativeView,
   appearance: (theme, background, zoom) => { void nativeCall("appearance", [theme, background, zoom]).catch(() => undefined); },
 };
 const publisher = createDesktopPublisher(wire);
@@ -55,6 +57,13 @@ async function shutdown(id?: number): Promise<void> {
   process.exit(ok ? 0 : 1);
 }
 wire.on("disconnect", () => { void shutdown(); });
+// Private shell requests reuse the renderer response envelope; the shell decides
+// what to do with a refused install preparation.
+function answerNativeRequest(id: number, work: () => unknown): void {
+  void (async () => { await starting; wire.send({ kind: "response", id, ok: true, value: await work() }); })().catch(() => {
+    wire.send({ kind: "response", id, ok: false });
+  });
+}
 wire.on("packet", (packet: unknown) => {
   if (!packet || typeof packet !== "object") return;
   const message = packet as Record<string, unknown>;
@@ -64,6 +73,7 @@ wire.on("packet", (packet: unknown) => {
     else request?.reject(new Error("The native Desktop operation failed."));
     return;
   }
+  if (message.kind === "updateView") { backend?.updateView(message.view); return; }
   if (message.kind === "close") { void shutdown(); return; }
   if (message.kind === "window") {
     focused = message.focused === true; visible = message.visible === true; visibility?.(visible); return;
@@ -77,11 +87,14 @@ wire.on("packet", (packet: unknown) => {
     return;
   }
   if (message.kind === "exitCheck" && !closing && typeof message.id === "number") {
-    const id = message.id;
-    void (async () => {
-      await starting;
-      wire.send({ kind: "response", id, ok: true, value: backend?.requiresExitConfirmation() ?? false });
-    })().catch(() => { wire.send({ kind: "response", id, ok: false }); });
+    answerNativeRequest(message.id, () => backend?.requiresExitConfirmation() ?? false);
+    return;
+  }
+  if (message.kind === "prepareUpdate" && !closing && typeof message.id === "number") {
+    answerNativeRequest(message.id, () => {
+      if (!backend) throw new Error("Desktop is not ready.");
+      return backend.prepareUpdate();
+    });
     return;
   }
   if (message.kind !== "request" || closing || typeof message.id !== "number") return;

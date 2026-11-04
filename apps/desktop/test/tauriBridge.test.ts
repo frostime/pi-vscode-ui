@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HostToWebviewMessage } from "@frostime/pi-client/shared/bridge/hostToWebview";
 import { BRIDGE_VERSION } from "@frostime/pi-client/shared/bridge/bridgeVersion";
 import { DESKTOP_MESSAGE_LIMIT_ERROR, DESKTOP_TRANSPORT_BLOCKED_CHANNEL } from "../src/shared/desktopTransport.js";
+import type { DesktopUpdateView } from "../src/shared/desktopUpdates.js";
 
 const native = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -59,5 +60,22 @@ describe("Tauri local rejection", () => {
     expect(press({ key: "Unidentified", code: "NumpadAdd" }).preventDefault).toHaveBeenCalled();
     press({ key: "-", code: "Minus" }); press({ key: "0", code: "Digit0" });
     expect(native.invoke.mock.calls.map((call) => (call[1] as { request: { args: unknown[] } }).request.args[0])).toEqual(["in", "out", "reset"]);
+  });
+});
+
+describe("Tauri Desktop update bridge", () => {
+  it("routes finite actions and views over the dedicated Desktop channels", async () => {
+    await connectTauriDesktop(); native.invoke.mockClear();
+    const view: DesktopUpdateView = { currentVersion: "0.16.2", configured: true, checked: true, operation: "idle", installBlock: { reason: "opening" } };
+    const views: DesktopUpdateView[] = [];
+    const unsubscribe = window.frostpiDesktop.onUpdates((value) => views.push(value));
+    native.emit?.({ kind: "event", channel: "frostpi:updates:view", value: view });
+    unsubscribe();
+    native.emit?.({ kind: "event", channel: "frostpi:updates:view", value: view });
+    expect(views).toEqual([view]);
+
+    native.invoke.mockResolvedValueOnce(view);
+    await expect(window.frostpiDesktop.updates({ type: "install" })).resolves.toEqual(view);
+    expect(native.invoke).toHaveBeenLastCalledWith("desktop_request", { request: { channel: "frostpi:updates:action", args: [{ type: "install" }] } });
   });
 });

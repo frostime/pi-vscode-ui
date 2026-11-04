@@ -4,6 +4,7 @@ import type { WebviewToHostMessage } from "@frostime/pi-client/shared/bridge/web
 import { DESKTOP_MESSAGE_LIMIT_ERROR, DESKTOP_TRANSPORT_BLOCKED_CHANNEL } from "../shared/desktopTransport.js";
 import type { DesktopApi } from "../shared/desktopBridge.js";
 import type { DesktopSettingsResult } from "../shared/desktopSettings.js";
+import type { DesktopUpdateView } from "../shared/desktopUpdates.js";
 
 /** Only this adapter imports Tauri. Shared ClientApp keeps its existing DesktopApi. */
 export async function connectTauriDesktop(): Promise<void> {
@@ -53,6 +54,8 @@ export async function connectTauriDesktop(): Promise<void> {
     },
     onSettings: (listener) => subscribe("frostpi:settings:view", listener),
     onOpenSettings: (listener) => subscribe("frostpi:settings:open", listener),
+    updates: async (action) => await request("frostpi:updates:action", action) as DesktopUpdateView,
+    onUpdates: (listener) => subscribe("frostpi:updates:view", listener),
   };
   await invoke("desktop_connect", { channel });
   window.frostpiDesktop = Object.freeze(api);

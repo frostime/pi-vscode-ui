@@ -25,6 +25,24 @@
     }
   },
   "bundle": {
-    "active": false
+    "active": false,
+    "targets": ["msi"],
+    "icon": ["icons/icon.ico"],
+    "resources": {
+      "../dist/backend.cjs": "backend.cjs",
+      "../dist/pi-extensions/": "pi-extensions/"
+    },
+    "windows": {
+      "webviewInstallMode": { "type": "skip" },
+      "wix": { "upgradeCode": "8808c0f1-825f-44a7-9b47-4db5e8dbacfb" }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": ["https://github.com/frostime/pi-vscode-ui/releases/latest/download/FrostPi-desktop-update.json"],
+      "requireSignedVersion": true,
+      "windows": { "installMode": "basicUi" }
+    }
   }
 }

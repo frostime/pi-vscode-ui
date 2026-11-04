@@ -1,6 +1,7 @@
 import type { HostToWebviewMessage } from "@frostime/pi-client/shared/bridge/hostToWebview";
 import type { WebviewToHostMessage } from "@frostime/pi-client/shared/bridge/webviewToHost";
 import type { DesktopSettingsAction, DesktopSettingsTarget, DesktopSettingsView } from "./desktopSettings.js";
+import type { DesktopUpdateAction, DesktopUpdateView } from "./desktopUpdates.js";
 
 export interface DesktopProject {
   id: string;
@@ -88,6 +89,9 @@ export interface DesktopApi {
   settings(action: DesktopSettingsAction): Promise<DesktopSettingsView>;
   onSettings(listener: (view: DesktopSettingsView) => void): () => void;
   onOpenSettings(listener: (target: DesktopSettingsTarget) => void): () => void;
+  /** Finite update actions only; packages, sources and installer options stay in the host. */
+  updates(action: DesktopUpdateAction): Promise<DesktopUpdateView>;
+  onUpdates(listener: (view: DesktopUpdateView) => void): () => void;
 }
 
 declare global {

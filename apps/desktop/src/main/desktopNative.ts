@@ -1,4 +1,5 @@
 import type { HostOpenFileDialogOptions } from "@frostime/pi-client/host";
+import type { DesktopUpdateAction, DesktopUpdateNativeView } from "../shared/desktopUpdates.js";
 
 /** Desktop-native operations are requested by the trusted Node host, never by raw renderer IPC. */
 export interface DesktopNative {
@@ -12,6 +13,8 @@ export interface DesktopNative {
   openPath(path: string): Promise<string>;
   /** Starts a program outside the process Job; only registered Project actions supply the command. */
   launch(executable: string, args: readonly string[]): Promise<void>;
+  /** The native update owner keeps packages, signatures and the installer; no path is supplied here. */
+  updates(action: DesktopUpdateAction): Promise<DesktopUpdateNativeView>;
   appearance(theme: "dark" | "light", background: string, zoom: number): void;
 }
 

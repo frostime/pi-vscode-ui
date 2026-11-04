@@ -13,6 +13,10 @@ import { createDesktopHost } from "./desktopHost.js";
 import { DesktopProjects } from "./desktopProjects.js";
 import { ProjectActions, type ProjectActionEnvironment } from "./projectActions.js";
 import type { DesktopProjectsView } from "../shared/desktopBridge.js";
+import {
+  isDesktopUpdateNativeView, parseDesktopUpdateAction,
+  type DesktopUpdateInstallBlock, type DesktopUpdateNativeView, type DesktopUpdatePreparation, type DesktopUpdateView,
+} from "../shared/desktopUpdates.js";
 import { DesktopSettingsStore } from "./settings/DesktopSettingsStore.js";
 import { DesktopSettingsController } from "./settings/DesktopSettingsController.js";
 import { defaultVscodeSettingsPath, importVscodeSettings } from "./settings/importVscodeSettings.js";
@@ -125,11 +129,56 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
   });
   const drafts = new ComposerDraftCache(host);
   const unsupportedEditor = (): never => { throw new Error("Editor tabs are not supported in Desktop."); };
+  // Session admission and update projection. This closure is the only owner of
+  // "a New/Resume is still running": DesktopProjectNavigation counts per Project
+  // and skips its no-Project branch, so it cannot answer for the whole Desktop.
+  let sessionOpenings = 0;
+  let updateAdmissionClosed = false;
+  let lastUpdateView: DesktopUpdateNativeView | undefined;
+  const updateInstallBlock = (): DesktopUpdateInstallBlock | undefined => {
+    const count = registry.snapshot().sessions.length;
+    if (count > 0) return { reason: "sessions", count };
+    return sessionOpenings > 0 ? { reason: "opening" } : undefined;
+  };
+  // The block is a hint for the UI; installing is authorized only by prepareUpdate.
+  const publishUpdateView = (view: DesktopUpdateNativeView): DesktopUpdateView => {
+    lastUpdateView = view;
+    const block = updateInstallBlock();
+    const projection: DesktopUpdateView = block ? { ...view, installBlock: block } : { ...view };
+    publish("frostpi:updates:view", projection);
+    return projection;
+  };
+  const refreshUpdateBlock = (): void => { if (lastUpdateView) publishUpdateView(lastUpdateView); };
+  const runSessionOpening = <T>(work: () => Promise<T>): Promise<T> => {
+    if (updateAdmissionClosed) {
+      return Promise.reject(new Error("Desktop is preparing to install an update. New sessions cannot start."));
+    }
+    sessionOpenings++;
+    // An existing view must show the opening block now, not only after work settles.
+    refreshUpdateBlock();
+    // Admitted work stays counted through discovery/pickers, while the Session set
+    // is still empty; only its completion or cancellation releases the count.
+    return (async () => await work())().finally(() => { sessionOpenings--; refreshUpdateBlock(); });
+  };
+  const prepareUpdate = (): DesktopUpdatePreparation => {
+    if (disposed) throw new Error("Desktop is closing.");
+    if (updateAdmissionClosed) return { ok: true };
+    // Same synchronous step as the check: an empty Registry cannot admit an install
+    // while a New/Resume callback is still pending.
+    const block = updateInstallBlock();
+    if (block) return { ok: false, ...block };
+    updateAdmissionClosed = true;
+    return { ok: true };
+  };
+  const updateView = (value: unknown): void => {
+    if (!isDesktopUpdateNativeView(value)) throw new Error("Desktop update subprocess returned an invalid view.");
+    publishUpdateView(value);
+  };
   const dispatcher = new DesktopActionDispatcher({
     host, registry, logger, drafts,
     getProxyCredentials: () => host.proxyCredentials.get(),
     openPanel: unsupportedEditor, revealPanel: unsupportedEditor, openComposerEditor: unsupportedEditor,
-  }, resume, navigation);
+  }, resume, navigation, { runSessionOpening });
   const incoming = host.createEventEmitter<unknown>();
   const visibility = host.createEventEmitter<boolean>();
   const connection = new WebviewConnection(registry, {
@@ -156,7 +205,7 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
     connection.refresh();
   };
   const subscriptions = [
-    registry.onDidChange(() => { navigation.refresh(); resume.refresh(); }),
+    registry.onDidChange(() => { navigation.refresh(); resume.refresh(); refreshUpdateBlock(); }),
     registry.onDidToast((toast) => connection.post({ type: "toast", ...toast })),
     registry.onDidSetComposerText(({ sessionId, text }) => connection.queueComposerText(sessionId, text, () => undefined)),
   ];
@@ -179,6 +228,15 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
     } catch (error) {
       return { ok: false, error: settingsErrorMessage(error) };
     }
+  });
+  // Checks and downloads run with open Sessions; only installing meets the gate, and
+  // the shell asks prepareUpdate after it accepts the request.
+  const unsubscribeUpdatesAction = transport.handle("frostpi:updates:action", async (action: unknown): Promise<DesktopUpdateView> => {
+    const parsed = parseDesktopUpdateAction(action);
+    if (!parsed) throw new Error("Invalid Desktop update action.");
+    const view = await native.updates(parsed);
+    if (!isDesktopUpdateNativeView(view)) throw new Error("The Desktop update host returned an invalid state.");
+    return publishUpdateView(view);
   });
   const listeners: Array<() => void> = [];
   const listen = (channel: string, action: (...values: unknown[]) => void | Promise<void>): void => {
@@ -261,6 +319,7 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
     unsubscribeState();
     unsubscribeSettings();
     unsubscribeSettingsAction();
+    unsubscribeUpdatesAction();
     await zoomWrites;
     for (const subscription of subscriptions) subscription.dispose();
     connection.dispose(); drafts.dispose(); incoming.dispose(); visibility.dispose();
@@ -281,5 +340,5 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
     await dispose().catch(() => undefined);
     throw error;
   }
-  return { registry, projects, connection, settingsStore, stateStore, navigation, requiresExitConfirmation, dispose };
+  return { registry, projects, connection, settingsStore, stateStore, navigation, requiresExitConfirmation, prepareUpdate, updateView, dispose };
 }

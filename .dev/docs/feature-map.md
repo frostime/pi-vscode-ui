@@ -4,7 +4,7 @@ description: Product features, owning code, and nearest contracts.
 scope:
   - /apps/**
   - /packages/**
-updated: 2026-11-01
+updated: 2026-11-03
 ---
 
 # Feature → Code Map
@@ -62,6 +62,7 @@ Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 - VS Code file/selection/external Composer editor: `apps/vscode/src/extension/composer/`; file/diff navigation: `apps/vscode/src/extension/conversation/openReferencedLocation.ts` and `apps/vscode/src/extension/file-changes/`. Desktop file opening: `apps/desktop/src/main/openReferencedLocation.ts`; pure reference parsing/whitelist: `apps/pi-client/src/shared/files/fileReferences.ts`.
 - Shared setting parsing: `apps/pi-client/src/host/readConfiguration.ts`; Runtime invocation/compatibility: `apps/pi-client/src/core/configuration/`; process proxy calculation: `apps/pi-client/src/core/network/`.
 - Desktop settings storage/import/actions: `apps/desktop/src/main/settings/`; original-key schema additions and finite operations: `apps/desktop/src/shared/desktopSettings.ts`; settings modal/draft coordination: `apps/desktop/src/renderer/SettingsPanel.svelte`; grouped labels: `settingsPresentation.ts`; schema-based draft conversion: `settingsForm.ts`; field controls/key disclosure: `SettingRow.svelte` in the same renderer directory. Contract: `apps/desktop/SPEC.md`.
+- Desktop updates: Settings' `UpdateSection.svelte` consumes `src/shared/desktopUpdates.ts`; `src/main/createDesktopBackend.ts` owns Session admission, while `src-tauri/src/updates/` owns cache and the official updater Rust API. Installation waits for the native `Backend.drain` acknowledgement. The renderer has no updater plugin permissions. Paths are relative to `apps/desktop/`; contract: `apps/desktop/SPEC.md`.
 - Native proxy configuration/secrets: `apps/vscode/src/extension/network/`. Contract: `proxy-environment.SPEC.md` there; proxy changes require process restart.
 - Pi settings: `apps/pi-client/src/core/_shared/pi-settings/`; cache-miss projection: `apps/pi-client/src/core/conversation/cacheMissDetection.ts`.
 - VS Code diagnostics/status/notifications: `apps/vscode/src/extension/diagnostics/`, `status-bar/`, `notifications/`.
@@ -69,6 +70,6 @@ Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 ## Verification and packaging
 
 - Workspace drivers (`scripts/`): `workspaces.mjs`, `build.mjs`, `quality.mjs`, `check.mjs`, `clean.mjs`. Product JS compilers: `apps/vscode/build.mjs`, `apps/desktop/build.mjs`. VSIX: `scripts/package-vsix.mjs` and `scripts/verify-vsix.mjs`.
-- Desktop (`apps/desktop/scripts/`): `build.mjs` completes JS + Rust; `packaging.mjs` owns inventory/runtime copies; `package-app.mjs` stages the ZIP; `archive-contract.mjs` defines provenance/hashes; `verify-package.mjs` tests the extracted exe and writes its report; `prepare-release.mjs` checks archive integrity/source and writes the upload checksum; `manual-smoke.mjs` launches controlled human acceptance.
+- Desktop (`apps/desktop/scripts/`): `build.mjs` completes JS + Rust; `packaging.mjs` owns inventory/runtime copies; `package-app.mjs` stages the ZIP; `archive-contract.mjs` defines provenance/hashes; `verify-package.mjs` tests the extracted exe and writes its report; `prepare-release.mjs` checks archive integrity/source and writes the upload checksum; `manual-smoke.mjs` launches controlled human acceptance. MSI uses `package-msi.mjs`, `msi-contract.mjs` and `prepare-msi-release.mjs` for building/signing and checking required publication inputs, not payload/provenance audits. Signed MSI builds embed the public key and publish their version manifest after the installer and signature.
 - Package-local scripts and tests: `apps/pi-client/`, `apps/vscode/`, `apps/desktop/`, `packages/pi-rpc/`, `packages/provider-usage/`.
 - Workflows: `development.md`, `testing.md`, `release.md`. Root scripts orchestrate packages; plugin-local build must not require Desktop.

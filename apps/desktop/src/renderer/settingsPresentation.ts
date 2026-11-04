@@ -24,6 +24,8 @@ export interface SettingsPage {
   icon: string;
   description: string;
   sections: readonly SettingsSection[];
+  /** Application actions rather than saved settings; SettingsPanel renders the content. */
+  updates?: boolean;
 }
 
 // Presentation only. Types, defaults and validation remain in the original-key
@@ -97,6 +99,10 @@ export const settingsPages: readonly SettingsPage[] = [
         { key: "frostpi.notifications.experimental.enabled", label: "Native notifications", description: "Not available in Desktop. This shared extension setting stays off.", unavailable: true },
       ] },
     ],
+  },
+  {
+    id: "updates", title: "Updates", icon: "cloud-download", description: "Check, download and install Desktop updates for Windows.",
+    updates: true, sections: [],
   },
 ];
 

@@ -18,6 +18,7 @@
     "package:vsix": "node scripts/package-vsix.mjs",
     "verify:vsix": "node scripts/verify-vsix.mjs",
     "package:desktop": "pnpm --dir apps/desktop package:app",
+    "package:desktop:msi": "pnpm --dir apps/desktop package:msi",
     "verify:desktop": "pnpm --dir apps/desktop verify:package",
     "test:desktop:manual": "node apps/desktop/scripts/manual-smoke.mjs"
   },

@@ -207,7 +207,7 @@ fn is_launch_target(target: &str) -> bool {
 
 /// Quotes one command-line argument the way `CreateProcess` expects; the shell passes our
 /// parameter string through unchanged.
-fn quote_argument(value: &str) -> String {
+pub(crate) fn quote_argument(value: &str) -> String {
     // Always quoted on purpose: a batch shim such as `code.cmd` receives the parameter string
     // through the command interpreter, where an unquoted `&` splits the argument. A path
     // containing a `%NAME%` pair still expands there; that case cannot be represented.
