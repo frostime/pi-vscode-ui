@@ -41,7 +41,6 @@
     onsettings,
     theme,
     themeBusy,
-    themeSetupRequired,
     ontheme,
     onsidebar,
     onsession,
@@ -61,7 +60,6 @@
     onsettings: () => void;
     theme: DesktopTheme;
     themeBusy: boolean;
-    themeSetupRequired: boolean;
     ontheme: () => void;
     onsidebar: (layout: DesktopSidebarLayout) => void;
     onsession: (id: string) => void;
@@ -87,9 +85,7 @@
   let keyboardDirty = false;
 
   const nextTheme = $derived(theme === "dark" ? "light" : "dark");
-  const themeAction = $derived(themeSetupRequired
-    ? "Finish Desktop settings setup before changing the theme"
-    : `Switch to ${desktopThemes[nextTheme].label}`);
+  const themeAction = $derived(`Switch to ${desktopThemes[nextTheme].label}`);
   const activeProject = $derived(view.projects.find((project) => project.id === view.activeProjectId) ?? null);
   const activeSession = $derived(sessions.find((session) => session.id === activeSessionId));
   const differentDirectory = $derived(activeSession && activeProject && activeSession.cwd !== activeProject.cwd ? activeSession.cwd : null);
@@ -473,7 +469,7 @@
         <button type="button" class="settings-button" onclick={onsettings}>
           <span class="codicon codicon-settings-gear" aria-hidden="true"></span><span>Settings</span>
         </button>
-        <button type="button" class="theme-button" title={themeAction} aria-label={themeAction} disabled={themeBusy || themeSetupRequired} onclick={ontheme}>
+        <button type="button" class="theme-button" title={themeAction} aria-label={themeAction} disabled={themeBusy} onclick={ontheme}>
           <span class="codicon codicon-color-mode" aria-hidden="true"></span>
         </button>
       </div>

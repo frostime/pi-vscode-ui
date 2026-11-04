@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Stop Desktop Settings category names from wrapping onto a second line. The category column now sizes to its labels instead of a fixed 190px, which kept "Conversation & Pi" and "Network & files" on one line at larger interface text sizes.
+- Let the Desktop theme toggle work before Desktop settings have been initialized. Switching the palette now writes `desktop.theme` and ends first-run setup instead of leaving the button disabled.
 
 ## [0.16.2] - 2026-11-03
 
