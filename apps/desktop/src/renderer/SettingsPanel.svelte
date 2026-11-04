@@ -2,20 +2,25 @@
   import { tick, untrack } from "svelte";
   import { postToHost } from "@frostime/pi-client/ui/bridge/hostBridge";
   import { desktopSettingDefinitions, type DesktopSettingsAction, type DesktopSettingsTarget, type DesktopSettingsView } from "../shared/desktopSettings.js";
+  import type { DesktopUpdateAction, DesktopUpdateView } from "../shared/desktopUpdates.js";
   import SettingRow from "./SettingRow.svelte";
+  import UpdateSection from "./UpdateSection.svelte";
   import { settingsPages, settingsByKey, matchesSettingSearch } from "./settingsPresentation.js";
   import { createSettingsDraft, settingDraftValue, changedSettingKeys, mergeSettingsDraft, parseSettingsDraft, type SettingsDraft } from "./settingsForm.js";
 
-  let { view, target = "all", busy, error, onaction, onclose }: {
+  let { view, target = "all", busy, error, updateView, updateError = "", onaction, onupdate, onclose }: {
     view: DesktopSettingsView;
     target?: DesktopSettingsTarget;
     busy: boolean;
     error?: string;
+    updateView: DesktopUpdateView | null;
+    updateError?: string;
     onaction: (action: DesktopSettingsAction) => Promise<DesktopSettingsView | null>;
+    onupdate: (action: DesktopUpdateAction) => void;
     onclose: () => void;
   } = $props();
 
-  type ReplacingOperation = "close" | "reload" | "importVscode" | "useDefaults";
+  type ReplacingOperation = "close" | "reload" | "importVscode" | "useDefaults" | "install";
   let panel = $state<HTMLDialogElement>();
   let content = $state<HTMLDivElement>();
   let keepEditing = $state<HTMLButtonElement>();
@@ -155,7 +160,16 @@
 
   function performOperation(next: ReplacingOperation): void {
     if (next === "close") onclose();
+    else if (next === "install") onupdate({ type: "install" });
     else void act({ type: next });
+  }
+
+  function requestUpdate(action: DesktopUpdateAction): void {
+    if (busy || operation) return;
+    // Only installing ends Desktop; checking and downloading keep the draft and sessions.
+    if (action.type !== "install" || !hasChanges) { onupdate(action); return; }
+    discardTrigger = panel?.ownerDocument.activeElement instanceof HTMLElement ? panel.ownerDocument.activeElement : null;
+    pendingOperation = "install";
   }
 
   function cancelDiscard(): void {
@@ -206,7 +220,7 @@
           {#each settingsPages as entry (entry.id)}
             <button type="button" aria-current={!filtering && entry.id === pageId ? "page" : undefined} onclick={() => selectPage(entry.id)}>
               <span class={`codicon codicon-${entry.icon}`} aria-hidden="true"></span><span>{entry.title}</span>
-              <small>{entry.sections.reduce((count, section) => count + section.settings.length, 0)}</small>
+              {#if !entry.updates}<small>{entry.sections.reduce((count, section) => count + section.settings.length, 0)}</small>{/if}
             </button>
           {/each}
         </nav>
@@ -231,21 +245,25 @@
             {/if}
             <h2 class="section-title">{filtering ? search.trim() ? "Search results" : "Customized settings" : page.title}</h2>
             <p class="section-description">{filtering ? `${visibleCount} settings across all categories` : page.description}</p>
-            {#each visibleSections as section (section.id)}
-              <section class="setting-group" aria-labelledby={`section-${section.id}`}>
-                <h3 id={`section-${section.id}`}>{section.title}</h3>
-                <div class="group-card">
-                  {#each section.settings as setting (setting.key)}
-                    <SettingRow {setting} definition={desktopSettingDefinitions[setting.key]!} value={settingDraftValue(setting.key, draft)}
-                      explicit={draft[setting.key] !== undefined} expanded={expanded[setting.key] ?? false} busy={busy || Boolean(view.error)} error={fieldErrors[setting.key] ?? ""}
-                      onchange={(value) => updateField(setting.key, value)} onreset={() => resetField(setting.key)}
-                      onexpand={(value) => expanded[setting.key] = value} oncopy={() => postToHost({ type: "copyText", text: setting.key })} />
-                  {/each}
-                </div>
-              </section>
+            {#if !filtering && page.updates}
+              <UpdateSection view={updateView} error={updateError} onaction={requestUpdate} />
             {:else}
-              <p class="empty-results">No matching settings. Try a label or an exact key.</p>
-            {/each}
+              {#each visibleSections as section (section.id)}
+                <section class="setting-group" aria-labelledby={`section-${section.id}`}>
+                  <h3 id={`section-${section.id}`}>{section.title}</h3>
+                  <div class="group-card">
+                    {#each section.settings as setting (setting.key)}
+                      <SettingRow {setting} definition={desktopSettingDefinitions[setting.key]!} value={settingDraftValue(setting.key, draft)}
+                        explicit={draft[setting.key] !== undefined} expanded={expanded[setting.key] ?? false} busy={busy || Boolean(view.error)} error={fieldErrors[setting.key] ?? ""}
+                        onchange={(value) => updateField(setting.key, value)} onreset={() => resetField(setting.key)}
+                        onexpand={(value) => expanded[setting.key] = value} oncopy={() => postToHost({ type: "copyText", text: setting.key })} />
+                    {/each}
+                  </div>
+                </section>
+              {:else}
+                <p class="empty-results">No matching settings. Try a label or an exact key.</p>
+              {/each}
+            {/if}
           </div>
         </div>
       </div>

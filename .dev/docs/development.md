@@ -3,7 +3,7 @@ title: Development Workflow
 description: Workspace setup, product builds and startup, settings generation and shared-source resolution.
 scope:
   - /**
-updated: 2026-10-29
+updated: 2026-11-03
 ---
 
 # Development Workflow
@@ -31,11 +31,11 @@ Commands below run from the repository root. Choose checks in [testing.md](testi
 | Run Desktop | `pnpm --dir apps/desktop start` | Launches the existing exe detached with the development profile and returns immediately; does not build. Stop the app from its tray Exit menu — a launcher Ctrl+C no longer reaches it, which also preserves its exit cleanup |
 | Debug the extension | `.vscode/launch.json` | `build:debug` runs the extension build with `FROSTPI_SOURCEMAP=1` for Host maps/unminified output; production stays minified for the bundle budget |
 
-The product-local `pnpm --dir apps/vscode build` and `pnpm --dir apps/desktop build` have the same complete-build behavior as the root shortcuts. Desktop's exe is `apps/desktop/src-tauri/target/release/frostpi-desktop.exe`. Native compilation requires Windows x64, Rust MSVC and Visual Studio C++ build tools/Windows SDK. Running Desktop additionally requires Node 22.19+, Pi and WebView2; Pi can impose a newer Node minimum.
+The product-local `pnpm --dir apps/vscode build` and `pnpm --dir apps/desktop build` have the same complete-build behavior as the root shortcuts. Ordinary Desktop builds require no signing keys and leave network updates disabled. `pnpm package:desktop:msi` is a separate full build with an embedded updater public key and signed installer; see [release setup](release.md#msi-and-update-signing). Desktop's exe is `apps/desktop/src-tauri/target/release/frostpi-desktop.exe`. Native compilation requires Windows x64, Rust MSVC and Visual Studio C++ build tools/Windows SDK. Running Desktop additionally requires Node 22.19+, Pi and WebView2; Pi can impose a newer Node minimum.
 
 For Rust-free checks or JS-only tooling, use `node scripts/build.mjs --scope desktop`; scope can also be `vscode` or `all` (the default). It prepares shared dependencies once and writes selected JS outputs to `dist/`; it does not rebuild the exe or refresh its sibling resources. The renderer is embedded in the exe, so GUI checks after renderer changes need a complete Desktop build. Ordinary `check` and `check:vscode` use this internal JS build and need neither Rust nor GUI runtimes.
 
-`start` defaults to `%APPDATA%/FrostPi-Dev`; a packaged launch or direct double-click of the build exe uses `%APPDATA%/FrostPi`. Both honor `FROSTPI_DESKTOP_USER_DATA`. These profiles hold FrostPi settings, Project/session indexes and WebView2 data. The launcher only selects FrostPi storage: it does not redirect Pi history/configuration/extensions/skills, copy credentials, or copy/migrate/clear profiles. Automated tests instead use temporary FrostPi/Pi data; see the [Desktop contract](../../apps/desktop/SPEC.md) for state and import rules.
+`start` defaults to `%APPDATA%/FrostPi-Dev`; a packaged launch or direct double-click of the build exe uses `%APPDATA%/FrostPi`. Both honor `FROSTPI_DESKTOP_USER_DATA`. MSI update relaunch carries the already-resolved profile through the private `--frostpi-user-data=` argument; that argument is not a Project directory. It preserves the updated instance's profile even if Windows Installer changes the working directory or inherited environment. Ordinary launches still use `FROSTPI_DESKTOP_USER_DATA` ahead of the default profile. Profile paths must be absolute, for example `D:\FrostPiData`; native startup visibly rejects relative paths and exits without opening or substituting a profile. These profiles hold FrostPi settings, Project/session indexes and WebView2 data. The launcher only selects FrostPi storage: it does not redirect Pi history/configuration/extensions/skills, copy credentials, or copy/migrate/clear profiles. Automated tests instead use temporary FrostPi/Pi data; see the [Desktop contract](../../apps/desktop/SPEC.md) for state and import rules.
 
 VS Code keeps Pi in its workspace Extension Host, including remote workspaces. Editor integration must not require a Desktop build or launch. Use [dual-maintenance](../../.agents/skills/dual-maintenance/SKILL.md) to select source ownership and cross-product verification.
 

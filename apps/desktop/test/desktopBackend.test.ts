@@ -6,7 +6,9 @@ import { BRIDGE_VERSION } from "@frostime/pi-client/shared/bridge/bridgeVersion"
 import { createDesktopBackend } from "../src/main/createDesktopBackend.js";
 import type { DesktopBackendOptions } from "../src/main/createDesktopBackend.js";
 import type { DesktopNative, DesktopTransport } from "../src/main/desktopNative.js";
+import type { DesktopUpdateNativeView } from "../src/shared/desktopUpdates.js";
 import { DesktopSettingsStore } from "../src/main/settings/DesktopSettingsStore.js";
+import type { DesktopUpdateView } from "../src/shared/desktopUpdates.js";
 import type { DesktopProjectsView } from "../src/shared/desktopBridge.js";
 
 const disposals: Array<() => Promise<void>> = [];
@@ -25,6 +27,7 @@ async function fixture(overrides: Partial<DesktopBackendOptions> = {}, firstRun 
   const native = {
     focused: () => true, message: vi.fn(), confirm: vi.fn(), openFiles: vi.fn(), chooseDirectory: vi.fn(),
     writeClipboard: vi.fn(), openExternal: vi.fn(), openPath: vi.fn(), launch: vi.fn(), appearance: vi.fn(),
+    updates: vi.fn((): Promise<DesktopUpdateNativeView> => Promise.resolve({ currentVersion: "test", configured: true, checked: false, operation: "idle" })),
   } satisfies DesktopNative;
   const transport: DesktopTransport = {
     publish: (channel, value) => { events.push({ channel, value }); return true; },
@@ -151,5 +154,116 @@ describe("Desktop backend assembly", () => {
         && value.message === "Unknown Project action: unknown";
     })).toBe(true));
     expect(native.launch).not.toHaveBeenCalled();
+  });
+});
+
+describe("Desktop update actions and Session admission", () => {
+  const updateAction = (handlers: Map<string, (value: unknown) => Promise<unknown>>) => handlers.get("frostpi:updates:action")!;
+
+  it("forwards read, check and download with an open Session and merges the real Session block", async () => {
+    const { backend, native, events, handlers } = await fixture();
+    const id = await backend.registry.createSession();
+    await vi.waitFor(() => expect(backend.registry.sessionView(id!)?.status).toBe("ready"), { timeout: 5000 });
+    const action = updateAction(handlers);
+
+    for (const type of ["read", "check", "download"] as const) {
+      const view = await action({ type }) as DesktopUpdateView;
+      expect(native.updates).toHaveBeenLastCalledWith({ type });
+      expect(view).toEqual({ currentVersion: "test", configured: true, checked: false, operation: "idle", installBlock: { reason: "sessions", count: 1 } });
+      expect(events.filter((event) => event.channel === "frostpi:updates:view").at(-1)?.value).toEqual(view);
+    }
+  });
+
+  it("forwards install to the host and publishes native progress with the Node-owned block", async () => {
+    const { backend, native, events, handlers } = await fixture();
+    const action = updateAction(handlers);
+
+    // Node does not decide install eligibility; the shell asks prepareUpdate itself.
+    const accepted = await action({ type: "install" }) as DesktopUpdateView;
+    expect(native.updates).toHaveBeenLastCalledWith({ type: "install" });
+    expect(accepted).toEqual({ currentVersion: "test", configured: true, checked: false, operation: "idle" });
+
+    const id = await backend.registry.createSession();
+    await vi.waitFor(() => expect(backend.registry.sessionView(id!)?.status).toBe("ready"), { timeout: 5000 });
+    const progress = { currentVersion: "0.17.0", configured: true, checked: true, operation: "downloading" as const, progress: { receivedBytes: 10, totalBytes: 100 } };
+    backend.updateView(progress);
+    expect(events.filter((event) => event.channel === "frostpi:updates:view").at(-1)?.value)
+      .toEqual({ ...progress, installBlock: { reason: "sessions", count: 1 } });
+
+    // The shell cannot supply the block or any other renderer-visible field.
+    const published = events.filter((event) => event.channel === "frostpi:updates:view").length;
+    expect(() => backend.updateView({ ...progress, installBlock: { reason: "opening" } })).toThrow("invalid view");
+    expect(() => backend.updateView({ ...progress, downloadUrl: "https://example.invalid/update.json" })).toThrow("invalid view");
+    expect(events.filter((event) => event.channel === "frostpi:updates:view")).toHaveLength(published);
+  });
+
+  it("refuses preparation for a Session in another Project and after that Session stopped", async () => {
+    const { backend, directory, options, send } = await fixture();
+    const id = await backend.registry.createSession();
+    await vi.waitFor(() => expect(backend.registry.sessionView(id!)?.status).toBe("ready"), { timeout: 5000 });
+    // Saved Pi history is what keeps a Session durable after it stops.
+    await backend.registry.sendPrompt(id!, "persist-update-session", []);
+    await vi.waitFor(() => expect(backend.registry.snapshot().activeSession?.isStreaming).toBe(false), { timeout: 5000 });
+    const other = await backend.projects.addProject(await mkdtemp(join(directory, "other-")));
+    await send("frostpi:projects:select", other.id);
+    expect(backend.registry.activeSessionId).toBeNull();
+    expect(backend.registry.snapshot().sessions).toHaveLength(1);
+    expect(backend.prepareUpdate()).toEqual({ ok: false, reason: "sessions", count: 1 });
+
+    await backend.dispose();
+    const reopened = await createDesktopBackend({ ...options, directories: [] }); disposals.push(reopened.dispose);
+    expect(reopened.registry.snapshot().sessions.map((session) => session.status)).toEqual(["stopped"]);
+    expect(reopened.prepareUpdate()).toEqual({ ok: false, reason: "sessions", count: 1 });
+  });
+
+  it("blocks an empty-Set install while New/Resume is unfinished, then refuses new Sessions until cancelled", async () => {
+    let release!: () => void;
+    const discovery = new Promise<void>((done) => { release = done; });
+    const { backend, project, events, handlers, send } = await fixture({
+      discoverWorkingDirectories: async () => {
+        await discovery;
+        return { directories: [{ cwd: project, workspaceFolderCwd: project, directoryName: "project", isCurrent: true }], authoritative: true };
+      },
+    });
+    const seeded = await updateAction(handlers)({ type: "read" }) as DesktopUpdateView;
+    expect(seeded.installBlock).toBeUndefined();
+    void send("frostpi:client:in", { type: "resumeSession", bridgeVersion: BRIDGE_VERSION });
+    const dialogId = (): string | undefined => (events.filter((event) => event.channel === "frostpi:dialog:view").at(-1)?.value as { id?: string } | null)?.id;
+    await vi.waitFor(() => expect(events.some((event) => event.channel === "frostpi:resume:view" && (event.value as { phase?: string })?.phase === "finding")).toBe(true), { timeout: 5000 });
+    // The existing view reports the unfinished New/Resume as soon as it starts, before it settles.
+    expect(events.filter((event) => event.channel === "frostpi:updates:view").at(-1)?.value)
+      .toEqual({ ...seeded, installBlock: { reason: "opening" } });
+    expect(backend.registry.snapshot().sessions).toHaveLength(0);
+    expect(backend.prepareUpdate()).toEqual({ ok: false, reason: "opening" });
+
+    // Discovery finished but the Resume picker still waits: the empty set cannot admit an install.
+    release();
+    await vi.waitFor(() => expect(dialogId()).toBeDefined(), { timeout: 5000 });
+    expect(backend.registry.snapshot().sessions).toHaveLength(0);
+    expect(backend.prepareUpdate()).toEqual({ ok: false, reason: "opening" });
+
+    await send("frostpi:dialog:response", dialogId(), null);
+    await vi.waitFor(() => expect(events.some((event) => event.channel === "frostpi:resume:view" && event.value === null)).toBe(true), { timeout: 5000 });
+    expect(backend.registry.snapshot().sessions).toHaveLength(0);
+    expect(backend.prepareUpdate()).toEqual({ ok: true });
+
+    // The gate stays closed: a later New reaches no Pi child and creates no Session.
+    await send("frostpi:client:in", { type: "createSession", bridgeVersion: BRIDGE_VERSION });
+    await vi.waitFor(() => expect(events.some((event) => event.channel === "frostpi:client:out"
+      && (event.value as { message?: string })?.message?.includes("preparing to install"))).toBe(true), { timeout: 5000 });
+    expect(backend.registry.snapshot().sessions).toHaveLength(0);
+
+  });
+
+  it("rejects forged update actions before reaching the host", async () => {
+    const { native, handlers } = await fixture();
+    const action = updateAction(handlers);
+    for (const forged of [
+      { type: "check", url: "https://example.invalid/update.json" },
+      { type: "download", path: "C:\\Temp\\update.msi" },
+      { type: "install", path: "C:\\Temp\\update.msi" },
+      { type: "apply" }, "check", null,
+    ]) await expect(action(forged)).rejects.toThrow(/Invalid Desktop update action/);
+    expect(native.updates).not.toHaveBeenCalled();
   });
 });

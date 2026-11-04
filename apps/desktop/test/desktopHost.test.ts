@@ -14,9 +14,11 @@ import { workspaceFileExcludeRules } from "@frostime/pi-client/host/file-search/
 import type { DesktopInteractions } from "../src/main/dialogs.js";
 import { createDesktopHost as createHost, type DesktopHostOptions } from "../src/main/desktopHost.js";
 import type { DesktopNative } from "../src/main/desktopNative.js";
+import type { DesktopUpdateNativeView } from "../src/shared/desktopUpdates.js";
 const native = {
   focused: () => false, message: vi.fn(), confirm: vi.fn(), openFiles: vi.fn(), chooseDirectory: vi.fn(),
   writeClipboard: vi.fn(), openExternal: vi.fn(), openPath: vi.fn(), launch: vi.fn(), appearance: vi.fn(),
+  updates: vi.fn((): Promise<DesktopUpdateNativeView> => Promise.resolve({ currentVersion: "test", configured: true, checked: false, operation: "idle" })),
 } satisfies DesktopNative;
 function createDesktopHost(options: Omit<DesktopHostOptions, "native">) {
   return createHost({ ...options, native });

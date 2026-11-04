@@ -8,7 +8,7 @@ export const desktopRequestChannels = [
   "frostpi:client:in", "frostpi:projects:request", "frostpi:projects:add", "frostpi:projects:remove",
   "frostpi:projects:select", "frostpi:projects:move", "frostpi:projects:action", "frostpi:sidebar:set",
   "frostpi:dialog:response", "frostpi:resume:request", "frostpi:resume:show", "frostpi:resume:dismiss",
-  "frostpi:settings:action", "frostpi:zoom",
+  "frostpi:settings:action", "frostpi:updates:action", "frostpi:zoom",
 ] as const;
 
 export interface DesktopRequest { channel: string; args: unknown[] }

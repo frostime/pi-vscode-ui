@@ -5,7 +5,7 @@ scope:
   - /apps/**/test/**
   - /packages/**/test/**
   - /scripts/test/**
-updated: 2026-10-30
+updated: 2026-11-03
 ---
 
 # Testing Strategy
@@ -65,6 +65,7 @@ For Rust-only work, `node scripts/build.mjs --scope desktop` supplies the JS/ren
 | Extension Host E2E | Suite execution in VS Code; currently activation, registration and New/Stop | Complete Webview, remote, theme or real-model acceptance |
 | Desktop GUI smoke | Real WebView2/application IPC, hide/restore and renderer-failure cleanup with controlled Pi | Tray menu Exit/confirmation, real-Pi history or model responses |
 | Packaged verification | The identified ZIP's extracted exe works with isolated data | Later source edits, signing, other OSes or complete user experience |
+| Real two-version MSI upgrade | The tested old→new installation, data retention and automatic relaunch into the same profile | Other versions, cancellation recovery, rollback or package-security guarantees |
 | Shared Runtime with real Pi | Selected operations with the installed runtime | GUI/packaging behavior |
 | Real Pi GUI acceptance | Actual tested send, Stop, history and blocking-input paths | Every runtime/provider/extension combination |
 
@@ -81,6 +82,8 @@ The E2E runner preserves caller proxies for SDK downloads, then sanitizes the is
 `verify:desktop` checks an explicitly supplied archive against its embedded version, not the checkout. Its optional `--real-pi` uses isolated data and an offline extension command/confirmation/custom-message path; it does not test model completion or durable real-Pi history. `PI_OFFLINE` suppresses automatic activity, not explicit model calls. `verify:desktop` and the smoke runner also accept `--native-dialogs` as described below.
 
 ### Windows native evidence
+
+An MSI release needs one real old-version → new-version upgrade on Windows, using a separate product identity/UpgradeCode, install directory and test profile. Confirm retained data, application usability, all-user/UAC installation and automatic reopen into the same profile. Check that Sessions across all Projects and pending New/Resume block installation, while checks/downloads remain usable; a downloaded version must remain installable after restart and offline without requesting latest. This change's real two-version upgrade remains unverified; compilation, extraction and GUI smoke are not substitutes. If UAC cannot run in the current environment, prepare a user-assisted run. Never uninstall or replace the user's normal product. Do not add cancellation recovery, rollback, tampered-package or payload-audit acceptance requirements.
 
 Native automation (`apps/desktop/scripts/native-window.ps1`) must target only test-process windows. Regular smoke checks hide/restore and renderer-failure cleanup; its `manualChecks` lists tray right-click Exit/confirmation, which Windows menu automation cannot reliably exercise. For those checks, use `test:desktop:manual`, exit through the tray, reopen with `--reopen` and exit again; record the ZIP SHA and observed results separately. Do not relabel renderer-failure cleanup as normal Exit coverage.
 

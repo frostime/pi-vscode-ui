@@ -65,7 +65,7 @@ impl Wake {
 
 /// FNV-1a compresses the profile path into a fixed 16-hex kernel object name,
 /// because non-ASCII or long profile paths would be unsafe object names directly.
-fn profile_key(profile: &Path) -> String {
+pub(crate) fn profile_key(profile: &Path) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for byte in profile.to_string_lossy().as_bytes() {
         hash ^= u64::from(*byte);

@@ -4,7 +4,7 @@ import { basename, join, resolve, sep } from "node:path";
 import AdmZip from "adm-zip";
 import { nativeNoticesText } from "./native-notices.mjs";
 import { desktopNoticesText } from "./desktop-notices.mjs";
-import { artifactsRoot, buildInfoFile, buildOutput, copyRuntimeFiles, desktopRoot, distributedArchive, piExtensionNames, productVersion, repositoryRoot } from "./packaging.mjs";
+import { artifactsRoot, buildInfoFile, buildOutput, copyRuntimeFiles, desktopRoot, distributedArchive, piExtensionNames, productVersion, repositoryRoot, writeRuntimePackageJson } from "./packaging.mjs";
 import { createBuildInfo } from "./archive-contract.mjs";
 import { assertNoArguments, run } from "../../../scripts/lib.mjs";
 
@@ -27,7 +27,7 @@ try {
   cpSync(executable, join(root, "FrostPi.exe"));
   copyRuntimeFiles(root);
   // Pi extension artifacts use ESM; backend.cjs remains explicitly CommonJS.
-  writeFileSync(join(root, "package.json"), JSON.stringify({ name: "frostpi-desktop", private: true, type: "module", version: productVersion() }) + "\n");
+  writeRuntimePackageJson(join(root, "package.json"));
   cpSync(join(repositoryRoot, "LICENSE"), join(root, "LICENSE"));
   writeFileSync(join(root, "THIRD_PARTY_NOTICES.md"), desktopNoticesText());
   writeFileSync(join(root, "NATIVE_NOTICES.md"), nativeNoticesText());
