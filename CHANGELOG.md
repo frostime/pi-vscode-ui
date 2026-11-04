@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Widen the conversation column from 820px to 960px in Session Tabs, the sidebar and Desktop, so wide code blocks and tables need less horizontal scrolling. The Composer and the context row keep sharing the same center line.
+
+### Fixed
+
+- Stop Desktop Settings category names from wrapping onto a second line. The category column now sizes to its labels instead of a fixed 190px, which kept "Conversation & Pi" and "Network & files" on one line at larger interface text sizes.
+
 ## [0.16.2] - 2026-11-03
 
 ### Added
