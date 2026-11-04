@@ -326,7 +326,7 @@
   .filter[aria-pressed="true"] { color: var(--frost-link); border-color: var(--frost-focus); }
   .mobile-category { display: none; margin: 0 16px 12px; padding: 7px 9px; min-width: 0; border: 1px solid var(--frost-input-border); border-radius: 4px; background: var(--frost-input-bg); color: var(--frost-text); }
   .settings-workspace { display: flex; flex: 1; min-height: 0; border-top: 1px solid var(--frost-border); }
-  .categories { flex: 0 0 190px; padding: 16px 12px; background: var(--frost-bg); border-right: 1px solid var(--frost-border); overflow: auto; }
+  .categories { flex: 0 0 auto; min-width: 190px; padding: 16px 12px; background: var(--frost-bg); border-right: 1px solid var(--frost-border); overflow: auto; }
   .categories button { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 36px; padding: 7px 9px; text-align: left; color: var(--frost-muted); background: transparent; border: 0; }
   .categories button:hover { background: var(--frost-hover); }
   .categories button[aria-current="page"] { color: var(--frost-text); background: color-mix(in srgb, var(--frost-active) 55%, transparent); }

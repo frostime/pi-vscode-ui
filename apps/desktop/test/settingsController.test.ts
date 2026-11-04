@@ -63,8 +63,8 @@ describe("Desktop settings actions", () => {
 
   it("persists theme changes without replacing other settings and rejects unsupported themes", async () => {
     const { controller, store } = await fixture();
-    await expect(controller.handle({ type: "setTheme", theme: "light" })).rejects.toThrow("Use defaults");
-    expect(store.firstRun).toBe(true);
+    await controller.handle({ type: "setTheme", theme: "light" });
+    expect(store.firstRun).toBe(false);
     await controller.handle({ type: "save", values: { "chat.fontSize": 18 } });
     await Promise.all([
       store.update("chat.editor.fontSize", 19),

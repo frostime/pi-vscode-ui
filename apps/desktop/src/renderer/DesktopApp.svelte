@@ -132,7 +132,7 @@
   onmove={(id, index) => window.frostpiDesktop.moveProject(id, index)}
   onaction={(id, action) => window.frostpiDesktop.projectAction(id, action)}
   onsettings={() => showSettings()}
-  {theme} themeBusy={settingsBusy} themeSetupRequired={settingsView?.firstRun ?? true}
+  {theme} themeBusy={settingsBusy}
   ontheme={() => settingsAction({ type: "setTheme", theme: theme === "dark" ? "light" : "dark" })}
   onsidebar={(layout) => window.frostpiDesktop.setSidebar(layout)}
   onsession={(id) => postToHost({ type: "activateSession", sessionId: id })}

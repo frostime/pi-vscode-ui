@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.3] - 2026-11-04
+
+### Changed
+
+- Widen the conversation column from 820px to 960px in Session Tabs, the sidebar and Desktop, so wide code blocks and tables need less horizontal scrolling. The Composer and the context row keep sharing the same center line.
+
+### Fixed
+
+- Stop Desktop Settings category names from wrapping onto a second line. The category column now sizes to its labels instead of a fixed 190px, which kept "Conversation & Pi" and "Network & files" on one line at larger interface text sizes.
+- Let the Desktop theme toggle work before Desktop settings have been initialized. Switching the palette now writes `desktop.theme` and ends first-run setup instead of leaving the button disabled.
+
 ## [0.16.2] - 2026-11-03
 
 ### Added
@@ -539,6 +550,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
 [Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.2...HEAD
+[0.16.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.2...v0.16.3
 [0.16.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.15.5...v0.16.0
