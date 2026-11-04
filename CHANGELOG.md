@@ -6,14 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Install Desktop with a Windows MSI and manage updates in Settings → Updates. Check, download and install separately; downloading leaves sessions running, while installation requires all sessions to be closed and reopens Desktop after updating.
-
 ## [0.16.2] - 2026-11-03
 
 ### Added
 
+- Install Desktop with a Windows MSI and manage updates in Settings → Updates. Check, download and install separately; downloading leaves sessions running, while installation requires all sessions to be closed and reopens Desktop after updating.
 - Reorder Desktop Projects by dragging a row, and open a Project's folder, VS Code, Zed or Windows Terminal from its new action menu. Only installed programs appear in the menu, and the full Project path moved from the top bar into a hover tooltip.
 
 ### Changed
