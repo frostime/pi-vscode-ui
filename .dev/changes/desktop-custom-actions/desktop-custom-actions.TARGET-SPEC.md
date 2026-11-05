@@ -26,4 +26,4 @@ Agent 验证配置校验/持久化、全局与项目执行隔离、菜单投影�
 
 ## 分支与整合
 
-用户要求先将 main 同步到 quasi-main，再从 quasi-main 新建任务分支。起始核查时二者均为 `3ec12d2`；任务分支为 `feat/desktop-custom-actions`，工作 checkpoint 在 `wip/desktop-custom-actions`。另须审查 `origin/feat/desktop-file-link-routing`（起始审查 commit `5d2d032`），然后将两个功能一起整合到 quasi-main，不进入 main。
+用户要求先将 main 同步到 quasi-main，再从 quasi-main 新建任务分支。起始核查时二者均为 `3ec12d2`；任务分支为 `feat/desktop-custom-actions`；实现曾在 `wip/desktop-custom-actions` 保存 checkpoint，再 squash 回任务分支。`origin/feat/desktop-file-link-routing`（`5d2d032`）已独立审查，并与本功能一起整合到 quasi-main；没有进入 main。最终验证结果与本机全量 gate 的环境限制见同目录 METHOD。
