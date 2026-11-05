@@ -53,7 +53,7 @@ function mountSettings(target?: "desktop.actions") {
   const onaction = vi.fn((action: DesktopSettingsAction): Promise<DesktopSettingsView> =>
     Promise.resolve(action.type === "save" ? { ...settings, values: action.values } : settings));
   const view = render(SettingsPanel, { props: {
-    view: settings, projects, target, busy: false, updateView: null,
+    view: settings, projects, ...(target ? { target } : {}), busy: false, updateView: null,
     onaction, onupdate: vi.fn(), onclose: vi.fn(),
   } });
   const categories = within(view.getByRole("navigation", { name: "Settings categories" }));
@@ -77,10 +77,10 @@ describe("Desktop Actions settings", () => {
     expect(view.queryByRole("combobox", { name: "Project" })).toBeNull();
     expect(view.getByText("Project directory at run time")).toBeTruthy();
     expect(view.queryByText(projects[0]!.cwd)).toBeNull();
-    await fireEvent.click(view.getByRole("button", { name: "Project", exact: true }));
+    await fireEvent.click(view.getByRole("button", { name: "Project" }));
     expect((view.getByRole("combobox", { name: "Project" }) as HTMLSelectElement).value).toBe("");
     expect(view.queryByRole("textbox", { name: "Menu name" })).toBeNull();
-    expect(view.queryByRole("button", { name: "Add", exact: true })).toBeNull();
+    expect(view.queryByRole("button", { name: "Add" })).toBeNull();
     expect(view.onaction).not.toHaveBeenCalled();
   });
 
@@ -89,7 +89,7 @@ describe("Desktop Actions settings", () => {
     const globalCommand = "global-tool --token sensitive-global {{cwd}}";
     const betaCommand = "beta-tool --token sensitive-beta {{cwd}}";
     await editCommand(view, "Shared edited", globalCommand);
-    await fireEvent.click(view.getByRole("button", { name: "Project", exact: true }));
+    await fireEvent.click(view.getByRole("button", { name: "Project" }));
     await fireEvent.change(view.getByRole("combobox", { name: "Project" }), { target: { value: "beta" } });
     await editCommand(view, "Beta edited", betaCommand);
     expect(view.getByText("beta-tool --token sensitive-beta 'C:\\Projects\\Beta''s tools; safe'")).toBeTruthy();
@@ -115,7 +115,7 @@ describe("Desktop Actions settings", () => {
     expect(review.textContent).not.toContain(betaCommand);
     expect(view.onaction).not.toHaveBeenCalled();
     expect(projectAction).not.toHaveBeenCalled();
-    await fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
+    await fireEvent.click(view.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(view.onaction).toHaveBeenCalledExactlyOnceWith({
       type: "save", values: {
         "desktop.theme": "light", "desktop.zoomFactor": 1.2,
@@ -131,13 +131,13 @@ describe("Desktop Actions settings", () => {
 
   it("validates additions before Save and keeps stable ids while central Discard restores deletions", async () => {
     const view = mountSettings("desktop.actions");
-    await fireEvent.click(view.getByRole("button", { name: "Add", exact: true }));
+    await fireEvent.click(view.getByRole("button", { name: "Add" }));
     await fireEvent.input(view.getByRole("textbox", { name: "PowerShell command" }), { target: { value: "new-tool" } });
-    await fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
+    await fireEvent.click(view.getByRole("button", { name: "Save" }));
     expect(view.onaction).not.toHaveBeenCalled();
     await waitFor(() => expect(document.activeElement).toBe(view.getByRole("textbox", { name: "Menu name" })));
     await fireEvent.input(view.getByRole("textbox", { name: "Menu name" }), { target: { value: "New task" } });
-    await fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
+    await fireEvent.click(view.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(view.onaction).toHaveBeenCalledTimes(1));
     const save = view.onaction.mock.calls[0]![0];
     expect(save.type).toBe("save");
@@ -147,14 +147,14 @@ describe("Desktop Actions settings", () => {
     expect(added.id).toMatch(/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/u);
     expect(added.projectId).toBeUndefined();
     await fireEvent.input(view.getByRole("textbox", { name: "Menu name" }), { target: { value: "Renamed task" } });
-    await fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
+    await fireEvent.click(view.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(view.onaction).toHaveBeenCalledTimes(2));
     const renamedSave = view.onaction.mock.calls[1]![0];
     if (renamedSave.type !== "save") throw new Error("Expected settings Save");
     expect((renamedSave.values["desktop.actions"] as DesktopCommandAction[]).find((action) => action.label === "Renamed task")?.id).toBe(added.id);
     await fireEvent.click(view.getByRole("button", { name: "Delete this Action" }));
     expect(view.queryByRole("button", { name: /Renamed task/ })).toBeNull();
-    await fireEvent.click(view.getByRole("button", { name: "Discard", exact: true }));
+    await fireEvent.click(view.getByRole("button", { name: "Discard" }));
     expect(view.getByRole("button", { name: /Renamed task/ })).toBeTruthy();
     expect(projectAction).not.toHaveBeenCalled();
   });
@@ -191,7 +191,7 @@ describe("Desktop Project menu assembly", () => {
   it("shows one command section with scope icons and an inline settings gear, passing only action identity", async () => {
     const view = mountShell();
     const clientContent = view.getByText("Client content");
-    const trigger = view.getByRole("button", { name: "Project Alpha", exact: true });
+    const trigger = view.getByRole("button", { name: "Project Alpha" });
     await fireEvent.click(trigger);
     const menu = within(view.getByRole("menu", { name: "Actions for Alpha" }));
     expect(menu.getByText("Open In")).toBeTruthy();
@@ -225,7 +225,7 @@ describe("Desktop Project menu assembly", () => {
     expect(menu.queryByRole("menuitem", { name: "Configure Actions" })).toBeNull();
     await fireEvent.click(menu.getByRole("menuitem", { name: "Open in File Explorer" }));
     expect(view.onaction).toHaveBeenCalledExactlyOnceWith("beta", "explorer");
-    const mainTrigger = view.getByRole("button", { name: "Project Alpha", exact: true });
+    const mainTrigger = view.getByRole("button", { name: "Project Alpha" });
     await fireEvent.click(mainTrigger);
     expect(document.activeElement).toBe(view.getByRole("menuitem", { name: "Open in File Explorer" }));
     await fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
