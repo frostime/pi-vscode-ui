@@ -4,6 +4,13 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const native = vi.hoisted(() => ({ openExternal: vi.fn(), openPath: vi.fn() }));
+const search = vi.hoisted(() => ({ search: vi.fn() }));
+
+vi.mock("@frostime/pi-client/host/file-search/WorkspaceFileSearch", () => ({
+  WorkspaceFileSearch: class {
+    readonly search = search.search;
+  },
+}));
 
 import { openReferencedLocation as openLocation } from "../src/main/openReferencedLocation.js";
 const openReferencedLocation = (reference: Parameters<typeof openLocation>[0], cwd: string | undefined) => openLocation(reference, cwd, native);
@@ -14,11 +21,12 @@ beforeEach(async () => {
   vi.resetAllMocks();
   native.openExternal.mockResolvedValue(undefined);
   native.openPath.mockResolvedValue("");
+  search.search.mockResolvedValue([]);
 });
 afterEach(async () => { await rm(cwd, { recursive: true, force: true }); });
 
 describe("Desktop file references", () => {
-  it.each(["code & #100% 中文.ts", "script.ps1", "script.py", "script.sh", "page.html", "diagram.svg", ".bashrc", "Makefile", "settings.json"])("opens %s only in VS Code with an encoded file URI and line/column", async (name) => {
+  it.each(["code & #100% 中文.ts", "script.ps1", "script.py", "script.sh", ".bashrc", "Makefile", "settings.json"])("opens %s only in VS Code with an encoded file URI and line/column", async (name) => {
     const path = join(cwd, name);
     await writeFile(path, "synthetic file, never execute");
     await openReferencedLocation({ path: name, line: 42, column: 5 }, cwd);
@@ -40,7 +48,7 @@ describe("Desktop file references", () => {
     expect(native.openPath).not.toHaveBeenCalled();
   });
 
-  it.each(["note.md", "notes.txt", "image.PNG", "document.pdf", "LICENSE"])("opens %s through the default application without a location suffix", async (name) => {
+  it.each(["note.md", "notes.txt", "image.PNG", "document.pdf", "page.html", "report.htm", "diagram.svg", "LICENSE"])("opens %s through the default application without a location suffix", async (name) => {
     const path = join(cwd, name);
     await writeFile(path, "synthetic document");
     await openReferencedLocation({ path: name, line: 7, endLine: 9 }, cwd);
@@ -95,5 +103,38 @@ describe("Desktop file references", () => {
     await writeFile(join(cwd, "note.txt"), "document");
     native.openPath.mockResolvedValueOnce("No associated application");
     await expect(openReferencedLocation({ path: "note.txt" }, cwd)).rejects.toThrow("default application");
+  });
+
+  it("does not search when the reference exists", async () => {
+    await writeFile(join(cwd, "file.ts"), "synthetic code");
+    await openReferencedLocation({ path: "file.ts" }, cwd);
+    expect(search.search).not.toHaveBeenCalled();
+  });
+
+  it("opens the best workspace match when the reference path is missing", async () => {
+    await mkdir(join(cwd, "moved"));
+    await writeFile(join(cwd, "moved", "file.ts"), "synthetic code");
+    search.search.mockResolvedValue([{ path: "moved/file.ts", isDirectory: false, score: 1 }]);
+
+    await openReferencedLocation({ path: "src/file.ts", line: 3, column: 2 }, cwd);
+
+    expect(search.search).toHaveBeenCalledWith(cwd, "src/file.ts", 1, expect.any(Set), expect.objectContaining({ excludeRules: [] }));
+    expect(new URL(native.openExternal.mock.calls[0]![0] as string).pathname).toMatch(/\/moved\/file\.ts:3:2$/);
+    expect(native.openPath).not.toHaveBeenCalled();
+  });
+
+  it("applies the whitelist to the fallback match rather than to the missing reference", async () => {
+    await writeFile(join(cwd, "run.cmd"), "never execute");
+    search.search.mockResolvedValue([{ path: "run.cmd", isDirectory: false, score: 1 }]);
+
+    await expect(openReferencedLocation({ path: join(cwd, "old", "run.cmd") }, cwd)).rejects.toThrow("not supported");
+    expect(native.openPath).not.toHaveBeenCalled();
+    expect(native.openExternal).not.toHaveBeenCalled();
+  });
+
+  it("keeps the missing-target error when the fallback has no match", async () => {
+    await expect(openReferencedLocation({ path: "missing.ts" }, cwd)).rejects.toThrow("does not exist");
+    expect(native.openPath).not.toHaveBeenCalled();
+    expect(native.openExternal).not.toHaveBeenCalled();
   });
 });

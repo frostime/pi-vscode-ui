@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Run custom global or Project-specific PowerShell commands in a new external Windows Terminal window from Desktop's Project menu. Configure them in Settings → Actions, use `{{cwd}}` for the Project directory, and open lazygit directly when installed.
+- Open a Desktop file link that does not exist as given by searching the Session working directory once, matching how VS Code already resolves a moved or stale path. The whitelist still checks the file that was found.
+
+### Changed
+
+- Open linked HTML and SVG files in the program the system associates with them instead of a plain-text editor, matching how other documents and images already open.
 
 ## [0.16.3] - 2026-11-04
 

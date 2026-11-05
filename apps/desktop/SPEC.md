@@ -20,6 +20,18 @@ Opening a folder, file or URL uses the shell's default action (`native.rs::shell
 
 External programs are started by the native shell, never by Node. The Node backend runs inside a `KILL_ON_JOB_CLOSE` job object, so any process it spawns dies with the application; a launched editor or terminal must outlive FrostPi.
 
+## File and link navigation
+
+A file reference resolves relative paths from the displayed Session's cwd. A relative reference without a cwd fails; Desktop never falls back to the foreground Project, the process cwd or a guessed base directory.
+
+A reference that does not exist as given gets one best-effort workspace search, shared with VS Code (`apps/pi-client/src/host/file-search/fallbackFileSearch.ts`): it queries the reference path as written, or its basename when the reference is absolute. No match, a directory match, a failed search, a search timeout and a missing search tool all keep the original "does not exist" error. The search never creates a file.
+
+The whitelist (`isAllowedFileReferencePath`) checks both the requested path and its real path. It checks a searched match exactly like a direct reference: finding a file must never relax the type boundary or launch an executable through an alias.
+
+Directories, common extension-less document names and documents/media (`.htm`, `.html`, `.md`, `.pdf`, `.png`, `.jpg`, `.jpeg`, `.rst`, `.svg`, `.txt`, `.webp`) open through the shell's default action for that program. HTML and SVG belong there although they can carry scripts: the default browser or viewer is a separate sandbox, unlike the Markdown SVG that FrostPi sanitizes for its own webview. FrostPi does not inspect what it hands to the default program.
+
+Every other file opens only in VS Code through `vscode://file/<path>:<line>:<column>`; a line range keeps only its start. A failed external open reports that VS Code is required and must never fall back to the default association, which could run the file. Renderer-supplied application protocols never reach the OS.
+
 ## Window and application lifetime
 
 Closing the main window hides it to the Windows tray; it must not dispose the backend, stop Pi children or remount ClientApp. The first close in each launch explains the tray behavior. Tray left-click and Show restore the same window and its drafts. Hidden windows report invisible to the backend so restoring them refreshes the shared presentation.
