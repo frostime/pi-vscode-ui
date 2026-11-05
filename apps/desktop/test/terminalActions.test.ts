@@ -24,7 +24,27 @@ describe("terminal Actions", () => {
     expect(expandActionCommand("tool --root {{cwd}} --again {{cwd}}", cwd)).toBe(`tool --root ${literal} --again ${literal}`);
   });
 
-  it("shows lazygit only when the tool and terminal dependencies are available", async () => {
+  it.each([
+    { tools: ["wt.exe", "pwsh.exe", "powershell.exe"], shell: "pwsh.exe", terminal: true },
+    { tools: ["wt.exe", "powershell.exe"], shell: "powershell.exe", terminal: true },
+    { tools: ["pwsh.exe", "powershell.exe"], shell: "pwsh.exe", terminal: false },
+    { tools: ["powershell.exe"], shell: "powershell.exe", terminal: false },
+  ])("selects $shell with Windows Terminal=$terminal from available tools", async ({ tools, shell, terminal }) => {
+    const { actions, launch } = await registry(() => [{ id: "dev", label: "Dev", command: "Get-Location" }], tools);
+    // Repeated launches target the same named window, not a fresh or most-recent user window.
+    await actions.run("custom:dev", "C:/repo");
+    await actions.run("custom:dev", "C:/repo");
+    expect(launch).toHaveBeenCalledTimes(2);
+    for (const [executable, args] of launch.mock.calls) {
+      expect(executable).toBe(join("C:/Tools", terminal ? "wt.exe" : shell));
+      const prefix = terminal ? ["-w", "FrostPi", "new-tab", join("C:/Tools", shell)] : [];
+      expect(args).toEqual([...prefix, "-NoLogo", "-NoExit", "-EncodedCommand", expect.any(String)]);
+      expect(Buffer.from(args.at(-1)!, "base64").toString("utf16le"))
+        .toBe("Set-Location -LiteralPath 'C:/repo' -ErrorAction Stop\nGet-Location");
+    }
+  });
+
+  it("shows lazygit when the tool and either PowerShell are available, without requiring Windows Terminal", async () => {
     const available = await registry(() => [], ["wt.exe", "powershell.exe", "lazygit.exe"]);
     expect(available.actions.view).toContainEqual({ id: "lazygit", label: "lazygit", icon: "codicon-globe", section: "actions", scope: "global" });
     await available.actions.run("lazygit", "C:/repo");
@@ -32,6 +52,11 @@ describe("terminal Actions", () => {
     const script = Buffer.from(available.launch.mock.calls[0]![1].at(-1)!, "base64").toString("utf16le");
     expect(script).toContain("-LiteralPath 'C:/repo'");
     expect(script).toMatch(/& '.*lazygit\.exe'/u);
+
+    const direct = await registry(() => [], ["pwsh.exe", "lazygit.exe"]);
+    expect(direct.actions.view.some((action) => action.id === "lazygit")).toBe(true);
+    await direct.actions.run("lazygit", "C:/repo");
+    expect(basename(direct.launch.mock.calls[0]![0])).toBe("pwsh.exe");
 
     const missingShell = await registry(() => [], ["wt.exe", "lazygit.exe"]);
     expect(missingShell.actions.view.some((action) => action.id === "lazygit")).toBe(false);
@@ -55,7 +80,7 @@ describe("terminal Actions", () => {
 
     await actions.run("custom:local", "C:/space 'quoted'; $literal", "project-a");
     const [, args] = launch.mock.calls[0]!;
-    expect(args.slice(0, 3)).toEqual(["-w", "new", "new-tab"]);
+    expect(args.slice(0, 3)).toEqual(["-w", "FrostPi", "new-tab"]);
     expect(args).toContain("-NoExit");
     const script = Buffer.from(args.at(-1)!, "base64").toString("utf16le");
     expect(script).toBe("Set-Location -LiteralPath 'C:/space ''quoted''; $literal' -ErrorAction Stop\ngit -C 'C:/space ''quoted''; $literal' status");
@@ -78,12 +103,18 @@ describe("terminal Actions", () => {
     const command = { id: "dev", label: "Dev", command: "token=secret" };
     const missing = await registry(() => [command], []);
     expect(missing.actions.view.some((action) => action.id === "custom:dev")).toBe(true);
-    await expect(missing.actions.run("custom:dev", "C:/repo", "project-a")).rejects.toThrow("Windows Terminal");
+    await expect(missing.actions.run("custom:dev", "C:/repo", "project-a")).rejects.toThrow("PowerShell");
     expect(missing.launch).not.toHaveBeenCalled();
+  });
 
-    const failed = await registry(() => [command]);
+  it.each([
+    { tools: ["wt.exe", "pwsh.exe", "powershell.exe"] },
+    { tools: ["pwsh.exe", "powershell.exe"] },
+  ])("does not retry with another host or shell after a launch failure ($tools)", async ({ tools }) => {
+    const failed = await registry(() => [{ id: "dev", label: "Dev", command: "token=secret" }], tools);
     failed.launch.mockRejectedValueOnce(new Error("token=secret"));
-    await expect(failed.actions.run("custom:dev", "C:/repo", "project-a")).rejects.toThrow("Could not open a new terminal window");
+    await expect(failed.actions.run("custom:dev", "C:/repo", "project-a")).rejects.toThrow(/^Could not start the terminal for this Action\.$/u);
+    expect(failed.launch).toHaveBeenCalledOnce();
   });
 });
 

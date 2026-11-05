@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { devtoolsClient, openDebuggingSocket } from "./cdp-client.mjs";
 import { powerShellLiteral, runPowerShell } from "./powershell.mjs";
@@ -285,7 +285,7 @@ async function verifyProjectActions() {
   assert.equal(await client.evaluate("Boolean(document.getElementById('action-project'))"), false);
   await client.evaluate("document.querySelector('.add-action').click()");
   await until(() => client.evaluate("Boolean(document.getElementById('action-label'))"), "add global command");
-  const command = "[IO.File]::WriteAllText((Join-Path {{cwd}} 'action-proof.json'), (Get-Location).ProviderPath); exit";
+  const command = "[IO.File]::WriteAllText((Join-Path {{cwd}} 'action-proof.json'), (@{cwd=(Get-Location).ProviderPath; executable=[Diagnostics.Process]::GetCurrentProcess().MainModule.FileName} | ConvertTo-Json -Compress)); exit";
   await client.evaluate("(()=>{const field=document.getElementById('action-label');field.value='Terminal proof';field.dispatchEvent(new Event('input',{bubbles:true}))})()");
   await client.evaluate(`(()=>{const field=document.getElementById('action-command');field.value=${JSON.stringify(command)};field.dispatchEvent(new Event('input',{bubbles:true}))})()`);
   await client.evaluate("[...document.querySelectorAll('.scope-tabs button')].find(b=>b.textContent.trim()==='Project').click()");
@@ -309,15 +309,19 @@ async function verifyProjectActions() {
   await until(() => client.evaluate("[...document.querySelectorAll('.project-menu [role=menuitem]')].some(b=>b.textContent.trim()==='Terminal proof')"), "saved global Action refreshes menu");
   assert.equal(await client.evaluate("document.querySelector('.project-menu').textContent.includes('Other Project only')"), false);
   checks.push("Actions stay in Settings, default global, require explicit Project selection, preserve drafts and refresh correctly scoped menus");
-  const hasTerminal = runPowerShell("[bool]((Get-Command wt.exe -ErrorAction SilentlyContinue) -and (Get-Command powershell.exe -ErrorAction SilentlyContinue))", { capture: true }).trim() === "True";
-  if (hasTerminal) {
+  const tools = JSON.parse(runPowerShell("@{ wt=[bool](Get-Command wt.exe -ErrorAction SilentlyContinue); pwsh=[bool](Get-Command pwsh.exe -ErrorAction SilentlyContinue); powershell=[bool](Get-Command powershell.exe -ErrorAction SilentlyContinue) } | ConvertTo-Json -Compress", { capture: true }));
+  assert.equal(view.actions.some(action => action.id === "terminal"), tools.wt);
+  if (tools.pwsh || tools.powershell) {
     await client.evaluate("[...document.querySelectorAll('.project-menu [role=menuitem]')].find(b=>b.textContent.trim()==='Terminal proof').click()");
     const proof = join(active.cwd, "action-proof.json");
     await until(() => existsSync(proof), "native terminal Action writes cwd proof");
-    assert.equal(readFileSync(proof, "utf8").toLowerCase(), active.cwd.toLowerCase());
-    checks.push("registered Action crosses real renderer/backend/native Windows Terminal boundary with the clicked Project cwd");
+    const result = JSON.parse(readFileSync(proof, "utf8"));
+    assert.equal(result.cwd.toLowerCase(), active.cwd.toLowerCase());
+    const shell = tools.pwsh ? "pwsh.exe" : "powershell.exe";
+    assert.equal(basename(result.executable).toLowerCase(), shell);
+    checks.push(`registered Action crosses real renderer/backend/native boundary with the clicked Project cwd (${tools.wt ? "Windows Terminal" : "direct shell"}, ${shell})`);
   } else {
-    manualChecks.push("install Windows Terminal/Windows PowerShell and verify external terminal Action launch");
+    manualChecks.push("install PowerShell 7 or Windows PowerShell and verify external terminal Action launch");
     await client.evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))");
   }
   await client.evaluate("window.__actionProjectsStop()");
