@@ -38,3 +38,16 @@ Settings 仍拥有完整草稿、保存、丢弃与关闭确认；`ActionSetting
 当前依赖使用 root hoisted/copy layout；六个 workspace junction 由忽略目录中的真实副本代替。`tmp/sync-workspace-dependencies.mjs` 同步这些副本；共享包重新构建或合入远端共享代码后，须再运行它，避免测试引用旧 dist。没有改 `.npmrc`、lockfile 或产品依赖声明。不要再次直接运行普通 pnpm install 恢复坏链接。
 
 Desktop 起始 suite 在 Actions 改动下有 200 passed、7 failed；当时 7 个失败涉及的测试文件和产品模块均未改，且独立链接探针失败。最终合入文件路由后为 206 passed、7 failed，仍为同组链接相关 fixtures。共享 Session alias/worktree 和 VS Code workspace alias fixtures 也以相同方式失败。不能将这些失败标为通过，也不能把它们归因到本轮新功能。
+
+## 0.16.4 本地测试 MSI（非发布）
+
+版本由 `pnpm version:set 0.16.4` 写入 `apps/vscode/package.json`，CHANGELOG 的 `Unreleased` 条目移入 `[0.16.4] - 2026-11-05`。这些改动已在 quasi-main；main 仍为 0.16.3。
+
+本机没有 `FROSTPI_UPDATE_PUBLIC_KEY`、`TAURI_SIGNING_PRIVATE_KEY`，正式 `package:desktop:msi` 因此不可用。用户明确同意产物为**不启用自动更新的本地测试 MSI**：不创建密钥、不签名、不生成 `.sig` 或更新 manifest，也不改正式打包脚本。临时脚本 `tmp/package-local-test-msi.mjs` 复用正式构建输出与安装清单，但关闭 `createUpdaterArtifacts`，并保留 `tauri.conf.json` 的空 pubkey。该脚本与产物不可作为发布资产。
+
+- 产物 `artifacts/FrostPi-0.16.4-win32-x64-local-test.msi`，7,589,888 bytes，SHA-256 `c0917d8141aec740b58a1540e513ac6987252ebea89903215435a923bab445a1`。
+- MSI 属性：ProductName `FrostPi`、ProductVersion `0.16.4`、ALLUSERS=1（全用户安装，需要 UAC）、UpgradeCode 与正式安装一致；因此会升级本机已有的 0.16.3 安装（`G:\Apps\FrostPi`），不是并存。
+- 管理员解包核对载荷：exe FileVersion/ProductVersion `0.16.4`，backend.cjs、pi-extensions、LICENSE、Cargo.lock、package.json 均在预期目录；exe 未签名（预期）。
+- 本机 hoisted 依赖缺少若干包内 LICENSE 文件，正式 notices 生成失败，因此本地 MSI 未含 THIRD_PARTY_NOTICES.md 与 NATIVE_NOTICES.md。这只是本地测试产物；发布包必须走正式流程生成 notices。
+- 对解包后的真实载荷运行 Desktop GUI smoke，17 checks 通过，包括真实终端 Action、`updates({type:'read'})` 报告版本等于产品版本，以及 Settings 内 Updates 不发起网络检查。首次在该载荷上的 smoke 在既有 tray 恢复自动化处超时，重跑通过；未改产品代码。
+- 未验证：实际安装/UAC 升级/卸载、Authenticode 信任提示、正式签名与更新链路。安装后的运行效果需用户本地确认。
