@@ -2,7 +2,7 @@
 
 ## 已确认目标
 
-用户希望 Desktop 借用已有外部工具，减少从项目进入日常工作流的步骤，而不是内置另一套 IDE。一个终端 Action 只负责在项目目录打开新的外部终端窗口并运行用户配置的 PowerShell 命令；命令结束后窗口保留。FrostPi 不跟踪输出、运行状态或退出，也不负责关闭、重试和重启。
+用户希望 Desktop 借用已有外部工具，减少从项目进入日常工作流的步骤，而不是内置另一套 IDE。一个终端 Action 只负责在项目目录启动外部终端并运行用户配置的 PowerShell 命令；命令结束后 shell 保留。优先使用 `pwsh.exe`，其次 `powershell.exe`。存在 `wt.exe` 时在专用命名窗口 `FrostPi` 内新建 Tab，由 Windows Terminal 创建或复用这个窗口；不存在时由原生宿主直接启动选中的 shell。仅按程序可用性选择路径，启动或命令失败后不能换 shell 重跑。FrostPi 不跟踪输出、运行状态或退出，也不负责关闭、重试和重启。
 
 内置 lazygit 在启动时检测到工具及终端依赖后显示。自定义命令支持 `{{cwd}}`，将其作为当前 shell 安全引用后的路径参数展开。工作目录由后台根据用户点击的 Project 解析，不能由 renderer 提交，也不随 Session worktree 改变。
 

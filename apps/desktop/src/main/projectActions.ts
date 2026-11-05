@@ -164,7 +164,7 @@ export class ProjectActions {
   readonly #enabled = new Set<string>();
   readonly #commands: () => readonly DesktopCommandAction[];
   #terminal: string | undefined;
-  #powershell: string | undefined;
+  #shell: string | undefined;
 
   constructor(deps: ProjectActionDeps, actions: readonly ProjectAction[] = builtInActions()) {
     this.#deps = deps;
@@ -175,15 +175,11 @@ export class ProjectActions {
   /** Probes every action once; availability is startup state, so later PATH changes are ignored. */
   async initialize(environment: ProjectActionEnvironment = defaultEnvironment()): Promise<void> {
     this.#enabled.clear();
-    try {
-      this.#terminal = await findExecutable(environment, ["wt.exe"]);
-      this.#powershell = await findExecutable(environment, ["powershell.exe"]);
-    } catch {
-      // Availability probes may fail; command execution reports the missing prerequisite.
-      this.#terminal = this.#powershell = undefined;
-    }
+    // Optional probes are independent: unavailable Windows Terminal must not hide a usable shell.
+    this.#terminal = await findExecutable(environment, ["wt.exe"]).catch(() => undefined);
+    this.#shell = await findExecutable(environment, ["pwsh.exe", "powershell.exe"]).catch(() => undefined);
     for (const action of this.#actions) {
-      if (action.section === "actions" && (!this.#terminal || !this.#powershell)) continue;
+      if (action.section === "actions" && !this.#shell) continue;
       let available = true;
       if (action.detect) {
         try {
@@ -224,18 +220,22 @@ export class ProjectActions {
   }
 
   async #launchTerminal(root: string, command: string): Promise<void> {
-    if (!this.#terminal || !this.#powershell) {
-      throw new Error("Terminal Actions require Windows Terminal and Windows PowerShell on PATH. Install them and restart FrostPi.");
+    if (!this.#shell) {
+      throw new Error("Terminal Actions require pwsh.exe or powershell.exe on PATH. Install PowerShell and restart FrostPi.");
     }
     // Encode both the directory setup and the user command. Windows Terminal parses semicolons
     // even inside child arguments; UTF-16LE Base64 keeps paths/commands out of its parser.
     const script = `Set-Location -LiteralPath ${quotePowerShellLiteral(root)} -ErrorAction Stop\n${expandActionCommand(command, root)}`;
     const encoded = Buffer.from(script, "utf16le").toString("base64");
+    const shellArguments = ["-NoLogo", "-NoExit", "-EncodedCommand", encoded];
+    // WT owns named-window creation/reuse. Direct launches leave console hosting to Windows.
+    const executable = this.#terminal ?? this.#shell;
+    const args = this.#terminal ? ["-w", "FrostPi", "new-tab", this.#shell, ...shellArguments] : shellArguments;
     try {
-      await this.#deps.launch(this.#terminal, ["-w", "new", "new-tab", this.#powershell, "-NoLogo", "-NoExit", "-EncodedCommand", encoded]);
+      await this.#deps.launch(executable, args);
     } catch {
-      // Never echo a configured command or native error: commands can contain secrets.
-      throw new Error("Could not open a new terminal window for this Action.");
+      // Never retry the command or echo native errors: it may have side effects or contain secrets.
+      throw new Error("Could not start the terminal for this Action.");
     }
   }
 }

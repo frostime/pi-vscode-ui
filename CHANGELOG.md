@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Run custom global or Project-specific PowerShell commands in a new external Windows Terminal window from Desktop's Project menu. Configure them in Settings → Actions, use `{{cwd}}` for the Project directory, and open lazygit directly when installed.
+- Run custom global or Project-specific PowerShell commands from Desktop's Project menu. Configure them in Settings → Actions, use `{{cwd}}` for the Project directory, and open lazygit directly when installed. Actions prefer PowerShell 7 and reuse a dedicated Windows Terminal window when available.
 - Open a Desktop file link that does not exist as given by searching the Session working directory once, matching how VS Code already resolves a moved or stale path. The whitelist still checks the file that was found.
 
 ### Changed
