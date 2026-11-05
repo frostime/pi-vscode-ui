@@ -348,7 +348,7 @@ async function verifySettingsAndComposition() {
   await client.evaluate("[...document.querySelectorAll('.settings-dialog .categories button')].find(b=>b.textContent.includes('Updates')).click()");
   await until(() => client.evaluate("Boolean(document.querySelector('.settings-dialog .update-section'))"), "Updates inside Settings");
   const update = await client.evaluate("window.frostpiDesktop.updates({type:'read'})");
-  assert.equal(typeof update.currentVersion, "string");
+  assert.equal(update.currentVersion, JSON.parse(readFileSync(resolve("../vscode/package.json"), "utf8")).version, "running exe reports the product version");
   assert.equal(update.checked, false, "Opening Settings must not perform a network update check");
   assert.equal(update.installBlock?.reason, "sessions");
   assert.equal(await client.evaluate("[...document.querySelectorAll('.update-section button')].find(b=>b.textContent.includes('Install')).disabled"), true);
