@@ -136,6 +136,30 @@ describe("Desktop backend assembly", () => {
     const saved = JSON.parse(await readFile(join(directory, "state.json"), "utf8")) as { projects: Array<{ id: string }> };
     expect(saved.projects.map((project) => project.id)).toEqual(expected);
   });
+  it("refreshes command menus on settings Save and resolves command scope/cwd in the backend", async () => {
+    const { backend, native, events, send, handlers, directory } = await fixture({
+      projectActionEnvironment: { PATH: "C:/tools", exists: (path) => Promise.resolve(/(?:wt|powershell)\.exe$/u.test(path)) },
+    });
+    const first = backend.projects.list()[0]!;
+    const second = await backend.projects.addProject(await mkdtemp(join(directory, "second-")));
+    const commands = [{ id: "local", label: "Local", command: "Write-Output secret {{cwd}}", projectId: first.id }];
+    const settings = handlers.get("frostpi:settings:action")!;
+    expect(await settings({ type: "save", values: { ...backend.settingsStore.values, "desktop.actions": commands } })).toMatchObject({ ok: true });
+    const view = events.filter((event) => event.channel === "frostpi:projects:view").at(-1)?.value as DesktopProjectsView;
+    expect(view.actions).toContainEqual({ id: "custom:local", label: "Local", icon: "codicon-folder", section: "actions", scope: "project", projectId: first.id });
+    expect(JSON.stringify(view)).not.toContain("secret");
+
+    await send("frostpi:projects:action", second.id, "custom:local");
+    await vi.waitFor(() => expect(events.some((event) => (event.value as { message?: string })?.message === "This Action belongs to a different Project.")).toBe(true));
+    expect(native.launch).not.toHaveBeenCalled();
+    await send("frostpi:projects:action", first.id, "custom:local", "C:/renderer-injected");
+    await vi.waitFor(() => expect(native.launch).toHaveBeenCalledOnce());
+    const args = native.launch.mock.calls[0]![1] as string[];
+    const script = Buffer.from(args.at(-1)!, "base64").toString("utf16le");
+    expect(script).toContain(first.cwd.replaceAll("'", "''"));
+    expect(script).not.toContain("renderer-injected");
+    expect(backend.registry.snapshot().sessions).toHaveLength(0);
+  });
   it("runs a Project action for the project cwd and reports an unknown action as a toast", async () => {
     const { backend, native, events, send } = await fixture();
     const project = backend.projects.list()[0]!;

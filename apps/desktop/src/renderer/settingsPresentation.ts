@@ -90,6 +90,14 @@ export const settingsPages: readonly SettingsPage[] = [
     ],
   },
   {
+    id: "actions", title: "Actions", icon: "terminal", description: "Run your shell commands in a new external terminal from the Project menu.",
+    sections: [
+      { title: "Command actions", settings: [
+        { key: "desktop.actions", label: "Custom Actions", description: "Global commands appear in every Project. Project commands append to them. Commands run in PowerShell in the clicked Project's directory." },
+      ] },
+    ],
+  },
+  {
     id: "advanced", title: "Advanced", icon: "settings-gear", description: "Diagnostics and feature availability.",
     sections: [
       { title: "Diagnostics", settings: [

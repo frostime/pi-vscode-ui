@@ -10,7 +10,11 @@ While the same Session remains selected, sidebar hide/resize, theme/zoom changes
 
 Project order is user-owned. It is the order of the `projects` array in `state.json`, changes only through an explicit move, and survives restart. Reordering must not change a Project's id, name, cwd, the selected Project, or any Session's Project association.
 
-The Project action menu is projected from one main-process registry (`apps/desktop/src/main/projectActions.ts`). That registry owns which actions exist, their order, labels, icons and startup availability; the renderer renders the projected list and returns only `(projectId, actionId)`. The root directory is resolved in the main process and never travels from the renderer. Detection decides menu visibility only: it is not persisted, not exposed as settings, and never re-run from the renderer.
+The Project action menu is projected from one main-process registry (`apps/desktop/src/main/projectActions.ts`). That registry owns built-in availability and combines saved command metadata with the detected tools; the renderer returns only `(projectId, actionId)`, never a command or root directory. Main resolves the clicked Project's cwd and checks a command's saved Project association again at execution, rather than trusting a stale menu. Tool detection is startup state, not persisted settings and never re-run from the renderer.
+
+The sidebar Project menu contains Open In and Remove only. The main-panel Project menu adds one Actions section; global and Project commands differ by icon, not separate menu sections. Its settings gear opens the existing Settings Actions category in global scope. Project configuration requires an explicit Project selection independent of navigation; neither entry into settings nor editing another Project may select a Project implicitly.
+
+Terminal Actions deliberately hand execution to a new external Windows Terminal window running Windows PowerShell. FrostPi does not collect output, track lifetime, stop tasks or restart failures. The shell remains after command completion. User commands come only from Desktop settings and run only on an explicit click, never from repository configuration. `{{cwd}}` is a safely quoted complete PowerShell argument, not raw path interpolation or a general template language. Commands may contain credentials: keep them out of logs, error messages and settings change-summary text.
 
 Opening a folder, file or URL uses the shell's default action (`native.rs::shell_execute`, verb and class unset). Never pass an explicit `open` verb, the `explore` verb, or `SHOpenFolderAndSelectItems`: each of them bypasses a replaced default handler, for example a third-party file manager registered as the default verb for folders.
 
@@ -33,6 +37,8 @@ Report application shutdown as saved only after Registry session metadata and De
 ## Settings and initial import
 
 The development launcher isolates only FrostPi-owned settings/state and WebView2 storage. It must not redirect Pi agent/session directories or copy credentials. Normal packaged launches keep the existing profile, and an explicit `FROSTPI_DESKTOP_USER_DATA` takes precedence in both normal launch paths. A profile must be an absolute Windows path: reject relative paths at native startup, before claiming or opening a profile, with a visible error and nonzero exit. Do not guess a base directory, normalize a relative override or fall back to another profile. The private MSI relaunch argument preserves the updated instance's selected absolute profile.
+
+Global and Project command definitions share `desktop.actions` in the Desktop user settings. A missing `projectId` means global; an explicit id binds the command to that Desktop Project, not a path, Session cwd or current selection. Global commands remain usable in every Project and Project commands append without overriding global definitions. Save uses the existing settings draft/confirmation path, refreshes projected menus and never starts a command.
 
 Store VS Code/FrostPi keys as flat dot-delimited names; reserve `desktop.*` for Desktop-only settings. Types/defaults come from `desktopSettingDefinitions` in `apps/desktop/src/shared/desktopSettings.ts`; UI labels/groups must not redefine them. Saving settings must not stop or restart an existing Pi child.
 

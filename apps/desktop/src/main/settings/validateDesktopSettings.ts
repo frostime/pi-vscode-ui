@@ -1,6 +1,7 @@
 import { Ajv } from "ajv";
 import { normalizeProxyEndpoint } from "@frostime/pi-client/core/network/buildPiProcessEnvironment";
 import { desktopSettingDefinitions } from "../../shared/desktopSettings.js";
+import { commandActionIssue, type DesktopCommandAction } from "../../shared/desktopActions.js";
 
 // VS Code schemas carry editor-only annotations such as scope and enumDescriptions.
 const ajv = new Ajv({ strict: false, allErrors: true });
@@ -14,7 +15,8 @@ const validate = ajv.compile({
 
 /** Import checks individual values before resolving cross-setting dependencies such as proxy mode. */
 export function isSettingValueValid(key: string, value: unknown): boolean {
-  return Object.hasOwn(settingValidators, key) && settingValidators[key]!(value);
+  return Object.hasOwn(settingValidators, key) && settingValidators[key]!(value)
+    && (key !== "desktop.actions" || !commandActionIssue(value as DesktopCommandAction[]));
 }
 
 /** Messages name keys, never rejected values (which may contain a credential). */
@@ -32,6 +34,10 @@ export function validateDesktopSettings(values: unknown): string[] {
   }
   const settings = values as Record<string, unknown>;
   const issues: string[] = [];
+  if (settings["desktop.actions"] !== undefined) {
+    const issue = commandActionIssue(settings["desktop.actions"] as DesktopCommandAction[]);
+    if (issue) issues.push(`desktop.actions: ${issue}`);
+  }
   if (settings["frostpi.network.proxy.mode"] === "vscode") {
     issues.push("frostpi.network.proxy.mode 'vscode' requires VS Code. Choose inherit, custom, or direct.");
   }
