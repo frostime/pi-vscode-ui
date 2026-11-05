@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.4] - 2026-11-05
+
 ### Added
 
 - Run custom global or Project-specific PowerShell commands from Desktop's Project menu. Configure them in Settings → Actions, use `{{cwd}}` for the Project directory, and open lazygit directly when installed. Actions prefer PowerShell 7 and reuse a dedicated Windows Terminal window when available.
@@ -558,7 +560,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.2...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.4...HEAD
+[0.16.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.3...v0.16.4
 [0.16.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.2...v0.16.3
 [0.16.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.0...v0.16.1
