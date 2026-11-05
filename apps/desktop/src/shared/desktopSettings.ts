@@ -1,5 +1,6 @@
 import { frostPiSettingDefinitions } from "@frostime/pi-client/shared/configuration/frostPiSettingDefinitions.generated";
 import { chatTypographyDefaults } from "@frostime/pi-client/shared/model/chatTypography";
+import { desktopCommandActionSchema } from "./desktopActions.js";
 
 /** Original VS Code names are the storage and UI keys. Desktop-only keys belong under desktop.*. */
 export type DesktopSettingsValues = Record<string, unknown>;
@@ -53,6 +54,7 @@ export const relatedVscodeSettingDefinitions: Record<string, SettingDefinition> 
 // Add actual Desktop-only preferences here under desktop.*. Their renderer
 // labels and groups are separate from this schema and do not rename the keys.
 export const desktopOnlySettingDefinitions: Record<string, SettingDefinition> = {
+  "desktop.actions": { type: "array", default: [], items: desktopCommandActionSchema, description: "User-defined PowerShell commands opened in a new Windows Terminal window. Omit projectId for global commands; set it to a Desktop Project id for project-only commands." },
   "desktop.theme": { type: "string", default: "dark", enum: Object.keys(desktopThemes), description: "Desktop color theme: dark uses Dark Modern; light uses Light Modern. Changes apply immediately without restarting Pi." },
   "desktop.ui.fontFamily": { type: "string", default: "default", description: "Font family for Desktop interface text. Default uses the system UI font. Explicit Conversation and Composer fonts stay independent." },
   "desktop.ui.fontSize": { type: "number", default: 13, minimum: 10, maximum: 24, description: "Base size of interface text in pixels. Conversation and Composer text sizes stay independent." },
@@ -66,7 +68,7 @@ export const desktopSettingDefinitions: Record<string, SettingDefinition> = {
 };
 
 /** Main chooses one known field; this is not a renderer-supplied path or VS Code search grammar. */
-export type DesktopSettingsTarget = "all" | "frostpi.network.proxy.mode" | "frostpi.pi.executable";
+export type DesktopSettingsTarget = "all" | "desktop.actions" | "frostpi.network.proxy.mode" | "frostpi.pi.executable";
 
 export interface DesktopSettingsView {
   values: DesktopSettingsValues;

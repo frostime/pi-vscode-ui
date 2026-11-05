@@ -2,7 +2,7 @@
   import { onMount, untrack } from "svelte";
   import type { Snippet } from "svelte";
   import { DESKTOP_SIDEBAR_WIDTH } from "../shared/desktopBridge.js";
-  import { desktopThemes, type DesktopTheme } from "../shared/desktopSettings.js";
+  import { desktopThemes, type DesktopTheme, type DesktopSettingsTarget } from "../shared/desktopSettings.js";
   import type {
     DesktopProjectActionView,
     DesktopProjectActivity,
@@ -57,7 +57,7 @@
     onremove: (id: string) => void;
     onmove: (id: string, index: number) => void;
     onaction: (id: string, action: string) => void;
-    onsettings: () => void;
+    onsettings: (target?: DesktopSettingsTarget) => void;
     theme: DesktopTheme;
     themeBusy: boolean;
     ontheme: () => void;
@@ -89,7 +89,9 @@
   const activeProject = $derived(view.projects.find((project) => project.id === view.activeProjectId) ?? null);
   const activeSession = $derived(sessions.find((session) => session.id === activeSessionId));
   const differentDirectory = $derived(activeSession && activeProject && activeSession.cwd !== activeProject.cwd ? activeSession.cwd : null);
-  const projectActions = $derived<DesktopProjectActionView[]>(view.actions ?? []);
+  const projectActions = $derived<DesktopProjectActionView[]>((view.actions ?? []).filter((action) =>
+    (action.projectId === undefined || action.projectId === menu?.projectId)
+    && (action.section !== "actions" || menu?.anchor === contextButton)));
   // The menu replaces the path tooltip while it is open.
   const tooltipVisible = $derived(tooltip && menu === null && activeProject !== null);
   const sidebarVisible = $derived(!narrow && !hidden);
@@ -238,7 +240,7 @@
   }
 
   function menuFor(id: string): boolean {
-    return menu?.projectId === id;
+    return menu?.projectId === id && menu.anchor !== contextButton;
   }
 
   function toggleMenu(anchor: HTMLElement, project: { id: string; name: string }): void {
@@ -252,6 +254,14 @@
     menu = null;
     target.anchor.focus();
     onaction(target.projectId, action);
+  }
+
+  function configureActions(): void {
+    const target = menu;
+    if (!target) return;
+    menu = null;
+    target.anchor.focus();
+    onsettings("desktop.actions");
   }
 
   function runMenuRemove(): void {
@@ -466,7 +476,7 @@
         </button>
       {/if}
       <div class="footer-actions">
-        <button type="button" class="settings-button" onclick={onsettings}>
+        <button type="button" class="settings-button" onclick={() => onsettings()}>
           <span class="codicon codicon-settings-gear" aria-hidden="true"></span><span>Settings</span>
         </button>
         <button type="button" class="theme-button" title={themeAction} aria-label={themeAction} disabled={themeBusy} onclick={ontheme}>
@@ -559,7 +569,8 @@
     <!-- Keyed by anchor: switching triggers without a pointer event must remount, not reuse the old position. -->
     {#key menu.anchor}
       <ProjectActionMenu anchor={menu.anchor} projectName={menu.projectName}
-        actions={projectActions} onaction={runMenuAction} onremove={runMenuRemove} onclose={() => menu = null} />
+        actions={projectActions} showActions={menu.anchor === contextButton} onconfigure={configureActions}
+        onaction={runMenuAction} onremove={runMenuRemove} onclose={() => menu = null} />
     {/key}
   {/if}
 </div>

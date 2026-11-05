@@ -3,13 +3,17 @@
   import { postToHost } from "@frostime/pi-client/ui/bridge/hostBridge";
   import { desktopSettingDefinitions, type DesktopSettingsAction, type DesktopSettingsTarget, type DesktopSettingsView } from "../shared/desktopSettings.js";
   import type { DesktopUpdateAction, DesktopUpdateView } from "../shared/desktopUpdates.js";
+  import type { DesktopProject } from "../shared/desktopBridge.js";
+  import type { DesktopCommandAction } from "../shared/desktopActions.js";
+  import ActionSettings from "./ActionSettings.svelte";
   import SettingRow from "./SettingRow.svelte";
   import UpdateSection from "./UpdateSection.svelte";
   import { settingsPages, settingsByKey, matchesSettingSearch } from "./settingsPresentation.js";
   import { createSettingsDraft, settingDraftValue, changedSettingKeys, mergeSettingsDraft, parseSettingsDraft, type SettingsDraft } from "./settingsForm.js";
 
-  let { view, target = "all", busy, error, updateView, updateError = "", onaction, onupdate, onclose }: {
+  let { view, projects, target = "all", busy, error, updateView, updateError = "", onaction, onupdate, onclose }: {
     view: DesktopSettingsView;
+    projects: DesktopProject[];
     target?: DesktopSettingsTarget;
     busy: boolean;
     error?: string;
@@ -26,6 +30,8 @@
   let keepEditing = $state<HTMLButtonElement>();
   let search = $state("");
   let pageId = $state("appearance");
+  let actionsScope = $state<"global" | "project">("global");
+  let actionsProjectId = $state("");
   let customizedOnly = $state(false);
   let savedDraft = $state<SettingsDraft>({});
   let draft = $state<SettingsDraft>({});
@@ -103,6 +109,14 @@
   function updateField(key: string, value: string | boolean): void {
     draft[key] = value;
     delete fieldErrors[key];
+  }
+
+  function reviewValue(key: string, values: SettingsDraft): string | boolean {
+    if (key === "desktop.actions") {
+      const actions = JSON.parse(String(settingDraftValue(key, values))) as DesktopCommandAction[];
+      return `${actions.length} custom Action${actions.length === 1 ? "" : "s"}`;
+    }
+    return values[key] ?? "Default";
   }
 
   function resetField(key: string): void {
@@ -253,10 +267,17 @@
                   <h3 id={`section-${section.id}`}>{section.title}</h3>
                   <div class="group-card">
                     {#each section.settings as setting (setting.key)}
-                      <SettingRow {setting} definition={desktopSettingDefinitions[setting.key]!} value={settingDraftValue(setting.key, draft)}
-                        explicit={draft[setting.key] !== undefined} expanded={expanded[setting.key] ?? false} busy={busy || Boolean(view.error)} error={fieldErrors[setting.key] ?? ""}
-                        onchange={(value) => updateField(setting.key, value)} onreset={() => resetField(setting.key)}
-                        onexpand={(value) => expanded[setting.key] = value} oncopy={() => postToHost({ type: "copyText", text: setting.key })} />
+                      {#if setting.key === "desktop.actions"}
+                        <ActionSettings actions={JSON.parse(String(settingDraftValue(setting.key, draft))) as DesktopCommandAction[]} {projects}
+                          bind:scope={actionsScope} bind:projectId={actionsProjectId}
+                          busy={busy || Boolean(view.error)} error={fieldErrors[setting.key] ?? ""}
+                          onchange={(actions) => updateField(setting.key, JSON.stringify(actions, null, 2))} />
+                      {:else}
+                        <SettingRow {setting} definition={desktopSettingDefinitions[setting.key]!} value={settingDraftValue(setting.key, draft)}
+                          explicit={draft[setting.key] !== undefined} expanded={expanded[setting.key] ?? false} busy={busy || Boolean(view.error)} error={fieldErrors[setting.key] ?? ""}
+                          onchange={(value) => updateField(setting.key, value)} onreset={() => resetField(setting.key)}
+                          onexpand={(value) => expanded[setting.key] = value} oncopy={() => postToHost({ type: "copyText", text: setting.key })} />
+                      {/if}
                     {/each}
                   </div>
                 </section>
@@ -271,7 +292,7 @@
         <section class="changes" aria-label="Unsaved setting changes">
           <h3>Review changes</h3>
           {#each changedKeys as key (key)}
-            <div class="change-row"><span>{settingsByKey[key]!.label}</span><code>{savedDraft[key] ?? "Default"} → {draft[key] ?? "Default"}</code></div>
+            <div class="change-row"><span>{settingsByKey[key]!.label}</span><code>{reviewValue(key, savedDraft)} → {reviewValue(key, draft)}</code></div>
           {/each}
         </section>
       {/if}

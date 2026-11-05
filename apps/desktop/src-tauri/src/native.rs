@@ -4,7 +4,8 @@ use windows_sys::Win32::UI::Shell::{ShellExecuteExW, SHELLEXECUTEINFOW};
 
 const MAX_LAUNCH_TARGET_BYTES: usize = 4096;
 const MAX_LAUNCH_ARGUMENTS: usize = 16;
-const MAX_LAUNCH_ARGUMENT_BYTES: usize = 4096;
+// Encoded PowerShell startup scripts contain both the cwd and a configured terminal command.
+const MAX_LAUNCH_ARGUMENT_BYTES: usize = 32768;
 const SEE_MASK_NOASYNC: u32 = 0x0000_0100;
 
 pub fn execute(app: &tauri::AppHandle, packet: &Value) -> Result<Value, String> {
