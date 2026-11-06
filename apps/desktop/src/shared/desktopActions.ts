@@ -7,32 +7,29 @@ export interface DesktopCommandAction {
   projectId?: string;
 }
 
+/** An unfinished Action is the user's own draft: it may be saved, and it fails when run. */
 export const desktopCommandActionSchema = {
   type: "object",
   required: ["id", "label", "command"],
   additionalProperties: false,
   properties: {
     id: { type: "string", minLength: 1, maxLength: 80, pattern: "^[a-zA-Z0-9_-]+$" },
-    label: { type: "string", minLength: 1, maxLength: 80, pattern: "\\S", not: { pattern: "[\\u0000-\\u001f]" } },
-    command: { type: "string", minLength: 1, maxLength: 4096, pattern: "\\S", not: { pattern: "\\u0000" } },
+    label: { type: "string", maxLength: 80, not: { pattern: "[\\u0000-\\u001f]" } },
+    command: { type: "string", maxLength: 4096, not: { pattern: "\\u0000" } },
     projectId: { type: "string", minLength: 1 },
   },
 } as const;
 
-export function isActionLabelValid(label: string): boolean {
-  return Boolean(label.trim()) && label.length <= 80
-    && !Array.from(label).some((character) => character.charCodeAt(0) < 0x20);
+/** Saved but not runnable. Execution reports it; the settings file stays the user's own draft. */
+export function actionIsIncomplete(action: DesktopCommandAction): boolean {
+  return !action.label.trim() || !action.command.trim();
 }
 
-/** Shape is validated at the settings boundary; ids must also be unique across both scopes. */
+/** Shape is enforced by the settings schema; only identity that would make execution ambiguous is rejected. */
 export function commandActionIssue(actions: readonly DesktopCommandAction[]): string | undefined {
   const ids = new Set<string>();
   for (const action of actions) {
     if (ids.has(action.id)) return "Each Action must have a unique id.";
-    if (!action.label.trim()) return "Enter a name for each Action.";
-    if (!action.command.trim()) return "Enter a shell command for each Action.";
-    if (!isActionLabelValid(action.label)) return "Action names must be at most 80 characters and contain no control characters.";
-    if (action.command.length > 4096 || action.command.includes("\0")) return "Action commands must be at most 4096 characters and contain no null characters.";
     ids.add(action.id);
   }
   return undefined;
