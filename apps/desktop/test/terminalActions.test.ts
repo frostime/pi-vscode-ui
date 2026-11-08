@@ -119,6 +119,22 @@ describe("terminal Actions", () => {
 });
 
 describe("command settings", () => {
+  it("keeps an unfinished Action in the menu and refuses to run it", async () => {
+    const { actions, launch } = await registry(() => [{ id: "draft", label: " ", command: "" }]);
+
+    expect(actions.view.map(({ id, label }) => ({ id, label }))).toContainEqual({ id: "custom:draft", label: "Unnamed Action" });
+    await expect(actions.run("custom:draft", "C:/repo")).rejects.toThrow("This Action has no command");
+    expect(launch).not.toHaveBeenCalled();
+  });
+
+  it("runs an unnamed Action that has a command", async () => {
+    const { actions, launch } = await registry(() => [{ id: "anon", label: "", command: "pnpm dev" }]);
+
+    expect(actions.view.map(({ id, label }) => ({ id, label }))).toContainEqual({ id: "custom:anon", label: "Unnamed Action" });
+    await actions.run("custom:anon", "C:/repo");
+    expect(launch).toHaveBeenCalledOnce();
+  });
+
   it("persists global/project scope in the existing user settings store", async () => {
     const root = await mkdtemp(join(tmpdir(), "frostpi-action-settings-"));
     directories.push(root);
@@ -130,8 +146,12 @@ describe("command settings", () => {
     ];
     await store.replace({ "desktop.actions": commands });
     expect((await DesktopSettingsStore.open(path)).values["desktop.actions"]).toEqual(commands);
+    // An unfinished Action is the user's own draft: it is saved, and it fails only when run.
+    const draft = [{ id: "draft", label: " ", command: "" }];
+    await store.replace({ "desktop.actions": [...commands, ...draft] });
+    expect((await DesktopSettingsStore.open(path)).values["desktop.actions"]).toEqual([...commands, ...draft]);
+    await store.replace({ "desktop.actions": commands });
     for (const invalid of [
-      [{ id: "bad", label: " ", command: "secret" }],
       [{ id: "bad", label: "Bad", command: "secret\0" }],
       [{ id: "bad", label: "Bad", command: "secret", cwd: "C:/injected" }],
       [{ id: "bad", label: "Bad", command: "secret", projectId: 42 }],

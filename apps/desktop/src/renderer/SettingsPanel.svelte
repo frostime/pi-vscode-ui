@@ -30,8 +30,6 @@
   let keepEditing = $state<HTMLButtonElement>();
   let search = $state("");
   let pageId = $state("appearance");
-  let actionsScope = $state<"global" | "project">("global");
-  let actionsProjectId = $state("");
   let customizedOnly = $state(false);
   let savedDraft = $state<SettingsDraft>({});
   let draft = $state<SettingsDraft>({});
@@ -53,6 +51,7 @@
     return pages.flatMap((entry) => entry.sections.map((section) => ({
       id: `${entry.id}-${section.title.toLowerCase().replace(/\W+/g, "-")}`,
       title: filtering ? `${entry.title} · ${section.title}` : section.title,
+      flat: section.flat,
       settings: section.settings.filter((setting) => {
         if (customizedOnly && draft[setting.key] === undefined) return false;
         if (!matchesSettingSearch(setting, search)) return false;
@@ -257,20 +256,19 @@
                 {#each Object.keys(fieldErrors) as key (key)}<button type="button" class="error-link" onclick={() => revealSetting(key)}>{settingsByKey[key]!.label}</button>{/each}
               </div>
             {/if}
-            <h2 class="section-title">{filtering ? search.trim() ? "Search results" : "Customized settings" : page.title}</h2>
-            <p class="section-description">{filtering ? `${visibleCount} settings across all categories` : page.description}</p>
+            <h2 class="section-title" class:standalone={!filtering && !page.description}>{filtering ? search.trim() ? "Search results" : "Customized settings" : page.title}</h2>
+            {#if filtering || page.description}<p class="section-description">{filtering ? `${visibleCount} settings across all categories` : page.description}</p>{/if}
             {#if !filtering && page.updates}
               <UpdateSection view={updateView} error={updateError} onaction={requestUpdate} />
             {:else}
               {#each visibleSections as section (section.id)}
-                <section class="setting-group" aria-labelledby={`section-${section.id}`}>
-                  <h3 id={`section-${section.id}`}>{section.title}</h3>
+                <section class="setting-group" aria-labelledby={filtering || !section.flat ? `section-${section.id}` : undefined}>
+                  {#if filtering || !section.flat}<h3 id={`section-${section.id}`}>{section.title}</h3>{/if}
                   <div class="group-card">
                     {#each section.settings as setting (setting.key)}
                       {#if setting.key === "desktop.actions"}
                         <ActionSettings actions={JSON.parse(String(settingDraftValue(setting.key, draft))) as DesktopCommandAction[]} {projects}
-                          bind:scope={actionsScope} bind:projectId={actionsProjectId}
-                          busy={busy || Boolean(view.error)} error={fieldErrors[setting.key] ?? ""}
+                          busy={busy || Boolean(view.error)}
                           onchange={(actions) => updateField(setting.key, JSON.stringify(actions, null, 2))} />
                       {:else}
                         <SettingRow {setting} definition={desktopSettingDefinitions[setting.key]!} value={settingDraftValue(setting.key, draft)}
@@ -357,6 +355,7 @@
   .settings-body { flex: 1; min-width: 0; min-height: 0; padding: 24px 28px 32px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
   .content-inner { max-width: 820px; margin: 0 auto; }
   .section-title { font-size: calc(var(--font-size-ui) + 6px); font-weight: 600; margin: 0; }
+  .section-title.standalone { margin-bottom: 12px; }
   .section-description { font-size: var(--font-size-compact); margin: 6px 0 22px; }
   .setting-group > h3 { margin: 22px 4px 9px; color: var(--frost-muted); font-size: var(--font-size-compact); font-weight: 500; }
   .group-card { min-width: 0; border: 1px solid var(--frost-border); border-radius: 8px; background: var(--frost-surface); }

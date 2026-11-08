@@ -16,13 +16,15 @@ export interface SettingPresentation {
 export interface SettingsSection {
   title: string;
   settings: readonly SettingPresentation[];
+  /** The page has one section, so its card needs no heading of its own. */
+  flat?: boolean;
 }
 
 export interface SettingsPage {
   id: string;
   title: string;
   icon: string;
-  description: string;
+  description?: string;
   sections: readonly SettingsSection[];
   /** Application actions rather than saved settings; SettingsPanel renders the content. */
   updates?: boolean;
@@ -90,9 +92,9 @@ export const settingsPages: readonly SettingsPage[] = [
     ],
   },
   {
-    id: "actions", title: "Actions", icon: "terminal", description: "Run your shell commands in a new external terminal from the Project menu.",
+    id: "actions", title: "Actions", icon: "terminal",
     sections: [
-      { title: "Command actions", settings: [
+      { title: "Command actions", flat: true, settings: [
         { key: "desktop.actions", label: "Custom Actions", description: "Global commands appear in every Project. Project commands append to them. Commands run in PowerShell in the clicked Project's directory." },
       ] },
     ],
