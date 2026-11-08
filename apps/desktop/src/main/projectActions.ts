@@ -3,7 +3,7 @@ import { access } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import type { DesktopProjectActionView } from "../shared/desktopBridge.js";
-import { expandActionCommand, quotePowerShellLiteral, type DesktopCommandAction } from "../shared/desktopActions.js";
+import { actionHasNoCommand, expandActionCommand, quotePowerShellLiteral, type DesktopCommandAction } from "../shared/desktopActions.js";
 
 /** Tool detection input; injectable because the real probe depends on the machine's PATH. */
 export interface ProjectActionEnvironment {
@@ -199,7 +199,7 @@ export class ProjectActions {
     const saved = this.#commands();
     const ordered = [...saved.filter((command) => !command.projectId), ...saved.filter((command) => command.projectId)];
     const commands: DesktopProjectActionView[] = ordered.map(({ id, label, projectId }) => ({
-      id: `custom:${id}`, label, icon: projectId ? "codicon-folder" : "codicon-globe",
+      id: `custom:${id}`, label: label.trim() || "Unnamed Action", icon: projectId ? "codicon-folder" : "codicon-globe",
       section: "actions", scope: projectId ? "project" : "global", ...(projectId ? { projectId } : {}),
     }));
     return [...builtins, ...commands];
@@ -210,6 +210,8 @@ export class ProjectActions {
       const command = this.#commands().find((candidate) => candidate.id === id.slice("custom:".length));
       if (!command) throw new Error("This Action is no longer available.");
       if (command.projectId && command.projectId !== projectId) throw new Error("This Action belongs to a different Project.");
+      // An unfinished Action is saved on purpose; refuse it here instead of blocking the settings file.
+      if (actionHasNoCommand(command)) throw new Error("This Action has no command. Add one in Settings → Actions.");
       await this.#launchTerminal(root, command.command);
       return;
     }
