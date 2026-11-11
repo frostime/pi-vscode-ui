@@ -245,3 +245,32 @@ export function parseFileHref(href: string): FileReference | null {
     return parseFileReference(href, { requireKnownExtension: false });
   }
 }
+
+/**
+ * Reader-facing target of a file reference: absolute paths stay as written, and relative paths
+ * resolve against the Session cwd. This labels where a click leads; it is not the host's open path,
+ * which may still fall back to a workspace search when the reference as written is absent.
+ */
+export function absoluteFileReferencePath(path: string, cwd: string | undefined): string {
+  if (ABSOLUTE_PATH.test(path) || cwd === undefined || !ABSOLUTE_PATH.test(cwd)) return path;
+  return joinAbsolutePath(cwd, path);
+}
+
+function joinAbsolutePath(cwd: string, path: string): string {
+  const windows = WINDOWS_ABSOLUTE_PATH.test(cwd) || /^\\\\/.test(cwd);
+  const separator = windows ? "\\" : "/";
+  const drive = windows ? /^[a-z]:/i.exec(cwd)?.[0] ?? "" : "";
+  const unc = drive === "" && windows;
+  const rootLength = drive.length + (unc ? 2 : 0);
+  const segments: string[] = [];
+  for (const segment of `${cwd.slice(rootLength)}${separator}${path}`.split(/[\\/]+/)) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  const prefix = drive ? `${drive}${separator}` : unc ? "\\\\" : separator;
+  return `${prefix}${segments.join(separator)}`;
+}

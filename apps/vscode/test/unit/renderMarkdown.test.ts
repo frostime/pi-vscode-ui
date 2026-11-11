@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { parseFileReference } from "$shared/files/fileReferences.js";
+import { absoluteFileReferencePath, parseFileReference } from "$shared/files/fileReferences.js";
 import {
   ensureKatex,
   renderMarkdownHtml,
@@ -332,5 +332,25 @@ describe("sanitizeMermaidSvg", () => {
   it("fails closed on non-svg payload", () => {
     expect(sanitizeMermaidSvg("<div onclick=\"alert(1)\">x</div>")).toBeNull();
     expect(sanitizeMermaidSvg("")).toBeNull();
+  });
+});
+
+describe("absoluteFileReferencePath", () => {
+  it("resolves relative references against the session cwd", () => {
+    expect(absoluteFileReferencePath("src/a.ts", "C:\\repo")).toBe("C:\\repo\\src\\a.ts");
+    expect(absoluteFileReferencePath("src/a.ts", "/home/user/repo")).toBe("/home/user/repo/src/a.ts");
+  });
+
+  it("normalizes dot segments", () => {
+    expect(absoluteFileReferencePath("../b.ts", "C:\\repo\\src")).toBe("C:\\repo\\b.ts");
+  });
+
+  it("resolves against a UNC share", () => {
+    expect(absoluteFileReferencePath("src/a.ts", "\\\\server\\share")).toBe("\\\\server\\share\\src\\a.ts");
+  });
+
+  it("leaves the reference as written without a usable cwd", () => {
+    expect(absoluteFileReferencePath("src/a.ts", undefined)).toBe("src/a.ts");
+    expect(absoluteFileReferencePath("src/a.ts", "relative-cwd")).toBe("src/a.ts");
   });
 });

@@ -1,3 +1,95 @@
+<script lang="ts" module>
+  import { get } from "svelte/store";
+
+  import { absoluteFileReferencePath } from "$shared/files/fileReferences.js";
+
+  import { clientCapabilities as capabilitiesStore } from "../../../state/clientCapabilities.svelte";
+  import { presentationStore } from "../../../state/sessionViewStore.svelte";
+
+  /** Resting this long over a link reveals its target, so dragging across links stays quiet. */
+  const LINK_PREVIEW_DELAY_MS = 1_000;
+  const LINK_PREVIEW_GAP_PX = 6;
+  const LINK_PREVIEW_EDGE_PX = 8;
+
+  // One preview element and one pending timer serve every mounted message.
+  let previewElement: HTMLDivElement | undefined;
+  let previewTimer: ReturnType<typeof setTimeout> | undefined;
+  let previewAnchor: Element | undefined;
+
+  function scheduleLinkPreview(anchor: Element): void {
+    cancelLinkPreview();
+    previewAnchor = anchor;
+    previewTimer = setTimeout(() => {
+      previewTimer = undefined;
+      showLinkPreview(anchor);
+    }, LINK_PREVIEW_DELAY_MS);
+  }
+
+  function cancelLinkPreview(): void {
+    if (previewTimer !== undefined) {
+      clearTimeout(previewTimer);
+      previewTimer = undefined;
+    }
+    previewAnchor = undefined;
+    if (previewElement) previewElement.dataset.visible = "false";
+  }
+
+  function showLinkPreview(anchor: Element): void {
+    const label = linkPreviewLabel(anchor);
+    if (!label) return;
+    previewAnchor = anchor;
+    const element = previewElement ?? createPreviewElement();
+    element.textContent = label;
+    positionLinkPreview(element, anchor);
+    element.dataset.visible = "true";
+  }
+
+  function createPreviewElement(): HTMLDivElement {
+    const element = document.createElement("div");
+    element.className = "link-preview";
+    element.setAttribute("role", "tooltip");
+    document.body.append(element);
+    previewElement = element;
+    return element;
+  }
+
+  function linkPreviewLabel(anchor: Element): string | undefined {
+    const path = anchor.getAttribute("data-file-path");
+    if (path) {
+      if (!get(capabilitiesStore).openReferencedLocation) return undefined;
+      const cwd = get(presentationStore).displayedSession?.cwd;
+      return `${absoluteFileReferencePath(path, cwd)}${fileLocationSuffix(anchor)}`;
+    }
+    const href = anchor.getAttribute("href");
+    return href && /^https?:\/\//i.test(href) ? href : undefined;
+  }
+
+  function fileLocationSuffix(anchor: Element): string {
+    const line = anchor.getAttribute("data-file-line");
+    if (!line) return "";
+    const column = anchor.getAttribute("data-file-column");
+    const endLine = anchor.getAttribute("data-file-end-line");
+    return `:${line}${column ? `:${column}` : ""}${endLine ? `-${endLine}` : ""}`;
+  }
+
+  function positionLinkPreview(element: HTMLDivElement, anchor: Element): void {
+    const anchorRect = anchor.getBoundingClientRect();
+    const { width, height } = element.getBoundingClientRect();
+    const maxLeft = window.innerWidth - width - LINK_PREVIEW_EDGE_PX;
+    const left = Math.min(Math.max(LINK_PREVIEW_EDGE_PX, anchorRect.left), Math.max(LINK_PREVIEW_EDGE_PX, maxLeft));
+    const below = anchorRect.bottom + LINK_PREVIEW_GAP_PX;
+    const above = anchorRect.top - height - LINK_PREVIEW_GAP_PX;
+    const top = below + height > window.innerHeight - LINK_PREVIEW_EDGE_PX && above >= LINK_PREVIEW_EDGE_PX ? above : below;
+    element.style.left = `${Math.round(left)}px`;
+    element.style.top = `${Math.round(top)}px`;
+  }
+
+  function anchorFromEvent(event: Event): Element | undefined {
+    const target = event.target instanceof Element ? event.target : null;
+    return target?.closest("a") ?? undefined;
+  }
+</script>
+
 <script lang="ts">
   import { postToHost } from "../../../bridge/hostBridge";
   import { clientCapabilities } from "../../../state/clientCapabilities.svelte";
@@ -172,9 +264,51 @@
     return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
   }
 
+  // ---- Link target preview ----
+
+  function handlePointerOver(event: PointerEvent): void {
+    const anchor = anchorFromEvent(event);
+    if (!anchor || anchor === previewAnchor) return;
+    scheduleLinkPreview(anchor);
+  }
+
+  function handlePointerOut(event: PointerEvent): void {
+    const anchor = anchorFromEvent(event);
+    if (!anchor || anchor !== previewAnchor) return;
+    const related = event.relatedTarget;
+    if (related instanceof Node && anchor.contains(related)) return;
+    cancelLinkPreview();
+  }
+
+  function handleFocusIn(event: FocusEvent): void {
+    const anchor = anchorFromEvent(event);
+    if (!anchor) return;
+    cancelLinkPreview();
+    showLinkPreview(anchor);
+  }
+
   function linkActions(node: HTMLElement): { destroy(): void } {
+    const hide = (): void => cancelLinkPreview();
     node.addEventListener("click", handleClick);
-    return { destroy: () => node.removeEventListener("click", handleClick) };
+    node.addEventListener("pointerover", handlePointerOver);
+    node.addEventListener("pointerout", handlePointerOut);
+    node.addEventListener("focusin", handleFocusIn);
+    node.addEventListener("focusout", hide);
+    // A fixed preview does not follow its anchor, so any scroll or resize retires it.
+    window.addEventListener("scroll", hide, true);
+    window.addEventListener("resize", hide);
+    return {
+      destroy: () => {
+        node.removeEventListener("click", handleClick);
+        node.removeEventListener("pointerover", handlePointerOver);
+        node.removeEventListener("pointerout", handlePointerOut);
+        node.removeEventListener("focusin", handleFocusIn);
+        node.removeEventListener("focusout", hide);
+        window.removeEventListener("scroll", hide, true);
+        window.removeEventListener("resize", hide);
+        if (previewAnchor && node.contains(previewAnchor)) cancelLinkPreview();
+      },
+    };
   }
 </script>
 

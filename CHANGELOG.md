@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Show where a Markdown link leads when the pointer rests over it: a file reference reveals its resolved path and line, an external link reveals the full URL.
+
 ### Fixed
 
 - Show one Reasoning entry for adjacent thinking blocks in the same assistant reply instead of a stack of identical rows, and skip empty thinking blocks that rendered a blank row.
