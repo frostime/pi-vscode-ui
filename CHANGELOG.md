@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Show one Reasoning entry for adjacent thinking blocks in the same assistant reply instead of a stack of identical rows, and skip empty thinking blocks that rendered a blank row.
+
 ## [0.16.5] - 2026-11-08
 
 ### Changed

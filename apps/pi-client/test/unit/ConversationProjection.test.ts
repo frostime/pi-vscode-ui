@@ -1022,6 +1022,28 @@ describe("ConversationProjection", () => {
     expect(normalizePersistedProjection(projection)).toEqual(normalizePersistedProjection(replacement));
   });
 
+  it("joins adjacent thinking blocks into one reasoning activity and drops empty ones", () => {
+    const projection = new ConversationProjection();
+    projection.replaceEntries([
+      userEntry("u1", null, "Explain the split", 1),
+      assistantEntry("a1", "u1", [
+        { type: "thinking", thinking: "First thought." },
+        { type: "thinking", thinking: "" },
+        { type: "thinking", thinking: "Second thought." },
+        { type: "text", text: "Answer" },
+        { type: "thinking", thinking: "After the answer." },
+        { type: "thinking", thinking: "   " },
+      ], "stop", 2),
+    ], []);
+
+    const [turn] = turns(projection.read().items);
+    const reasoning = turn?.items.flatMap((item) => item.type === "reasoning" ? [{ id: item.id, text: item.text }] : []);
+    expect(reasoning).toEqual([
+      { id: "assistant-a1:reasoning:0", text: "First thought.\n\nSecond thought." },
+      { id: "assistant-a1:reasoning:4", text: "After the answer." },
+    ]);
+  });
+
   it("projects one indexed tool card through preparation, binding, execution, final replacement, and persisted takeover", () => {
     const projection = new ConversationProjection();
     projection.appendUserPrompt("Inspect", [], 1);

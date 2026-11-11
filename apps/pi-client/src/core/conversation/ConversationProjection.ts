@@ -1087,15 +1087,22 @@ function assistantActivities(
   blocksFromContent: (content: unknown, idPrefix: string) => MessageBlockView[],
 ): AgentActivityView[] {
   const activities: AgentActivityView[] = [];
-  for (const part of parts) {
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index]!;
     if (part.type === "thinking") {
-      activities.push({
-        id: `${messageId}:reasoning:${part.contentIndex}`,
-        type: "reasoning",
-        text: part.text,
-        status,
-        timestamp,
-      });
+      const run = thinkingRunText(parts, index);
+      index = run.lastIndex;
+      const reasoningText = run.text.trim();
+      // Pi can emit an empty thinking block between real ones; it carries nothing to read.
+      if (reasoningText) {
+        activities.push({
+          id: `${messageId}:reasoning:${part.contentIndex}`,
+          type: "reasoning",
+          text: reasoningText,
+          status,
+          timestamp,
+        });
+      }
     } else if (part.type === "text" && part.text) {
       activities.push(responseActivity(messageId, part.contentIndex, [{ type: "text", text: part.text }], status, timestamp));
     } else if (part.type === "image") {
@@ -1129,6 +1136,35 @@ function assistantActivities(
     activities.push(responseActivity(messageId, errorIndex, [{ type: "error", text: errorMessage }], status, timestamp));
   }
   return activities;
+}
+
+/**
+ * One reasoning activity covers a run of adjacent thinking blocks. A provider may split one answer's
+ * reasoning into several blocks (the OpenAI Responses API emits one reasoning item per summary
+ * part). Pi replays those blocks separately, so the projection joins only the run and keeps the
+ * first block's content index as the activity identity. A text or tool part ends the run.
+ */
+function thinkingRunText(
+  parts: readonly AdaptedAssistantPart[],
+  startIndex: number,
+): { text: string; lastIndex: number } {
+  const start = parts[startIndex];
+  if (start?.type !== "thinking") return { text: "", lastIndex: startIndex };
+  let text = start.text;
+  let lastIndex = startIndex;
+  for (let next = startIndex + 1; next < parts.length; next += 1) {
+    const adjacent = parts[next];
+    if (adjacent?.type !== "thinking") break;
+    text = joinThinking(text, adjacent.text);
+    lastIndex = next;
+  }
+  return { text, lastIndex };
+}
+
+function joinThinking(left: string, right: string): string {
+  if (!left) return right;
+  if (!right) return left;
+  return `${left}\n\n${right}`;
 }
 
 function responseActivity(
