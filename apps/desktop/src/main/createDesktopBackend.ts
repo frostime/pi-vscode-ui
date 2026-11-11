@@ -13,6 +13,7 @@ import { createDesktopHost } from "./desktopHost.js";
 import { DesktopProjects } from "./desktopProjects.js";
 import { ProjectActions, type ProjectActionEnvironment } from "./projectActions.js";
 import type { DesktopProjectsView } from "../shared/desktopBridge.js";
+import type { DesktopCommandAction } from "../shared/desktopActions.js";
 import {
   isDesktopUpdateNativeView, parseDesktopUpdateAction,
   type DesktopUpdateInstallBlock, type DesktopUpdateNativeView, type DesktopUpdatePreparation, type DesktopUpdateView,
@@ -59,6 +60,7 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
   const projectActions = new ProjectActions({
     launch: (executable, args) => native.launch(executable, args),
     openPath: (path) => native.openPath(path),
+    commands: () => (settingsStore.values["desktop.actions"] ?? []) as DesktopCommandAction[],
   });
   await projectActions.initialize(options.projectActionEnvironment);
   await projects.restore(stateStore.projects);
@@ -219,7 +221,7 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
     applyAppearance();
     registry.refreshConfigurationState();
     connection.post({ type: "setChatTypography", typography: readChatTypography(host.configuration.getConfiguration("chat")) });
-    connection.refresh();
+    publishProjects();
     publish("frostpi:settings:view", settings.view());
   });
   const unsubscribeSettingsAction = transport.handle("frostpi:settings:action", async (action: unknown): Promise<DesktopSettingsResult> => {
@@ -287,7 +289,7 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
     if (typeof id !== "string" || typeof action !== "string") return;
     const project = projects.list().find((candidate) => candidate.id === id);
     if (!project) throw new Error("This Desktop Project is no longer available.");
-    await projectActions.run(action, project.cwd);
+    await projectActions.run(action, project.cwd, project.id);
   });
   listen("frostpi:sidebar:set", (layout) => navigation.setSidebar(layout));
   listen("frostpi:dialog:response", (id, value) => interactions.respond(id, value));

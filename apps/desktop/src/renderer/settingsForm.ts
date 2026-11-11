@@ -1,4 +1,5 @@
 import { desktopSettingDefinitions, type DesktopSettingsValues } from "../shared/desktopSettings.js";
+import { commandActionIssue, type DesktopCommandAction } from "../shared/desktopActions.js";
 import { settingsByKey } from "./settingsPresentation.js";
 
 /** Only explicit overrides are present. Text preserves unfinished numbers and JSON until Save. */
@@ -65,6 +66,19 @@ export function parseSettingsDraft(draft: SettingsDraft): { values: DesktopSetti
         || (definition.maximum !== undefined && Number(value) > definition.maximum)) {
         errors[key] = `Enter a number${definition.minimum !== undefined ? ` from ${definition.minimum / scale}` : ""}${definition.maximum !== undefined ? ` to ${definition.maximum / scale}` : ""}${setting.unit ? ` ${setting.unit}` : ""}.`;
         continue;
+      }
+    }
+    if (key === "desktop.actions") {
+      const entries = value as unknown[];
+      if (!entries.every((entry) => entry !== null && typeof entry === "object"
+        && "id" in entry && typeof entry.id === "string"
+        && "label" in entry && typeof entry.label === "string"
+        && "command" in entry && typeof entry.command === "string"
+        && (!("projectId" in entry) || typeof entry.projectId === "string"))) {
+        errors[key] = "Each Action needs an id, a name and a shell command, with an optional Project id.";
+      } else {
+        const issue = commandActionIssue(entries as DesktopCommandAction[]);
+        if (issue) errors[key] = issue;
       }
     }
     if (definition.enum && !definition.enum.includes(String(value))) errors[key] = "Choose a listed option.";

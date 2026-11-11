@@ -27,6 +27,10 @@ export interface DesktopProjectActionView {
   id: string;
   label: string;
   icon: string;
+  /** Missing means Open In. Command actions are shown only in the main-panel Project menu. */
+  section?: "actions";
+  scope?: "global" | "project";
+  projectId?: string;
 }
 
 export interface DesktopProjectNavigationView {

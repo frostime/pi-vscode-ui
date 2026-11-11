@@ -1,9 +1,8 @@
-import { basename, isAbsolute, resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 
 import * as vscode from "vscode";
 
-import type { WorkspaceFileSearchOptions } from "@frostime/pi-client/host/file-search/fdArgs";
-import { WorkspaceFileSearch } from "@frostime/pi-client/host/file-search/WorkspaceFileSearch";
+import { findWorkspaceFile } from "@frostime/pi-client/host/file-search/fallbackFileSearch";
 
 export interface ReferencedLocation {
   path: string;
@@ -11,16 +10,6 @@ export interface ReferencedLocation {
   column?: number | undefined;
   endLine?: number | undefined;
 }
-
-/**
- * Deliberately narrower than mention search: no session boosts, no files.exclude
- * config — a linked file should open even when hidden from the explorer.
- */
-const FALLBACK_SEARCH_OPTIONS: WorkspaceFileSearchOptions = {
-  excludeRules: [],
-  respectIgnoreFiles: true,
-  followSymlinks: false,
-};
 
 /**
  * Opens a referenced file and applies its 1-based line/column/endLine.
@@ -46,32 +35,6 @@ export async function openReferencedLocation(
   // Nothing plausible matched: open the original path anyway so VS Code's
   // "nonexistent file" error is what the user sees.
   return openInEditor(uri, reference);
-}
-
-/**
- * One-shot fd lookup for a reference that does not exist as given. fd output is
- * workspace-relative, so an absolute reference (typically from another machine
- * or a moved file) can never match as-is; the basename still identifies the
- * file. Best-effort: any failure keeps the caller's original behavior.
- */
-async function findWorkspaceFile(
-  referencePath: string,
-  baseDirectory?: string,
-): Promise<string | undefined> {
-  if (!baseDirectory) return undefined;
-  const query = isAbsolute(referencePath) ? basename(referencePath) : referencePath;
-  try {
-    const [top] = await new WorkspaceFileSearch().search(
-      baseDirectory,
-      query,
-      1,
-      new Set(),
-      FALLBACK_SEARCH_OPTIONS,
-    );
-    return top && !top.isDirectory ? resolve(baseDirectory, top.path) : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 async function pathExists(uri: vscode.Uri): Promise<boolean> {

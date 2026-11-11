@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.5] - 2026-11-08
+
+### Changed
+
+- Configure Desktop Actions in one list instead of switching to a scope and choosing a Project first. The list groups Global commands, then each Project's, a row expands into its own editor, and Move up/Move down set the order they appear in the Project menu.
+- Save an unfinished Action instead of blocking the whole settings change. An Action with no name appears as `Unnamed Action` and still runs; one with no command reports that when clicked.
+
+## [0.16.4] - 2026-11-05
+
+### Added
+
+- Run custom global or Project-specific PowerShell commands from Desktop's Project menu. Configure them in Settings → Actions, use `{{cwd}}` for the Project directory, and open lazygit directly when installed. Actions prefer PowerShell 7 and reuse a dedicated Windows Terminal window when available.
+- Open a Desktop file link that does not exist as given by searching the Session working directory once, matching how VS Code already resolves a moved or stale path. The whitelist still checks the file that was found.
+
+### Changed
+
+- Open linked HTML and SVG files in the program the system associates with them instead of a plain-text editor, matching how other documents and images already open.
+
 ## [0.16.3] - 2026-11-04
 
 ### Changed
@@ -549,7 +567,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.2...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.5...HEAD
+[0.16.5]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.4...v0.16.5
+[0.16.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.3...v0.16.4
 [0.16.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.2...v0.16.3
 [0.16.2]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.0...v0.16.1

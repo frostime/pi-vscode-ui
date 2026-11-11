@@ -3,13 +3,17 @@
   import { postToHost } from "@frostime/pi-client/ui/bridge/hostBridge";
   import { desktopSettingDefinitions, type DesktopSettingsAction, type DesktopSettingsTarget, type DesktopSettingsView } from "../shared/desktopSettings.js";
   import type { DesktopUpdateAction, DesktopUpdateView } from "../shared/desktopUpdates.js";
+  import type { DesktopProject } from "../shared/desktopBridge.js";
+  import type { DesktopCommandAction } from "../shared/desktopActions.js";
+  import ActionSettings from "./ActionSettings.svelte";
   import SettingRow from "./SettingRow.svelte";
   import UpdateSection from "./UpdateSection.svelte";
   import { settingsPages, settingsByKey, matchesSettingSearch } from "./settingsPresentation.js";
   import { createSettingsDraft, settingDraftValue, changedSettingKeys, mergeSettingsDraft, parseSettingsDraft, type SettingsDraft } from "./settingsForm.js";
 
-  let { view, target = "all", busy, error, updateView, updateError = "", onaction, onupdate, onclose }: {
+  let { view, projects, target = "all", busy, error, updateView, updateError = "", onaction, onupdate, onclose }: {
     view: DesktopSettingsView;
+    projects: DesktopProject[];
     target?: DesktopSettingsTarget;
     busy: boolean;
     error?: string;
@@ -47,6 +51,7 @@
     return pages.flatMap((entry) => entry.sections.map((section) => ({
       id: `${entry.id}-${section.title.toLowerCase().replace(/\W+/g, "-")}`,
       title: filtering ? `${entry.title} · ${section.title}` : section.title,
+      flat: section.flat,
       settings: section.settings.filter((setting) => {
         if (customizedOnly && draft[setting.key] === undefined) return false;
         if (!matchesSettingSearch(setting, search)) return false;
@@ -103,6 +108,14 @@
   function updateField(key: string, value: string | boolean): void {
     draft[key] = value;
     delete fieldErrors[key];
+  }
+
+  function reviewValue(key: string, values: SettingsDraft): string | boolean {
+    if (key === "desktop.actions") {
+      const actions = JSON.parse(String(settingDraftValue(key, values))) as DesktopCommandAction[];
+      return `${actions.length} custom Action${actions.length === 1 ? "" : "s"}`;
+    }
+    return values[key] ?? "Default";
   }
 
   function resetField(key: string): void {
@@ -243,20 +256,26 @@
                 {#each Object.keys(fieldErrors) as key (key)}<button type="button" class="error-link" onclick={() => revealSetting(key)}>{settingsByKey[key]!.label}</button>{/each}
               </div>
             {/if}
-            <h2 class="section-title">{filtering ? search.trim() ? "Search results" : "Customized settings" : page.title}</h2>
-            <p class="section-description">{filtering ? `${visibleCount} settings across all categories` : page.description}</p>
+            <h2 class="section-title" class:standalone={!filtering && !page.description}>{filtering ? search.trim() ? "Search results" : "Customized settings" : page.title}</h2>
+            {#if filtering || page.description}<p class="section-description">{filtering ? `${visibleCount} settings across all categories` : page.description}</p>{/if}
             {#if !filtering && page.updates}
               <UpdateSection view={updateView} error={updateError} onaction={requestUpdate} />
             {:else}
               {#each visibleSections as section (section.id)}
-                <section class="setting-group" aria-labelledby={`section-${section.id}`}>
-                  <h3 id={`section-${section.id}`}>{section.title}</h3>
+                <section class="setting-group" aria-labelledby={filtering || !section.flat ? `section-${section.id}` : undefined}>
+                  {#if filtering || !section.flat}<h3 id={`section-${section.id}`}>{section.title}</h3>{/if}
                   <div class="group-card">
                     {#each section.settings as setting (setting.key)}
-                      <SettingRow {setting} definition={desktopSettingDefinitions[setting.key]!} value={settingDraftValue(setting.key, draft)}
-                        explicit={draft[setting.key] !== undefined} expanded={expanded[setting.key] ?? false} busy={busy || Boolean(view.error)} error={fieldErrors[setting.key] ?? ""}
-                        onchange={(value) => updateField(setting.key, value)} onreset={() => resetField(setting.key)}
-                        onexpand={(value) => expanded[setting.key] = value} oncopy={() => postToHost({ type: "copyText", text: setting.key })} />
+                      {#if setting.key === "desktop.actions"}
+                        <ActionSettings actions={JSON.parse(String(settingDraftValue(setting.key, draft))) as DesktopCommandAction[]} {projects}
+                          busy={busy || Boolean(view.error)}
+                          onchange={(actions) => updateField(setting.key, JSON.stringify(actions, null, 2))} />
+                      {:else}
+                        <SettingRow {setting} definition={desktopSettingDefinitions[setting.key]!} value={settingDraftValue(setting.key, draft)}
+                          explicit={draft[setting.key] !== undefined} expanded={expanded[setting.key] ?? false} busy={busy || Boolean(view.error)} error={fieldErrors[setting.key] ?? ""}
+                          onchange={(value) => updateField(setting.key, value)} onreset={() => resetField(setting.key)}
+                          onexpand={(value) => expanded[setting.key] = value} oncopy={() => postToHost({ type: "copyText", text: setting.key })} />
+                      {/if}
                     {/each}
                   </div>
                 </section>
@@ -271,7 +290,7 @@
         <section class="changes" aria-label="Unsaved setting changes">
           <h3>Review changes</h3>
           {#each changedKeys as key (key)}
-            <div class="change-row"><span>{settingsByKey[key]!.label}</span><code>{savedDraft[key] ?? "Default"} → {draft[key] ?? "Default"}</code></div>
+            <div class="change-row"><span>{settingsByKey[key]!.label}</span><code>{reviewValue(key, savedDraft)} → {reviewValue(key, draft)}</code></div>
           {/each}
         </section>
       {/if}
@@ -336,6 +355,7 @@
   .settings-body { flex: 1; min-width: 0; min-height: 0; padding: 24px 28px 32px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
   .content-inner { max-width: 820px; margin: 0 auto; }
   .section-title { font-size: calc(var(--font-size-ui) + 6px); font-weight: 600; margin: 0; }
+  .section-title.standalone { margin-bottom: 12px; }
   .section-description { font-size: var(--font-size-compact); margin: 6px 0 22px; }
   .setting-group > h3 { margin: 22px 4px 9px; color: var(--frost-muted); font-size: var(--font-size-compact); font-weight: 500; }
   .group-card { min-width: 0; border: 1px solid var(--frost-border); border-radius: 8px; background: var(--frost-surface); }

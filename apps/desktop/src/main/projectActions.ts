@@ -3,6 +3,7 @@ import { access } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import type { DesktopProjectActionView } from "../shared/desktopBridge.js";
+import { actionHasNoCommand, expandActionCommand, quotePowerShellLiteral, type DesktopCommandAction } from "../shared/desktopActions.js";
 
 /** Tool detection input; injectable because the real probe depends on the machine's PATH. */
 export interface ProjectActionEnvironment {
@@ -14,6 +15,7 @@ export interface ProjectActionEnvironment {
 export interface ProjectActionContext {
   readonly root: string;
   launch(executable: string, args: readonly string[]): Promise<void>;
+  launchTerminal(command: string): Promise<void>;
   openPath(path: string): Promise<string>;
 }
 
@@ -21,6 +23,7 @@ export interface ProjectAction {
   readonly id: string;
   readonly label: string;
   readonly icon: string;
+  readonly section?: "actions";
   /** Missing means always available. A throwing probe means unavailable, not a startup failure. */
   detect?(environment: ProjectActionEnvironment): Promise<boolean>;
   invoke(context: ProjectActionContext): Promise<void>;
@@ -30,6 +33,7 @@ interface ProjectActionDeps {
   // Property syntax: the registry hands these to actions, so they must not carry a `this` binding.
   launch: (executable: string, args: readonly string[]) => Promise<void>;
   openPath: (path: string) => Promise<string>;
+  commands?: () => readonly DesktopCommandAction[];
 }
 
 interface ToolActionDefinition {
@@ -101,6 +105,7 @@ function toolAction(definition: ToolActionDefinition): ProjectAction {
 
 /** Built per registry instance: each closure holds that instance's detection result. */
 function builtInActions(): ProjectAction[] {
+  let lazygit: string | undefined;
   return [
     {
       id: "reveal",
@@ -138,6 +143,17 @@ function builtInActions(): ProjectAction[] {
       candidates: ["wt.exe"],
       arguments: (root) => ["-d", root],
     }),
+    {
+      id: "lazygit", label: "lazygit", icon: "codicon-globe", section: "actions",
+      async detect(environment) {
+        lazygit = await findExecutable(environment, ["lazygit.exe"]);
+        return lazygit !== undefined;
+      },
+      async invoke(context) {
+        if (!lazygit) throw new Error("lazygit is not available on this machine.");
+        await context.launchTerminal(`& ${quotePowerShellLiteral(lazygit)}`);
+      },
+    },
   ];
 }
 
@@ -146,16 +162,24 @@ export class ProjectActions {
   readonly #deps: ProjectActionDeps;
   readonly #actions: readonly ProjectAction[];
   readonly #enabled = new Set<string>();
+  readonly #commands: () => readonly DesktopCommandAction[];
+  #terminal: string | undefined;
+  #shell: string | undefined;
 
   constructor(deps: ProjectActionDeps, actions: readonly ProjectAction[] = builtInActions()) {
     this.#deps = deps;
     this.#actions = [...actions];
+    this.#commands = deps.commands ?? (() => []);
   }
 
   /** Probes every action once; availability is startup state, so later PATH changes are ignored. */
   async initialize(environment: ProjectActionEnvironment = defaultEnvironment()): Promise<void> {
     this.#enabled.clear();
+    // Optional probes are independent: unavailable Windows Terminal must not hide a usable shell.
+    this.#terminal = await findExecutable(environment, ["wt.exe"]).catch(() => undefined);
+    this.#shell = await findExecutable(environment, ["pwsh.exe", "powershell.exe"]).catch(() => undefined);
     for (const action of this.#actions) {
+      if (action.section === "actions" && !this.#shell) continue;
       let available = true;
       if (action.detect) {
         try {
@@ -169,15 +193,51 @@ export class ProjectActions {
   }
 
   get view(): DesktopProjectActionView[] {
-    return this.#actions
+    const builtins: DesktopProjectActionView[] = this.#actions
       .filter((action) => this.#enabled.has(action.id))
-      .map(({ id, label, icon }) => ({ id, label, icon }));
+      .map(({ id, label, icon, section }) => ({ id, label, icon, ...(section ? { section, scope: "global" as const } : {}) }));
+    const saved = this.#commands();
+    const ordered = [...saved.filter((command) => !command.projectId), ...saved.filter((command) => command.projectId)];
+    const commands: DesktopProjectActionView[] = ordered.map(({ id, label, projectId }) => ({
+      id: `custom:${id}`, label: label.trim() || "Unnamed Action", icon: projectId ? "codicon-folder" : "codicon-globe",
+      section: "actions", scope: projectId ? "project" : "global", ...(projectId ? { projectId } : {}),
+    }));
+    return [...builtins, ...commands];
   }
 
-  async run(id: unknown, root: string): Promise<void> {
+  async run(id: unknown, root: string, projectId?: string): Promise<void> {
+    if (typeof id === "string" && id.startsWith("custom:")) {
+      const command = this.#commands().find((candidate) => candidate.id === id.slice("custom:".length));
+      if (!command) throw new Error("This Action is no longer available.");
+      if (command.projectId && command.projectId !== projectId) throw new Error("This Action belongs to a different Project.");
+      // An unfinished Action is saved on purpose; refuse it here instead of blocking the settings file.
+      if (actionHasNoCommand(command)) throw new Error("This Action has no command. Add one in Settings → Actions.");
+      await this.#launchTerminal(root, command.command);
+      return;
+    }
     const action = typeof id === "string" ? this.#actions.find((candidate) => candidate.id === id) : undefined;
     if (!action) throw new Error(`Unknown Project action: ${String(id)}`);
     if (!this.#enabled.has(action.id)) throw new Error(`Project action "${action.id}" is not available on this machine.`);
-    await action.invoke({ root, launch: this.#deps.launch, openPath: this.#deps.openPath });
+    await action.invoke({ root, launch: this.#deps.launch, launchTerminal: (command) => this.#launchTerminal(root, command), openPath: this.#deps.openPath });
+  }
+
+  async #launchTerminal(root: string, command: string): Promise<void> {
+    if (!this.#shell) {
+      throw new Error("Terminal Actions require pwsh.exe or powershell.exe on PATH. Install PowerShell and restart FrostPi.");
+    }
+    // Encode both the directory setup and the user command. Windows Terminal parses semicolons
+    // even inside child arguments; UTF-16LE Base64 keeps paths/commands out of its parser.
+    const script = `Set-Location -LiteralPath ${quotePowerShellLiteral(root)} -ErrorAction Stop\n${expandActionCommand(command, root)}`;
+    const encoded = Buffer.from(script, "utf16le").toString("base64");
+    const shellArguments = ["-NoLogo", "-NoExit", "-EncodedCommand", encoded];
+    // WT owns named-window creation/reuse. Direct launches leave console hosting to Windows.
+    const executable = this.#terminal ?? this.#shell;
+    const args = this.#terminal ? ["-w", "FrostPi", "new-tab", this.#shell, ...shellArguments] : shellArguments;
+    try {
+      await this.#deps.launch(executable, args);
+    } catch {
+      // Never retry the command or echo native errors: it may have side effects or contain secrets.
+      throw new Error("Could not start the terminal for this Action.");
+    }
   }
 }

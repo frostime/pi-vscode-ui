@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { devtoolsClient, openDebuggingSocket } from "./cdp-client.mjs";
 import { powerShellLiteral, runPowerShell } from "./powershell.mjs";
@@ -266,6 +266,66 @@ async function verifyParallelAndResume() {
   await until(() => client.evaluate("!document.querySelector('.resume-overlay') && document.querySelector('.conversation-frame').textContent.includes('desktop-limit-draft')"), "Resume loads saved history");
   checks.push("Resume cancellation preserves editor/draft; Project switch and saved-history loading work");
 }
+async function verifyProjectActions() {
+  await client.evaluate("window.__actionProjects=null;window.__actionProjectsStop=window.frostpiDesktop.onProjects(view=>window.__actionProjects=view);window.frostpiDesktop.requestProjects()");
+  await until(() => client.evaluate("Boolean(window.__actionProjects?.activeProjectId)"), "Project action context");
+  const view = await client.evaluate("window.__actionProjects");
+  const active = view.projects.find(entry => entry.id === view.activeProjectId);
+  const other = view.projects.find(entry => entry.id !== view.activeProjectId);
+  assert.ok(active && other, "Actions checks need two isolated Projects");
+  await client.evaluate("document.querySelector('.project-row .row-action').click()");
+  assert.equal(await client.evaluate("Boolean(document.querySelector('.project-menu .configure'))"), false);
+  assert.equal(await client.evaluate("[...document.querySelectorAll('.project-menu .menu-heading')].some(e=>e.textContent==='Actions')"), false);
+  await client.evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));document.querySelector('.project-context').click()");
+  await until(() => client.evaluate("Boolean(document.querySelector('.project-menu .configure'))"), "main Project Actions menu");
+  await client.evaluate("document.querySelector('.project-menu .configure').click()");
+  await until(() => client.evaluate("Boolean(document.querySelector('.action-settings'))"), "gear opens Actions inside Settings");
+  assert.equal(await client.evaluate("document.getElementById('settings-title').textContent"), "Settings");
+  assert.equal(await client.evaluate("document.querySelector('.scope-tabs [aria-pressed=true]').textContent.trim().startsWith('Global')"), true);
+  assert.equal(await client.evaluate("Boolean(document.getElementById('action-project'))"), false);
+  await client.evaluate("document.querySelector('.add-action').click()");
+  await until(() => client.evaluate("Boolean(document.getElementById('action-label'))"), "add global command");
+  const command = "[IO.File]::WriteAllText((Join-Path {{cwd}} 'action-proof.json'), (@{cwd=(Get-Location).ProviderPath; executable=[Diagnostics.Process]::GetCurrentProcess().MainModule.FileName} | ConvertTo-Json -Compress)); exit";
+  await client.evaluate("(()=>{const field=document.getElementById('action-label');field.value='Terminal proof';field.dispatchEvent(new Event('input',{bubbles:true}))})()");
+  await client.evaluate(`(()=>{const field=document.getElementById('action-command');field.value=${JSON.stringify(command)};field.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+  await client.evaluate("[...document.querySelectorAll('.scope-tabs button')].find(b=>b.textContent.trim()==='Project').click()");
+  assert.equal(await client.evaluate("document.getElementById('action-project').value"), "");
+  assert.equal(await client.evaluate("Boolean(document.getElementById('action-label'))"), false);
+  await client.evaluate(`(()=>{const select=document.getElementById('action-project');select.value=${JSON.stringify(other.id)};select.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  await client.evaluate("document.querySelector('.add-action').click()");
+  await until(() => client.evaluate("Boolean(document.getElementById('action-label'))"), "explicit Project command");
+  await client.evaluate("(()=>{const field=document.getElementById('action-label');field.value='Other Project only';field.dispatchEvent(new Event('input',{bubbles:true}))})()");
+  await client.evaluate("(()=>{const field=document.getElementById('action-command');field.value='Write-Output isolated';field.dispatchEvent(new Event('input',{bubbles:true}))})()");
+  await client.evaluate("[...document.querySelectorAll('.settings-dialog .categories button')].find(b=>b.textContent.includes('Appearance')).click()");
+  await client.evaluate("[...document.querySelectorAll('.settings-dialog .categories button')].find(b=>b.textContent.includes('Actions')).click()");
+  assert.equal(await client.evaluate("document.getElementById('action-project').value"), other.id);
+  assert.equal(await client.evaluate("document.getElementById('action-label').value"), "Other Project only");
+  await client.evaluate("document.querySelector('.settings-dialog .save').click()");
+  await until(() => client.evaluate("document.querySelector('.settings-dialog .save').disabled && document.querySelector('.save-status').textContent.includes('No unsaved')"), "central Settings saves Actions");
+  assert.equal(await client.evaluate("document.querySelector('.project-context .context-name').textContent"), active.name);
+  await client.evaluate("document.querySelector('.settings-dialog header button').click()");
+  await until(() => client.evaluate("!document.querySelector('.settings-dialog')"), "close Settings after saving Actions");
+  await client.evaluate("document.querySelector('.project-context').click()");
+  await until(() => client.evaluate("[...document.querySelectorAll('.project-menu [role=menuitem]')].some(b=>b.textContent.trim()==='Terminal proof')"), "saved global Action refreshes menu");
+  assert.equal(await client.evaluate("document.querySelector('.project-menu').textContent.includes('Other Project only')"), false);
+  checks.push("Actions stay in Settings, default global, require explicit Project selection, preserve drafts and refresh correctly scoped menus");
+  const tools = JSON.parse(runPowerShell("@{ wt=[bool](Get-Command wt.exe -ErrorAction SilentlyContinue); pwsh=[bool](Get-Command pwsh.exe -ErrorAction SilentlyContinue); powershell=[bool](Get-Command powershell.exe -ErrorAction SilentlyContinue) } | ConvertTo-Json -Compress", { capture: true }));
+  assert.equal(view.actions.some(action => action.id === "terminal"), tools.wt);
+  if (tools.pwsh || tools.powershell) {
+    await client.evaluate("[...document.querySelectorAll('.project-menu [role=menuitem]')].find(b=>b.textContent.trim()==='Terminal proof').click()");
+    const proof = join(active.cwd, "action-proof.json");
+    await until(() => existsSync(proof), "native terminal Action writes cwd proof");
+    const result = JSON.parse(readFileSync(proof, "utf8"));
+    assert.equal(result.cwd.toLowerCase(), active.cwd.toLowerCase());
+    const shell = tools.pwsh ? "pwsh.exe" : "powershell.exe";
+    assert.equal(basename(result.executable).toLowerCase(), shell);
+    checks.push(`registered Action crosses real renderer/backend/native boundary with the clicked Project cwd (${tools.wt ? "Windows Terminal" : "direct shell"}, ${shell})`);
+  } else {
+    manualChecks.push("install PowerShell 7 or Windows PowerShell and verify external terminal Action launch");
+    await client.evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))");
+  }
+  await client.evaluate("window.__actionProjectsStop()");
+}
 async function verifySettingsAndComposition() {
   await client.evaluate("document.querySelector('.settings-button').click()");
   await until(() => client.evaluate("Boolean(document.getElementById('setting-chat.fontSize'))"), "settings panel");
@@ -288,7 +348,7 @@ async function verifySettingsAndComposition() {
   await client.evaluate("[...document.querySelectorAll('.settings-dialog .categories button')].find(b=>b.textContent.includes('Updates')).click()");
   await until(() => client.evaluate("Boolean(document.querySelector('.settings-dialog .update-section'))"), "Updates inside Settings");
   const update = await client.evaluate("window.frostpiDesktop.updates({type:'read'})");
-  assert.equal(typeof update.currentVersion, "string");
+  assert.equal(update.currentVersion, JSON.parse(readFileSync(resolve("../vscode/package.json"), "utf8")).version, "running exe reports the product version");
   assert.equal(update.checked, false, "Opening Settings must not perform a network update check");
   assert.equal(update.installBlock?.reason, "sessions");
   assert.equal(await client.evaluate("[...document.querySelectorAll('.update-section button')].find(b=>b.textContent.includes('Install')).disabled"), true);
@@ -419,6 +479,7 @@ try {
   await verifyOversizedPrompt();
   await verifyParallelAndResume();
   if (process.argv.includes("--native-dialogs")) await verifyNativeDialogs();
+  await verifyProjectActions();
   await verifySettingsAndComposition();
   const initialWidth = await client.evaluate("innerWidth");
   const initialZoom = (await client.evaluate("window.frostpiDesktop.settings({type:'read'})")).values["desktop.zoomFactor"] ?? 1;

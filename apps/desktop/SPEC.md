@@ -10,11 +10,27 @@ While the same Session remains selected, sidebar hide/resize, theme/zoom changes
 
 Project order is user-owned. It is the order of the `projects` array in `state.json`, changes only through an explicit move, and survives restart. Reordering must not change a Project's id, name, cwd, the selected Project, or any Session's Project association.
 
-The Project action menu is projected from one main-process registry (`apps/desktop/src/main/projectActions.ts`). That registry owns which actions exist, their order, labels, icons and startup availability; the renderer renders the projected list and returns only `(projectId, actionId)`. The root directory is resolved in the main process and never travels from the renderer. Detection decides menu visibility only: it is not persisted, not exposed as settings, and never re-run from the renderer.
+The Project action menu is projected from one main-process registry (`apps/desktop/src/main/projectActions.ts`). That registry owns built-in availability and combines saved command metadata with the detected tools; the renderer returns only `(projectId, actionId)`, never a command or root directory. Main resolves the clicked Project's cwd and checks a command's saved Project association again at execution, rather than trusting a stale menu. Tool detection is startup state, not persisted settings and never re-run from the renderer.
+
+The sidebar Project menu contains Open In and Remove only. The main-panel Project menu adds one Actions section; global and Project commands differ by icon, not separate menu sections. Its settings gear opens the existing Settings Actions category. That category edits one list grouped by scope (Global first, then each Project that has commands), so scope is a row's property rather than a page mode: adding a command names its target group explicitly, and neither entering settings nor editing a Project may select a Project by navigation.
+
+Terminal Actions deliberately hand execution to external PowerShell, preferring `pwsh.exe` over `powershell.exe`. Windows Terminal is optional: when available, new tabs share its named `FrostPi` window; otherwise the native host starts the chosen shell directly. Choose the route from startup availability, never retry a failed launch or command through another host or shell. A command that cannot run reports why in the existing error toast; the settings page does not mark entries as valid or invalid. FrostPi does not collect output, track lifetime, stop tasks or restart failures. The shell remains after command completion. User commands come only from Desktop settings and run only on an explicit click, never from repository configuration. `{{cwd}}` is a safely quoted complete PowerShell argument, not raw path interpolation or a general template language. Commands may contain credentials: keep them out of logs, error messages and settings change-summary text.
 
 Opening a folder, file or URL uses the shell's default action (`native.rs::shell_execute`, verb and class unset). Never pass an explicit `open` verb, the `explore` verb, or `SHOpenFolderAndSelectItems`: each of them bypasses a replaced default handler, for example a third-party file manager registered as the default verb for folders.
 
 External programs are started by the native shell, never by Node. The Node backend runs inside a `KILL_ON_JOB_CLOSE` job object, so any process it spawns dies with the application; a launched editor or terminal must outlive FrostPi.
+
+## File and link navigation
+
+A file reference resolves relative paths from the displayed Session's cwd. A relative reference without a cwd fails; Desktop never falls back to the foreground Project, the process cwd or a guessed base directory.
+
+A reference that does not exist as given gets one best-effort workspace search, shared with VS Code (`apps/pi-client/src/host/file-search/fallbackFileSearch.ts`): it queries the reference path as written, or its basename when the reference is absolute. No match, a directory match, a failed search, a search timeout and a missing search tool all keep the original "does not exist" error. The search never creates a file.
+
+The whitelist (`isAllowedFileReferencePath`) checks both the requested path and its real path. It checks a searched match exactly like a direct reference: finding a file must never relax the type boundary or launch an executable through an alias.
+
+Directories, common extension-less document names and documents/media (`.htm`, `.html`, `.md`, `.pdf`, `.png`, `.jpg`, `.jpeg`, `.rst`, `.svg`, `.txt`, `.webp`) open through the shell's default action for that program. HTML and SVG belong there although they can carry scripts: the default browser or viewer is a separate sandbox, unlike the Markdown SVG that FrostPi sanitizes for its own webview. FrostPi does not inspect what it hands to the default program.
+
+Every other file opens only in VS Code through `vscode://file/<path>:<line>:<column>`; a line range keeps only its start. A failed external open reports that VS Code is required and must never fall back to the default association, which could run the file. Renderer-supplied application protocols never reach the OS.
 
 ## Window and application lifetime
 
@@ -33,6 +49,8 @@ Report application shutdown as saved only after Registry session metadata and De
 ## Settings and initial import
 
 The development launcher isolates only FrostPi-owned settings/state and WebView2 storage. It must not redirect Pi agent/session directories or copy credentials. Normal packaged launches keep the existing profile, and an explicit `FROSTPI_DESKTOP_USER_DATA` takes precedence in both normal launch paths. A profile must be an absolute Windows path: reject relative paths at native startup, before claiming or opening a profile, with a visible error and nonzero exit. Do not guess a base directory, normalize a relative override or fall back to another profile. The private MSI relaunch argument preserves the updated instance's selected absolute profile.
+
+Global and Project command definitions share `desktop.actions` in the Desktop user settings. A missing `projectId` means global; an explicit id binds the command to that Desktop Project, not a path, Session cwd or current selection. Global commands remain usable in every Project and Project commands append without overriding global definitions. Save uses the existing settings draft/confirmation path, refreshes projected menus and never starts a command. Saving does not block on an unfinished command: an entry with no name or no command is stored as the user's draft. An unnamed Action shows as `Unnamed Action` and still runs; one without a command reports that when run. Only duplicate ids, which would make execution ambiguous, are rejected.
 
 Store VS Code/FrostPi keys as flat dot-delimited names; reserve `desktop.*` for Desktop-only settings. Types/defaults come from `desktopSettingDefinitions` in `apps/desktop/src/shared/desktopSettings.ts`; UI labels/groups must not redefine them. Saving settings must not stop or restart an existing Pi child.
 

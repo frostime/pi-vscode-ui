@@ -131,7 +131,7 @@
   onremove={(id) => window.frostpiDesktop.removeProject(id)}
   onmove={(id, index) => window.frostpiDesktop.moveProject(id, index)}
   onaction={(id, action) => window.frostpiDesktop.projectAction(id, action)}
-  onsettings={() => showSettings()}
+  onsettings={showSettings}
   {theme} themeBusy={settingsBusy}
   ontheme={() => settingsAction({ type: "setTheme", theme: theme === "dark" ? "light" : "dark" })}
   onsidebar={(layout) => window.frostpiDesktop.setSidebar(layout)}
@@ -156,7 +156,7 @@
 </DesktopShell>
 
 {#if settingsOpen && settingsView}
-  <SettingsPanel view={settingsView} target={settingsTarget} busy={settingsBusy} error={settingsError}
+  <SettingsPanel view={settingsView} projects={projects.projects} target={settingsTarget} busy={settingsBusy} error={settingsError}
     updateView={updatesView} updateError={updatesError} onaction={settingsAction} onupdate={(action) => void updateAction(action)}
     onclose={() => settingsOpen = false} />
 {/if}

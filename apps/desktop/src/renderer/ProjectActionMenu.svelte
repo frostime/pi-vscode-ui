@@ -10,6 +10,8 @@
     anchor,
     projectName,
     actions,
+    showActions = false,
+    onconfigure,
     onaction,
     onremove,
     onclose,
@@ -17,6 +19,8 @@
     anchor: HTMLElement;
     projectName: string;
     actions: DesktopProjectActionView[];
+    showActions?: boolean;
+    onconfigure: () => void;
     onaction: (id: string) => void;
     onremove: () => void;
     onclose: () => void;
@@ -24,6 +28,8 @@
 
   let menuElement = $state<HTMLDivElement | null>(null);
   let placement = $state({ left: 0, top: 0 });
+  const openInActions = $derived(actions.filter((action) => action.section !== "actions"));
+  const commandActions = $derived(actions.filter((action) => action.section === "actions"));
 
   // The anchor sits in the scrolling `.project-list`, so a CSS popover would be
   // clipped by that container. The menu is mounted at shell level and placed
@@ -111,13 +117,28 @@
   bind:this={menuElement}
   style={`left: ${placement.left}px; top: ${placement.top}px`}
 >
-  {#each actions as action (action.id)}
+  <div class="menu-heading">Open In</div>
+  {#each openInActions as action (action.id)}
     <button type="button" class="menu-item" role="menuitem" onclick={() => onaction(action.id)}>
       <span class={`codicon ${action.icon}`} aria-hidden="true"></span>
       <span class="menu-label">{action.label}</span>
     </button>
   {/each}
-  {#if actions.length > 0}<div class="menu-separator" role="separator"></div>{/if}
+  {#if showActions}
+    <div class="menu-separator" role="separator"></div>
+    <div class="menu-heading"><span>Actions</span>
+      <button type="button" class="configure" role="menuitem" aria-label="Configure Actions" title="Configure Actions" onclick={onconfigure}>
+        <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
+      </button>
+    </div>
+    {#each commandActions as action (action.id)}
+      <button type="button" class="menu-item" role="menuitem" aria-label={`${action.label} (${action.scope === "project" ? "Project" : "Global"})`} onclick={() => onaction(action.id)}>
+        <span class={`codicon codicon-${action.scope === "project" ? "folder" : "globe"}`} aria-hidden="true"></span>
+        <span class="menu-label">{action.label}</span>
+      </button>
+    {/each}
+  {/if}
+  <div class="menu-separator" role="separator"></div>
   <button type="button" class="menu-item danger" role="menuitem" onclick={onremove}>
     <span class="codicon codicon-trash" aria-hidden="true"></span>
     <span class="menu-label">Remove Project</span>
@@ -128,10 +149,16 @@
   .project-menu {
     position: fixed; z-index: 100; min-width: 214px; max-width: min(300px, calc(100vw - 16px));
     display: flex; flex-direction: column; padding: 4px;
+    max-height: calc(100dvh - 16px); overflow-y: auto;
     border: 1px solid var(--frost-border); border-radius: 6px;
     background: var(--frost-surface-raised); box-shadow: var(--frost-shadow);
     font-family: var(--font-ui); font-size: calc(var(--font-size-ui) - 1.5px);
   }
+  .menu-heading { display: flex; align-items: center; justify-content: space-between; min-height: 24px; padding: 2px 8px; color: var(--frost-muted); font-size: var(--font-size-detail); }
+  .configure { display: inline-flex; padding: 3px; border: 0; border-radius: 3px; background: transparent; color: var(--frost-muted); cursor: pointer; }
+  .configure:hover { background: var(--frost-hover); color: var(--frost-text); }
+  .configure:focus-visible { outline: 1px solid var(--frost-focus); outline-offset: 1px; }
+  .configure .codicon { font-size: 13px; }
   .menu-item {
     width: 100%; display: flex; align-items: center; gap: 7px; padding: 5px 8px;
     border-radius: 4px; background: transparent; color: var(--frost-text);
