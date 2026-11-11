@@ -60,59 +60,40 @@ function mountSettings(target?: "desktop.actions") {
   return { ...view, categories, onaction };
 }
 
-async function editCommand(view: ReturnType<typeof mountSettings>, label: string, command: string): Promise<void> {
-  await fireEvent.input(view.getByRole("textbox", { name: "Menu name" }), { target: { value: label } });
-  await fireEvent.input(view.getByRole("textbox", { name: "PowerShell command" }), { target: { value: command } });
+/** Entering the page opens and focuses the first Action; wait for that before interacting. */
+async function settle(view: ReturnType<typeof mountSettings>): Promise<void> {
+  await waitFor(() => expect(document.activeElement).toBe(view.getByRole("textbox", { name: "Name" })));
+}
+
+async function editAction(view: ReturnType<typeof mountSettings>, row: RegExp, label: string, command: string): Promise<void> {
+  const button = view.getByRole("button", { name: row });
+  if (button.getAttribute("aria-expanded") !== "true") await fireEvent.click(button);
+  await fireEvent.input(view.getByRole("textbox", { name: "Name" }), { target: { value: label } });
+  await fireEvent.input(view.getByRole("textbox", { name: "Command" }), { target: { value: command } });
 }
 
 describe("Desktop Actions settings", () => {
-  it.each([undefined, "desktop.actions"] as const)("opens %s with a global editor and no implicit Project selection", async (target) => {
-    const view = mountSettings(target);
-    expect(view.getByRole("heading", { level: 2, name: target ? "Actions" : "Appearance" })).toBeTruthy();
-    if (!target) {
-      expect(view.queryByRole("group", { name: "Action scope" })).toBeNull();
-      await fireEvent.click(view.categories.getByRole("button", { name: /^Actions/ }));
-    }
-    expect(within(view.getByRole("group", { name: "Action scope" })).getByRole("button", { name: /^Global/ }).getAttribute("aria-pressed")).toBe("true");
-    expect(view.queryByRole("combobox", { name: "Project" })).toBeNull();
-    expect(view.getByText("Project directory at run time")).toBeTruthy();
-    expect(view.queryByText(projects[0]!.cwd)).toBeNull();
-    await fireEvent.click(view.getByRole("button", { name: "Project" }));
-    expect((view.getByRole("combobox", { name: "Project" }) as HTMLSelectElement).value).toBe("");
-    expect(view.queryByRole("textbox", { name: "Menu name" })).toBeNull();
-    expect(view.queryByRole("button", { name: "Add" })).toBeNull();
-    expect(view.onaction).not.toHaveBeenCalled();
-  });
-
-  it("retains global and explicitly selected Project edits across scopes, categories, search and external appearance updates until Save", async () => {
+  it("keeps Global and Project drafts across categories, search and external updates until Save", async () => {
     const view = mountSettings("desktop.actions");
+    await settle(view);
     const globalCommand = "global-tool --token sensitive-global {{cwd}}";
     const betaCommand = "beta-tool --token sensitive-beta {{cwd}}";
-    await editCommand(view, "Shared edited", globalCommand);
-    await fireEvent.click(view.getByRole("button", { name: "Project" }));
-    await fireEvent.change(view.getByRole("combobox", { name: "Project" }), { target: { value: "beta" } });
-    await editCommand(view, "Beta edited", betaCommand);
-    expect(view.getByText("beta-tool --token sensitive-beta 'C:\\Projects\\Beta''s tools; safe'")).toBeTruthy();
-    await fireEvent.change(view.getByRole("combobox", { name: "Project" }), { target: { value: "alpha" } });
-    expect((view.getByRole("textbox", { name: "Menu name" }) as HTMLInputElement).value).toBe("Alpha task");
-    await editCommand(view, "Alpha edited", "alpha-tool --changed");
-    await fireEvent.change(view.getByRole("combobox", { name: "Project" }), { target: { value: "beta" } });
-    expect((view.getByRole("textbox", { name: "PowerShell command" }) as HTMLTextAreaElement).value).toBe(betaCommand);
+    await editAction(view, /^Global tool/, "Shared edited", globalCommand);
+    await editAction(view, /^Beta task/, "Beta edited", betaCommand);
+    // Unfinished input survives leaving the category and an external view update.
     await fireEvent.click(view.categories.getByRole("button", { name: /^Appearance/ }));
     await view.rerender({ view: { ...settings, values: { ...settings.values, "desktop.theme": "light", "desktop.zoomFactor": 1.2 } } });
     await fireEvent.click(view.categories.getByRole("button", { name: /^Actions/ }));
-    expect((view.getByRole("combobox", { name: "Project" }) as HTMLSelectElement).value).toBe("beta");
-    expect((view.getByRole("textbox", { name: "PowerShell command" }) as HTMLTextAreaElement).value).toBe(betaCommand);
-    await fireEvent.click(within(view.getByRole("group", { name: "Action scope" })).getByRole("button", { name: /^Global/ }));
+    expect(view.getByRole("button", { name: /^Beta edited/ })).toBeTruthy();
+    await fireEvent.click(view.getByRole("button", { name: /^Beta edited/ }));
+    expect((view.getByRole("textbox", { name: "Command" }) as HTMLTextAreaElement).value).toBe(betaCommand);
     await fireEvent.input(view.getByRole("searchbox", { name: "Search settings" }), { target: { value: "desktop.actions" } });
-    expect((view.getByRole("textbox", { name: "PowerShell command" }) as HTMLTextAreaElement).value).toBe(globalCommand);
-    expect(view.queryByRole("button", { name: "Edit arguments…" })).toBeNull();
+    expect(view.getByRole("button", { name: /^Shared edited/ })).toBeTruthy();
+    // Commands may contain credentials, so the change summary never quotes them.
     await fireEvent.click(view.getByRole("button", { name: "Review changes" }));
     const review = view.getByRole("region", { name: "Unsaved setting changes" });
     expect(review.textContent).toContain("Custom Actions");
     expect(review.textContent).not.toContain("sensitive-");
-    expect(review.textContent).not.toContain(globalCommand);
-    expect(review.textContent).not.toContain(betaCommand);
     expect(view.onaction).not.toHaveBeenCalled();
     expect(projectAction).not.toHaveBeenCalled();
     await fireEvent.click(view.getByRole("button", { name: "Save" }));
@@ -121,7 +102,7 @@ describe("Desktop Actions settings", () => {
         "desktop.theme": "light", "desktop.zoomFactor": 1.2,
         "desktop.actions": [
           { ...configured[0], label: "Shared edited", command: globalCommand },
-          { ...configured[1], label: "Alpha edited", command: "alpha-tool --changed" },
+          { ...configured[1], label: "Alpha task", command: "alpha-tool" },
           { ...configured[2], label: "Beta edited", command: betaCommand },
         ],
       },
@@ -129,33 +110,25 @@ describe("Desktop Actions settings", () => {
     expect(projectAction).not.toHaveBeenCalled();
   });
 
-  it("validates additions before Save and keeps stable ids while central Discard restores deletions", async () => {
+  it("saves an unfinished Action as a draft and keeps its identity through delete and Discard", async () => {
     const view = mountSettings("desktop.actions");
-    await fireEvent.click(view.getByRole("button", { name: "Add" }));
-    await fireEvent.input(view.getByRole("textbox", { name: "PowerShell command" }), { target: { value: "new-tool" } });
-    await fireEvent.click(view.getByRole("button", { name: "Save" }));
-    expect(view.onaction).not.toHaveBeenCalled();
-    await waitFor(() => expect(document.activeElement).toBe(view.getByRole("textbox", { name: "Menu name" })));
-    await fireEvent.input(view.getByRole("textbox", { name: "Menu name" }), { target: { value: "New task" } });
+    await settle(view);
+    await fireEvent.click(within(view.getByRole("region", { name: "Global Actions" })).getByRole("button", { name: "Add" }));
+    // Only a missing command makes an Action unrunnable, so a name-less draft is saved.
+    await fireEvent.input(view.getByRole("textbox", { name: "Command" }), { target: { value: "new-tool" } });
     await fireEvent.click(view.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(view.onaction).toHaveBeenCalledTimes(1));
     const save = view.onaction.mock.calls[0]![0];
     expect(save.type).toBe("save");
     if (save.type !== "save") throw new Error("Expected settings Save");
-    const savedActions = save.values["desktop.actions"] as DesktopCommandAction[];
-    const added = savedActions.find((action) => action.label === "New task")!;
+    const added = (save.values["desktop.actions"] as DesktopCommandAction[]).find((action) => action.command === "new-tool")!;
+    expect(added.label).toBe("");
     expect(added.id).toMatch(/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/u);
     expect(added.projectId).toBeUndefined();
-    await fireEvent.input(view.getByRole("textbox", { name: "Menu name" }), { target: { value: "Renamed task" } });
-    await fireEvent.click(view.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(view.onaction).toHaveBeenCalledTimes(2));
-    const renamedSave = view.onaction.mock.calls[1]![0];
-    if (renamedSave.type !== "save") throw new Error("Expected settings Save");
-    expect((renamedSave.values["desktop.actions"] as DesktopCommandAction[]).find((action) => action.label === "Renamed task")?.id).toBe(added.id);
     await fireEvent.click(view.getByRole("button", { name: "Delete this Action" }));
-    expect(view.queryByRole("button", { name: /Renamed task/ })).toBeNull();
+    expect(view.queryByRole("button", { name: /^Unnamed Action/ })).toBeNull();
     await fireEvent.click(view.getByRole("button", { name: "Discard" }));
-    expect(view.getByRole("button", { name: /Renamed task/ })).toBeTruthy();
+    expect(view.getByRole("button", { name: /^Unnamed Action/ })).toBeTruthy();
     expect(projectAction).not.toHaveBeenCalled();
   });
 });
