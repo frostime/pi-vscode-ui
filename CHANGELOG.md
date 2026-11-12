@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Update the rendering libraries to releases that fix published advisories: Mermaid 11.16.1 (a crafted diagram could change shared JavaScript object defaults or hang rendering), markdown-it 14.3.3 (a malformed link reference could freeze the chat for seconds), DOMPurify 3.4.17 and KaTeX 0.18.2.
+- Stop Mermaid diagrams from contacting remote servers. A diagram could previously load remote images or style-sheet resources while it rendered, without `Load image`, which let message content report to a server of its choice. The Webview no longer has permission to load anything remote; `Load image` now has the Extension Host fetch that one image, over HTTPS only, through the configured FrostPi proxy and within the attachment size limit.
+- Keep `/editor` drafts private on shared machines: the temporary draft now lives in its own owner-only directory instead of a world-readable file in the system temporary directory, and is removed together with it.
+- Leave Pi's stderr out of exported diagnostics. The export now states only how much was captured, since stderr can contain prompts or credentials in forms no redaction recognizes; the session's error display and the FrostPi output channel still show it. Redaction of the remaining text also covers JSON fields, headers, command-line flags, URL query secrets, private keys and common provider token formats.
+- On Windows, refuse Markdown image paths that name a network share or device (`\\server\share`, `file://server/…`), which were opened automatically and could send the user's Windows credentials to a server chosen by message content.
+
 ## [0.16.5] - 2026-11-08
 
 ### Changed

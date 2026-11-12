@@ -48,6 +48,58 @@ describe("resolveLocalMarkdownImage", () => {
     expect(svg).toMatchObject({ ok: true, mimeType: "image/svg+xml" });
     await expect(resolveLocalMarkdownImage("https://example.com/image.png", directory, 1024)).resolves.toEqual({ ok: false, reason: "invalidSource" });
   });
+
+  it.each([
+    ["a UNC path", "\\\\attacker.example\\share\\image.png"],
+    ["a forward-slash UNC path", "//attacker.example/share/image.png"],
+    ["a mixed-separator UNC path", "/\\attacker.example\\share\\image.png"],
+    ["a WebDAV UNC path", "\\\\attacker.example@SSL\\share\\image.png"],
+    ["a file URL with a host", "file://attacker.example/share/image.png"],
+    ["an upper-case file URL with a host", "FILE://ATTACKER.EXAMPLE/share/image.png"],
+    ["a percent-encoded UNC path", "%5C%5Cattacker.example%5Cshare%5Cimage.png"],
+    ["a UNC device path", "\\\\?\\UNC\\attacker.example\\share\\image.png"],
+    ["a device namespace path", "\\\\.\\pipe\\image.png"],
+  ])("refuses %s on Windows before touching the filesystem", async (_form, source) => {
+    // A filesystem attempt would report notFound here; invalidSource proves there was none.
+    await expect(resolveLocalMarkdownImage(source, "C:\\workspace", 1024, "win32"))
+      .resolves.toEqual({ ok: false, reason: "invalidSource" });
+  });
+
+  it("still resolves drive and Session-relative paths on Windows", async () => {
+    for (const source of ["C:\\images\\a.png", "C:/images/a.png", "file:///C:/images/a.png", "images\\a.png", "..\\a.png"]) {
+      await expect(resolveLocalMarkdownImage(source, "C:\\workspace", 1024, "win32"))
+        .resolves.toEqual({ ok: false, reason: "notFound" });
+    }
+  });
+
+  it("lets a Session on a network share read only from that same share", async () => {
+    const cwd = "\\\\fileserver\\projects\\app";
+
+    await expect(resolveLocalMarkdownImage("docs\\a.png", cwd, 1024, "win32"))
+      .resolves.toEqual({ ok: false, reason: "notFound" });
+    await expect(resolveLocalMarkdownImage("\\\\FILESERVER\\projects\\shared\\a.png", cwd, 1024, "win32"))
+      .resolves.toEqual({ ok: false, reason: "notFound" });
+    await expect(resolveLocalMarkdownImage("\\\\fileserver\\other\\a.png", cwd, 1024, "win32"))
+      .resolves.toEqual({ ok: false, reason: "invalidSource" });
+    await expect(resolveLocalMarkdownImage("\\\\attacker.example\\projects\\a.png", cwd, 1024, "win32"))
+      .resolves.toEqual({ ok: false, reason: "invalidSource" });
+    // A file URL is judged by the path it names, like any other source.
+    await expect(resolveLocalMarkdownImage("file://fileserver/projects/app/a.png", cwd, 1024, "win32"))
+      .resolves.toEqual({ ok: false, reason: "notFound" });
+    await expect(resolveLocalMarkdownImage("file://attacker.example/projects/app/a.png", cwd, 1024, "win32"))
+      .resolves.toEqual({ ok: false, reason: "invalidSource" });
+  });
+
+  it.each([
+    ["\\\\?\\UNC\\fileserver\\projects\\app", "\\\\?\\UNC\\attacker.example\\share\\a.png"],
+    ["\\\\?\\UNC\\fileserver\\projects\\app", "a.png"],
+    ["\\\\.\\C:\\workspace", "\\\\.\\C:\\..\\UNC\\attacker.example\\share\\a.png"],
+    ["\\\\?\\C:\\workspace", "\\\\?\\C:\\workspace\\a.png"],
+  ])("never accepts a device-namespace path, even from a Session opened as %s", async (cwd, source) => {
+    // Every \\?\UNC\… path shares one parsed root, so a same-root exception would admit any server.
+    await expect(resolveLocalMarkdownImage(source, cwd, 1024, "win32"))
+      .resolves.toEqual({ ok: false, reason: "invalidSource" });
+  });
 });
 
 async function temporaryDirectory(): Promise<string> {

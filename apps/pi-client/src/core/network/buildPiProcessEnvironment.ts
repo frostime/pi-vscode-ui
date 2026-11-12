@@ -41,7 +41,10 @@ export function buildPiProcessEnvironment(
   return { env, label: "Custom proxy" };
 }
 
-/** Usage queries use current policy without changing the Host or a running Pi process. */
+/**
+ * Host-initiated requests (Provider Usage queries, consented remote Markdown images)
+ * use current policy without changing the Host or a running Pi process.
+ */
 export function buildProviderUsageEnvironment(
   base: NodeJS.ProcessEnv,
   proxy: ProxyConfiguration,

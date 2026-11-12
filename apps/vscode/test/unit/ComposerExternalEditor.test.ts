@@ -1,4 +1,6 @@
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname } from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -127,5 +129,59 @@ describe("ComposerExternalEditor", () => {
 
     editor.dispose();
     await expect(access(firstPath)).rejects.toThrow();
+  });
+
+  it.skipIf(process.platform === "win32")("keeps the draft unreadable by other local accounts", async () => {
+    const editor = new ComposerExternalEditor(vi.fn());
+    // A permissive umask must not widen the draft: the modes are requested explicitly.
+    const previousUmask = process.umask(0o000);
+    try {
+      await editor.open("session-1", "private prompt text");
+    } finally {
+      process.umask(previousUmask);
+    }
+    const fsPath = vscodeMock.documents[0]!.uri.fsPath;
+    const directory = dirname(fsPath);
+
+    expect((await stat(fsPath)).mode & 0o777).toBe(0o600);
+    expect((await stat(directory)).mode & 0o777).toBe(0o700);
+    // The draft sits alone in a directory created for it, not directly in the shared temp directory.
+    expect(dirname(directory)).toBe(tmpdir());
+    expect(await readdir(directory)).toEqual(["composer-draft.md"]);
+
+    editor.dispose();
+  });
+
+  it("removes the private directory with the draft, on apply and on dispose", async () => {
+    const applied: Array<{ sessionId: string; text: string }> = [];
+    const editor = new ComposerExternalEditor((result) => applied.push(result));
+
+    await editor.open("session-1", "first");
+    const first = vscodeMock.documents[0]!;
+    vscodeMock.closeDocumentEmitter.fire(first);
+    await vi.waitFor(() => expect(applied).toHaveLength(1));
+    await vi.waitFor(() => expect(access(dirname(first.uri.fsPath))).rejects.toThrow());
+
+    vscodeMock.documents.length = 0;
+    await editor.open("session-1", "second");
+    const second = vscodeMock.documents[0]!;
+    editor.dispose();
+    await expect(access(dirname(second.uri.fsPath))).rejects.toThrow();
+  });
+
+  it("leaves nothing behind when the editor cannot open the draft", async () => {
+    const editor = new ComposerExternalEditor(vi.fn());
+    let attempted = "";
+    vscodeMock.workspace.openTextDocument.mockImplementationOnce((uri: { fsPath: string }) => {
+      attempted = uri.fsPath;
+      return Promise.reject(new Error("editor unavailable"));
+    });
+
+    await expect(editor.open("session-1", "draft")).rejects.toThrow("editor unavailable");
+    await expect(access(dirname(attempted))).rejects.toThrow();
+
+    // A later attempt is not mistaken for an already-open draft.
+    await expect(editor.open("session-1", "draft")).resolves.toBe("opened");
+    editor.dispose();
   });
 });

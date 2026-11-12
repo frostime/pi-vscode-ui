@@ -3,7 +3,7 @@
   import { onDestroy, onMount } from "svelte";
 
   import ImageLightbox from "../ImageLightbox.svelte";
-  import { loadLocalMarkdownImage } from "./markdownImageClient";
+  import { loadLocalMarkdownImage, loadRemoteMarkdownImage } from "./markdownImageClient";
   import { markdownImageCaption } from "./markdownImageCaption";
   import { sanitizeMarkdownSvg } from "./sanitizeMarkdownSvg";
 
@@ -74,10 +74,24 @@
     }
   }
 
-  function loadRemoteImage(): void {
+  /**
+   * Runs only from the explicit `Load image` action. The Host fetches the bytes; the
+   * Webview never contacts the remote origin and its CSP would refuse the attempt.
+   */
+  async function loadRemoteImage(): Promise<void> {
     if (!remote || phase !== "waiting") return;
     phase = "loading";
-    imageUrl = remote.href;
+    try {
+      const result = await loadRemoteMarkdownImage(remote.href);
+      if (disposed) return;
+      if (!result.ok) {
+        fail(remoteFailureMessage(result.reason));
+        return;
+      }
+      await displayBytes(result.mimeType, decodeBase64(result.data));
+    } catch {
+      if (!disposed) fail("Unable to load remote image");
+    }
   }
 
   async function displayBytes(mimeType: string, bytes: Uint8Array): Promise<void> {
@@ -133,6 +147,18 @@
       tooLarge: "Image exceeds the configured size limit",
       unsupportedType: "Unsupported image type",
       readFailed: "Unable to read local image",
+    };
+    return messages[reason];
+  }
+
+  function remoteFailureMessage(reason: MarkdownImageFailureReason): string {
+    const messages: Record<MarkdownImageFailureReason, string> = {
+      invalidSource: "Unsupported image URL",
+      notFound: "Remote image not found",
+      notAFile: "Unable to load remote image",
+      tooLarge: "Image exceeds the configured size limit",
+      unsupportedType: "Unsupported image type",
+      readFailed: "Unable to load remote image",
     };
     return messages[reason];
   }
@@ -221,14 +247,14 @@
         onclick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          loadRemoteImage();
+          void loadRemoteImage();
         }}
       >Load image</button>
     </span>
   {:else if phase === "loading"}
     <span class="image-placeholder" role="status">
       <span class="placeholder-icon codicon codicon-loading codicon-modifier-spin" aria-hidden="true"></span>
-      <span class="placeholder-copy"><strong>{label}</strong><small>Loading local image…</small></span>
+      <span class="placeholder-copy"><strong>{label}</strong><small>{remote ? "Loading image…" : "Loading local image…"}</small></span>
     </span>
   {:else if phase === "failed"}
     <span class="image-placeholder image-failed" role="status">

@@ -4,7 +4,7 @@ import { JsonlDecoder } from "./protocol/JsonlDecoder.js";
 import { PiRpcCommandError, PiRpcProcessError, PiRpcProtocolError } from "./protocol/protocolErrors.js";
 import { isRpcChunkFrame, RpcChunkAssembler } from "./protocol/RpcChunkAssembler.js";
 import { isRpcMessage, isRpcResponse, type RpcCommand, type RpcEvent, type RpcResponse, type RpcSessionState } from "./protocol/rpcTypes.js";
-import { BoundedTextBuffer } from "./process/processDiagnostics.js";
+import { BoundedTextBuffer, STDERR_EXCERPT_MARKER } from "./process/processDiagnostics.js";
 import { resolvePiExecutable } from "./process/resolvePiExecutable.js";
 import { piRpcDialect } from "./dialects/pi/piRpcDialect.js";
 import type { RpcDialect } from "./dialects/RpcDialect.js";
@@ -341,8 +341,8 @@ export class PiRpcConnection {
 
   #withStderr(error: Error): Error {
     const stderr = this.#stderr.toString().trim();
-    if (!stderr || error.message.includes("Stderr:")) return error;
-    return Object.assign(new Error(`${error.message}. Stderr: ${stderr}`), { name: error.name, cause: error });
+    if (!stderr || error.message.includes(STDERR_EXCERPT_MARKER)) return error;
+    return Object.assign(new Error(`${error.message}. ${STDERR_EXCERPT_MARKER} ${stderr}`), { name: error.name, cause: error });
   }
 }
 

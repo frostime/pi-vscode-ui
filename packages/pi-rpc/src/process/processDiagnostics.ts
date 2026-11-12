@@ -1,3 +1,10 @@
+/**
+ * Introduces the bounded stderr excerpt that a failure message may end with:
+ * `<message>. Stderr: <excerpt>`. Consumers that must not repeat third-party output
+ * (exported diagnostics) cut the message at this marker.
+ */
+export const STDERR_EXCERPT_MARKER = "Stderr:";
+
 export class BoundedTextBuffer {
   #value = "";
 

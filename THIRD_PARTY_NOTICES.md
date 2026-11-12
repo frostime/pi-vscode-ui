@@ -121,7 +121,7 @@ FrostPi bundles the following production dependencies. Copyright remains with th
 | delaunator | 5.1.0 | ISC | <https://github.com/mapbox/delaunator#readme> |
 | dequal | 2.0.3 | MIT | <https://github.com/lukeed/dequal#readme> |
 | devalue | 5.8.1 | MIT | <https://github.com/sveltejs/devalue#readme> |
-| dompurify | 3.4.12 | (MPL-2.0 OR Apache-2.0) | <https://github.com/cure53/DOMPurify> |
+| dompurify | 3.4.17 | (MPL-2.0 OR Apache-2.0) | <https://github.com/cure53/DOMPurify> |
 | entities | 4.5.0 | BSD-2-Clause | <https://github.com/fb55/entities#readme> |
 | es-toolkit | 1.49.0 | MIT | <https://es-toolkit.dev> |
 | esm-env | 1.2.2 | MIT | <https://github.com/benmccann/esm-env> |
@@ -133,7 +133,7 @@ FrostPi bundles the following production dependencies. Copyright remains with th
 | inline-style-parser | 0.2.7 | MIT | <https://github.com/remarkablemark/inline-style-parser#readme> |
 | internmap | 1.0.1, 2.0.3 | ISC | <https://github.com/mbostock/internmap/> |
 | is-reference | 3.0.3 | MIT | <https://github.com/Rich-Harris/is-reference#readme> |
-| katex | 0.16.47, 0.18.1 | MIT | <https://katex.org> |
+| katex | 0.16.47, 0.18.2 | MIT | <https://katex.org> |
 | khroma | 2.1.0 | Unknown | <https://github.com/fabiospampinato/khroma#readme> |
 | layout-base | 1.0.2, 2.0.1 | MIT | <https://github.com/iVis-at-Bilkent/layout-base#readme> |
 | linkify-it | 5.0.2 | MIT | <https://github.com/markdown-it/linkify-it#readme> |
@@ -141,10 +141,10 @@ FrostPi bundles the following production dependencies. Copyright remains with th
 | lodash-es | 4.18.1 | MIT | <https://lodash.com/custom-builds> |
 | lz-string | 1.5.0 | MIT | <http://pieroxy.net/blog/pages/lz-string/index.html> |
 | magic-string | 0.30.21 | MIT | <https://github.com/Rich-Harris/magic-string#readme> |
-| markdown-it | 14.3.0 | MIT | <https://github.com/markdown-it/markdown-it#readme> |
+| markdown-it | 14.3.3 | MIT | <https://github.com/markdown-it/markdown-it#readme> |
 | marked | 16.4.2 | MIT | <https://marked.js.org> |
 | mdurl | 2.0.0 | MIT | <https://github.com/markdown-it/mdurl#readme> |
-| mermaid | 11.16.0 | MIT | <https://github.com/mermaid-js/mermaid#readme> |
+| mermaid | 11.16.1 | MIT | <https://github.com/mermaid-js/mermaid#readme> |
 | minimatch | 10.2.5 | BlueOak-1.0.0 | <https://github.com/isaacs/minimatch#readme> |
 | package-manager-detector | 1.7.0 | MIT | <https://github.com/antfu-collective/package-manager-detector#readme> |
 | path-data-parser | 0.1.0 | MIT | <https://github.com/pshihn/path-data-parser#readme> |
