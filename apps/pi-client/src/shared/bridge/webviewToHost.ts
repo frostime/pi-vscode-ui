@@ -116,6 +116,11 @@ const payloadSchema = z.discriminatedUnion("type", [
     draftImageCount: z.number().int().min(0).max(12),
   }),
   z.object({ type: z.literal("abort"), sessionId: z.string().min(1).max(128) }),
+  z.object({
+    type: z.literal("dismissSideQuestion"),
+    sessionId: z.string().min(1).max(128),
+    questionId: z.string().min(1).max(128),
+  }),
   z.object({ type: z.literal("cancelFork"), sessionId: z.string().min(1).max(128) }),
   z.object({
     type: z.literal("branchHere"),

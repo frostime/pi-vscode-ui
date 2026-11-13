@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// A scripted Pi child for /clear and /rewind. It keeps a real entry tree, model
-// state and session identity, and answers FrostPi's private tree adapter command the
+// A scripted Pi child for /clear, /rewind and /btw. It keeps a real entry tree, model
+// state and session identity, and answers FrostPi's two private adapter commands the
 // way the bundled extensions do, so Registry and Runtime run unmodified against it.
 const fs = require("node:fs");
 const path = require("node:path");
@@ -8,6 +8,7 @@ const path = require("node:path");
 const args = process.argv.slice(2);
 const extensionPaths = args.flatMap((arg, index) => arg === "-e" ? [args[index + 1]] : []);
 const treeExtension = extensionPaths.find((file) => path.basename(file) === "session-tree.js");
+const sideExtension = extensionPaths.find((file) => path.basename(file) === "side-question.js");
 const vetoNewSession = args.includes("--veto-new-session");
 const noSession = args.includes("--no-session");
 const resumedFile = args.includes("--session") ? args[args.indexOf("--session") + 1] : undefined;
@@ -33,6 +34,12 @@ let streaming = false;
 let finishHeldTurn;
 let releaseNewSession;
 let failNextState = false;
+let heldSideQuestionResponses = [];
+
+// Lets a test see when every result the adapter wrote has been consumed by the Host.
+if (process.env.FROSTPI_SIDE_QUESTION_RESULT_DIR) {
+  fs.appendFileSync(path.join(process.cwd(), "side-question-result-dirs"), `${process.env.FROSTPI_SIDE_QUESTION_RESULT_DIR}\n`);
+}
 
 // A resumed process reports the file it was given; a new conversation gets a name no
 // other process reuses, so a test can tell "reopened" from "started fresh".
@@ -63,6 +70,12 @@ function append(message) {
   return id;
 }
 
+function activePathLength() {
+  let count = 0;
+  for (let id = leafId; id; id = entries.find((entry) => entry.id === id)?.parentId ?? null) count += 1;
+  return count;
+}
+
 function decode(message) {
   return JSON.parse(Buffer.from(message.slice(message.indexOf(" ") + 1), "base64url").toString("utf8"));
 }
@@ -72,6 +85,7 @@ function privateCommands() {
   const source = (file) => ({ path: file, source: "local", scope: "temporary", origin: "top-level" });
   return [
     ...(treeExtension ? [{ name: "frostpi.session-tree", source: "extension", sourceInfo: source(treeExtension) }] : []),
+    ...(sideExtension ? [{ name: "frostpi.side-question", source: "extension", sourceInfo: source(sideExtension) }] : []),
   ];
 }
 
@@ -161,6 +175,35 @@ function prompt(command) {
       JSON.stringify({ version: 1, requestId: request.requestId, status: "committed", leafId }),
     );
     respond(id);
+    return;
+  }
+  if (text.startsWith("/frostpi.side-question ")) {
+    const request = decode(text);
+    // The model request never returns: the command stays pending until the process ends.
+    if (request.question.includes("never-answer")) return;
+    const file = path.join(process.env.FROSTPI_SIDE_QUESTION_RESULT_DIR, `${request.requestId}.json`);
+    const write = (result) => fs.writeFileSync(file, JSON.stringify({ version: 1, requestId: request.requestId, ...result }));
+    if (request.token !== process.env.FROSTPI_SIDE_QUESTION_TOKEN || request.question.includes("no-result")) {
+      // The real adapter throws here; Pi reports the command handled and writes nothing.
+    } else if (request.question.includes("provider-failure")) {
+      write({ status: "failed", error: "429 rate limited" });
+    } else {
+      write({
+        status: "answered",
+        answer: `Answer to "${request.question}" from ${activePathLength()} entries${streaming ? " while busy" : ""}`,
+        model: `${model.provider}/${model.id}`,
+        usage: { input: 1200, output: 34, cacheRead: 1000 },
+        ...(request.question.includes("cut-off") ? { incomplete: "length" } : {}),
+      });
+    }
+    // A held answer is written at once and delivered just before the next question's.
+    if (request.question.includes("held-answer")) {
+      heldSideQuestionResponses.push(id);
+      return;
+    }
+    for (const held of heldSideQuestionResponses.splice(0)) respond(held);
+    const delayed = request.question.includes("slow-answer");
+    setTimeout(() => respond(id), delayed ? 150 : 0);
     return;
   }
 

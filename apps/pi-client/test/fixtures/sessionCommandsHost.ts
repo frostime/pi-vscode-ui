@@ -1,3 +1,4 @@
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -75,6 +76,7 @@ export async function sessionCommandsHost(piArguments: string[] = [], { adapters
     logger,
     ...(adapters ? {
       sessionTreeArtifactPath: join(directory, "session-tree.js"),
+      sideQuestionArtifactPath: join(directory, "side-question.js"),
     } : {}),
     discoverWorkingDirectories: (cwd) => {
       discoveries.push(cwd);
@@ -103,6 +105,17 @@ export async function sessionCommandsHost(piArguments: string[] = [], { adapters
     persistedSessions(): Array<{ id: string; title: string; sessionFile?: string }> {
       const value = [...stored.values()].at(-1) as { sessions?: Array<{ id: string; title: string; sessionFile?: string }> } | undefined;
       return value?.sessions ?? [];
+    },
+    /** Resolves once the Host has read and applied every answer the fake adapter wrote. */
+    async sideQuestionAnswersConsumed(): Promise<void> {
+      const list = join(directory, "side-question-result-dirs");
+      const unread = (): number => existsSync(list)
+        ? readFileSync(list, "utf8").split("\n").filter(Boolean)
+            .reduce((count, resultDirectory) => count + (existsSync(resultDirectory) ? readdirSync(resultDirectory).length : 0), 0)
+        : 0;
+      await waitFor(() => unread() === 0);
+      // A file is gone before its reader's continuation runs: give the event loop two turns.
+      for (let turn = 0; turn < 2; turn += 1) await new Promise((resolve) => setImmediate(resolve));
     },
     /** A started Session with its command list and models loaded. */
     async startSession(ephemeral = false): Promise<string> {

@@ -12,6 +12,8 @@ export interface RuntimeCapabilities {
   readonly queuedPromptRecovery: boolean;
   /** Replace the conversation in the running process (`new_session`), as `/clear` does. */
   readonly newSession: boolean;
+  /** Load the bundled side-question adapter, as `/btw` needs. */
+  readonly sideQuestion: boolean;
 }
 
 export interface RuntimeCompatibilityProfile {
@@ -34,6 +36,7 @@ const PI_PROFILE: RuntimeCompatibilityProfile = {
     questionTool: true,
     queuedPromptRecovery: true,
     newSession: true,
+    sideQuestion: true,
   },
   defaultSessionRoot: () => join(homedir(), ".pi", "agent", "sessions"),
 };
@@ -49,6 +52,7 @@ const OH_MY_PI_PROFILE: RuntimeCompatibilityProfile = {
     questionTool: true,
     queuedPromptRecovery: true,
     newSession: false,
+    sideQuestion: false,
   },
   defaultSessionRoot: () => join(homedir(), ".omp", "agent", "sessions"),
 };

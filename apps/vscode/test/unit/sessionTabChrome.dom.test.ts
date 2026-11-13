@@ -1,11 +1,12 @@
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { SessionSummaryView, SessionViewModel } from "$shared/model/sessionViewModel";
+import type { SessionSummaryView, SessionViewModel, SideQuestionView } from "$shared/model/sessionViewModel";
 import { VSCODE_CLIENT_UI_CAPABILITIES } from "$shared/model/clientUiCapabilities";
 import { connectHostBridge } from "$ui/bridge/hostBridge";
 import PanelSessionHeader from "$ui/features/sessions/PanelSessionHeader.svelte";
 import SessionHeader from "$ui/features/sessions/SessionHeader.svelte";
+import SideQuestionCard from "$ui/features/side-question/SideQuestionCard.svelte";
 import { clientCapabilities } from "$ui/state/clientCapabilities.svelte";
 
 const postMessage = vi.fn();
@@ -105,5 +106,59 @@ describe("sidebar launcher", () => {
     await fireEvent.click(withoutTabs.getByRole("button", { name: "More ways to start a session" }));
     expect(withoutTabs.queryByRole("button", { name: /New session in editor tab/ })).toBeNull();
     expect(withoutTabs.getByRole("button", { name: /New temporary session/ })).toBeTruthy();
+  });
+});
+
+describe("side-question card", () => {
+  const base: SideQuestionView = { id: "side-question-3", question: "Which file has the parser?", status: "pending", askedAt: 0 };
+
+  it("shows the pending question and dismisses it by id", async () => {
+    const view = render(SideQuestionCard, { sessionId: "session", question: base });
+    expect(view.getByRole("status").textContent).toContain("Answering");
+    expect(view.container.textContent).toContain("Which file has the parser?");
+    expect(view.container.textContent).toContain("not added to the conversation");
+    expect(view.queryByRole("button", { name: "Copy answer" })).toBeNull();
+
+    await fireEvent.click(view.getByRole("button", { name: "Dismiss side question" }));
+    expect(posted()).toEqual([{ type: "dismissSideQuestion", sessionId: "session", questionId: "side-question-3" }]);
+  });
+
+  it("renders the answer as sanitized Markdown with its source and token use", async () => {
+    const view = render(SideQuestionCard, {
+      sessionId: "session",
+      question: {
+        ...base, status: "answered", truncated: true, model: "anthropic/claude",
+        answer: "It is in `parser.ts`.\n\n<img src=x onerror=alert(1)>",
+        usage: { input: 320, output: 1_250, cacheRead: 41_000 },
+      },
+    });
+
+    expect(view.container.querySelector(".side-question-answer code")?.textContent).toBe("parser.ts");
+    expect(view.container.querySelector(".side-question-answer img")).toBeNull();
+    expect(view.container.querySelector("[onerror]")).toBeNull();
+    expect(view.container.textContent).toContain("anthropic/claude · 41.3k in (41.0k cached) · 1.3k out");
+    expect(view.container.textContent).toContain("The answer was cut at the length limit.");
+
+    await fireEvent.click(view.getByRole("button", { name: "Copy answer" }));
+    expect(posted()).toEqual([{ type: "copyText", text: "It is in `parser.ts`.\n\n<img src=x onerror=alert(1)>" }]);
+  });
+
+  it("says when the answer may be partial, and why", () => {
+    const answered = { ...base, status: "answered" as const, answer: "Let me check." };
+    const toolCall = render(SideQuestionCard, { sessionId: "session", question: { ...answered, incomplete: "tool-call" } });
+    expect(toolCall.getByRole("note").textContent).toContain("tried to use a tool");
+    cleanup();
+
+    const cutOff = render(SideQuestionCard, { sessionId: "session", question: { ...answered, incomplete: "length" } });
+    expect(cutOff.getByRole("note").textContent).toContain("reached its output limit");
+    cleanup();
+
+    expect(render(SideQuestionCard, { sessionId: "session", question: answered }).queryByRole("note")).toBeNull();
+  });
+
+  it("reports a failure in place", () => {
+    const view = render(SideQuestionCard, { sessionId: "session", question: { ...base, status: "failed", error: "429 rate limited" } });
+    expect(view.getByRole("alert").textContent).toBe("429 rate limited");
+    expect(view.queryByRole("status")).toBeNull();
   });
 });

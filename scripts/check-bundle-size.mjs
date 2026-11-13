@@ -5,7 +5,7 @@ import { root } from "./lib.mjs";
 
 const budgets = new Map([
   ["apps/vscode/dist/extension/extension.cjs", 1_200_000],
-  // CodeMirror composer and completion runtime; Session Tab header and focus view.
+  // CodeMirror composer and completion runtime; Session Tab header, side questions and focus view.
   ["apps/vscode/dist/webview/webview.js", 870_000],
   ["apps/vscode/dist/webview/webview.css", 165_000],
 ]);

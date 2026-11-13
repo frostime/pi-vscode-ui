@@ -178,8 +178,11 @@ FrostPi answers a few slash commands itself. They never become a prompt, and the
 - `/compact [instructions]` runs Pi's own context compaction.
 - `/clear` starts a new conversation in the same session view. The model, thinking level and Pi process stay. The earlier conversation remains in Pi's session history, so **Resume session** can reopen it. Stop a running response first.
 - `/rewind` lists your earlier prompts, returns the conversation to just before the one you pick, and puts that prompt back in the Composer for editing. It is **Branch here** with a picker: the path you left stays available through **Switch branch**. Files on disk are not restored; only the conversation changes.
+- `/btw <question>` asks a side question about the conversation without adding it to the conversation. The answer appears in a card above the Composer and is never saved. It works while Pi is running a turn, uses the current model and counts as one more model request, and cannot use tools.
+  - The request is made inside Pi through its model API for extensions, with Pi's model, credentials and provider settings. It follows Pi's `images.blockImages` setting.
+  - It is not an agent turn. Other Pi extensions' `context`, `before_provider_request` and `before_provider_headers` hooks do not run for it. If you rely on such an extension to redact context or to add gateway headers, do not use `/btw`.
 
-`/clear` and `/rewind` need Pi. With the `oh-my-pi` compatibility profile FrostPi does not offer them and passes such text to the runtime unchanged.
+`/clear`, `/rewind` and `/btw` need Pi. With the `oh-my-pi` compatibility profile FrostPi does not offer them and passes such text to the runtime unchanged.
 
 ### Focus view
 
@@ -376,7 +379,7 @@ The impact is limited, apart from the optional `question` tool, which is disable
 
 If you configure a proxy, FrostPi sets the proxy environment variables when the process starts.
 
-FrostPi also injects a `session-tree-adapter` extension to provide Pi's tree functionality in the GUI. This extension is process-local: it does not write to Pi's home directory or interfere with the Agent's runtime context.
+FrostPi also injects a `session-tree-adapter` extension to provide Pi's tree functionality in the GUI, and a `side-question` adapter that answers `/btw`. Both are process-local: they register one private command each, add no model-visible tool, and do not write to Pi's home directory or to the session.
 
 ### Why are `fd` and `rg` recommended?
 

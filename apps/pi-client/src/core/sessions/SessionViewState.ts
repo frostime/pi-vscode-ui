@@ -190,6 +190,11 @@ export class SessionViewState {
     this.#view.focusView = focusView;
   }
 
+  setSideQuestion(sideQuestion: SessionViewModel["sideQuestion"]): void {
+    if (sideQuestion) this.#view.sideQuestion = sideQuestion;
+    else delete this.#view.sideQuestion;
+  }
+
   /** A replaced conversation keeps the process, model catalogue and settings, and nothing of the old transcript. */
   resetForNewConversation(title: string): void {
     this.#view.title = title;
@@ -198,6 +203,7 @@ export class SessionViewState {
     delete this.#view.stats;
     delete this.#view.cacheHitPercent;
     delete this.#view.composerSeed;
+    delete this.#view.sideQuestion;
     delete this.#view.error;
   }
 

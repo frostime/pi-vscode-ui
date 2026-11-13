@@ -22,7 +22,7 @@ describe("Host slash commands through the real Registry and child-process path",
     const fixture = await host();
     const sessionId = await fixture.startSession();
     expect(fixture.view(sessionId).commands.map(({ name, source }) => `${name}:${source}`)).toEqual([
-      "clear:frostpi", "rewind:frostpi", "visible:extension",
+      "clear:frostpi", "rewind:frostpi", "btw:frostpi", "visible:extension",
     ]);
   });
 
@@ -33,9 +33,11 @@ describe("Host slash commands through the real Registry and child-process path",
     const sessionId = await fixture.startSession();
     expect(view(sessionId).commands.map((command) => command.name)).toEqual(["clear", "visible"]);
 
+    await fixture.converse(sessionId, "/btw is this mine?");
     await fixture.converse(sessionId, "/rewind");
 
-    expect(userPrompts(view(sessionId))).toEqual(["/rewind"]);
+    expect(userPrompts(view(sessionId))).toEqual(["/btw is this mine?", "/rewind"]);
+    expect(view(sessionId).sideQuestion).toBeUndefined();
     expect(fixture.shownQuickPicks).toEqual([]);
   });
 
@@ -46,9 +48,11 @@ describe("Host slash commands through the real Registry and child-process path",
     const sessionId = await fixture.startSession();
     expect(view(sessionId).commands.map((command) => command.name)).toEqual(["clear", "visible"]);
 
+    await fixture.converse(sessionId, "/btw is this mine?");
     await fixture.converse(sessionId, "/rewind");
 
-    expect(userPrompts(view(sessionId))).toEqual(["/rewind"]);
+    expect(userPrompts(view(sessionId))).toEqual(["/btw is this mine?", "/rewind"]);
+    expect(view(sessionId).sideQuestion).toBeUndefined();
     expect(fixture.shownQuickPicks).toEqual([]);
   });
 
@@ -146,6 +150,7 @@ describe("Host slash commands through the real Registry and child-process path",
       // Requests that would land around the switch wait for it.
       await expect(registry.setModel(cleared, "fake", "other")).rejects.toThrow("Wait for the conversation to finish clearing.");
       await expect(registry.sendPrompt(cleared, "too early", [])).rejects.toThrow("Wait for the conversation to finish clearing.");
+      await expect(registry.sendPrompt(cleared, "/btw too early", [])).rejects.toThrow("Wait for the conversation to finish clearing.");
       await expect(registry.clearConversation(cleared)).rejects.toThrow("Finish the current session-tree interaction first.");
       // An unrelated save in that window still describes the Session as it is.
       await registry.rename(other, "Renamed B");
@@ -207,6 +212,20 @@ describe("Host slash commands through the real Registry and child-process path",
       await fixture.waitFor(() => view(sessionId).status === "ready" && view(sessionId).sessionFile !== undefined);
       expect(view(sessionId).sessionFile).not.toBe(earlierFile);
       expect(registry.snapshot().sessions.map((session) => session.id)).toEqual([sessionId, bystander]);
+    });
+
+    it("takes a pending side question with the conversation it was about", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+      await fixture.converse(sessionId, "first");
+      await registry.sendPrompt(sessionId, "/btw never-answer", []);
+      expect(view(sessionId).sideQuestion).toMatchObject({ status: "pending" });
+
+      await registry.sendPrompt(sessionId, "/clear", []);
+
+      expect(view(sessionId).sideQuestion).toBeUndefined();
+      expect(userPrompts(view(sessionId))).toEqual([]);
     });
 
     it("confirms before discarding a temporary session's only copy", async () => {
@@ -292,6 +311,118 @@ describe("Host slash commands through the real Registry and child-process path",
       await expect(registry.sendPrompt(sessionId, "/rewind", [], "followUp")).rejects.toThrow("Wait for the current Pi operation to finish");
       expect(fixture.shownQuickPicks).toEqual([]);
       expect(view(sessionId).queuedFollowUps).toEqual([]);
+    });
+  });
+
+  describe("/btw", () => {
+    it("answers from the conversation without adding to it or promoting a new session", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+
+      await registry.sendPrompt(sessionId, "/btw   what is this repo?", []);
+      await fixture.waitFor(() => view(sessionId).sideQuestion?.status === "answered");
+
+      expect(view(sessionId).sideQuestion).toMatchObject({
+        question: "what is this repo?",
+        answer: 'Answer to "what is this repo?" from 0 entries',
+        model: "fake/default",
+        usage: { input: 1200, output: 34, cacheRead: 1000 },
+      });
+      expect(view(sessionId).conversationItems).toEqual([]);
+      // A side question is not a first prompt: the unused session is still replaceable.
+      await registry.flushPersistence();
+      expect(fixture.persistedSessions()).toEqual([]);
+    });
+
+    it("answers while the agent is busy and never queues the question as a prompt", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+      await fixture.converse(sessionId, "first");
+      await registry.sendPrompt(sessionId, "hold", []);
+      await fixture.waitFor(() => view(sessionId).isStreaming);
+
+      await registry.sendPrompt(sessionId, "/btw slow-answer please", [], "steer");
+      expect(view(sessionId).sideQuestion).toMatchObject({ status: "pending", question: "slow-answer please" });
+      await fixture.waitFor(() => view(sessionId).sideQuestion?.status === "answered");
+
+      expect(view(sessionId).sideQuestion?.answer).toBe('Answer to "slow-answer please" from 2 entries while busy');
+      expect(view(sessionId)).toMatchObject({ isStreaming: true, queuedSteers: [], queuedFollowUps: [] });
+      await registry.abort(sessionId);
+      await fixture.waitFor(() => !view(sessionId).isStreaming);
+      expect(userPrompts(view(sessionId))).toEqual(["first", "hold"]);
+    });
+
+    it("shows a provider failure or a missing result on the card, not as a prompt error", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+
+      await registry.sendPrompt(sessionId, "/btw provider-failure", []);
+      await fixture.waitFor(() => view(sessionId).sideQuestion?.status === "failed");
+      expect(view(sessionId).sideQuestion?.error).toBe("429 rate limited");
+
+      await registry.sendPrompt(sessionId, "/btw no-result", []);
+      await fixture.waitFor(() => view(sessionId).sideQuestion?.status === "failed" && view(sessionId).sideQuestion?.question === "no-result");
+      expect(view(sessionId).sideQuestion?.error).toBe("Pi did not return an answer to the side question.");
+      expect(fixture.errors).toEqual([]);
+    });
+
+    it("drops an answer that arrives after its card was dismissed or replaced", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+
+      // The fake writes a held answer at once and delivers it just before the next one.
+      await registry.sendPrompt(sessionId, "/btw held-answer one", []);
+      const first = view(sessionId).sideQuestion!.id;
+      registry.dismissSideQuestion(sessionId, "another-card");
+      expect(view(sessionId).sideQuestion?.id).toBe(first);
+      registry.dismissSideQuestion(sessionId, first);
+      expect(view(sessionId).sideQuestion).toBeUndefined();
+
+      await registry.sendPrompt(sessionId, "/btw held-answer two", []);
+      await registry.sendPrompt(sessionId, "/btw three", []);
+      await fixture.waitFor(() => view(sessionId).sideQuestion?.status === "answered");
+      // All three answers have reached the Host; only the card still shown took one.
+      await fixture.sideQuestionAnswersConsumed();
+      expect(view(sessionId).sideQuestion).toMatchObject({ question: "three", answer: expect.stringContaining('"three"') as string });
+    });
+
+    it("marks an answer the model did not finish", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+
+      await registry.sendPrompt(sessionId, "/btw cut-off", []);
+      await fixture.waitFor(() => view(sessionId).sideQuestion?.status === "answered");
+
+      expect(view(sessionId).sideQuestion).toMatchObject({ incomplete: "length" });
+    });
+
+    it("rejects an empty question and attachments before asking Pi", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+      const image = { id: "i", name: "i.png", mimeType: "image/png" as const, data: "AAAA", size: 3 };
+
+      await expect(registry.sendPrompt(sessionId, "/btw", [])).rejects.toThrow("Type a question after /btw.");
+      await expect(registry.sendPrompt(sessionId, "/btw look", [image])).rejects.toThrow("/btw does not support image attachments.");
+      expect(view(sessionId).sideQuestion).toBeUndefined();
+    });
+
+    it("fails a pending question when its process stops", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+      await fixture.converse(sessionId, "first");
+      await registry.sendPrompt(sessionId, "/btw never-answer", []);
+      expect(view(sessionId).sideQuestion).toMatchObject({ status: "pending" });
+
+      await registry.retrySession(sessionId);
+
+      expect(view(sessionId).sideQuestion).toMatchObject({ status: "failed", error: "The session stopped before the answer arrived." });
     });
   });
 

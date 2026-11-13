@@ -17,6 +17,7 @@ describe("Session Tab Host authorization", () => {
       activateSession: vi.fn(),
       closeSession: vi.fn(),
       rename: vi.fn().mockResolvedValue(undefined),
+      dismissSideQuestion: vi.fn(),
       abort: vi.fn(),
       sendPrompt: vi.fn().mockResolvedValue(undefined),
       forkMessage: vi.fn().mockResolvedValue({ cancelled: false, forkSessionId: "fork" }),
@@ -95,6 +96,16 @@ describe("Session Tab Host authorization", () => {
     await expect(dispatcher.dispatch({ type: "createSessionPanel", bridgeVersion: BRIDGE_VERSION } as never, sidebarConnection))
       .rejects.toThrow('"createSessionPanel" is not supported in this host.');
     expect(registry.createSession).not.toHaveBeenCalled();
+  });
+
+  it("dismisses a side question only for the displayed Session", async () => {
+    const { dispatcher, registry, connection } = setup();
+    await dispatcher.dispatch({ type: "dismissSideQuestion", bridgeVersion: BRIDGE_VERSION, sessionId: "source", questionId: "side-question-1" } as never, connection);
+    expect(registry.dismissSideQuestion).toHaveBeenCalledWith("source", "side-question-1");
+
+    await expect(dispatcher.dispatch({ type: "dismissSideQuestion", bridgeVersion: BRIDGE_VERSION, sessionId: "other", questionId: "side-question-1" } as never, connection))
+      .rejects.toThrow("does not target the Session displayed by this surface");
+    expect(registry.dismissSideQuestion).toHaveBeenCalledOnce();
   });
 
   it("rejects sidebar management actions from a pinned panel", async () => {

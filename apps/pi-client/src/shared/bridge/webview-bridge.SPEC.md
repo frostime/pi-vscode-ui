@@ -40,6 +40,8 @@ Fork is a conversation action scoped to that originating Connection. Sidebar-ori
 
 File actions carry validated locations only; relative paths resolve from the Session displayed by the originating Connection. Markdown local-image requests are correlated, bounded, authorized against that same displayed Session, and return only to their originating Connection. The Host reads only ordinary files, identifies supported content independently of its extension, and returns structured inline failures rather than global toasts. Returned image bytes are transient presentation resources: they do not enter conversation projection, drafts, or persistence, and paths/image bytes must not be logged.
 
+A side question (`/btw`) and its answer are part of the displayed Session's view, not a correlated response, so every presentation of that Session shows the same card. `dismissSideQuestion` is a conversation action scoped to the displayed Session; it names the question id, and a stale id has no effect. The question, the answer and provider error text are conversation content: they must not be logged or exported.
+
 Session-tree actions carry stable ids and draft presence only: the Host refetches authoritative entries and owns native interaction. Complete entries, prompt/image content, private tokens, and summary content do not cross that action boundary. Host-projected Fork/tree Composer seeds are non-persisted and applied once per Webview mount until submission.
 
 ## Provider account usage

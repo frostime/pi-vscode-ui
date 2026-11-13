@@ -11,6 +11,7 @@
   import { isQueuedPromptRecoveryPending, requestQueuedPromptRecovery } from "../features/composer/queuedPromptRecoveryStore.svelte";
   import ConversationView from "../features/conversation/ConversationView.svelte";
   import ExtensionUiHost from "../features/extension-ui/ExtensionUiHost.svelte";
+  import SideQuestionCard from "../features/side-question/SideQuestionCard.svelte";
   import { showToast } from "../state/sessionViewStore.svelte";
   import ExtensionWidgets from "./ExtensionWidgets.svelte";
   import SessionMetrics from "./SessionMetrics.svelte";
@@ -71,6 +72,9 @@
     <SessionMetrics {session} {providerUsageSource} />
     <ExtensionWidgets widgets={aboveWidgets} />
     <ExtensionUiHost sessionId={session.id} requests={session.pendingExtensionUi} />
+    {#if session.sideQuestion}
+      {#key session.sideQuestion.id}<SideQuestionCard sessionId={session.id} question={session.sideQuestion} />{/key}
+    {/if}
     <Composer bind:this={composer} {session} {localCommands} {restoreFailedSubmissionLocally} {draftAuthority} onpendingsubmissionchange={trackPendingSubmission} />
     <ExtensionWidgets widgets={belowWidgets} />
   </div>

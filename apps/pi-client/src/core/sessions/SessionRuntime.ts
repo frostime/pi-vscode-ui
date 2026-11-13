@@ -19,7 +19,7 @@ import {
 import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
 import type { QuestionDraftSubmission } from "../../shared/question-tool/questionToolProtocol.js";
 import type { AgentTurnView, ImageAttachmentView } from "../../shared/model/conversationModel.js";
-import type { ComposerSeedView, SessionViewModel } from "../../shared/model/sessionViewModel.js";
+import type { ComposerSeedView, SessionViewModel, SideQuestionView } from "../../shared/model/sessionViewModel.js";
 import type { QueuedPromptRecoveryOutcome } from "../../shared/model/queuedPromptRecoveryModel.js";
 import { canonicalPath } from "../_shared/canonicalPath.js";
 import { loadPiSettings, showCacheMissNoticesEnabled } from "../_shared/pi-settings/loadPiSettings.js";
@@ -37,6 +37,7 @@ import { configuredPiInvocation } from "../configuration/configuredPiInvocation.
 import { runtimeCompatibilityProfile, type RuntimeCompatibility } from "../configuration/runtimeCompatibility.js";
 import { buildPiProcessEnvironment, proxyFingerprint, proxyModeLabel } from "../network/buildPiProcessEnvironment.js";
 import type { ProxyCredentialsProvider } from "../network/proxyCredentials.js";
+import { MAX_SIDE_QUESTION_LENGTH, SideQuestionExtensionBridge } from "../side-question/SideQuestionExtensionBridge.js";
 import { SessionTreeExtensionBridge, type SessionTreeSummaryOptions } from "./tree/SessionTreeExtensionBridge.js";
 import {
   buildSessionTreeIndex,
@@ -98,8 +99,10 @@ export class SessionRuntime {
   #appliedQuestionToolEnabled: boolean | null = null;
   #appliedRuntimeCompatibility: RuntimeCompatibility = "pi";
   #abortRequested = false;
+  #sideQuestionSequence = 0;
   readonly #sessionTreeBridge: SessionTreeExtensionBridge | null;
   readonly #questionToolBridge: QuestionToolExtensionBridge | null;
+  readonly #sideQuestionBridge: SideQuestionExtensionBridge | null;
   /** False until a command list from this process has shown which bundled adapters it loaded. */
   #adaptersDiscovered = false;
   /** True from the `/clear` request until its new conversation is loaded or the request fails. */
@@ -119,6 +122,7 @@ export class SessionRuntime {
     readonly isEphemeral = false,
     /** Extra CLI tokens appended verbatim to every launch of this runtime; never persisted or logged. */
     readonly customLaunchArguments: readonly string[] = [],
+    sideQuestionArtifactPath?: string,
   ) {
     this.#id = id;
     const initialConfiguration = configurationProvider();
@@ -140,6 +144,7 @@ export class SessionRuntime {
     this.#host = host;
     this.#sessionTreeBridge = sessionTreeArtifactPath ? new SessionTreeExtensionBridge(sessionTreeArtifactPath) : null;
     this.#questionToolBridge = questionToolArtifactPath ? new QuestionToolExtensionBridge(questionToolArtifactPath) : null;
+    this.#sideQuestionBridge = sideQuestionArtifactPath ? new SideQuestionExtensionBridge(sideQuestionArtifactPath) : null;
   }
 
   get id(): string {
@@ -183,6 +188,8 @@ export class SessionRuntime {
     this.#lifecycleVersion += 1;
     this.#queuedPromptRecovery?.dispose();
     this.#conversation.finalizeLiveState();
+    // Settle the card before the transport rejects the request with its own wording.
+    this.#failPendingSideQuestion("The session stopped before the answer arrived.");
     this.#viewState.setStatus("stopping");
     this.#stopLiveStatsRefresh();
     this.#notifyChange();
@@ -191,6 +198,7 @@ export class SessionRuntime {
     await Promise.all([
       this.#sessionTreeBridge?.dispose(),
       this.#questionToolBridge?.dispose(),
+      this.#sideQuestionBridge?.dispose(),
     ]);
     this.#connection = null;
     this.#api = null;
@@ -431,7 +439,8 @@ export class SessionRuntime {
         if (previousExtensionUi) this.#restoreForkDecorations(previousExtensionUi);
         return { cancelled: true };
       }
-      // Pi has committed: from here the old transcript must not stay on screen.
+      // Pi has committed: from here the old transcript must not stay on screen. A side
+      // question about it goes with it; an answer that still arrives finds no card.
       onCommitted?.();
       this.#conversation.clearQueuedPrompts();
       this.#viewState.resetForNewConversation(NEW_SESSION_TITLE);
@@ -485,9 +494,51 @@ export class SessionRuntime {
     }
   }
 
+  /**
+   * `/btw`: resolves once the question is admitted. The answer arrives later through
+   * the view, so asking never blocks the Composer or the agent.
+   */
+  async askSideQuestion(question: string): Promise<void> {
+    if (!this.#runtimeCapabilities().sideQuestion) throw new Error("Side questions are not supported by the selected runtime.");
+    const bridge = this.#sideQuestionBridge;
+    if (!bridge) throw new Error("Side questions are unavailable in this FrostPi build.");
+    this.#assertNotClearing();
+    const text = question.trim();
+    if (!text) throw new Error("Type a question after /btw.");
+    if (text.length > MAX_SIDE_QUESTION_LENGTH) {
+      throw new Error(`A side question can have at most ${MAX_SIDE_QUESTION_LENGTH.toLocaleString("en-US")} characters.`);
+    }
+    const api = this.#requireApi();
+    if (!bridge.available) await this.#discoverAdapters(api, true);
+    if (!bridge.available) {
+      throw new Error("Side questions are unavailable in this Pi process. Update Pi, restart the session, and check FrostPi diagnostics.");
+    }
+
+    const id = `side-question-${++this.#sideQuestionSequence}`;
+    this.#viewState.setSideQuestion({ id, question: text, status: "pending", askedAt: Date.now() });
+    this.#notifyChange();
+    void bridge.ask(api, text).then(
+      (answer) => this.#settleSideQuestion(id, {
+        status: "answered",
+        answer: answer.answer,
+        ...(answer.truncated ? { truncated: true } : {}),
+        ...(answer.incomplete ? { incomplete: answer.incomplete } : {}),
+        ...(answer.model ? { model: answer.model } : {}),
+        ...(answer.usage ? { usage: answer.usage } : {}),
+      }),
+      (error: unknown) => this.#settleSideQuestion(id, { status: "failed", error: errorMessage(error) }),
+    );
+  }
+
   /** False when this runtime leaves the command's text for the runtime itself to interpret. */
   answersHostCommand(name: HostCommand["name"]): boolean {
     return answersHostCommand(name, this.#hostCommandSupport());
+  }
+
+  dismissSideQuestion(id: string): void {
+    if (this.view.sideQuestion?.id !== id) return;
+    this.#viewState.setSideQuestion(undefined);
+    this.#notifyChange();
   }
 
   async executeFork(entryId: string): Promise<ForkExecutionResult> {
@@ -740,11 +791,13 @@ export class SessionRuntime {
     this.#adaptersDiscovered = false;
     if (compatibilityProfile.capabilities.sessionTree) await this.#sessionTreeBridge?.prepare();
     if (configuration.questionToolEnabled && compatibilityProfile.capabilities.questionTool) await this.#questionToolBridge?.prepare();
+    if (compatibilityProfile.capabilities.sideQuestion) await this.#sideQuestionBridge?.prepare();
     const args = [
       ...configuration.piArguments,
       ...(this.isEphemeral ? ["--no-session"] : sessionFile ? ["--session", sessionFile] : []),
       ...(compatibilityProfile.capabilities.sessionTree ? this.#sessionTreeBridge?.launchArguments() ?? [] : []),
       ...(configuration.questionToolEnabled && compatibilityProfile.capabilities.questionTool ? this.#questionToolBridge?.launchArguments() ?? [] : []),
+      ...(compatibilityProfile.capabilities.sideQuestion ? this.#sideQuestionBridge?.launchArguments() ?? [] : []),
       // Keep per-launch tokens last and verbatim; the Pi CLI owns their interpretation.
       ...this.customLaunchArguments,
     ];
@@ -772,6 +825,7 @@ export class SessionRuntime {
         ...proxyEnvironment.env,
         ...(compatibilityProfile.capabilities.sessionTree ? this.#sessionTreeBridge?.launchEnvironment() ?? {} : {}),
         ...(configuration.questionToolEnabled && compatibilityProfile.capabilities.questionTool ? this.#questionToolBridge?.launchEnvironment() ?? {} : {}),
+        ...(compatibilityProfile.capabilities.sideQuestion ? this.#sideQuestionBridge?.launchEnvironment() ?? {} : {}),
       },
       ...invocation,
       requestTimeoutMs: 30_000,
@@ -1170,6 +1224,20 @@ export class SessionRuntime {
     return conversationTurns(this.view).some((turn) => turn.id === turnId && turn.status === "running");
   }
 
+  /** A dismissed or replaced question has no card left to update. */
+  #settleSideQuestion(id: string, outcome: Pick<SideQuestionView, "status" | "answer" | "truncated" | "incomplete" | "error" | "model" | "usage">): void {
+    const current = this.view.sideQuestion;
+    if (!current || current.id !== id || current.status !== "pending") return;
+    this.#viewState.setSideQuestion({ id, question: current.question, askedAt: current.askedAt, ...outcome });
+    this.#notifyChange();
+  }
+
+  #failPendingSideQuestion(error: string): void {
+    const current = this.view.sideQuestion;
+    if (current?.status !== "pending") return;
+    this.#viewState.setSideQuestion({ id: current.id, question: current.question, askedAt: current.askedAt, status: "failed", error });
+  }
+
   #assertNotClearing(): void {
     if (this.#clearing) throw new Error("Wait for the conversation to finish clearing.");
   }
@@ -1180,7 +1248,8 @@ export class SessionRuntime {
    * `fromRuntime` is false for a placeholder list, which proves nothing about adapters.
    */
   #visibleCommands(commands: readonly RpcCommandDescriptor[], fromRuntime = true): RpcCommandDescriptor[] {
-    const runtimeCommands = this.#sessionTreeBridge?.discover(commands) ?? [...commands];
+    const afterTree = this.#sessionTreeBridge?.discover(commands) ?? [...commands];
+    const runtimeCommands = this.#sideQuestionBridge?.discover(afterTree) ?? afterTree;
     if (fromRuntime) this.#adaptersDiscovered = true;
     return withHostCommands(runtimeCommands, this.#hostCommandSupport());
   }
@@ -1210,6 +1279,7 @@ export class SessionRuntime {
     return {
       capabilities: this.#runtimeCapabilities(),
       sessionTreeAdapter: loaded(this.#sessionTreeBridge),
+      sideQuestionAdapter: loaded(this.#sideQuestionBridge),
     };
   }
 

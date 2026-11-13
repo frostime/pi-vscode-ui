@@ -18,7 +18,7 @@ export const FROSTPI_RESUME_COMMAND: RpcCommandDescriptor = {
   name: "resume", description: "Open an existing Pi session for this workspace", source: "frostpi",
 };
 
-// `/clear` and `/rewind` are not listed here: the Host adds them to a Session's
+// `/clear`, `/rewind` and `/btw` are not listed here: the Host adds them to a Session's
 // own command list only when that Session's runtime supports them.
 const FROSTPI_COMMANDS: readonly RpcCommandDescriptor[] = [FROSTPI_COMPACT_COMMAND, FROSTPI_RESUME_COMMAND];
 

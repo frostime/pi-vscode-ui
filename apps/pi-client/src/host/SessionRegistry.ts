@@ -64,6 +64,8 @@ export interface SessionRegistryOptions {
   sessionTreeArtifactPath?: string;
   /** Bundled question-tool adapter; hosts without one keep the question tool unavailable. */
   questionToolArtifactPath?: string;
+  /** Bundled side-question adapter; hosts without one keep `/btw` unavailable. */
+  sideQuestionArtifactPath?: string;
   /** Native VS Code keeps its historical fallback; Desktop restores only an explicitly saved selection. */
   restoreSelection?: "saved-or-first" | "saved-only";
   /** Host metadata may associate New/Resume identities before presentation; forks name their source. */
@@ -90,6 +92,7 @@ export class SessionRegistry {
   readonly #discoverWorkingDirectories: DiscoverSessionWorkingDirectories;
   readonly #sessionTreeArtifactPath: string | undefined;
   readonly #questionToolArtifactPath: string | undefined;
+  readonly #sideQuestionArtifactPath: string | undefined;
   readonly #restoreOnlySavedSelection: boolean;
   readonly #onSessionOpened: SessionRegistryOptions["onSessionOpened"];
 
@@ -116,6 +119,7 @@ export class SessionRegistry {
     this.#discoverWorkingDirectories = options.discoverWorkingDirectories ?? discoverSessionWorkingDirectories;
     this.#sessionTreeArtifactPath = options.sessionTreeArtifactPath;
     this.#questionToolArtifactPath = options.questionToolArtifactPath;
+    this.#sideQuestionArtifactPath = options.sideQuestionArtifactPath;
     this.#restoreOnlySavedSelection = options.restoreSelection === "saved-only";
     this.#onSessionOpened = options.onSessionOpened;
     this.#changeEmitter = host.createEventEmitter<void>();
@@ -440,6 +444,9 @@ export class SessionRegistry {
           // The chosen prompt returns as a Composer seed, which must outlive this submission.
           await this.rewind(sessionId);
           return;
+        case "btw":
+          await runtime.askSideQuestion(hostCommand.argument);
+          return;
       }
     }
     await runtime.sendPrompt(text, images, streamingBehavior);
@@ -503,6 +510,10 @@ export class SessionRegistry {
       if (result.seed) runtime.setComposerSeed(result.seed);
       return { cancelled: result.cancelled };
     });
+  }
+
+  dismissSideQuestion(sessionId: string, questionId: string): void {
+    this.#requireRuntime(sessionId).dismissSideQuestion(questionId);
   }
 
   async restoreQueuedPrompts(sessionId: string) {
@@ -840,6 +851,7 @@ export class SessionRegistry {
       this.#questionToolArtifactPath,
       record.ephemeral === true,
       customArguments,
+      this.#sideQuestionArtifactPath,
     );
   }
 

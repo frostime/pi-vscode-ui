@@ -250,6 +250,9 @@ export class WebviewActionDispatcher {
       case "abort":
         await this.#registry.abort(message.sessionId);
         return;
+      case "dismissSideQuestion":
+        this.#registry.dismissSideQuestion(message.sessionId, message.questionId);
+        return;
       case "cancelFork":
         await this.#registry.cancelFork(message.sessionId);
         return;
