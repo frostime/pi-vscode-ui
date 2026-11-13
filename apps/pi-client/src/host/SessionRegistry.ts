@@ -440,6 +440,13 @@ export class SessionRegistry {
           // The chosen prompt returns as a Composer seed, which must outlive this submission.
           await this.rewind(sessionId);
           return;
+        case "reload":
+          await this.#withTreeInteraction(sessionId, () => runtime.reloadResources());
+          return;
+        case "name":
+        case "alias":
+          await this.#renameFromCommand(sessionId, hostCommand.argument);
+          return;
       }
     }
     await runtime.sendPrompt(text, images, streamingBehavior);
@@ -636,6 +643,21 @@ export class SessionRegistry {
       if (result.seed) runtime.setComposerSeed(result.seed);
       return { cancelled: result.cancelled };
     });
+  }
+
+  /** `/name` and `/alias`: with a name, rename at once; without one, ask for it. */
+  async #renameFromCommand(sessionId: string, argument: string): Promise<void> {
+    const current = this.#requireRuntime(sessionId).view.title;
+    const name = argument || await this.#host.window.showInputBox({
+      title: "Rename FrostPi session",
+      value: current,
+      prompt: "The name is shown in the session list and the editor tab.",
+      validateInput: (value) => value.trim().length > MAX_SESSION_NAME_LENGTH ? `A session name can have at most ${MAX_SESSION_NAME_LENGTH} characters.` : undefined,
+    });
+    const normalized = name?.trim();
+    if (!normalized || normalized === current) return;
+    if (normalized.length > MAX_SESSION_NAME_LENGTH) throw new Error(`A session name can have at most ${MAX_SESSION_NAME_LENGTH} characters.`);
+    await this.rename(sessionId, normalized);
   }
 
   async rename(sessionId: string, name: string): Promise<void> {
@@ -1185,6 +1207,9 @@ export class SessionRegistry {
     return this.#host.workspace.getWorkspaceFolders().some((folder) => sameCanonicalPath(folder.uri.fsPath, cwd));
   }
 }
+
+/** The bridge's bound on a session name; Pi itself accepts longer ones. */
+const MAX_SESSION_NAME_LENGTH = 160;
 
 function forkSessionName(title: string): string {
   const source = title.trim();

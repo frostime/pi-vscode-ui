@@ -24,7 +24,7 @@ describe("bounded OMP runtime commands", () => {
     const fixture = await createFixture();
     const runtime = fixture.runtime();
     await fixture.start(runtime);
-    await vi.waitFor(() => expect(runtime.view.commands.map((command) => command.name)).toEqual(["review", "skill:test"]));
+    await vi.waitFor(() => expect(runtime.view.commands.map((command) => command.name)).toEqual(["name", "alias", "review", "skill:test"]));
     await expect(runtime.sendPrompt("/ui", [])).rejects.toThrow("not supported");
     await expect(runtime.sendPrompt("/model:foo", [])).rejects.toThrow("not supported");
     expect(turns(runtime.view)).toEqual([]);
