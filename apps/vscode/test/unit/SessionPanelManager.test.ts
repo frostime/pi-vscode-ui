@@ -78,6 +78,41 @@ describe("Session panel lifecycle", () => {
     manager.dispose();
   });
 
+  it("opens a new tab in a requested group and reports which Session Tab is active", () => {
+    const sessions = new Map([["first", { id: "first", title: "First" }], ["second", { id: "second", title: "Second" }]]);
+    const registry = {
+      sessionView: (id: string) => sessions.get(id) ?? null,
+      hasSession: (id: string) => sessions.has(id),
+      retainProvisionalSession: vi.fn(),
+    };
+    const first = fakePanel();
+    const second = fakePanel();
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel);
+    createWebviewPanel.mockReset();
+    createWebviewPanel.mockReturnValueOnce(first.value as never).mockReturnValueOnce(second.value as never);
+    const manager = new SessionPanelManager(
+      registry as never,
+      {} as never,
+      () => ({ dispose: vi.fn(), focusComposer: vi.fn() }) as never,
+    );
+
+    manager.open("first");
+    first.value.viewColumn = 3;
+    expect(manager.viewColumn("first")).toBe(3);
+    expect(manager.viewColumn("missing")).toBeUndefined();
+    expect(manager.activeSessionId()).toBeUndefined();
+
+    manager.open("second", manager.viewColumn("first"));
+    expect(createWebviewPanel.mock.calls.map((call) => call[2])).toEqual([
+      { viewColumn: 1, preserveFocus: false },
+      { viewColumn: 3, preserveFocus: false },
+    ]);
+
+    (second.value as { active?: boolean }).active = true;
+    expect(manager.activeSessionId()).toBe("second");
+    manager.dispose();
+  });
+
   it("disposes the mapped panel exactly once after Registry removal", () => {
     const sessions = new Map([["session", { id: "session", title: "Session" }]]);
     const registry = {

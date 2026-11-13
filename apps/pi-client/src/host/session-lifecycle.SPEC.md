@@ -5,7 +5,7 @@ scope:
   - /apps/pi-client/src/core/sessions/**
   - /apps/pi-client/src/host/**
   - /apps/vscode/src/extension/webview-host/**
-updated: 2026-11-01
+updated: 2026-11-12
 ---
 
 # Pi Session Lifecycle
@@ -49,6 +49,16 @@ Fork and tree mutation require an idle, fully loaded Session without pending ext
 Cancel Fork stops that child and restarts the original so a late response cannot replace recovery. If naming/state/history reconciliation fails after commit, remove the unfinished fork entry and recover the original; leave Pi-created files on disk. Rekeying Registry maps and Runtime identity must not publish a mismatched intermediate view. `SessionRegistry.forkMessage`, `#replaceRuntimeWithFork` and `#restoreOriginalAfterFork` implement this boundary.
 
 **Tree navigation mutates the existing Pi path, not application identity.** After Pi confirms commit, its path is authoritative. Rebuild entries/state under the same Runtime and JSONL; a later load/projection failure is retryable history failure, not permission to reverse-navigate automatically. Composer replacement and non-empty-draft confirmation follow the Composer seed contract.
+
+## Host commands on the conversation
+
+**Clear replaces Pi's conversation, not the application identity.** `/clear` asks the running child for a new session. The FrostPi id, its presentation, the process, working directory, model and thinking level stay; Pi starts a new session on its default model, so Runtime restores the model and level that were in use. Pi's successful response is the commit boundary. Before it, a refusal or an extension veto leaves everything unchanged, restart metadata included, and the request has no deadline: an extension may ask the user first, and Pi would still commit a request FrostPi had given up on. While it is pending, Runtime refuses other requests that change or read the conversation (prompt, compaction, model, thinking level, rename, Fork, tree navigation, side question); closing or restarting the Session stays possible and ends the request. After the boundary the earlier transcript must not stay displayed, and a failed reload is a visible history failure under the same identity. The earlier conversation stays in Pi's own session file, where Resume finds it; FrostPi neither deletes nor rewrites it. Clear requires an idle Session without pending extension input or queued prompts. From the boundary on, the entry is Provisional again, because its new conversation has no file to restore until the first prompt, and it is retained, because the user chose to continue in it. Its record drops the earlier file at the same moment, so neither saved metadata nor a restart can reopen the conversation the user cleared, also when the reload failed. Clearing an Ephemeral Session that contains a user prompt requires the same irreversible-loss confirmation as closing it.
+
+**Rewind is tree navigation with a list.** `/rewind` offers the user prompts on the active path, latest first, then follows Branch here exactly: the same preconditions, summary choice, commit boundary and one-shot Composer seed. It changes which entries Pi sends to the model. The abandoned path remains a branch of the same session file, and files on disk are never restored.
+
+**A side question is transient Runtime state.** `/btw` asks Pi's current model about the conversation Pi already holds, through the bundled side-question adapter and with Pi's own credentials. The adapter uses Pi's model API for extensions, not the agent loop: it applies Pi's `images.blockImages` setting itself, treating a Pi that cannot report settings as blocking, and other extensions' agent-request hooks do not run. An answer the model cut at its output limit, or gave beside a tool call it cannot make here, is shown and marked as possibly partial. Nothing is appended to the session, so it is not a turn: it never promotes a Provisional Session, never enters a streaming queue, does not wait for or interrupt an agent turn, and issues no completion notification. Admission returns as soon as the question is shown; the answer arrives later through the view. A Session holds one question; asking again replaces it, and an answer for a dismissed or replaced question is dropped. Stopping the process fails a pending question. Clearing the conversation removes the card with the conversation it was about, and an answer that still arrives is dropped. The exchange is not persisted and does not survive the Extension Host.
+
+**A Session created for its own presentation leaves the sidebar alone.** New-in-tab preserves the sidebar selection and does not discard the sidebar's unretained Provisional Session; with nothing selected, the new Session becomes the selection so the collection stays reachable. Asked from an existing Session, it reuses that Session's working directory only while discovery still allows the directory, and otherwise falls back to the ordinary Host choice. The presentation is told about the entry before its child starts; if the presentation cannot open, the Session still starts and the failure is reported.
 
 ## Retention, restoration and shutdown
 

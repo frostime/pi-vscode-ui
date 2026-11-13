@@ -25,6 +25,7 @@ export class SessionViewState {
     attachmentLimits: AttachmentLimitsView = { maxImageBytes: 10 * 1024 * 1024, maxImages: 12 },
     collapseTurnTrace = true,
     isEphemeral = false,
+    focusView = true,
   ) {
     this.#view = {
       id,
@@ -43,6 +44,7 @@ export class SessionViewState {
       commands: [],
       attachmentLimits,
       collapseTurnTrace,
+      focusView,
       composerStreamingBehavior: "followUp",
       networkProxy: { mode: "inherit", label: "Inherited", restartRequired: false },
       questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
@@ -182,6 +184,27 @@ export class SessionViewState {
 
   setCollapseTurnTrace(collapseTurnTrace: boolean): void {
     this.#view.collapseTurnTrace = collapseTurnTrace;
+  }
+
+  setFocusView(focusView: boolean): void {
+    this.#view.focusView = focusView;
+  }
+
+  setSideQuestion(sideQuestion: SessionViewModel["sideQuestion"]): void {
+    if (sideQuestion) this.#view.sideQuestion = sideQuestion;
+    else delete this.#view.sideQuestion;
+  }
+
+  /** A replaced conversation keeps the process, model catalogue and settings, and nothing of the old transcript. */
+  resetForNewConversation(title: string): void {
+    this.#view.title = title;
+    delete this.#view.sessionFile;
+    delete this.#view.sessionId;
+    delete this.#view.stats;
+    delete this.#view.cacheHitPercent;
+    delete this.#view.composerSeed;
+    delete this.#view.sideQuestion;
+    delete this.#view.error;
   }
 
   setComposerStreamingBehavior(streamingBehavior: SessionViewModel["composerStreamingBehavior"]): void {

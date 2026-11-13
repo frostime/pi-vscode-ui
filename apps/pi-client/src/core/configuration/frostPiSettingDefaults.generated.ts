@@ -7,6 +7,7 @@ export const frostPiSettingDefaults = {
   "session.startOnOpen": true,
   "composer.streamingBehavior": "followUp",
   "conversation.collapseTurnTrace": true,
+  "conversation.focusView": true,
   "questionTool.enabled": false,
   "attachments.maxImageBytes": 10485760,
   "diagnostics.level": "info",

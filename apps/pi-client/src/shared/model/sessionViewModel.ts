@@ -42,6 +42,27 @@ export interface QuestionToolStateView {
   restartRequired: boolean;
 }
 
+/**
+ * One `/btw` exchange. It is answered from the conversation Pi holds but is never
+ * written to it, so it lives only in the running Session's view.
+ */
+export interface SideQuestionView {
+  id: string;
+  question: string;
+  status: "pending" | "answered" | "failed";
+  /** Markdown answer; present once answered. */
+  answer?: string;
+  /** The answer exceeded the transfer bound and was cut. */
+  truncated?: boolean;
+  /** The reply may be partial: the model hit its output limit or tried to call a tool. */
+  incomplete?: "length" | "tool-call";
+  error?: string;
+  /** `provider/model` that answered. */
+  model?: string;
+  usage?: { input: number; output: number; cacheRead: number };
+  askedAt: number;
+}
+
 export interface ComposerSeedView {
   id: string;
   text: string;
@@ -70,6 +91,8 @@ export interface SessionViewModel {
   attachmentLimits: AttachmentLimitsView;
   /** When true, completed turns collapse tool/reasoning/interim replies into one summary above the final response. */
   collapseTurnTrace: boolean;
+  /** When true, runs of tool calls and reasoning fold into one expandable row, also while a turn is running. */
+  focusView: boolean;
   /** Default streaming delivery selected for this session's Composer. */
   composerStreamingBehavior: StreamingBehavior;
   networkProxy: NetworkProxyView;
@@ -84,6 +107,7 @@ export interface SessionViewModel {
   extensionStatuses: ExtensionStatusView[];
   extensionWidgets: ExtensionWidgetView[];
   composerSeed?: ComposerSeedView;
+  sideQuestion?: SideQuestionView;
   sessionTreeAvailable: boolean;
   isNavigatingTree: boolean;
   isSummarizingTree: boolean;

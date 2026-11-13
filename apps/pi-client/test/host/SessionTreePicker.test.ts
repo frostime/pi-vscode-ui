@@ -6,7 +6,7 @@ const vscodeMocks = vi.hoisted(() => ({
   showWarningDialog: vi.fn(),
 }));
 
-const { confirmDraftReplacement, pickBranchEnd, pickBranchSummary } = await import(
+const { confirmDraftReplacement, pickBranchEnd, pickBranchSummary, pickRewindTarget } = await import(
   "../../src/host/pickers/SessionTreePicker.js"
 );
 
@@ -67,6 +67,29 @@ describe("SessionTreePicker", () => {
     vscodeMocks.showQuickPick.mockImplementationOnce((items: unknown[]) => Promise.resolve(items[2]));
     vscodeMocks.showInputBox.mockResolvedValueOnce(undefined);
     await expect(pickBranchSummary(fakeHost())).resolves.toBeUndefined();
+  });
+
+  it("offers rewind targets with what each removes and states that files are untouched", async () => {
+    const targets = [
+      { targetId: "latest", label: "Add tests", hasImages: true, removedMessageCount: 1, sentAt: Date.now() - 2 * 60_000 },
+      { targetId: "earlier", label: "Fix parser", hasImages: false, removedMessageCount: 2, sentAt: Date.now() - 3 * 3_600_000 },
+      { targetId: "first", label: "Start", hasImages: false, removedMessageCount: 9, sentAt: 0 },
+    ];
+    vscodeMocks.showQuickPick.mockImplementationOnce((items: unknown[]) => Promise.resolve(items[1]));
+
+    await expect(pickRewindTarget(fakeHost(), targets)).resolves.toEqual(targets[1]);
+
+    const [items, options] = vscodeMocks.showQuickPick.mock.calls[0] as [Array<{ label: string; description?: string; detail?: string }>, { title: string; placeHolder: string }];
+    expect(items.map(({ label, description, detail }) => ({ label, description, detail }))).toEqual([
+      { label: "$(history) Add tests $(file-media)", description: "2m ago", detail: "Returns to before this prompt" },
+      { label: "$(history) Fix parser", description: "3h ago", detail: "Returns to before this prompt · 1 later message leaves the context" },
+      { label: "$(history) Start", description: "", detail: "Returns to before this prompt · 8 later messages leave the context" },
+    ]);
+    expect(options.title).toBe("Rewind conversation");
+    expect(options.placeHolder).toContain("files on disk are not changed");
+
+    vscodeMocks.showQuickPick.mockResolvedValueOnce(undefined);
+    await expect(pickRewindTarget(fakeHost(), targets)).resolves.toBeUndefined();
   });
 
   it("confirms Composer draft replacement only on the explicit action", async () => {

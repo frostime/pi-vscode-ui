@@ -120,6 +120,7 @@ export async function createDesktopBackend(options: DesktopBackendOptions) {
     ...(options.discoverWorkingDirectories ? { discoverWorkingDirectories: options.discoverWorkingDirectories } : {}),
     sessionTreeArtifactPath: join(options.artifacts, "pi-extensions/session-tree.js"),
     questionToolArtifactPath: join(options.artifacts, "pi-extensions/question-tool.js"),
+    sideQuestionArtifactPath: join(options.artifacts, "pi-extensions/side-question.js"),
   });
   const navigation = new DesktopProjectNavigation({
     projects, registry, storage: stateStore,

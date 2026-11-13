@@ -8,7 +8,7 @@ import type { WebviewImageInput } from "../shared/bridge/webviewToHost.js";
 import type { QuestionDraftSubmission } from "../shared/question-tool/questionToolProtocol.js";
 import type { SessionRuntimeStatus, SessionSummaryView, SessionViewModel, WorkspaceViewModel } from "../shared/model/sessionViewModel.js";
 import { sameCanonicalPath } from "../core/_shared/canonicalPath.js";
-import { normalizePiSlashPrompt } from "../core/sessions/normalizePiSlashPrompt.js";
+import { parseHostCommand } from "../core/sessions/hostCommands.js";
 import { SessionRuntime } from "../core/index.js";
 import type { RuntimeLogger } from "../core/diagnostics/RuntimeLogger.js";
 import { readConfiguration, readHostProxy } from "./readConfiguration.js";
@@ -17,7 +17,7 @@ import { readPiSessionMetadata, type PiSessionCatalogEntry } from "./catalog/Ses
 import { pickPiSession } from "./catalog/SessionCatalogPicker.js";
 import { parseLaunchArguments } from "./sessions/parseLaunchArguments.js";
 import { SessionPersistence } from "./sessions/SessionPersistence.js";
-import { confirmDraftReplacement, pickBranchEnd, pickBranchSummary } from "./pickers/SessionTreePicker.js";
+import { confirmDraftReplacement, pickBranchEnd, pickBranchSummary, pickRewindTarget } from "./pickers/SessionTreePicker.js";
 import {
   discoverSessionWorkingDirectories,
   findSessionWorkingDirectory,
@@ -34,6 +34,18 @@ type SystemNotificationEvent = "inputRequired" | "failed" | "completed";
 type DiscoverSessionWorkingDirectories = typeof discoverSessionWorkingDirectories;
 
 export type ForkResultSelection = "select-result" | "preserve-sidebar-selection";
+
+export interface CreateSessionOptions {
+  /**
+   * `preserve-sidebar-selection` is for a Session that opens in its own presentation:
+   * the sidebar keeps its Session, including an unretained Provisional one.
+   */
+  selection?: ForkResultSelection;
+  /** Start in this Session's working directory without asking, while it is still an allowed directory. */
+  workingDirectoryOf?: string;
+  /** Runs once the entry exists and before its Pi process starts, so a presentation can show the startup. */
+  onRegistered?: (sessionId: string) => void | Promise<void>;
+}
 
 interface ForkOperation {
   phase: "waiting-for-pi" | "reconciling";
@@ -52,6 +64,8 @@ export interface SessionRegistryOptions {
   sessionTreeArtifactPath?: string;
   /** Bundled question-tool adapter; hosts without one keep the question tool unavailable. */
   questionToolArtifactPath?: string;
+  /** Bundled side-question adapter; hosts without one keep `/btw` unavailable. */
+  sideQuestionArtifactPath?: string;
   /** Native VS Code keeps its historical fallback; Desktop restores only an explicitly saved selection. */
   restoreSelection?: "saved-or-first" | "saved-only";
   /** Host metadata may associate New/Resume identities before presentation; forks name their source. */
@@ -78,6 +92,7 @@ export class SessionRegistry {
   readonly #discoverWorkingDirectories: DiscoverSessionWorkingDirectories;
   readonly #sessionTreeArtifactPath: string | undefined;
   readonly #questionToolArtifactPath: string | undefined;
+  readonly #sideQuestionArtifactPath: string | undefined;
   readonly #restoreOnlySavedSelection: boolean;
   readonly #onSessionOpened: SessionRegistryOptions["onSessionOpened"];
 
@@ -104,6 +119,7 @@ export class SessionRegistry {
     this.#discoverWorkingDirectories = options.discoverWorkingDirectories ?? discoverSessionWorkingDirectories;
     this.#sessionTreeArtifactPath = options.sessionTreeArtifactPath;
     this.#questionToolArtifactPath = options.questionToolArtifactPath;
+    this.#sideQuestionArtifactPath = options.sideQuestionArtifactPath;
     this.#restoreOnlySavedSelection = options.restoreSelection === "saved-only";
     this.#onSessionOpened = options.onSessionOpened;
     this.#changeEmitter = host.createEventEmitter<void>();
@@ -147,6 +163,12 @@ export class SessionRegistry {
     return runtime ? this.#withWorkingDirectoryLabel(runtime.view) : null;
   }
 
+  /** The directory whose settings apply to this Session: its workspace folder, also for a worktree outside it. */
+  configurationScope(sessionId: string): string | undefined {
+    const runtime = this.#runtimes.get(sessionId);
+    return runtime ? this.#configurationScopeCwd(runtime.view.cwd) : undefined;
+  }
+
   retainProvisionalSession(sessionId: string): void {
     this.#requireRuntime(sessionId);
     if (this.#temporarySessionIds.has(sessionId)) this.#retainedProvisionalSessionIds.add(sessionId);
@@ -185,14 +207,21 @@ export class SessionRegistry {
     };
   }
 
-  async createSession(ephemeral = false): Promise<string | undefined> {
+  async createSession(ephemeral = false, options: CreateSessionOptions = {}): Promise<string | undefined> {
     return this.#withSessionCreation(async () => {
-      const cwd = this.#sourceWorkspaceCwd("creating a Pi session");
-      const discovery = await this.#discoverWorkingDirectories(cwd);
+      const inherited = options.workingDirectoryOf
+        ? await this.#workingDirectoryOfSession(options.workingDirectoryOf)
+        : undefined;
       this.#assertOpen();
-      const directory = await this.#pickSessionWorkingDirectory(discovery.directories);
+      let directory = inherited;
+      if (!directory) {
+        const cwd = this.#sourceWorkspaceCwd("creating a Pi session");
+        const discovery = await this.#discoverWorkingDirectories(cwd);
+        this.#assertOpen();
+        directory = await this.#pickSessionWorkingDirectory(discovery.directories);
+      }
       if (!directory) return undefined;
-      return this.#createSessionInDirectory(directory, ephemeral);
+      return this.#createSessionInDirectory(directory, ephemeral, undefined, options);
     });
   }
 
@@ -274,13 +303,23 @@ export class SessionRegistry {
     return id;
   }
 
+  /** The source Session's directory, only while workspace discovery still allows it. */
+  async #workingDirectoryOfSession(sessionId: string): Promise<SessionWorkingDirectory | undefined> {
+    const source = this.#runtimes.get(sessionId);
+    if (!source) return undefined;
+    const discoveries = await this.#discoverOpenWorkspaceDirectories();
+    return findSessionWorkingDirectory(discoveries.flatMap((discovery) => discovery.directories), source.cwd);
+  }
+
   async #createSessionInDirectory(
     directory: SessionWorkingDirectory,
     ephemeral: boolean,
     customArguments?: readonly string[],
+    options: CreateSessionOptions = {},
   ): Promise<string> {
     this.#assertOpen();
-    await this.#discardActiveTemporarySession();
+    const preserveSidebar = options.selection === "preserve-sidebar-selection";
+    if (!preserveSidebar) await this.#discardActiveTemporarySession();
     this.#assertOpen();
     const id = randomUUID();
     const record: PersistedSessionRecord = {
@@ -295,11 +334,20 @@ export class SessionRegistry {
     if (!ephemeral) this.#temporarySessionIds.add(id);
     const runtime = this.#createRuntime(record, customArguments);
     this.#runtimes.set(id, runtime);
-    this.#activeSessionId = id;
+    if (preserveSidebar) this.#ensureValidActiveSelection();
+    else this.#activeSessionId = id;
     this.#onSessionOpened?.(id);
     await this.#persist();
     this.#emitChange();
+    // A presentation that cannot open must not leave an entry that never starts.
+    let presentationError: unknown;
+    try {
+      await options.onRegistered?.(id);
+    } catch (error) {
+      presentationError = error;
+    }
     await this.#startRuntime(runtime, true);
+    if (presentationError) throw presentationError instanceof Error ? presentationError : new Error("The new session could not be presented.", { cause: presentationError });
     return id;
   }
 
@@ -379,15 +427,93 @@ export class SessionRegistry {
       throw new Error("Wait for conversation history to finish loading before sending a prompt.");
     }
     if (runtime.view.isCompacting) throw new Error("Wait for context compaction to finish before sending a prompt.");
-    const compactInstructions = compactCommandInstructions(text);
-    if (compactInstructions !== null && images.length > 0) throw new Error("/compact does not support image attachments.");
-    if (compactInstructions !== null) await runtime.compact(compactInstructions || undefined);
-    else await runtime.sendPrompt(text, images, streamingBehavior);
+    const hostCommand = parseHostCommand(text);
+    // A command this runtime cannot be answered for stays the runtime's own text.
+    if (hostCommand && runtime.answersHostCommand(hostCommand.name)) {
+      if (images.length > 0) throw new Error(`/${hostCommand.name} does not support image attachments.`);
+      // Host commands never become a user prompt and never promote a Provisional Session.
+      switch (hostCommand.name) {
+        case "compact":
+          await runtime.compact(hostCommand.argument || undefined);
+          runtime.clearComposerSeed();
+          return;
+        case "clear":
+          await this.clearConversation(sessionId);
+          return;
+        case "rewind":
+          // The chosen prompt returns as a Composer seed, which must outlive this submission.
+          await this.rewind(sessionId);
+          return;
+        case "btw":
+          await runtime.askSideQuestion(hostCommand.argument);
+          return;
+      }
+    }
+    await runtime.sendPrompt(text, images, streamingBehavior);
     runtime.clearComposerSeed();
-    if (compactInstructions === null && this.#temporarySessionIds.delete(sessionId)) {
+    if (this.#temporarySessionIds.delete(sessionId)) {
       this.#retainedProvisionalSessionIds.delete(sessionId);
       await this.#persist();
     }
+  }
+
+  /**
+   * `/clear` keeps the application identity and its presentation; only Pi's conversation
+   * is replaced. Nothing here changes until Pi commits. From that point the entry is
+   * Provisional again, because the new conversation has no file to restore until its
+   * first prompt, and retained, because the user chose to continue in it. That holds
+   * even when loading the new conversation then fails: the old file is no longer this
+   * entry's conversation and must not be what a restart reopens.
+   */
+  async clearConversation(sessionId: string): Promise<{ cancelled: boolean }> {
+    this.#assertSessionOutsideFork(sessionId);
+    // A clear is a session-tree interaction too: a branch switch or a second clear must not interleave.
+    return this.#withTreeInteraction(sessionId, async () => {
+      const runtime = this.#requireRuntime(sessionId);
+      await this.#ensureRunning(runtime);
+      if (!await confirmClear(this.#host, runtime)) return { cancelled: true };
+
+      let committed = false;
+      const onCommitted = (): void => {
+        committed = true;
+        if (runtime.isEphemeral) return;
+        this.#temporarySessionIds.add(sessionId);
+        this.#retainedProvisionalSessionIds.add(sessionId);
+        // The earlier conversation's file stops being this entry's restart target.
+        const record = this.#records.get(sessionId);
+        if (record) this.#records.set(sessionId, { id: record.id, title: record.title, cwd: record.cwd, updatedAt: Date.now() });
+      };
+      try {
+        return await runtime.clearConversation(onCommitted);
+      } finally {
+        if (committed && !this.#disposed) {
+          await Promise.resolve(this.#persist()).catch(() => undefined);
+          this.#emitChange();
+        }
+      }
+    });
+  }
+
+  /** `/rewind`: Branch here, with the prompt chosen from a list instead of the transcript. */
+  async rewind(sessionId: string): Promise<{ cancelled: boolean }> {
+    return this.#withTreeInteraction(sessionId, async () => {
+      this.#assertNoForkOperation();
+      const runtime = this.#requireRuntime(sessionId);
+      await this.#ensureRunning(runtime);
+      const targets = await runtime.listRewindTargets();
+      if (targets.length === 0) throw new Error("This conversation has no earlier prompt to rewind to.");
+      const target = await pickRewindTarget(this.#host, targets);
+      if (!target) return { cancelled: true };
+      const summary = await pickBranchSummary(this.#host);
+      if (!summary) return { cancelled: true };
+      const result = await runtime.navigateTree(target.targetId, summary);
+      if (result.seed) runtime.setComposerSeed(result.seed);
+      return { cancelled: result.cancelled };
+    });
+  }
+
+  dismissSideQuestion(sessionId: string, questionId: string): void {
+    this.#requireRuntime(sessionId).dismissSideQuestion(questionId);
   }
 
   async restoreQueuedPrompts(sessionId: string) {
@@ -725,6 +851,7 @@ export class SessionRegistry {
       this.#questionToolArtifactPath,
       record.ephemeral === true,
       customArguments,
+      this.#sideQuestionArtifactPath,
     );
   }
 
@@ -1076,10 +1203,16 @@ function forkSessionName(title: string): string {
   return (source ? `Fork: ${source}` : "Fork session").slice(0, 160);
 }
 
-function compactCommandInstructions(text: string): string | null {
-  const normalized = normalizePiSlashPrompt(text);
-  if (normalized === "/compact") return "";
-  return normalized.startsWith("/compact ") ? normalized.slice("/compact ".length).trim() : null;
+async function confirmClear(host: ClientHost, runtime: SessionRuntime): Promise<boolean> {
+  const view = runtime.view;
+  const losesConversation = view.isEphemeral
+    && view.conversationItems.some((item) => item.type === "turn" && item.userMessage?.role === "user");
+  if (!losesConversation) return true;
+  const choice = await host.window.showWarningDialog(
+    "Clearing this temporary session will permanently discard its conversation. This cannot be undone.",
+    ["Clear conversation"],
+  );
+  return choice === "Clear conversation";
 }
 
 async function confirmClose(host: ClientHost, runtime: SessionRuntime): Promise<boolean> {

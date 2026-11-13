@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { BRIDGE_VERSION } from "../../src/shared/bridge/bridgeVersion.js";
+
 const { WebviewActionDispatcher } = await import("../../src/host/bridge/WebviewActionDispatcher.js");
 
 function fakeHost(editor: Record<string, unknown> = {}) {
@@ -7,19 +9,22 @@ function fakeHost(editor: Record<string, unknown> = {}) {
 }
 
 describe("Session Tab Host authorization", () => {
-  function setup() {
+  function setup(editorTabs = true) {
     const registry = {
       hasSession: vi.fn(() => true),
       sessionView: vi.fn(() => ({ cwd: "C:/workspace", attachmentLimits: { maxImageBytes: 1024 } })),
       createSession: vi.fn(),
       activateSession: vi.fn(),
       closeSession: vi.fn(),
+      rename: vi.fn().mockResolvedValue(undefined),
+      dismissSideQuestion: vi.fn(),
       abort: vi.fn(),
       sendPrompt: vi.fn().mockResolvedValue(undefined),
       forkMessage: vi.fn().mockResolvedValue({ cancelled: false, forkSessionId: "fork" }),
     };
     const logger = { error: vi.fn(), info: vi.fn() };
     const openPanel = vi.fn().mockResolvedValue(undefined);
+    const createSessionPanel = vi.fn().mockResolvedValue("created");
     const openComposerEditor = vi.fn().mockResolvedValue("opened");
     const drafts = {
       applyMutation: vi.fn(),
@@ -36,6 +41,7 @@ describe("Session Tab Host authorization", () => {
       openPanel,
       revealPanel: vi.fn(),
       openComposerEditor,
+      ...(editorTabs ? { createSessionPanel } : {}),
       host: fakeHost(),
     });
     const posted: unknown[] = [];
@@ -55,8 +61,52 @@ describe("Session Tab Host authorization", () => {
       surface: { kind: "sidebar" as const },
       sessionId: "source",
     };
-    return { dispatcher, registry, drafts, logger, openPanel, openComposerEditor, posted, connection, sidebarConnection };
+    return { dispatcher, registry, drafts, logger, openPanel, createSessionPanel, openComposerEditor, posted, connection, sidebarConnection };
   }
+
+  it("lets a Session Tab rename only the Session it is pinned to", async () => {
+    const { dispatcher, registry, connection, sidebarConnection } = setup();
+
+    await dispatcher.dispatch({ type: "renameSession", bridgeVersion: BRIDGE_VERSION, sessionId: "source", name: "Parser work" } as never, connection);
+    expect(registry.rename).toHaveBeenCalledWith("source", "Parser work");
+
+    await expect(dispatcher.dispatch({ type: "renameSession", bridgeVersion: BRIDGE_VERSION, sessionId: "other", name: "Hijack" } as never, connection))
+      .rejects.toThrow("does not target the Session displayed by this surface");
+    expect(registry.rename).toHaveBeenCalledOnce();
+
+    // The sidebar still manages every listed Session.
+    await dispatcher.dispatch({ type: "renameSession", bridgeVersion: BRIDGE_VERSION, sessionId: "other", name: "Listed" } as never, sidebarConnection);
+    expect(registry.rename).toHaveBeenLastCalledWith("other", "Listed");
+  });
+
+  it("creates a Session Tab beside the asking tab, or in the active group for the sidebar", async () => {
+    const { dispatcher, registry, createSessionPanel, connection, sidebarConnection } = setup();
+
+    await dispatcher.dispatch({ type: "createSessionPanel", bridgeVersion: BRIDGE_VERSION } as never, connection);
+    expect(createSessionPanel).toHaveBeenLastCalledWith("source");
+
+    await dispatcher.dispatch({ type: "createSessionPanel", bridgeVersion: BRIDGE_VERSION } as never, sidebarConnection);
+    expect(createSessionPanel).toHaveBeenLastCalledWith(null);
+    // Placement and creation belong to the product; the shared path creates nothing itself.
+    expect(registry.createSession).not.toHaveBeenCalled();
+  });
+
+  it("refuses Session Tab creation on a host without editor tabs before creating anything", async () => {
+    const { dispatcher, registry, sidebarConnection } = setup(false);
+    await expect(dispatcher.dispatch({ type: "createSessionPanel", bridgeVersion: BRIDGE_VERSION } as never, sidebarConnection))
+      .rejects.toThrow('"createSessionPanel" is not supported in this host.');
+    expect(registry.createSession).not.toHaveBeenCalled();
+  });
+
+  it("dismisses a side question only for the displayed Session", async () => {
+    const { dispatcher, registry, connection } = setup();
+    await dispatcher.dispatch({ type: "dismissSideQuestion", bridgeVersion: BRIDGE_VERSION, sessionId: "source", questionId: "side-question-1" } as never, connection);
+    expect(registry.dismissSideQuestion).toHaveBeenCalledWith("source", "side-question-1");
+
+    await expect(dispatcher.dispatch({ type: "dismissSideQuestion", bridgeVersion: BRIDGE_VERSION, sessionId: "other", questionId: "side-question-1" } as never, connection))
+      .rejects.toThrow("does not target the Session displayed by this surface");
+    expect(registry.dismissSideQuestion).toHaveBeenCalledOnce();
+  });
 
   it("rejects sidebar management actions from a pinned panel", async () => {
     const { dispatcher, registry, connection } = setup();

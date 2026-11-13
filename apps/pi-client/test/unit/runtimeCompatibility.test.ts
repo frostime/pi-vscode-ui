@@ -16,6 +16,8 @@ describe("runtime compatibility profiles", () => {
       slashCommands: true,
       questionTool: true,
       queuedPromptRecovery: true,
+      newSession: true,
+      sideQuestion: true,
     });
     expect(profile.defaultSessionRoot()).toBe(join(homedir(), ".pi", "agent", "sessions"));
     expect(configuredPiInvocation(undefined, "pi")).toEqual({});
@@ -33,6 +35,8 @@ describe("runtime compatibility profiles", () => {
         slashCommands: true,
         questionTool: true,
         queuedPromptRecovery: true,
+        newSession: false,
+        sideQuestion: false,
       },
     });
     expect(configuredPiInvocation(undefined, "oh-my-pi")).toEqual({ command: expectedCommand });

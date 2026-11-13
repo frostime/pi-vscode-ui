@@ -38,7 +38,7 @@ The same rule governs substitution. A failed negotiation fails startup instead o
 
 ## Capability gates
 
-A capability declares what the product offers, and the gate is checked before the runtime is asked. An unavailable operation is rejected at the product entry point or not offered at all; it is never submitted and answered as `Unknown command`. Missing capability is visible, and an unavailable private adapter reports diagnostics instead of silently falling back to a degraded path. Adapters that cover a capability gap, such as session-tree navigation, fork and the Question tool, are product modules above the normalized transport, not dialect features.
+A capability declares what the product offers, and the gate is checked before the runtime is asked. An unavailable operation is rejected at the product entry point or not offered at all; it is never submitted and answered as `Unknown command`. Missing capability is visible, and an unavailable private adapter reports diagnostics instead of silently falling back to a degraded path. Adapters that cover a capability gap, such as session-tree navigation, fork, the Question tool and side questions, are product modules above the normalized transport, not dialect features. `/clear` uses the documented `new_session` request and is gated the same way.
 
 Capabilities are not inferred from whichever RPC events happen to arrive, and discovering a command does not prove FrostPi can complete its lifecycle. FrostPi's local extension commands and the runtime's slash commands are separate submission paths; support for one says nothing about the other. The OMP profile's supported surface and the reasons for its limits are in [OMP compatibility](../architecture/omp-compatibility.md).
 

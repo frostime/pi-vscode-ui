@@ -78,8 +78,12 @@ export class PiRpcApi {
     return this.connection.request({ type: "fork", entryId }, null);
   }
 
+  /**
+   * Replaces the process's session. Like Fork it has no deadline: an extension may ask
+   * the user first, and a request abandoned here could still be committed by Pi later.
+   */
   newSession(parentSession?: string): Promise<{ cancelled: boolean }> {
-    return this.connection.request({ type: "new_session", ...(parentSession ? { parentSession } : {}) });
+    return this.connection.request({ type: "new_session", ...(parentSession ? { parentSession } : {}) }, null);
   }
 
   switchSession(sessionPath: string): Promise<{ cancelled: boolean }> {

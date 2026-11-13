@@ -22,6 +22,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger,
     sessionTreeArtifactPath: context.asAbsolutePath("dist/pi-extensions/session-tree.js"),
     questionToolArtifactPath: context.asAbsolutePath("dist/pi-extensions/question-tool.js"),
+    sideQuestionArtifactPath: context.asAbsolutePath("dist/pi-extensions/side-question.js"),
   });
   const coordinator = new SessionWebviewCoordinator(registry, logger, context.extensionUri, () => host.proxyCredentials.get(), host);
   const viewProvider = new PiViewProvider(context.extensionUri, coordinator);
@@ -47,6 +48,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         event.affectsConfiguration("frostpi.network.proxy")
         || event.affectsConfiguration("http.proxy")
         || event.affectsConfiguration("frostpi.attachments")
+        || event.affectsConfiguration("frostpi.conversation")
         || event.affectsConfiguration("frostpi.composer.fileMentions")
         || event.affectsConfiguration("frostpi.questionTool")
       ) {

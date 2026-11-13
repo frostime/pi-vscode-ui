@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Start a session directly in an editor tab with **FrostPi: New Session in Editor Tab**, the sidebar's New session menu, or the `+` button of a session tab. From a session tab the new one opens in the same tab group and working directory. The sidebar keeps its own selection.
+- Rename a session from its editor tab: click the title in the tab's new header, or run **FrostPi: Rename Session**. This also works while Pi is running a turn. Renaming used to be possible only from the sidebar.
+- `/clear` starts a new conversation in the same session view and keeps the model, thinking level and Pi process. The earlier conversation stays in Pi's session history for **Resume session**.
+- `/rewind` lists earlier prompts and returns the conversation to just before the one you pick, with that prompt back in the Composer. It uses Pi's session tree, so the path you left remains available; files on disk are not restored.
+- `/btw <question>` asks a side question about the current conversation without adding it to the conversation, also while Pi is running a turn. The answer appears in a dismissible card and is never saved. It follows Pi's `images.blockImages` setting; other Pi extensions' request hooks do not run for it.
+- Focus view, on by default: each run of tool calls and reasoning folds into one expandable row while a turn is running, and replies stay visible. Switch with **FrostPi: Toggle Focus View** or `frostpi.conversation.focusView`.
+
+### Changed
+
+- `frostpi.conversation.collapseTurnTrace` now applies as soon as it changes instead of at the next session start.
+
 ## [0.16.5] - 2026-11-08
 
 ### Changed

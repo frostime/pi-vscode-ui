@@ -183,7 +183,7 @@ process.on("SIGTERM", () => process.exit(0));
   function runtime() {
     const configuration: FrostPiConfiguration = {
       piExecutable: fake, runtimeCompatibility: "oh-my-pi", piArguments: [], streamingBehavior: "followUp",
-      maxImageBytes: 10 * 1024 * 1024, questionToolEnabled: false, collapseTurnTrace: true,
+      maxImageBytes: 10 * 1024 * 1024, questionToolEnabled: false, collapseTurnTrace: true, focusView: true,
       startSessionOnOpen: true, diagnosticsLevel: "info", experimentalNotificationsEnabled: false,
       fileMentionRespectSearchExclude: true, fileMentionRespectIgnoreFiles: true, fileMentionFollowSymlinks: true,
       proxy: { mode: "inherit" },

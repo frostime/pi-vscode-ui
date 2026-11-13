@@ -6,6 +6,7 @@ import {
   projectActiveBranchEdges,
   projectBranchEndChoices,
   projectEditableTarget,
+  projectRewindTargets,
 } from "../../src/core/sessions/tree/sessionTreeProjection.js";
 import { SessionEntryState } from "../../src/core/sessions/SessionEntryState.js";
 
@@ -20,6 +21,42 @@ const entries: RpcSessionEntry[] = [
   entry("nested-a-end", "nested-a-user", 8, "assistant", "Adapter works"),
   entry("nested-b", "branch-b", 9, "assistant", "Library alternative"),
 ];
+
+describe("rewind targets", () => {
+  it("lists the user's prompts on the active path, latest first, with what each rewind removes", () => {
+    const index = buildSessionTreeIndex(entries, "nested-a-end");
+
+    expect(projectRewindTargets(index)).toEqual([
+      { targetId: "nested-a-user", label: "Try adapter", hasImages: false, removedMessageCount: 2, sentAt: 7 },
+      { targetId: "branch-b", label: "Use library", hasImages: false, removedMessageCount: 4, sentAt: 5 },
+      { targetId: "root", label: "Start", hasImages: false, removedMessageCount: 6, sentAt: 1 },
+    ]);
+  });
+
+  it("offers only real user prompts and ignores the abandoned branches", () => {
+    const path: RpcSessionEntry[] = [
+      { type: "model_change", id: "model", parentId: null, timestamp: new Date(1).toISOString(), provider: "p", modelId: "m" },
+      entry("system", "model", 2, "system", "System prompt"),
+      entry("ask", "system", 3, "user", "  First\n  prompt with   spacing "),
+      entry("answer", "ask", 4, "assistant", "Answer"),
+      { type: "custom_message", id: "mail", parentId: "answer", timestamp: new Date(5).toISOString(), customType: "pi-mail", content: "Injected", display: true },
+      entry("tools-changed", "mail", 5, "system", ""),
+      { type: "compaction", id: "compact", parentId: "tools-changed", timestamp: new Date(6).toISOString(), summary: "Summary", firstKeptEntryId: "ask" },
+      {
+        type: "message", id: "image-ask", parentId: "compact", timestamp: new Date(7).toISOString(),
+        message: { role: "user", timestamp: 7, content: [{ type: "text", text: "Look" }, { type: "image", data: "AAAA", mimeType: "image/png" }] },
+      },
+      entry("abandoned", "answer", 8, "user", "Other path"),
+    ];
+
+    expect(projectRewindTargets(buildSessionTreeIndex(path, "image-ask"))).toEqual([
+      { targetId: "image-ask", label: "Look", hasImages: true, removedMessageCount: 1, sentAt: 7 },
+      // System messages, before or after it, are not conversation steps; the custom message is.
+      { targetId: "ask", label: "First prompt with spacing", hasImages: false, removedMessageCount: 4, sentAt: 3 },
+    ]);
+    expect(projectRewindTargets(buildSessionTreeIndex([], null))).toEqual([]);
+  });
+});
 
 describe("session tree projection", () => {
   it("projects branch controls from exact active parent-child edges", () => {
