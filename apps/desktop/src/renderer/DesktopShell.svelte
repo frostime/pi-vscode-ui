@@ -98,7 +98,8 @@
   let keyboardDirty = false;
   let projectsFolded = $state(false);
   let sessionsFolded = $state(false);
-  let sessionsHeight = $state(SESSIONS_DEFAULT_HEIGHT);
+  /** Null until the splitter is used: before that the section hugs its rows. */
+  let sessionsHeight = $state<number | null>(null);
   let sessionsSplitting = false;
   let splitStart: { y: number; height: number; max: number } | null = null;
 
@@ -149,6 +150,7 @@
   });
   const needsYouCount = $derived(sessionRows.filter((row) => row.state === "wait" || row.state === "fail").length);
   const splitHandleActive = $derived(!projectsFolded && !sessionsFolded);
+  const effectiveSessionsHeight = $derived(sessionsHeight ?? SESSIONS_DEFAULT_HEIGHT);
   const projectsLabel = $derived(narrow || hidden ? "Projects" : "Hide");
   const projectsAriaLabel = $derived(
     narrow
@@ -461,6 +463,11 @@
     commitSidebar();
   }
 
+  function sessionsSectionHeight(): number {
+    const section = shell?.querySelector<HTMLElement>(".sect.sessions");
+    return section ? Math.round(section.getBoundingClientRect().height) : SESSIONS_DEFAULT_HEIGHT;
+  }
+
   /** Dragging the section split is a transient preference, so only the width is persisted. */
   function splitBound(): number {
     const sidebar = shell?.querySelector<HTMLElement>(".sidebar");
@@ -475,6 +482,9 @@
     event.preventDefault();
     handle.focus();
     sessionsSplitting = true;
+    // A hug-content section has no explicit height yet; adopt its measured one so the
+    // boundary follows the pointer on the very first drag.
+    sessionsHeight ??= sessionsSectionHeight();
     splitStart = { y: event.clientY, height: sessionsHeight, max: splitBound() };
     handle.setPointerCapture(event.pointerId);
   }
@@ -503,6 +513,7 @@
     if (step === 0 && event.key !== "Home" && event.key !== "End") return;
     event.preventDefault();
     const max = splitBound();
+    sessionsHeight ??= sessionsSectionHeight();
     const next = event.key === "Home" ? SESSIONS_MIN_HEIGHT
       : event.key === "End" ? max
         : sessionsHeight + step;
@@ -520,7 +531,8 @@
 >
   <aside id="desktop-projects" class="sidebar" aria-label="Projects" inert={!sidebarAvailable}
     data-projects-folded={projectsFolded} data-sessions-folded={sessionsFolded}
-    style={`--sessions-height: ${sessionsHeight}px`}>
+    data-sessions-sized={sessionsHeight !== null}
+    style={`--sessions-height: ${effectiveSessionsHeight}px`}>
     <div class="sect projects">
       <div class="sect-head">
         <button type="button" class="sect-chevron" aria-expanded={!projectsFolded} aria-label="Toggle Projects"
@@ -601,7 +613,7 @@
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <div class="splitter" class:draggable={splitHandleActive} role="separator" aria-orientation="horizontal"
         aria-label="Resize Sessions" aria-valuemin={SESSIONS_MIN_HEIGHT} aria-valuemax={SESSIONS_MAX_HEIGHT}
-        aria-valuenow={sessionsHeight} tabindex={splitHandleActive ? 0 : -1}
+        aria-valuenow={effectiveSessionsHeight} tabindex={splitHandleActive ? 0 : -1}
         onpointerdown={startSplit} onpointermove={moveSplit} onpointerup={finishSplit}
         onpointercancel={finishSplit} onkeydown={splitKeyDown}
       ></div>
@@ -780,9 +792,13 @@
   /* Projects folded + Sessions open: Sessions takes the remaining height. */
   .sidebar[data-projects-folded="true"] .sect.projects { flex: 0 0 auto; }
   .sidebar[data-projects-folded="true"][data-sessions-folded="false"] .sect.sessions { flex: 1 1 auto; }
-  /* Both open: Sessions grows with its rows up to the height the splitter was left at. */
-  .sidebar[data-projects-folded="false"][data-sessions-folded="false"] .sect.sessions {
+  /* Both open and never sized: Sessions grows with its rows up to the default cap. */
+  .sidebar[data-projects-folded="false"][data-sessions-folded="false"][data-sessions-sized="false"] .sect.sessions {
     flex: 0 0 auto; max-height: var(--sessions-height);
+  }
+  /* Once the splitter is used the height is explicit, so the boundary follows the pointer. */
+  .sidebar[data-projects-folded="false"][data-sessions-folded="false"][data-sessions-sized="true"] .sect.sessions {
+    flex: 0 0 auto; height: var(--sessions-height);
   }
   /* Both folded: both titles sit at the top. */
   .sidebar[data-projects-folded="true"][data-sessions-folded="true"] .sect { flex: 0 0 auto; }
