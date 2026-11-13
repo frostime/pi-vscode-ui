@@ -9,6 +9,7 @@ import type { WebviewEndpoint } from "@frostime/pi-client/host/bridge/webviewTyp
 import { WorkspaceFileSearch } from "@frostime/pi-client/host/file-search/WorkspaceFileSearch";
 import type { SessionRegistry } from "@frostime/pi-client/host/SessionRegistry";
 import { ComposerExternalEditor } from "../composer/ComposerExternalEditor.js";
+import { workspaceUriForPath } from "../configuration/workspaceScope.js";
 import { readChatTypography } from "@frostime/pi-client/host/readChatTypography";
 import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { SessionPanelManager } from "./SessionPanelManager.js";
@@ -66,6 +67,7 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
       this.#drafts.onDidChange(({ sessionId, draft }) => this.#draftChanged(sessionId, draft)),
       this.#drafts.onDidOwnershipChange((sessionId) => this.#forEachConnection((connection) => connection.refreshDraftOwnership(sessionId))),
       this.#panels.onDidChange(() => this.#panelsChanged()),
+      this.#panels.onDidCloseTab((sessionId) => void this.#closeSessionWithTab(sessionId)),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (!chatTypographyChanged(event)) return;
         // A full refresh is unnecessary; each ready Webview can accept typography independently.
@@ -110,6 +112,23 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
       rollbackDraft?.();
       if (pendingText !== undefined) this.#queueSidebarComposerText(sessionId, pendingText);
       throw error;
+    }
+  }
+
+  /**
+   * With `frostpi.session.closeWithEditorTab`, closing a Session Tab closes the Session
+   * as the session list does: same confirmations, and Pi's files stay. Declining a
+   * confirmation leaves the Session running in the sidebar.
+   */
+  async #closeSessionWithTab(sessionId: string): Promise<void> {
+    if (!this.#registry.hasSession(sessionId)) return;
+    const scope = this.#registry.configurationScope(sessionId);
+    const configuration = vscode.workspace.getConfiguration("frostpi", scope ? workspaceUriForPath(scope) : undefined);
+    if (!configuration.get<boolean>("session.closeWithEditorTab", false)) return;
+    try {
+      await this.#registry.closeSession(sessionId);
+    } catch (error) {
+      void vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
     }
   }
 

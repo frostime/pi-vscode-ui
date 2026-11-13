@@ -168,9 +168,9 @@ FrostPi answers a few slash commands itself. They never become a prompt, and the
 
 ### Focus view
 
-The focus view keeps long turns readable. Each run of tool calls and reasoning folds into one row that says what it did, or what it is doing right now, and replies stay visible in order. Click a row to see its steps. When a turn finishes it collapses further into the single **Worked** summary above the final answer.
+The focus view keeps long turns readable. Each run of tool calls and reasoning folds into one row that says what it did, or what it is doing right now, and replies stay visible in order. Click a row to see its steps. A reasoning row shows a line of what the model is thinking, as a tool row shows its target. A finished turn keeps the same shape: each run of steps stays folded and every reply, including those between runs, stays visible.
 
-The focus view is on by default. Run **FrostPi: Toggle Focus View** or set `frostpi.conversation.focusView` to switch; `frostpi.conversation.collapseTurnTrace` controls the completed-turn summary separately.
+The focus view is on by default. Run **FrostPi: Toggle Focus View** or set `frostpi.conversation.focusView` to switch it for running turns; `frostpi.conversation.collapseTurnTrace` folds finished turns the same way and is also on by default.
 
 ### Pi Session Tree and Fork
 
@@ -239,6 +239,7 @@ FrostPi also provides context metrics, diagnostics export, strict LF-delimited J
 - `frostpi.pi.runtimeCompatibility` — choose the limited Pi or Oh My Pi compatibility contract; this does not enable all runtime-specific OMP features.
 - `frostpi.pi.arguments`
 - `frostpi.session.startOnOpen`
+- `frostpi.session.closeWithEditorTab` — closing a session's editor tab also closes the session, as **Close session** in the list does. Off by default, so the session keeps running in the sidebar.
 - `frostpi.composer.streamingBehavior`
 - `frostpi.conversation.focusView`
 - `frostpi.conversation.collapseTurnTrace`

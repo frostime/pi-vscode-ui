@@ -250,7 +250,7 @@ describe("Pi session startup and conversation history", () => {
     }
   });
 
-  it("makes a resumed session ready before explicitly loading a large history", async () => {
+  it("makes a resumed session ready before its history, and loads a large file without usable entries in full", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-runtime-"));
     const sessionFile = join(dir, "large.jsonl");
     await writeFile(sessionFile, Buffer.alloc(8 * 1024 * 1024 + 1));
@@ -335,14 +335,12 @@ process.on("SIGTERM", () => process.exit(0));
     expect(runtime.view.historyStatus).toBe("queued");
     expect(conversationTurns(runtime.view)).toHaveLength(0);
 
-    await runtime.loadHistory(false);
-    expect(runtime.view.historyStatus).toBe("deferred");
-    expect(conversationTurns(runtime.view)).toHaveLength(0);
-
-    const repeatedAutomaticLoad = runtime.loadHistory(false);
+    // The file has no entry to start a recent window at, so it loads in full, once.
+    const automaticLoad = runtime.loadHistory(false);
     const explicitLoad = runtime.loadHistory(true);
-    await Promise.all([repeatedAutomaticLoad, explicitLoad]);
+    await Promise.all([automaticLoad, explicitLoad]);
     expect(runtime.view.historyStatus).toBe("loaded");
+    expect(runtime.view.partialHistory).toBeUndefined();
     expect(conversationTurns(runtime.view)).toHaveLength(1);
     expect(conversationTurns(runtime.view).flatMap((turn) => turn.items).filter((item) => item.type === "response")).toEqual([
       expect.objectContaining({ type: "response", blocks: [{ type: "text", text: "Live response" }] }),

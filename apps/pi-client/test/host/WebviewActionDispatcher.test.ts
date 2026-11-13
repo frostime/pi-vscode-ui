@@ -16,6 +16,7 @@ describe("Session Tab Host authorization", () => {
       createSession: vi.fn(),
       activateSession: vi.fn(),
       closeSession: vi.fn(),
+      startIfStopped: vi.fn().mockResolvedValue(undefined),
       rename: vi.fn().mockResolvedValue(undefined),
       abort: vi.fn(),
       sendPrompt: vi.fn().mockResolvedValue(undefined),
@@ -162,6 +163,17 @@ describe("Session Tab Host authorization", () => {
     } as never, sidebarConnection);
 
     expect(openPanel).toHaveBeenCalledWith("source", draft);
+  });
+
+  it("opens any listed Session in a tab from the sidebar, also one it does not display", async () => {
+    const { dispatcher, openPanel, registry, sidebarConnection } = setup();
+    await dispatcher.dispatch({ type: "openSessionPanel", bridgeVersion: "3.0", sessionId: "other" } as never, sidebarConnection);
+    expect(openPanel).toHaveBeenCalledWith("other");
+    expect(registry.startIfStopped).toHaveBeenCalledWith("other");
+
+    vi.mocked(registry.hasSession).mockReturnValueOnce(false);
+    await expect(dispatcher.dispatch({ type: "openSessionPanel", bridgeVersion: "3.0", sessionId: "gone" } as never, sidebarConnection))
+      .rejects.toThrow("no longer exists");
   });
 
   it("keeps ordinary Sidebar drafts out of the Host cache", async () => {

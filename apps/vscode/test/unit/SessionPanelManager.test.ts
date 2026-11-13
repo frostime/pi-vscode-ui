@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import * as vscode from "vscode";
 
+const tabEvents = vi.hoisted(() => ({ listeners: new Set<(event: { closed: unknown[] }) => void>() }));
+
 vi.mock("vscode", () => ({
+  TabInputWebview: class { constructor(readonly viewType: string) {} },
   EventEmitter: class<T> {
     listeners = new Set<(value: T) => void>();
     event = (listener: (value: T) => void) => {
@@ -14,12 +17,53 @@ vi.mock("vscode", () => ({
   },
   Uri: { joinPath: (...parts: unknown[]) => ({ parts }) },
   ViewColumn: { Active: 1 },
-  window: { createWebviewPanel: vi.fn() },
+  window: {
+    createWebviewPanel: vi.fn(),
+    tabGroups: {
+      onDidChangeTabs: (listener: (event: { closed: unknown[] }) => void) => {
+        tabEvents.listeners.add(listener);
+        return { dispose: () => tabEvents.listeners.delete(listener) };
+      },
+    },
+  },
 }));
+
+function closeTabs(...tabs: Array<{ label: string; viewType?: string }>): void {
+  const closed = tabs.map(({ label, viewType = "mainThreadWebview-frostpi.session" }) => ({ label, input: new vscode.TabInputWebview(viewType) }));
+  for (const listener of tabEvents.listeners) listener({ closed });
+}
 
 const { SessionPanelManager } = await import("../../src/extension/webview-host/SessionPanelManager.js");
 
 describe("Session panel lifecycle", () => {
+  it("reports a Session Tab the user closed, in either event order, but not a panel the window disposed", () => {
+    const sessions = new Map([["a", { id: "a", title: "Alpha" }], ["b", { id: "b", title: "Beta" }], ["c", { id: "c", title: "Gamma" }]]);
+    const registry = { sessionView: (id: string) => sessions.get(id) ?? null, hasSession: (id: string) => sessions.has(id), retainProvisionalSession: vi.fn() };
+    const panels = new Map<string, ReturnType<typeof fakePanel>>();
+    const manager = new SessionPanelManager(registry as never, {} as never, () => ({ dispose: vi.fn() }) as never, (sessionId, title) => {
+      const panel = fakePanel();
+      panel.value.title = title;
+      panels.set(sessionId, panel);
+      return panel.value as never;
+    });
+    const closed: string[] = [];
+    manager.onDidCloseTab((sessionId) => closed.push(sessionId));
+    for (const id of ["a", "b", "c"]) manager.open(id);
+
+    // Tab event first, then the disposal.
+    closeTabs({ label: "FrostPi · Alpha" }, { label: "FrostPi · Alpha", viewType: "other.view" });
+    panels.get("a")!.closeFromUser();
+    // Disposal first, then the tab event.
+    panels.get("b")!.closeFromUser();
+    closeTabs({ label: "FrostPi · Beta" });
+    // A panel disposed without a closed tab, as on window close or reload.
+    panels.get("c")!.closeFromUser();
+
+    expect(closed).toEqual(["a", "b"]);
+    manager.dispose();
+    expect(tabEvents.listeners.size).toBe(0);
+  });
+
   it("creates one panel per Session and tab disposal leaves the Session intact", () => {
     const sessions = new Map([["session", { id: "session", title: "Session" }]]);
     const registry = {

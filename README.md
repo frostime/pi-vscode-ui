@@ -186,9 +186,9 @@ FrostPi answers a few slash commands itself. They never become a prompt, and the
 
 ### Focus view
 
-The focus view keeps long turns readable. Each run of tool calls and reasoning folds into one row that says what it did, or what it is doing right now, and replies stay visible in order. Click a row to see its steps. When a turn finishes it collapses further into the single **Worked** summary above the final answer.
+The focus view keeps long turns readable. Each run of tool calls and reasoning folds into one row that says what it did, or what it is doing right now, and replies stay visible in order. Click a row to see its steps. A reasoning row shows a line of what the model is thinking, as a tool row shows its target. A finished turn keeps the same shape: each run of steps stays folded and every reply, including those between runs, stays visible.
 
-The focus view is on by default. Run **FrostPi: Toggle Focus View** or set `frostpi.conversation.focusView` to switch; `frostpi.conversation.collapseTurnTrace` controls the completed-turn summary separately.
+The focus view is on by default. Run **FrostPi: Toggle Focus View** or set `frostpi.conversation.focusView` to switch it for running turns; `frostpi.conversation.collapseTurnTrace` folds finished turns the same way and is also on by default.
 
 ### Pi Session Tree and Fork
 
@@ -196,7 +196,7 @@ FrostPi provides a graphical interface for Pi's session-tree workflow:
 
 - **Branch here** navigates to an earlier user prompt, restores it in the Composer, and lets you continue as another path in the same Pi session and session file.
 - **Switch branch** opens a searchable native VS Code picker for existing paths. Path rows expose message count, last update, and ending context. Leaving the current path may use no summary, Pi's default branch summary, or custom summary-focus instructions.
-- **Fork** creates a separate Pi session and FrostPi session. Use it when the continuation should run and persist independently instead of becoming another path in the current session tree.
+- **Fork** creates a separate Pi session and FrostPi session. Use it when the continuation should run and persist independently instead of becoming another path in the current session tree. Fork also works while a reply is still running: FrostPi forks in a second Pi process and leaves the reply alone.
 
 Pi remains authoritative for the active tree leaf and reconstructed conversation context. FrostPi supplies the GUI compatibility layer.
 
@@ -261,6 +261,7 @@ Common settings include:
 - `frostpi.pi.runtimeCompatibility` — choose the limited Pi or Oh My Pi compatibility contract; this does not enable all runtime-specific OMP features.
 - `frostpi.pi.arguments`
 - `frostpi.session.startOnOpen`
+- `frostpi.session.closeWithEditorTab` — closing a session's editor tab also closes the session, as **Close session** in the list does. Off by default, so the session keeps running in the sidebar.
 - `frostpi.composer.streamingBehavior`
 - `frostpi.conversation.focusView`
 - `frostpi.conversation.collapseTurnTrace`

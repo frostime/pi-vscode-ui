@@ -1,20 +1,4 @@
-import type {
-  AgentActivityView,
-  AgentTurnItemView,
-  AgentTurnStatus,
-  AgentTurnView,
-  ReasoningActivityView,
-  SessionNoticeView,
-  ToolActivityView,
-} from "$shared/model/conversationModel";
-
-export interface TurnTraceSummary {
-  steps: number;
-  errors: number;
-  durationLabel: string | null;
-}
-
-export type TurnTraceStateLabel = "Worked" | "Stopped" | "Failed";
+import type { AgentTurnView, ReasoningActivityView, ToolActivityView } from "$shared/model/conversationModel";
 
 /** One folded run of consecutive tool calls and reasoning in the focus view. */
 export interface TurnStepGroup {
@@ -31,15 +15,6 @@ export interface TurnStepGroup {
 export type TurnItemPlan =
   | { mode: "flat" }
   | {
-      mode: "collapsed";
-      stateLabel: TurnTraceStateLabel;
-      collapsedItemIds: ReadonlySet<string>;
-      firstCollapsedItemId: string;
-      anchorItemId: string;
-      anchorLabel: "Reply" | "Last step";
-      summary: TurnTraceSummary;
-    }
-  | {
       mode: "grouped";
       /** Group shown in front of the item with this id. */
       groupsByFirstItemId: ReadonlyMap<string, TurnStepGroup>;
@@ -53,18 +28,18 @@ const MAX_GROUP_DETAIL_KINDS = 4;
 const MAX_STEP_LABEL_LENGTH = 72;
 
 /**
- * Completed turns keep their single "Worked" summary when `collapseTurnTrace` is on.
- * The focus view covers the rest: while a turn runs, and in finished turns that are not
- * collapsed, each run of tool calls and reasoning between replies folds into one row.
+ * Folding is per run, never per turn: each run of consecutive tool calls and reasoning
+ * becomes one row, and every reply, including those between runs, stays visible. A
+ * running turn folds in the focus view; a finished one also when `collapseTurnTrace`
+ * is on, which is the default.
  */
 export function planTurnItems(
-  turn: Pick<AgentTurnView, "status" | "items" | "startedAt" | "endedAt">,
+  turn: Pick<AgentTurnView, "status" | "items">,
   collapseTurnTrace: boolean,
   focusView = false,
 ): TurnItemPlan {
-  const collapsed = planCollapsedTrace(turn, collapseTurnTrace);
-  if (collapsed.mode !== "flat" || !focusView) return collapsed;
-  return planStepGroups(turn);
+  const fold = turn.status === "running" ? focusView : collapseTurnTrace || focusView;
+  return fold ? planStepGroups(turn) : { mode: "flat" };
 }
 
 function planStepGroups(turn: Pick<AgentTurnView, "status" | "items">): TurnItemPlan {
@@ -132,75 +107,6 @@ export function formatStepGroupLabel(group: Pick<TurnStepGroup, "steps" | "error
   return parts.join(" · ");
 }
 
-function planCollapsedTrace(
-  turn: Pick<AgentTurnView, "status" | "items" | "startedAt" | "endedAt">,
-  collapseTurnTrace: boolean,
-): TurnItemPlan {
-  if (!collapseTurnTrace || turn.status === "running" || turn.items.length === 0) return { mode: "flat" };
-
-  const activityLocations = turn.items.flatMap((item, itemIndex) => isAgentActivity(item) ? [{ item, itemIndex }] : []);
-  if (activityLocations.length === 0) return { mode: "flat" };
-
-  let lastResponseIndex: number | undefined;
-  for (let index = activityLocations.length - 1; index >= 0; index -= 1) {
-    const location = activityLocations[index];
-    if (location?.item.type === "response") {
-      lastResponseIndex = location.itemIndex;
-      break;
-    }
-  }
-  const anchorIndex = traceAnchorIndex(turn.status, activityLocations, lastResponseIndex);
-  if (anchorIndex === undefined) return { mode: "flat" };
-
-  const collapsed = turn.items.slice(0, anchorIndex).filter(isTraceItem);
-  const anchor = turn.items[anchorIndex];
-  if (collapsed.length === 0 || !anchor || !isAgentActivity(anchor)) return { mode: "flat" };
-
-  return {
-    mode: "collapsed",
-    stateLabel: turnStateLabel(turn.status),
-    collapsedItemIds: new Set(collapsed.map((item) => item.id)),
-    firstCollapsedItemId: collapsed[0]!.id,
-    anchorItemId: anchor.id,
-    anchorLabel: anchor.type === "response" ? "Reply" : "Last step",
-    summary: {
-      steps: collapsed.length,
-      errors: countTraceErrors(collapsed),
-      durationLabel: formatTurnDuration(turn.startedAt, turn.endedAt),
-    },
-  };
-}
-
-function traceAnchorIndex(
-  status: AgentTurnStatus,
-  activities: readonly { item: AgentActivityView; itemIndex: number }[],
-  lastResponseIndex: number | undefined,
-): number | undefined {
-  if (status === "completed") return lastResponseIndex;
-  if (lastResponseIndex !== undefined) return lastResponseIndex;
-  return activities.length > 1 ? activities.at(-1)?.itemIndex : undefined;
-}
-
-export function turnStateLabel(status: AgentTurnStatus): TurnTraceStateLabel {
-  switch (status) {
-    case "completed":
-      return "Worked";
-    case "aborted":
-      return "Stopped";
-    case "error":
-      return "Failed";
-    case "running":
-      return "Worked";
-  }
-}
-
-export function formatTraceSummaryLabel(summary: TurnTraceSummary): string {
-  const parts = [summary.steps === 1 ? "1 step" : `${summary.steps} steps`];
-  if (summary.errors > 0) parts.push(summary.errors === 1 ? "1 error" : `${summary.errors} errors`);
-  if (summary.durationLabel) parts.push(summary.durationLabel);
-  return parts.join(" · ");
-}
-
 /**
  * Duration label shared by turn traces and tool cards. Coarse on purpose — this reading reassures
  * the reader that work is progressing, it is not a stopwatch.
@@ -224,18 +130,6 @@ export function formatTurnDuration(startedAt: number, endedAt?: number): string 
   return formatDurationMs(endedAt - startedAt);
 }
 
-function isAgentActivity(item: AgentTurnView["items"][number]): item is AgentActivityView {
-  return item.type === "reasoning" || item.type === "response" || item.type === "tool";
-}
-
-function isTraceItem(item: AgentTurnItemView): item is AgentActivityView | SessionNoticeView {
-  return isAgentActivity(item) || item.type === "notice";
-}
-
-function countTraceErrors(items: readonly (AgentActivityView | SessionNoticeView)[]): number {
-  return items.filter((item) => {
-    if (item.type === "notice") return item.level === "error";
-    if (item.type === "tool") return item.tool.isError || item.tool.status === "error";
-    return item.status === "error";
-  }).length;
+function countTraceErrors(steps: readonly (ReasoningActivityView | ToolActivityView)[]): number {
+  return steps.filter((step) => step.type === "tool" ? step.tool.isError || step.tool.status === "error" : step.status === "error").length;
 }

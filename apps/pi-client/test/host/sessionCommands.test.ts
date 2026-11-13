@@ -337,6 +337,79 @@ describe("Host slash commands through the real Registry and child-process path",
     });
   });
 
+  describe("a long conversation", () => {
+    it("opens on its part since the last compaction, and loads in full on request", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+      const bulk = Array.from({ length: 13 }, (_, index) => `bulk ${index}`);
+      for (const text of bulk) await fixture.converse(sessionId, text);
+      await registry.sendPrompt(sessionId, "/compact", []);
+      await fixture.converse(sessionId, "after compaction");
+
+      await registry.retrySession(sessionId);
+      await fixture.waitFor(() => view(sessionId).status === "ready" && view(sessionId).historyStatus === "loaded" && userPrompts(view(sessionId)).length > 0);
+      expect(view(sessionId).partialHistory).toBe("compaction");
+      expect(userPrompts(view(sessionId))).toEqual(["after compaction"]);
+      expect(view(sessionId).conversationItems.some((item) => item.type === "compaction")).toBe(true);
+
+      // New turns keep arriving through the same window.
+      await fixture.converse(sessionId, "next");
+      expect(userPrompts(view(sessionId))).toEqual(["after compaction", "next"]);
+
+      await registry.loadHistory(sessionId);
+      expect(view(sessionId).partialHistory).toBeUndefined();
+      expect(userPrompts(view(sessionId))).toEqual([...bulk, "after compaction", "next"]);
+      expect(fixture.errors).toEqual([]);
+    }, 30_000);
+  });
+
+  describe("Fork during a reply", () => {
+    it("forks in a separate Pi process and leaves the running reply alone", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+      await fixture.converse(sessionId, "first");
+      await fixture.converse(sessionId, "second");
+      await registry.sendPrompt(sessionId, "hold", []);
+      await fixture.waitFor(() => view(sessionId).isStreaming);
+      const sourceFile = view(sessionId).sessionFile;
+      const second = view(sessionId).conversationItems.flatMap((item) => item.type === "turn" && item.userMessage?.blocks.some((block) => block.type === "text" && block.text === "second") ? [item.userMessage.sourceEntryId] : [])[0]!;
+
+      const result = await registry.forkMessage(sessionId, second, "preserve-sidebar-selection");
+
+      expect(result).toEqual({ cancelled: false, forkSessionId: expect.any(String) as string });
+      const fork = view(result.forkSessionId!);
+      expect(fork).toMatchObject({ title: "Fork: New session", status: "ready", composerSeed: { text: "second" } });
+      expect(userPrompts(fork)).toEqual(["first"]);
+      expect(fork.sessionFile).not.toBe(sourceFile);
+      // The source is still running its reply, in its own process and file.
+      expect(view(sessionId)).toMatchObject({ isStreaming: true, sessionFile: sourceFile });
+      expect(registry.activeSessionId).toBe(sessionId);
+      await registry.flushPersistence();
+      expect(fixture.persistedSessions().map((record) => record.id)).toEqual([sessionId, result.forkSessionId]);
+
+      await registry.abort(sessionId);
+      await fixture.waitFor(() => !view(sessionId).isStreaming);
+      expect(userPrompts(view(sessionId))).toEqual(["first", "second", "hold"]);
+    });
+
+    it("leaves nothing behind when the Fork fails", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+      await fixture.converse(sessionId, "first");
+      await registry.sendPrompt(sessionId, "hold", []);
+      await fixture.waitFor(() => view(sessionId).isStreaming);
+
+      await expect(registry.forkMessage(sessionId, "no-such-entry")).rejects.toThrow();
+
+      expect(registry.snapshot().sessions.map((session) => session.id)).toEqual([sessionId]);
+      expect(view(sessionId).isStreaming).toBe(true);
+      await registry.abort(sessionId);
+    });
+  });
+
   describe("a Session created for its own presentation", () => {
     it("keeps the sidebar's unused session and selection, and inherits the source directory without asking", async () => {
       const fixture = await host();

@@ -59,6 +59,11 @@ export interface SessionViewModel {
   isCompacting: boolean;
   isForking: boolean;
   historyStatus: SessionHistoryStatus;
+  /**
+   * Set while a large session shows only its recent part: from its last compaction, or
+   * from a recent prompt when there is none. Absent once the whole history is loaded.
+   */
+  partialHistory?: "compaction" | "recent";
   sessionFile?: string;
   sessionId?: string;
   model: RpcModel | null;

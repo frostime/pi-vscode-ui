@@ -36,6 +36,12 @@ export const frostPiSettingDefinitions = {
     "scope": "resource",
     "description": "When a previously selected session exists, start its Pi process when FrostPi activates. Does not create a new session if none exist."
   },
+  "frostpi.session.closeWithEditorTab": {
+    "type": "boolean",
+    "default": false,
+    "scope": "resource",
+    "description": "Closing a session's editor tab also closes the session: its Pi process stops and it leaves the session list, as Close session in the list does. Pi's session file is kept, so Resume session can reopen it. When off, the session keeps running in the sidebar."
+  },
   "frostpi.composer.streamingBehavior": {
     "type": "string",
     "enum": [
@@ -54,7 +60,7 @@ export const frostPiSettingDefinitions = {
     "type": "boolean",
     "default": true,
     "scope": "resource",
-    "description": "After a turn completes, collapse tools, reasoning, and interim replies into one summary above the final response."
+    "description": "After a turn completes, fold each run of tool calls and reasoning into one expandable row. Replies, including those between runs, stay visible."
   },
   "frostpi.conversation.focusView": {
     "type": "boolean",

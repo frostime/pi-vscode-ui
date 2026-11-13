@@ -3,71 +3,35 @@ import { describe, expect, it } from "vitest";
 import type { AgentTurnItemView, AgentTurnView } from "@frostime/pi-client/shared/model/conversationModel";
 import { formatStepGroupLabel, formatTurnDuration, planTurnItems } from "$ui/features/conversation/collapseTurnTrace.js";
 
-describe("planTurnItems", () => {
-  it("keeps running turns flat so live tools remain visible", () => {
-    expect(planTurnItems(turn("running", [tool("t1"), response("r1")]), true)).toEqual({ mode: "flat" });
-  });
-
-  it("collapses completed activities without moving a branch control inside the trace", () => {
-    const items = [tool("t1"), branchControl("edge"), reasoning("think"), response("final")];
-    const plan = planTurnItems(turn("completed", items, 1_000, 62_000), true);
-
-    expect(plan).toMatchObject({
-      mode: "collapsed",
-      stateLabel: "Worked",
-      firstCollapsedItemId: "t1",
-      anchorItemId: "final",
-      anchorLabel: "Reply",
-      summary: { steps: 2, errors: 0, durationLabel: "1m 01s" },
-    });
-    if (plan.mode !== "collapsed") return;
-    expect([...plan.collapsedItemIds]).toEqual(["t1", "think"]);
-    expect(plan.collapsedItemIds.has("edge")).toBe(false);
-  });
-
-  it("anchors interrupted turns without a response on the last activity", () => {
-    const plan = planTurnItems(turn("aborted", [tool("t1"), tool("t2"), tool("t3")], 0, 5_000), true);
-
-    expect(plan).toMatchObject({
-      mode: "collapsed",
-      stateLabel: "Stopped",
-      anchorItemId: "t3",
-      anchorLabel: "Last step",
-      summary: { steps: 2, errors: 0, durationLabel: "5s" },
-    });
-  });
-
-  it("counts failed tools in the collapsed trace summary", () => {
-    const plan = planTurnItems(turn("error", [tool("ok"), tool("bad", true), response("final")], 0, 4_200), true);
-    expect(plan.mode).toBe("collapsed");
-    if (plan.mode !== "collapsed") return;
-    expect(plan.summary).toMatchObject({ steps: 2, errors: 1 });
-  });
-
-  it("folds turn-wide retry work while leaving an intervening structural boundary visible", () => {
+describe("planTurnItems for finished turns", () => {
+  it("folds each run of steps, keeps every reply visible, and leaves structural markers outside", () => {
     const items = [
-      response("partial", "error"),
-      notice("provider-error", "error"),
-      compaction("compact"),
-      notice("retry", "info"),
-      response("final"),
+      tool("t1"), reasoning("think"), response("interim"),
+      tool("t2"), branchControl("edge"), tool("t3"),
+      reasoning("r2"), tool("t4"), response("final"),
     ];
-    const plan = planTurnItems(turn("completed", items, 0, 2_000), true);
+    const plan = planTurnItems(turn("completed", items, 0, 62_000), true);
 
-    expect(plan).toMatchObject({
-      mode: "collapsed",
-      stateLabel: "Worked",
-      anchorItemId: "final",
-      summary: { steps: 3, errors: 2, durationLabel: "2s" },
-    });
-    if (plan.mode !== "collapsed") return;
-    expect([...plan.collapsedItemIds]).toEqual(["partial", "provider-error", "retry"]);
-    expect(plan.collapsedItemIds.has("compact")).toBe(false);
+    expect(plan.mode).toBe("grouped");
+    if (plan.mode !== "grouped") return;
+    expect([...plan.groupsByFirstItemId.keys()]).toEqual(["t1", "t3"]);
+    expect(plan.groupsByFirstItemId.get("t1")).toMatchObject({ steps: 2, active: false, detail: "bash, reasoning" });
+    expect(plan.groupsByFirstItemId.get("t3")).toMatchObject({ steps: 3, detail: "bash ×2, reasoning" });
+    // Replies between runs, a lone step and the branch control are never folded.
+    for (const id of ["interim", "t2", "edge", "final"]) expect(plan.groupIdByItemId.has(id)).toBe(false);
   });
 
-  it("stays flat when collapse is disabled or no activity precedes the anchor", () => {
-    expect(planTurnItems(turn("completed", [response("final")]), true)).toEqual({ mode: "flat" });
-    expect(planTurnItems(turn("completed", [tool("t1"), response("final")]), false)).toEqual({ mode: "flat" });
+  it("applies to stopped and failed turns, and counts failed steps", () => {
+    const plan = planTurnItems(turn("error", [tool("ok"), tool("bad", true), response("final")], 0, 4_200), true);
+    expect(plan.mode).toBe("grouped");
+    if (plan.mode !== "grouped") return;
+    expect(plan.groupsByFirstItemId.get("ok")).toMatchObject({ steps: 2, errors: 1 });
+    expect(planTurnItems(turn("aborted", [tool("t1"), tool("t2"), tool("t3")]), true).mode).toBe("grouped");
+  });
+
+  it("stays flat when both folds are off, or when no run has two steps", () => {
+    expect(planTurnItems(turn("completed", [tool("t1"), tool("t2"), response("final")]), false)).toEqual({ mode: "flat" });
+    expect(planTurnItems(turn("completed", [tool("t1"), response("r"), tool("t2")]), true)).toEqual({ mode: "flat" });
   });
 });
 
@@ -137,9 +101,9 @@ describe("focus view", () => {
     expect(plan.groupsByFirstItemId.get("read")?.detail).toBe("read, grep, bash, edit, +2 more");
   });
 
-  it("yields to the completed-turn summary and is off unless requested", () => {
+  it("is the only fold of a running turn, and is off unless requested", () => {
     const items = [tool("t1"), tool("t2"), response("final")];
-    expect(planTurnItems(turn("completed", items, 0, 1_000), true, true).mode).toBe("collapsed");
+    expect(planTurnItems(turn("completed", items, 0, 1_000), true, true).mode).toBe("grouped");
     expect(planTurnItems(turn("completed", items, 0, 1_000), false, true).mode).toBe("grouped");
     expect(planTurnItems(turn("running", items), true, false)).toEqual({ mode: "flat" });
     expect(planTurnItems(turn("running", items), true)).toEqual({ mode: "flat" });
@@ -197,14 +161,6 @@ function response(id: string, status: "complete" | "error" = "complete"): AgentT
   return { id, type: "response", blocks: [{ type: "text", text: id }], status, timestamp: 0 };
 }
 
-function notice(id: string, level: "info" | "error"): AgentTurnItemView {
-  return { id, type: "notice", text: id, level, timestamp: 0 };
-}
-
-function compaction(id: string): AgentTurnItemView {
-  return { id, type: "compaction", summary: id, tokensBefore: 100, timestamp: 0 };
-}
-
 function branchControl(id: string): AgentTurnItemView {
   return {
     id,
@@ -213,4 +169,12 @@ function branchControl(id: string): AgentTurnItemView {
     activeChildEntryId: "child",
     pathCount: 2,
   };
+}
+
+function notice(id: string, level: "info" | "error"): AgentTurnItemView {
+  return { id, type: "notice", text: id, level, timestamp: 0 };
+}
+
+function compaction(id: string): AgentTurnItemView {
+  return { id, type: "compaction", summary: id, tokensBefore: 100, timestamp: 0 };
 }

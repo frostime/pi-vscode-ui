@@ -17,8 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/rewind` lists earlier prompts and returns the conversation to just before the one you pick, with that prompt back in the Composer. It uses Pi's session tree, so the path you left remains available; files on disk are not restored.
 - Focus view, on by default: each run of tool calls and reasoning folds into one expandable row while a turn is running, and replies stay visible. Switch with **FrostPi: Toggle Focus View** or `frostpi.conversation.focusView`.
 
+### Fixed
+
+- Opening a session in an editor tab from the session list failed with "The Webview action does not target the Session displayed by this surface" until that session had been shown in the sidebar. A restored session opened this way now also starts and loads its history.
+- A model set in `frostpi.pi.arguments` (`--model`, `--provider`, `--thinking`) applies to new conversations only. Pi used to apply it to every resumed session too, replacing the model that session was using.
+
 ### Changed
 
+- A finished turn no longer collapses into one **Worked** summary. Each run of tool calls and reasoning folds into its own row, and replies between runs stay visible. `frostpi.conversation.collapseTurnTrace` controls this for finished turns.
+- A reasoning row shows one line of the model's thinking beside its title, and an opened reasoning row stays open when the next step folds it into a group.
+- A long session opens on its part since the last compaction, or on its recent prompts when it has none, with **Load full history** to see everything. Sessions larger than 8 MiB used to open with no history at all.
+- Fork works while a reply is running. FrostPi forks in a separate Pi process, so the reply keeps going.
+- New setting `frostpi.session.closeWithEditorTab`: closing a session's editor tab also closes the session.
 - `frostpi.conversation.collapseTurnTrace` now applies as soon as it changes instead of at the next session start.
 
 ## [0.16.7] - 2026-11-16

@@ -186,6 +186,11 @@ export class SessionViewState {
     this.#view.collapseTurnTrace = collapseTurnTrace;
   }
 
+  setPartialHistory(partial: SessionViewModel["partialHistory"]): void {
+    if (partial) this.#view.partialHistory = partial;
+    else delete this.#view.partialHistory;
+  }
+
   setFocusView(focusView: boolean): void {
     this.#view.focusView = focusView;
   }

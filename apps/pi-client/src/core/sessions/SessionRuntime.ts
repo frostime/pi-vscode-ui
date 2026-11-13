@@ -1,4 +1,3 @@
-import { stat } from "node:fs/promises";
 
 import {
   PiRpcApi,
@@ -35,6 +34,8 @@ import { answersHostCommand, withHostCommands, type HostCommand, type HostComman
 import { commandName, normalizePiSlashPrompt } from "./normalizePiSlashPrompt.js";
 import { configuredPiInvocation } from "../configuration/configuredPiInvocation.js";
 import { runtimeCompatibilityProfile, type RuntimeCompatibility } from "../configuration/runtimeCompatibility.js";
+import { configuredLaunchArguments } from "../configuration/resumeLaunchArguments.js";
+import { findHistoryWindow, type HistoryWindow } from "./historyWindow.js";
 import { buildPiProcessEnvironment, proxyFingerprint, proxyModeLabel } from "../network/buildPiProcessEnvironment.js";
 import type { ProxyCredentialsProvider } from "../network/proxyCredentials.js";
 import { SessionTreeExtensionBridge, type SessionTreeSummaryOptions } from "./tree/SessionTreeExtensionBridge.js";
@@ -102,6 +103,11 @@ export class SessionRuntime {
   readonly #questionToolBridge: QuestionToolExtensionBridge | null;
   /** False until a command list from this process has shown which bundled adapters it loaded. */
   #adaptersDiscovered = false;
+  /**
+   * Set while a large session shows only its recent part: entries are read after this
+   * cursor. Cleared by a full load and whenever the process holds another conversation.
+   */
+  #historyWindow: HistoryWindow | null = null;
   /** True from the `/new` request until its new conversation is loaded or the request fails. */
   #startingNewConversation = false;
 
@@ -199,6 +205,7 @@ export class SessionRuntime {
     this.#extensionUi = null;
     this.#historyEventBuffer = null;
     this.#entries.reset();
+    this.#setHistoryWindow(null);
     this.#appliedProxyFingerprint = null;
     this.#proxyRestartForced = false;
     this.#appliedQuestionToolEnabled = null;
@@ -332,7 +339,7 @@ export class SessionRuntime {
     if (!this.#runtimeCapabilities().sessionTree) throw new Error("Session tree navigation is not supported by the selected runtime.");
     if (!this.#sessionTreeBridge?.available) throw new Error("Session tree navigation is unavailable in this Pi process. Update Pi, restart the session, and check FrostPi diagnostics.");
     if (this.view.historyStatus !== "loaded") throw new Error("Load conversation history before switching branches.");
-    const entryData = await this.#requireApi().getEntries();
+    const entryData = await this.#readEntries(this.#requireApi());
     return projectBranchEndChoices(buildSessionTreeIndex(entryData.entries, entryData.leafId), branchPointId);
   }
 
@@ -340,7 +347,7 @@ export class SessionRuntime {
   async listRewindTargets(): Promise<RewindTargetProjection[]> {
     await this.#discoverAdapters(this.#requireApi());
     this.#assertTreeNavigable();
-    const entryData = await this.#requireApi().getEntries();
+    const entryData = await this.#readEntries(this.#requireApi());
     return projectRewindTargets(buildSessionTreeIndex(entryData.entries, entryData.leafId));
   }
 
@@ -348,7 +355,7 @@ export class SessionRuntime {
     const sessionTreeBridge = this.#assertTreeNavigable();
 
     const api = this.#requireApi();
-    const beforeNavigation = await api.getEntries();
+    const beforeNavigation = await this.#readEntries(api);
     const target = beforeNavigation.entries.find((entry) => entry.id === targetId);
     if (!target) throw new Error("The selected session-tree entry is no longer available.");
     const projected = projectEditableTarget(target);
@@ -365,7 +372,7 @@ export class SessionRuntime {
       const result = await sessionTreeBridge.navigate(api, targetId, summary);
       if (result.status === "cancelled") return { cancelled: true };
       committed = true;
-      const entryData = await api.getEntries();
+      const entryData = await this.#readEntries(api);
       const [state, stats] = await Promise.all([
         api.getState(),
         api.getSessionStats().catch(() => undefined),
@@ -433,6 +440,7 @@ export class SessionRuntime {
       }
       // Pi has committed: from here the old transcript must not stay on screen.
       onCommitted?.();
+      this.#setHistoryWindow(null);
       this.#conversation.clearQueuedPrompts();
       this.#viewState.resetForNewConversation(NEW_SESSION_TITLE);
       return await this.#loadNewConversation(api, previousModel, previousThinkingLevel, hadConversation);
@@ -531,6 +539,7 @@ export class SessionRuntime {
 
   async reconcileFork(name: string, composerSeed: ComposerSeedView): Promise<void> {
     const api = this.#requireApi();
+    this.#setHistoryWindow(null);
     await api.setSessionName(name);
     const state = await api.getState();
     const [entryData, stats, commands] = await Promise.all([
@@ -778,7 +787,7 @@ export class SessionRuntime {
     if (compatibilityProfile.capabilities.sessionTree) await this.#sessionTreeBridge?.prepare();
     if (configuration.questionToolEnabled && compatibilityProfile.capabilities.questionTool) await this.#questionToolBridge?.prepare();
     const args = [
-      ...configuration.piArguments,
+      ...configuredLaunchArguments(configuration.piArguments, sessionFile !== undefined && !this.isEphemeral, compatibilityProfile.id),
       ...(this.isEphemeral ? ["--no-session"] : sessionFile ? ["--session", sessionFile] : []),
       ...(compatibilityProfile.capabilities.sessionTree ? this.#sessionTreeBridge?.launchArguments() ?? [] : []),
       ...(configuration.questionToolEnabled && compatibilityProfile.capabilities.questionTool ? this.#questionToolBridge?.launchArguments() ?? [] : []),
@@ -929,23 +938,28 @@ export class SessionRuntime {
     }
 
     try {
-      if (!force && (await stat(sessionFile)).size > MAX_AUTO_HISTORY_LOAD_BYTES) {
-        this.#viewState.setHistoryStatus("deferred");
-        this.#conversation.appendNotice("Conversation history is large and was not loaded automatically.", "info");
-        this.#notifyChange();
-        return;
-      }
+      // A large session opens on its recent part; loading it in full is the user's choice.
+      const window = force ? null : await findHistoryWindow(sessionFile).catch((error: unknown) => {
+        this.#logger.error("Failed to find the recent part of a large session", error);
+        return null;
+      });
       this.#viewState.setHistoryStatus("loading");
       this.#historyEventBuffer = [];
       this.#notifyChange();
-      let entryData = await api.getEntries();
+      this.#setHistoryWindow(window);
+      let entryData = await this.#readEntries(api).catch((error: unknown) => {
+        // A cursor Pi does not know (its file and ours disagree) falls back to everything.
+        if (!window) throw error;
+        this.#setHistoryWindow(null);
+        return api.getEntries();
+      });
       let snapshotEventCount = 0;
       // Custom events have no shared persisted ID. If any arrived during the
       // snapshot, capture again after their delivery instead of guessing which
       // were already included. A quiet capture covers all buffered customs.
       while (this.#historyEventBuffer?.slice(snapshotEventCount).some(isCustomMessageEnd)) {
         snapshotEventCount = this.#historyEventBuffer.length;
-        entryData = await api.getEntries();
+        entryData = await this.#readEntries(api);
       }
       const bufferedEvents = this.#takeHistoryEvents();
       if (this.#disposed || api !== this.#api) return;
@@ -1107,16 +1121,26 @@ export class SessionRuntime {
       }
     }
 
-    const complete = await api.getEntries();
+    const complete = await this.#readEntries(api);
     if (this.#disposed || api !== this.#api) return;
     this.#replacePersistedEntries(complete.entries, complete.leafId);
+  }
+
+  /** The session's entries, or only its recent part while a large session shows that. */
+  #readEntries(api: PiRpcApi): ReturnType<PiRpcApi["getEntries"]> {
+    return api.getEntries(this.#historyWindow?.since);
+  }
+
+  #setHistoryWindow(window: HistoryWindow | null): void {
+    this.#historyWindow = window;
+    this.#viewState.setPartialHistory(window ? (window.fromCompaction ? "compaction" : "recent") : undefined);
   }
 
   #replacePersistedEntries(
     entries: Awaited<ReturnType<PiRpcApi["getEntries"]>>["entries"],
     leafId: string | null,
   ): void {
-    const replacement = this.#entries.replace(entries, leafId);
+    const replacement = this.#entries.replace(entries, leafId, { partial: this.#historyWindow !== null });
     this.#conversation.replaceEntries(this.#ompPrompts?.projectEntries(replacement.activePath) ?? replacement.activePath, projectActiveBranchEdges(replacement.index));
     this.#viewState.setCacheHitPercent(latestAssistantCacheHit(replacement.activePath).percent);
     this.#viewState.setHistoryStatus("loaded");
@@ -1290,7 +1314,6 @@ export class SessionRuntime {
 }
 
 const NEW_SESSION_TITLE = "New session";
-const MAX_AUTO_HISTORY_LOAD_BYTES = 8 * 1024 * 1024;
 const LIVE_STATS_REFRESH_INTERVAL_MS = 3_000;
 /** Short multi-delay idle checks after extension commands (aligned with pi-acp). */
 const EXTENSION_COMMAND_IDLE_CHECK_DELAYS_MS = [0, 25, 75] as const;

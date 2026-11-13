@@ -2,7 +2,7 @@
   import type { AgentTurnItemView, AgentTurnView } from "$shared/model/conversationModel";
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
-  import { formatStepGroupLabel, formatTraceSummaryLabel, planTurnItems } from "./collapseTurnTrace";
+  import { formatStepGroupLabel, planTurnItems } from "./collapseTurnTrace";
   import BranchPointControl from "./BranchPointControl.svelte";
   import BranchSummaryBlock from "./BranchSummaryBlock.svelte";
   import CompactionBlock from "./CompactionBlock.svelte";
@@ -15,16 +15,21 @@
   import UserMessage from "./UserMessage.svelte";
 
   let { turn, session }: { turn: AgentTurnView; session: SessionViewModel } = $props();
-  let traceOpen = $state(false);
-  /** Focus-view groups the reader opened, by group id. */
+  /** Folded runs the reader opened, by group id. */
   let openGroupIds = $state<string[]>([]);
+  /**
+   * Opened reasoning rows, kept here because a row is mounted again when its run folds
+   * into a group as the next step starts; it must not close under the reader.
+   */
+  let openReasoningIds = $state<string[]>([]);
+
+  function setReasoningOpen(id: string, open: boolean): void {
+    const isOpen = openReasoningIds.includes(id);
+    if (open && !isOpen) openReasoningIds = [...openReasoningIds, id];
+    else if (!open && isOpen) openReasoningIds = openReasoningIds.filter((openId) => openId !== id);
+  }
 
   const plan = $derived(planTurnItems(turn, session.collapseTurnTrace, session.focusView));
-  const summaryLabel = $derived(plan.mode === "collapsed" ? formatTraceSummaryLabel(plan.summary) : "");
-
-  $effect(() => {
-    if (plan.mode !== "collapsed") traceOpen = false;
-  });
 
   function toggleGroup(groupId: string): void {
     openGroupIds = openGroupIds.includes(groupId)
@@ -33,7 +38,6 @@
   }
 
   function isItemShown(itemId: string): boolean {
-    if (plan.mode === "collapsed") return !plan.collapsedItemIds.has(itemId) || traceOpen;
     if (plan.mode === "grouped") {
       const groupId = plan.groupIdByItemId.get(itemId);
       return groupId === undefined || openGroupIds.includes(groupId);
@@ -47,36 +51,6 @@
   {#if turn.status === "running"}<TurnTiming startedAt={turn.startedAt} />{/if}
   <div class="turn-activities">
     {#each turn.items as item (item.id)}
-      {#if plan.mode === "collapsed" && item.id === plan.firstCollapsedItemId}
-        <div class="turn-trace-header">
-          <button
-            type="button"
-            class="activity-trigger"
-            aria-expanded={traceOpen}
-            aria-label={`${traceOpen ? "Collapse" : "Expand"} work trace: ${summaryLabel}`}
-            onclick={() => traceOpen = !traceOpen}
-          >
-            <span class="codicon codicon-list-tree activity-leading" aria-hidden="true"></span>
-            <span class="activity-title">{plan.stateLabel}</span>
-            <span class="turn-trace-meta">{summaryLabel}</span>
-            <span class={`codicon codicon-chevron-${traceOpen ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
-          </button>
-        </div>
-      {/if}
-
-      {#if plan.mode === "collapsed" && item.id === plan.anchorItemId}
-        <button
-          type="button"
-          class="turn-trace-break"
-          aria-label={`${traceOpen ? "Collapse" : "Expand"} work trace`}
-          onclick={() => traceOpen = !traceOpen}
-        >
-          <span class="turn-trace-break-line" aria-hidden="true"></span>
-          <span class="turn-trace-break-label">{plan.anchorLabel}</span>
-          <span class="turn-trace-break-line" aria-hidden="true"></span>
-        </button>
-      {/if}
-
       {#if plan.mode === "grouped"}
         {@const group = plan.groupsByFirstItemId.get(item.id)}
         {#if group}
@@ -115,7 +89,10 @@
 
 {#snippet turnItemRow(item: AgentTurnItemView)}
   {#if item.type === "reasoning"}
-    <ThinkingActivity activity={item} />
+    <ThinkingActivity
+      activity={item}
+      bind:open={() => openReasoningIds.includes(item.id), (open) => setReasoningOpen(item.id, open)}
+    />
   {:else if item.type === "tool"}
     <ToolActivity activity={item} />
   {:else if item.type === "response"}
@@ -162,48 +139,6 @@
     margin-left: 9px;
     padding-left: 6px;
     border-left: 1px solid var(--frost-border-soft);
-  }
-
-  .turn-trace-break {
-    display: grid;
-    grid-template-columns: minmax(12px, 1fr) auto minmax(12px, 1fr);
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    margin: 7px 2px 5px;
-    padding: 3px 2px;
-    min-width: 0;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    cursor: pointer;
-    transition: background var(--motion-fast) ease;
-  }
-
-  .turn-trace-break:hover {
-    background: color-mix(in srgb, var(--frost-surface) 48%, transparent);
-  }
-
-  .turn-trace-break:hover .turn-trace-break-line {
-    background: var(--frost-border);
-  }
-
-  .turn-trace-break:hover .turn-trace-break-label {
-    color: var(--frost-muted);
-  }
-
-  .turn-trace-break-line {
-    height: 1px;
-    background: var(--frost-border-soft);
-  }
-
-  .turn-trace-break-label {
-    color: var(--frost-faint);
-    font-size: calc(var(--font-size-ui) - 3.5px);
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    user-select: none;
   }
 
   .agent-turn { margin: 0 0 22px; }

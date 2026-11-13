@@ -57,10 +57,22 @@ function event(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`);
 }
 
+// Like Pi, the session file holds the entries, so a second process can open it.
+function save() {
+  const file = sessionFile();
+  if (file) fs.writeFileSync(file, entries.map((entry) => JSON.stringify(entry)).join("\n") + (entries.length ? "\n" : ""));
+}
+
+if (resumedFile && fs.existsSync(resumedFile)) {
+  entries = fs.readFileSync(resumedFile, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  leafId = entries.at(-1)?.id ?? null;
+}
+
 function append(message) {
-  const id = `entry-${generation}-${++sequence}`;
+  const id = `entry-${process.pid}-${generation}-${++sequence}`;
   entries.push({ type: "message", id, parentId: leafId, timestamp: new Date(sequence * 1000).toISOString(), message });
   leafId = id;
+  save();
   return id;
 }
 
@@ -145,6 +157,34 @@ function handle(command) {
       else finish();
       return;
     }
+    case "fork": {
+      // Pi's fork from a user message: a new session with the path before it, the prompt's text returned.
+      const target = entries.find((entry) => entry.id === command.entryId);
+      if (!target || target.message.role !== "user") {
+        process.stdout.write(`${JSON.stringify({ type: "response", id, command: "fork", success: false, error: "Invalid entry ID for forking" })}\n`);
+        return;
+      }
+      const kept = [];
+      for (let entryId = target.parentId; entryId; entryId = entries.find((entry) => entry.id === entryId)?.parentId ?? null) {
+        kept.unshift(entries.find((entry) => entry.id === entryId));
+      }
+      generation += 1;
+      entries = kept;
+      leafId = kept.at(-1)?.id ?? null;
+      sessionName = undefined;
+      save();
+      respond(id, { text: target.message.content, cancelled: false });
+      return;
+    }
+    case "compact": {
+      // Pi records a compaction as an entry on the active path.
+      const id = `entry-${process.pid}-${generation}-${++sequence}`;
+      entries.push({ type: "compaction", id, parentId: leafId, timestamp: new Date(sequence * 1000).toISOString(), summary: "Earlier work", firstKeptEntryId: leafId, tokensBefore: 1000 });
+      leafId = id;
+      save();
+      respond(id === undefined ? command.id : command.id, { summary: "Earlier work", firstKeptEntryId: leafId, tokensBefore: 1000 });
+      return;
+    }
     case "prompt": prompt(command); return;
     default: respond(id);
   }
@@ -182,7 +222,10 @@ function prompt(command) {
   const finish = () => {
     finishHeldTurn = undefined;
     append(userMessage);
-    const assistant = { role: "assistant", stopReason: "stop", timestamp: (sequence + 1) * 1000, content: [{ type: "text", text: `Reply to ${text}` }] };
+    // A "bulk" prompt gets a long reply, to make the session file large. It stays below
+    // the 1 MiB RPC frame, which this fake does not split the way Pi does.
+    const reply = text.startsWith("bulk") ? `Reply to ${text} ${"x".repeat(700 * 1024)}` : `Reply to ${text}`;
+    const assistant = { role: "assistant", stopReason: "stop", timestamp: (sequence + 1) * 1000, content: [{ type: "text", text: reply }] };
     event({ type: "message_start", message: assistant });
     event({ type: "message_end", message: assistant });
     append(assistant);

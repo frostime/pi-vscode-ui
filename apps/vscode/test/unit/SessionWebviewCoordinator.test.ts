@@ -16,6 +16,7 @@ const vscodeMock = vi.hoisted(() => {
 
 vi.mock("vscode", () => ({
   EventEmitter: vscodeMock.EventEmitter,
+  TabInputWebview: class { constructor(readonly viewType: string) {} },
   Uri: {
     joinPath: (...parts: unknown[]) => ({ parts, toString: () => parts.join("/") }),
     file: (fsPath: string) => ({ fsPath }),
@@ -44,6 +45,63 @@ vi.mock("vscode", () => ({
 const { SessionWebviewCoordinator, referenceDestinationItems } = await import("../../src/extension/webview-host/SessionWebviewCoordinator.js");
 
 describe("Session Webview coordination", () => {
+  it("closes the Session with its editor tab only when the setting asks for it", async () => {
+    const vscode = await import("vscode");
+    const registryEvents = {
+      change: new vscodeMock.EventEmitter<void>(),
+      toast: new vscodeMock.EventEmitter<{ level: "info"; message: string }>(),
+      composer: new vscodeMock.EventEmitter<{ sessionId: string; text: string }>(),
+    };
+    const sessions = new Map([["one", { id: "one", title: "One", cwd: "/main" }], ["two", { id: "two", title: "Two", cwd: "/main" }]]);
+    const registry = {
+      activeSessionId: null,
+      snapshot: () => ({ workspaceName: "workspace", workspacePath: "/main", sessions: [...sessions.values()], activeSessionId: null, piAvailable: true }),
+      sessionView: (sessionId: string) => sessions.get(sessionId) ?? null,
+      hasSession: (sessionId: string) => sessions.has(sessionId),
+      retainProvisionalSession: vi.fn(),
+      configurationScope: () => "/main",
+      closeSession: vi.fn(() => Promise.resolve()),
+      onDidChange: registryEvents.change.event,
+      onDidToast: registryEvents.toast.event,
+      onDidSetComposerText: registryEvents.composer.event,
+    };
+    const tabListeners = vi.mocked(vscode.window.tabGroups.onDidChangeTabs);
+    const listenersBefore = tabListeners.mock.calls.length;
+    const coordinator = new SessionWebviewCoordinator(
+      registry as never,
+      { error: vi.fn(), info: vi.fn() } as never,
+      {} as never,
+      () => Promise.resolve(undefined),
+      { createEventEmitter: <T>() => new vscodeMock.EventEmitter<T>() } as never,
+    );
+    const closeTab = (sessionId: string, title: string) => {
+      const panel = vscodeMock.panels.find((candidate) => candidate.title === title)!;
+      for (const [listener] of tabListeners.mock.calls.slice(listenersBefore)) {
+        (listener as unknown as (event: { closed: unknown[] }) => void)({ closed: [{ label: title, input: new vscode.TabInputWebview("mainThreadWebview-frostpi.session") }] });
+      }
+      panel.dispose();
+      return sessionId;
+    };
+    vi.mocked(vscode.workspace.getConfiguration).mockImplementation((() => ({
+      get: (key: string, fallback: unknown) => key === "session.closeWithEditorTab" ? enabled : fallback,
+    })) as never);
+    let enabled = false;
+
+    coordinator.openPanel("one");
+    coordinator.openPanel("two");
+    vscodeMock.panels.at(-2)!.title = "FrostPi · One";
+    vscodeMock.panels.at(-1)!.title = "FrostPi · Two";
+    closeTab("one", "FrostPi · One");
+    await Promise.resolve();
+    expect(registry.closeSession).not.toHaveBeenCalled();
+
+    enabled = true;
+    closeTab("two", "FrostPi · Two");
+    await vi.waitFor(() => expect(registry.closeSession).toHaveBeenCalledWith("two"));
+    vi.mocked(vscode.workspace.getConfiguration).mockImplementation((() => ({ get: (_key: string, fallback: unknown) => fallback })) as never);
+    coordinator.dispose();
+  });
+
   it("delivers Registry toasts once to the Sidebar and never duplicates them in panels", async () => {
     const registryEvents = {
       change: new vscodeMock.EventEmitter<void>(),
