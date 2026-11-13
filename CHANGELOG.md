@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `/btw <question>` asks a side question about the current conversation without adding it to the conversation, also while Pi is running a turn. The answer appears in a dismissible card and is never saved. It follows Pi's `images.blockImages` setting; other Pi extensions' request hooks do not run for it.
+
 ## [0.17.0] - 2026-11-25
 
 ### Added

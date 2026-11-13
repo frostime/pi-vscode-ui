@@ -44,6 +44,17 @@ await Promise.all([
     sourcesContent: sourcemap,
     logLevel: "info",
   }),
+  esbuild.build({
+    entryPoints: ["../pi-client/pi-extensions/side-question.ts"],
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    target: "node20",
+    outfile: "dist/pi-extensions/side-question.js",
+    sourcemap,
+    sourcesContent: sourcemap,
+    logLevel: "info",
+  }),
 ]);
 
 await buildWebview();

@@ -23,6 +23,7 @@ const required = [
   "extension/third_party_notices.md",
   "extension/dist/extension/extension.cjs",
   "extension/dist/pi-extensions/session-tree.js",
+  "extension/dist/pi-extensions/side-question.js",
   "extension/dist/webview/webview.js",
   "extension/dist/webview/webview.css",
   "extension/dist/webview/assets/codicon.ttf",

@@ -26,7 +26,7 @@ Use this map to locate a feature's source and nearest contract. Paths are worksp
 - Model-selection flags dropped on resume: `apps/pi-client/src/core/configuration/resumeLaunchArguments.ts`.
 - Closing a session with its editor tab: `SessionPanelManager.onDidCloseTab` and `SessionWebviewCoordinator`.
 - Stopping a session while keeping it listed, and deleting it with Pi's file: `SessionRegistry.stopSession` and `deleteSession`; the trash is `ClientHost.moveToTrash`.
-- Pi-side tree/Question artifacts: `apps/pi-client/pi-extensions/`; both products bundle the same sources into their distributions.
+- Pi-side tree/Question/side-question artifacts: `apps/pi-client/pi-extensions/`; both products bundle the same sources into their distributions.
 - Catalog contract: `apps/pi-client/src/host/catalog/session-catalog.SPEC.md`.
 
 ## Conversation projection and transport
@@ -51,7 +51,7 @@ Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 
 - Root/composition: `ClientApp.svelte`, `shell/SidebarShell.svelte`, `shell/SessionInteraction.svelte`; editor availability: `../shared/model/clientUiCapabilities.ts`.
 - Session Header/New/Resume: `features/sessions/SessionHeader.svelte` and `SessionList.svelte`; the Session Tab's own header: `features/sessions/PanelSessionHeader.svelte`; the page shown while no Session exists: `features/onboarding/OnboardingView.svelte`. A new Session in an editor tab, saved or Temporary, goes through `createSessionPanel` to `SessionWebviewCoordinator.createSessionInPanel`.
-- Host slash commands (`/compact`, `/new`, `/reload`, `/name`, `/alias`): parsing, runtime gating and the per-Session completion entries in `../core/sessions/hostCommands.ts`; dispatch in `../host/SessionRegistry.ts` (`sendPrompt`). `features/composer/frostPiCommands.ts` holds only the static, runtime-independent entries.
+- Host slash commands (`/compact`, `/new`, `/reload`, `/name`, `/alias`, `/btw`): parsing, runtime gating and the per-Session completion entries in `../core/sessions/hostCommands.ts`; dispatch in `../host/SessionRegistry.ts` (`sendPrompt`). `features/composer/frostPiCommands.ts` holds only the static, runtime-independent entries. Side questions: `../core/side-question/SideQuestionExtensionBridge.ts`, `../../pi-extensions/side-question.ts`, and the card in `features/side-question/`.
 - Turn folding (finished-turn summary, running-turn Focus View): `features/conversation/collapseTurnTrace.ts` plans, `AgentTurn.svelte` renders.
 - Composer/mentions/attachments: `features/composer/Composer.svelte` and `composer.SPEC.md`; shared file search: `../host/file-search/`; VS Code editor capture: `apps/vscode/src/extension/composer/`.
 - Pending-message recovery: `../core/sessions/QueuedPromptRecovery.ts` owns backend ordering/results; `features/composer/queuedPromptRecoveryStore.svelte.ts` owns UI correlation/feedback. Group entry: `features/conversation/ConversationView.svelte`; draft authority: bridge contract, not a second queue.
