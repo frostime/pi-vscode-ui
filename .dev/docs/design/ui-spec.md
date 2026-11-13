@@ -25,7 +25,7 @@ Navigation may narrow or hide, giving space back to the conversation. Keep a key
 
 The sidebar owns Session management. Session Tabs are pinned conversation projections, not another place to expose the whole collection or its New/Resume and administrative controls. When the selected Session is externalized, keep sidebar navigation and show its tab-reveal placeholder rather than a second editable conversation. Native placement and handoff rules are in `apps/pi-client/src/shared/bridge/webview-bridge.SPEC.md`.
 
-Desktop's Project navigation is a product-owned outer shell around the same client. Do not apply the Session-Tab model to it or recreate ClientApp when hiding/resizing its sidebar.
+Desktop's Project navigation is a product-owned outer shell around the same client. Do not apply the Session-Tab model to it or recreate ClientApp when hiding/resizing its sidebar. Its Sessions section is a read-only queue of waiting, failed and running Sessions rather than a second Session collection: it lists no idle Session, owns no Session state, and routes every row through `activateSession`. Section folding is transient; the split between Sections is a view preference. Both sections keep one header-and-scroll skeleton so their titles and right-aligned actions share one inset.
 
 ## Stylesheet ownership
 
