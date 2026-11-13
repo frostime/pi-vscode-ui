@@ -12,7 +12,7 @@ export interface SessionPanelHandle {
 }
 
 export type PanelConnectionFactory = (endpoint: WebviewEndpoint) => WebviewConnection;
-export type WebviewPanelFactory = (sessionId: string, title: string) => vscode.WebviewPanel;
+export type WebviewPanelFactory = (sessionId: string, title: string, viewColumn?: vscode.ViewColumn) => vscode.WebviewPanel;
 
 export class SessionPanelManager implements vscode.Disposable {
   readonly #registry: SessionRegistry;
@@ -34,10 +34,10 @@ export class SessionPanelManager implements vscode.Disposable {
     this.#registry = registry;
     this.#extensionUri = extensionUri;
     this.#createConnection = createConnection;
-    this.#createPanel = createPanel ?? ((sessionId, title) => vscode.window.createWebviewPanel(
+    this.#createPanel = createPanel ?? ((_sessionId, title, viewColumn) => vscode.window.createWebviewPanel(
       "frostpi.session",
       title,
-      { viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
+      { viewColumn: viewColumn ?? vscode.ViewColumn.Active, preserveFocus: false },
       {
         enableScripts: true,
         // Keep a hidden Session Tab mounted so returning to it does not show the bootstrap UI.
@@ -55,7 +55,21 @@ export class SessionPanelManager implements vscode.Disposable {
     return [...this.#panels.keys()];
   }
 
-  open(sessionId: string): void {
+  /** The Session whose tab is the active editor, if a Session Tab has it. */
+  activeSessionId(): string | undefined {
+    for (const handle of this.#panels.values()) {
+      if (handle.panel.active) return handle.sessionId;
+    }
+    return undefined;
+  }
+
+  /** The tab group a Session Tab currently sits in. */
+  viewColumn(sessionId: string): vscode.ViewColumn | undefined {
+    return this.#panels.get(sessionId)?.panel.viewColumn;
+  }
+
+  /** `viewColumn` places a new tab in a chosen group; without it the active group is used. */
+  open(sessionId: string, viewColumn?: vscode.ViewColumn): void {
     const existing = this.#panels.get(sessionId);
     if (existing) {
       existing.panel.reveal(existing.panel.viewColumn, false);
@@ -64,7 +78,7 @@ export class SessionPanelManager implements vscode.Disposable {
     const session = this.#registry.sessionView(sessionId);
     if (!session) throw new Error("This FrostPi Session no longer exists.");
 
-    const panel = this.#createPanel(sessionId, panelTitle(session.title));
+    const panel = this.#createPanel(sessionId, panelTitle(session.title), viewColumn);
     let connection: WebviewConnection | undefined;
     try {
       panel.webview.html = createWebviewHtml(panel.webview, this.#extensionUri);

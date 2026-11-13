@@ -44,7 +44,7 @@ process.on("SIGTERM", () => process.exit(0));
     runtimeCompatibility: "pi",
     startSessionOnOpen: false,
     streamingBehavior: "followUp",
-    collapseTurnTrace: true,
+    collapseTurnTrace: true, focusView: true,
     questionToolEnabled: false,
     maxImageBytes: 10 * 1024 * 1024,
     diagnosticsLevel: "error",

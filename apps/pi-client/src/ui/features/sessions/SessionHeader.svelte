@@ -10,6 +10,7 @@
   import IconButton from "../../primitives/IconButton.svelte";
   import StatusDot from "./StatusDot.svelte";
   import SessionList from "./SessionList.svelte";
+  import { sessionStatusLabel } from "./sessionStatusLabel";
 
   let { sessions, active }: { sessions: SessionSummaryView[]; active: SessionViewModel } = $props();
   let editing = $state(false);
@@ -59,6 +60,8 @@
   }
 
   function commitRename(): void {
+    // Enter or Escape removes the input, whose blur must not commit a second time.
+    if (!editing) return;
     const name = titleDraft.trim();
     if (name && name !== active.title) postToHost({ type: "renameSession", sessionId: active.id, name });
     editing = false;
@@ -77,6 +80,11 @@
   function createSessionWithArguments(): void {
     closeMenus();
     postToHost({ type: "createSessionWithArguments" });
+  }
+
+  function createSessionPanel(): void {
+    closeMenus();
+    postToHost({ type: "createSessionPanel" });
   }
 
   function toggleLauncherVariants(): void {
@@ -108,25 +116,6 @@
     }
     closeMenus();
     postToHost({ type: "openSessionPanel", sessionId: targetId, draft: draftForHost(targetId) });
-  }
-
-  function activeStatusLabel(): string {
-    if (active.pendingExtensionUi.length > 0) return "action required";
-    if (active.isForking) return "forking session";
-    if (active.isNavigatingTree) return active.isSummarizingTree ? "summarizing branch" : "switching branch";
-    if (active.isCompacting) return "compacting context";
-    if (active.status === "queued") return "waiting to start";
-    if (active.historyStatus === "queued") return "waiting for history";
-    if (active.historyStatus === "loading") return "loading history";
-    if (active.status === "running") {
-      if (active.historyStatus === "deferred") return "running · history not loaded";
-      if (active.historyStatus === "failed") return "running · history load failed";
-      return "running";
-    }
-    if (active.historyStatus === "deferred") return "history not loaded";
-    if (active.historyStatus === "failed") return "history load failed";
-    if (active.status === "ready") return "ready";
-    return active.status;
   }
 </script>
 
@@ -160,6 +149,7 @@
             bind:this={titleInput}
             bind:value={titleDraft}
             aria-label="Session name"
+            maxlength="160"
             onkeydown={(event) => {
               if (event.key === "Enter") commitRename();
               if (event.key === "Escape") editing = false;
@@ -176,6 +166,7 @@
           aria-expanded={sessionListOpen}
           title={active.cwd}
           onclick={() => { sessionListOpen = !sessionListOpen; menuOpen = false; launcherOpen = false; }}
+          ondblclick={beginRename}
         >
           <StatusDot status={active.status} />
           <span class="session-title">{active.title}</span>
@@ -184,7 +175,7 @@
             {#if active.workingDirectoryLabel}
               <span class="session-cwd-pill" title={active.cwd}>{active.workingDirectoryLabel}</span>
             {/if}
-            <span>· {activeStatusLabel()}</span>
+            <span>· {sessionStatusLabel(active)}</span>
           </span>
           <span class="codicon codicon-chevron-down session-heading-chevron" aria-hidden="true"></span>
         </button>
@@ -203,6 +194,9 @@
     </div>
 
     <div class="session-actions">
+      {#if !editing}
+        <IconButton icon="edit" label="Rename session" onclick={beginRename} />
+      {/if}
       <div class="session-menu-wrap">
         <IconButton icon="add" label="New or resume session" active={launcherOpen} onclick={() => { launcherOpen = !launcherOpen; menuOpen = false; sessionListOpen = false; }} />
         {#if launcherOpen}
@@ -225,6 +219,11 @@
             </div>
             {#if launcherVariantsOpen}
               <div class="launcher-variants">
+                {#if editorTabs}
+                  <button type="button" onclick={createSessionPanel}>
+                    <span class="codicon codicon-layout"></span><span><strong>New session in editor tab</strong><small>Start it directly in its own tab</small></span>
+                  </button>
+                {/if}
                 <button type="button" onclick={createTemporarySession}>
                   <span class="codicon codicon-eye-closed"></span><span><strong>New temporary session</strong><small>Start a conversation that is never saved</small></span>
                 </button>

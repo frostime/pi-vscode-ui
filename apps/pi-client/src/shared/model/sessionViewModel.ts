@@ -70,6 +70,8 @@ export interface SessionViewModel {
   attachmentLimits: AttachmentLimitsView;
   /** When true, completed turns collapse tool/reasoning/interim replies into one summary above the final response. */
   collapseTurnTrace: boolean;
+  /** When true, runs of tool calls and reasoning fold into one expandable row, also while a turn is running. */
+  focusView: boolean;
   /** Default streaming delivery selected for this session's Composer. */
   composerStreamingBehavior: StreamingBehavior;
   networkProxy: NetworkProxyView;

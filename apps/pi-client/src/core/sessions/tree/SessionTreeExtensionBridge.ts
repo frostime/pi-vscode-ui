@@ -65,11 +65,20 @@ export class SessionTreeExtensionBridge {
     targetId: string,
     summary: SessionTreeSummaryOptions,
   ): Promise<SessionTreeNavigationResult> {
+    return this.#run(api, { targetId, ...summary }, "Pi did not commit session tree navigation.");
+  }
+
+  /** Pi's `/reload`, which RPC mode offers only to an extension command. */
+  async reload(api: PiRpcApi): Promise<void> {
+    await this.#run(api, { action: "reload" }, "Pi did not reload its resources.");
+  }
+
+  async #run(api: PiRpcApi, request: Record<string, unknown>, failure: string): Promise<SessionTreeNavigationResult> {
     if (!this.#commandName || !this.#resultDirectory) {
       throw new Error("Session tree navigation is unavailable in this Pi process. Update Pi, restart the session, and check FrostPi diagnostics.");
     }
     const requestId = randomUUID();
-    const encoded = Buffer.from(JSON.stringify({ token: this.#token, requestId, targetId, ...summary }), "utf8").toString("base64url");
+    const encoded = Buffer.from(JSON.stringify({ token: this.#token, requestId, ...request }), "utf8").toString("base64url");
     let commandError: unknown;
     try {
       await api.executeExtensionCommand(this.#commandName, encoded);
@@ -80,7 +89,7 @@ export class SessionTreeExtensionBridge {
     const result = await this.#readResult(requestId).catch((error: unknown) => {
       throw asError(commandError ?? error);
     });
-    if (result.status === "failed") throw asError(commandError ?? new Error("Pi did not commit session tree navigation."));
+    if (result.status === "failed") throw asError(commandError ?? new Error(failure));
     return result;
   }
 

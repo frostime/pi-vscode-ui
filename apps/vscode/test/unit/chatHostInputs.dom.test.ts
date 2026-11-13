@@ -25,7 +25,7 @@ function session(id = "session", provider = "example"): SessionViewModel {
     isStreaming: false, isCompacting: false, isForking: false, historyStatus: "loaded",
     model: { id: "model", provider, supportsImages: true }, thinkingLevel: "off",
     availableModels: [], scopedModelIds: [], commands: [], attachmentLimits: { maxImages: 4, maxImageBytes: 1_000 },
-    collapseTurnTrace: false, composerStreamingBehavior: "steer",
+    collapseTurnTrace: false, focusView: false, composerStreamingBehavior: "steer",
     networkProxy: { mode: "direct", label: "Direct", restartRequired: false },
     questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
     conversationItems: [], queuedSteers: [], queuedFollowUps: [], queuedPromptRecovery: { state: "ready" }, pendingExtensionUi: [], extensionStatuses: [], extensionWidgets: [],

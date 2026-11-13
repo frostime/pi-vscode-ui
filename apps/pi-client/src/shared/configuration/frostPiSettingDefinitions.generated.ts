@@ -56,6 +56,12 @@ export const frostPiSettingDefinitions = {
     "scope": "resource",
     "description": "After a turn completes, collapse tools, reasoning, and interim replies into one summary above the final response."
   },
+  "frostpi.conversation.focusView": {
+    "type": "boolean",
+    "default": true,
+    "scope": "resource",
+    "description": "Fold each run of tool calls and reasoning into one expandable row, including while a turn is running. Replies stay visible. Use \"FrostPi: Toggle Focus View\" to switch."
+  },
   "frostpi.questionTool.enabled": {
     "type": "boolean",
     "default": false,

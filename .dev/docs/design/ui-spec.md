@@ -23,7 +23,7 @@ Navigation may narrow or hide, giving space back to the conversation. Keep a key
 
 ### VS Code presentations
 
-The sidebar owns Session management. Session Tabs are pinned conversation projections, not another place to expose the whole collection or its New/Resume and administrative controls. When the selected Session is externalized, keep sidebar navigation and show its tab-reveal placeholder rather than a second editable conversation. Native placement and handoff rules are in `apps/pi-client/src/shared/bridge/webview-bridge.SPEC.md`.
+The sidebar owns Session management. Session Tabs are pinned conversation projections, not another place to expose the whole collection or its Resume and administrative controls. A Session Tab has one compact header for its own Session: its name, which is renamed in place, its status, and an action that opens a new Session in a sibling tab. When the selected Session is externalized, keep sidebar navigation and show its tab-reveal placeholder rather than a second editable conversation. Native placement and handoff rules are in `apps/pi-client/src/shared/bridge/webview-bridge.SPEC.md`.
 
 Desktop's Project navigation is a product-owned outer shell around the same client. Do not apply the Session-Tab model to it or recreate ClientApp when hiding/resizing its sidebar.
 
@@ -40,6 +40,8 @@ Disclosure, form input and conversation scroll position belong to the user. Live
 An explicit annotation review may temporarily replace conversation/Composer, but remains presentation-local and produces an editable draft rather than another persisted conversation. Required extension input must remain reachable. Reviews may survive Session switches inside that document without being transferred between Sidebar and Session Tab presentations; the annotation and bridge SPECs own the details.
 
 Collapsing or hiding an input panel does not cancel its Host-owned request. Keep the request bound to its Session and retain a visible route to required input. Do not auto-confirm it or answer through whichever Pi became foreground later.
+
+The focus view folds each run of consecutive tool calls and reasoning into one row, including while a turn is running; replies, notices and structural markers stay visible in order, and a lone step stays its own row. A folded run names what it did, or what it is doing now, and shows activity while a step is in progress. Opening a run is the user's choice and holds while more steps arrive. Completed turns keep their single turn summary when that setting is on.
 
 ## Accessibility
 

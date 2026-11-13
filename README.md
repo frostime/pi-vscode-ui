@@ -169,6 +169,26 @@ Run multiple independent Pi sessions, switch providers and models, resume existi
 
 Session state remains visible while other sessions continue working in the background.
 
+A session can live in an editor tab instead of the sidebar. **FrostPi: New Session in Editor Tab** starts one there directly; the `+` button in a session tab, or in the editor title bar, opens another in the same tab group and working directory. Click a session tab's title to rename it, also while Pi is working, or run **FrostPi: Rename Session**. In the sidebar, use the pencil button next to the session title or double-click the title. The sidebar keeps its own selection throughout.
+
+### Conversation commands
+
+FrostPi answers a few slash commands itself. They never become a prompt, and they take precedence over a Pi extension command or prompt template with the same name.
+
+- `/compact [instructions]` runs Pi's own context compaction.
+- `/clear` starts a new conversation in the same session view. The model, thinking level and Pi process stay. The earlier conversation remains in Pi's session history, so **Resume session** can reopen it. Stop a running response first.
+- `/name <name>` or `/alias <name>` renames the session. Without a name, FrostPi asks for one.
+- `/reload` reloads Pi's extensions, skills, prompt templates, themes and context files without restarting the session. Stop a running response first.
+- `/rewind` lists your earlier prompts, returns the conversation to just before the one you pick, and puts that prompt back in the Composer for editing. It is **Branch here** with a picker: the path you left stays available through **Switch branch**. Files on disk are not restored; only the conversation changes.
+
+`/clear`, `/rewind` and `/reload` need Pi. With the `oh-my-pi` compatibility profile FrostPi does not offer them and passes such text to the runtime unchanged.
+
+### Focus view
+
+The focus view keeps long turns readable. Each run of tool calls and reasoning folds into one row that says what it did, or what it is doing right now, and replies stay visible in order. Click a row to see its steps. When a turn finishes it collapses further into the single **Worked** summary above the final answer.
+
+The focus view is on by default. Run **FrostPi: Toggle Focus View** or set `frostpi.conversation.focusView` to switch; `frostpi.conversation.collapseTurnTrace` controls the completed-turn summary separately.
+
 ### Pi Session Tree and Fork
 
 FrostPi provides a graphical interface for Pi's session-tree workflow:
@@ -241,6 +261,8 @@ Common settings include:
 - `frostpi.pi.arguments`
 - `frostpi.session.startOnOpen`
 - `frostpi.composer.streamingBehavior`
+- `frostpi.conversation.focusView`
+- `frostpi.conversation.collapseTurnTrace`
 - `frostpi.composer.fileMentions.respectSearchExclude`
 - `frostpi.composer.fileMentions.respectIgnoreFiles`
 - `frostpi.composer.fileMentions.followSymlinks`

@@ -20,6 +20,7 @@ export function readConfiguration(host: ClientHost, scope?: string): FrostPiConf
     startSessionOnOpen: config.get<boolean>("session.startOnOpen", defaults["session.startOnOpen"]),
     streamingBehavior: config.get<"steer" | "followUp">("composer.streamingBehavior", defaults["composer.streamingBehavior"]),
     collapseTurnTrace: config.get<boolean>("conversation.collapseTurnTrace", defaults["conversation.collapseTurnTrace"]),
+    focusView: config.get<boolean>("conversation.focusView", defaults["conversation.focusView"]),
     questionToolEnabled: config.get<boolean>("questionTool.enabled", defaults["questionTool.enabled"]),
     maxImageBytes: config.get<number>("attachments.maxImageBytes", defaults["attachments.maxImageBytes"]),
     diagnosticsLevel: config.get<"error" | "info" | "debug">("diagnostics.level", defaults["diagnostics.level"]),
