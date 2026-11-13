@@ -772,9 +772,9 @@
   /* Projects folded + Sessions open: Sessions takes the remaining height. */
   .sidebar[data-projects-folded="true"] .sect.projects { flex: 0 0 auto; }
   .sidebar[data-projects-folded="true"][data-sessions-folded="false"] .sect.sessions { flex: 1 1 auto; }
-  /* Both open: Sessions keeps the height the splitter was left at. */
+  /* Both open: Sessions grows with its rows up to the height the splitter was left at. */
   .sidebar[data-projects-folded="false"][data-sessions-folded="false"] .sect.sessions {
-    flex: 0 0 auto; height: var(--sessions-height);
+    flex: 0 0 auto; max-height: var(--sessions-height);
   }
   /* Both folded: both titles sit at the top. */
   .sidebar[data-projects-folded="true"][data-sessions-folded="true"] .sect { flex: 0 0 auto; }
