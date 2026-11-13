@@ -73,6 +73,20 @@ describe("Webview bridge validation", () => {
     }).success).toBe(false);
   });
 
+  it("accepts the remote Markdown image flag only as an explicit true", () => {
+    const request = {
+      bridgeVersion: BRIDGE_VERSION,
+      type: "loadMarkdownImage",
+      requestId: "image-1",
+      sessionId: "session-1",
+      source: "https://images.example.com/result.png",
+    };
+    expect(webviewToHostSchema.safeParse({ ...request, remote: true }).success).toBe(true);
+    for (const remote of [false, "true", 1, null]) {
+      expect(webviewToHostSchema.safeParse({ ...request, remote }).success).toBe(false);
+    }
+  });
+
   it("accepts bounded session-tree actions and rejects malformed fields", () => {
     expect(webviewToHostSchema.safeParse({
       bridgeVersion: BRIDGE_VERSION,

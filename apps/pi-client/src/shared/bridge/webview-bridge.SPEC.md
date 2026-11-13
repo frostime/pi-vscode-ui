@@ -7,7 +7,7 @@ scope:
   - /apps/pi-client/src/ui/bridge/**
   - /apps/vscode/src/extension/webview-host/**
   - /apps/desktop/src/**
-updated: 2026-11-01
+updated: 2026-11-12
 ---
 
 # Webview Bridge Compatibility Contract
@@ -36,7 +36,7 @@ Registry/global Host toasts preserve the former single-Webview behavior and are 
 
 Fork is a conversation action scoped to that originating Connection. Sidebar-origin Fork selects the result. Session-Tab-origin Fork preserves the sidebar selection and keeps the source tab pinned to the original Session id; the result opens in a distinct Session Tab. Do not retarget the original pinned Connection merely because the live Runtime follows the fork. These placement choices do not change Registry's commit/recovery boundary.
 
-File actions carry validated locations only; relative paths resolve from the Session displayed by the originating Connection. Markdown local-image requests are correlated, bounded, authorized against that same displayed Session, and return only to their originating Connection. The Host reads only ordinary files, identifies supported content independently of its extension, and returns structured inline failures rather than global toasts. Returned image bytes are transient presentation resources: they do not enter conversation projection, drafts, or persistence, and paths/image bytes must not be logged.
+File actions carry validated locations only; relative paths resolve from the Session displayed by the originating Connection. Markdown local-image requests are correlated, bounded, authorized against that same displayed Session, and return only to their originating Connection. The Host reads only ordinary files, identifies supported content independently of its extension, and returns structured inline failures rather than global toasts. Only a request carrying the explicit `remote` flag, which the Webview sends for the user's `Load image` action on an HTTPS source, makes the Host contact the network; an unflagged request never does, whatever its source text. The Host applies current workspace-scoped FrostPi proxy settings and stored proxy credentials to a local environment copy, as for Provider Usage, and fails the request rather than connecting directly when that proxy is unconfigured or unusable. Returned image bytes are transient presentation resources: they do not enter conversation projection, drafts, or persistence, and paths/image bytes must not be logged.
 
 Session-tree actions carry stable ids and draft presence only: the Host refetches authoritative entries and owns native interaction. Complete entries, prompt/image content, private tokens, and summary content do not cross that action boundary. Host-projected Fork/tree Composer seeds are non-persisted and applied once per Webview mount until submission.
 

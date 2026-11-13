@@ -932,7 +932,9 @@ process.on("SIGTERM", () => process.exit(0));
     runtimes.push(stopped);
     await stopped.start();
     await stopped.sendPrompt("stop", []);
-    await waitFor(() => projectedTools(stopped.view)[0]?.state === "preparing");
+    // The partial arguments arrive in a later write than the tool-call start; stopping
+    // between the two would leave nothing to assert on.
+    await waitFor(() => projectedTools(stopped.view).some((tool) => tool.state === "preparing" && tool.rawArguments.includes("partial.ts")));
     await stopped.stop();
     expect(projectedTools(stopped.view)[0]).toMatchObject({
       state: "preparing",
@@ -957,6 +959,40 @@ process.on("SIGTERM", () => process.exit(0));
       rawArguments: '{"path":"partial.ts"',
       isError: false,
     });
+  });
+
+  it("exports content-free diagnostics when Pi prints sensitive text to stderr", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-diagnostics-"));
+    const fakePi = join(dir, "fake-pi.cjs");
+    await writeFile(fakePi, String.raw`#!/usr/bin/env node
+process.stderr.write('Error: provider rejected request {"apiKey":"zz-live-0123456789abcdef","messages":[{"role":"user","content":"private prompt about Project Nightjar"}]}\n');
+setTimeout(() => process.exit(1), 20);
+`);
+    const runtime = new SessionRuntime(
+      "diagnostics",
+      dir,
+      "Diagnostics",
+      () => runtimeConfiguration(fakePi),
+      noProxyCredentials(),
+      { error: vi.fn(), info: vi.fn() },
+      { onChange: vi.fn(), onEditorText: vi.fn() },
+      host,
+    );
+    runtimes.push(runtime);
+
+    await expect(runtime.start()).rejects.toThrow();
+    // The session's own error display still tells the user why Pi failed.
+    expect(runtime.view.error).toContain("Project Nightjar");
+
+    const summary = runtime.diagnosticsSummary();
+    // Neither a credential in an unrecognized format nor free text can be redacted
+    // reliably, so none of the stderr content may be exported.
+    for (const leaked of ["zz-live-0123456789abcdef", "Nightjar", "apiKey", "provider rejected"]) {
+      expect(summary).not.toContain(leaked);
+    }
+    expect(summary).toMatch(/^Last error: .+ \(Pi stderr omitted\)$/m);
+    expect(summary).toMatch(/^Pi stderr: \d+ characters captured \(content omitted\)$/m);
+    expect(summary).toContain("Status: failed");
   });
 
   it("applies the Question tool setting only to the started Pi process", async () => {

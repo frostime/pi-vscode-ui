@@ -406,10 +406,46 @@ function restoreForeignObjectLabels(cleaned: string, original: string): string {
   const originalHosts = [...originalDoc.querySelectorAll("foreignObject")];
   if (cleanedHosts.length !== originalHosts.length) return cleaned; // fail closed, labels stay empty
   for (let i = 0; i < cleanedHosts.length; i += 1) {
-    const labelHtml = DOMPurify.sanitize(originalHosts[i]!.innerHTML);
+    // A style sheet inside a label would apply to the whole document.
+    const labelHtml = DOMPurify.sanitize(originalHosts[i]!.innerHTML, { FORBID_TAGS: ["style"] });
     cleanedHosts[i]!.innerHTML = labelHtml;
   }
   return cleanedDoc.body.innerHTML;
+}
+
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+const RESOURCE_ATTRIBUTES = ["src", "href", "xlink:href", "poster", "background"];
+// URL lists and beacon targets have no use in a diagram; they go whatever they contain.
+const REMOVED_ATTRIBUTES = ["srcset", "ping"];
+// Each pattern below is linear in its input: Mermaid passes label styles through
+// unchanged, so an attacker chooses up to its 50 000 character limit of this text.
+const CSS_RESOURCE_HINT = /url\(|image-set\(|@import|\\/i;
+const CSS_IMPORT = /@import\b[^;]*;?/gi;
+const CSS_IMAGE_SET = /(?:-webkit-)?image-set\([^;}]*/gi;
+// `url(` that is not a same-document fragment or inline data, through its closing parenthesis.
+const CSS_EXTERNAL_URL = /\burl\((?!\s*(?:["']\s*)?(?:#|data:))[^)]*\)?/gi;
+// An unterminated comment runs to the end, as it does in a style sheet.
+const CSS_COMMENT = /\/\*[\s\S]*?(?:\*\/|$)/g;
+const CSS_ESCAPE = /\\([0-9a-f]{1,6})\s?|\\([^\n])/gi;
+
+function hasExternalCssResource(css: string): boolean {
+  // Global patterns keep a cursor between `test` calls; `search` does not.
+  return css.search(CSS_IMPORT) >= 0 || css.search(CSS_IMAGE_SET) >= 0 || css.search(CSS_EXTERNAL_URL) >= 0;
+}
+
+/**
+ * Replaces references to external resources in Mermaid CSS; same-document fragments
+ * (`url(#arrowhead)`) and inline `data:` stay. Returns null when a reference is
+ * hidden behind comments or escapes (`u\72l(`), so the caller can drop the style.
+ */
+function neutralizeCssResources(css: string): string | null {
+  const neutralized = css.replace(CSS_IMPORT, "").replace(CSS_IMAGE_SET, "none").replace(CSS_EXTERNAL_URL, "none");
+  const decoded = neutralized.replace(CSS_COMMENT, "").replace(CSS_ESCAPE, (_escape, hex: string | undefined, literal: string | undefined) => {
+    if (hex === undefined) return literal ?? "";
+    const codePoint = Number.parseInt(hex, 16);
+    return codePoint > 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : "";
+  });
+  return hasExternalCssResource(decoded) ? null : neutralized;
 }
 
 /** Fail closed: never return unsanitized Mermaid output. */
@@ -418,16 +454,42 @@ export function sanitizeMermaidSvg(svg: string): string | null {
   if (!cleaned.includes("<svg")) return null;
   const restored = restoreForeignObjectLabels(cleaned, svg);
 
-  // The Webview permits HTTPS images only for the explicit Markdown-image
-  // consent flow. Mermaid output must not gain an implicit network channel.
+  // The Webview's CSP grants no remote origin, so nothing here can reach the network
+  // even if it survives. Removing resource references anyway keeps sanitized output
+  // inert by itself: only an explicit click on a link may leave the document.
   const document = new DOMParser().parseFromString(restored, "text/html");
   const root = document.querySelector("svg");
   if (!root) return null;
   for (const element of [root, ...root.querySelectorAll("*")]) {
-    if (element.localName.toLowerCase() === "a") continue;
-    for (const name of ["src", "href", "xlink:href"]) {
-      const value = element.getAttribute(name)?.trim();
-      if (value && !value.startsWith("#") && !value.startsWith("data:")) element.removeAttribute(name);
+    const name = element.localName.toLowerCase();
+    if (name === "style") {
+      // Only an SVG style sheet is serialized with its text escaped. An HTML one is
+      // written raw, where editing the text could assemble markup nothing sanitized.
+      if (element.namespaceURI !== SVG_NAMESPACE) {
+        element.remove();
+        continue;
+      }
+      const css = neutralizeCssResources(element.textContent ?? "");
+      if (css === null || css.includes("<")) return null;
+      element.textContent = css;
+      continue;
+    }
+    for (const attribute of [...element.attributes]) {
+      const attributeName = attribute.name.toLowerCase();
+      const value = attribute.value.trim();
+      if (REMOVED_ATTRIBUTES.includes(attributeName)) {
+        element.removeAttribute(attribute.name);
+      } else if (RESOURCE_ATTRIBUTES.includes(attributeName)) {
+        const navigation = name === "a" && (attributeName === "href" || attributeName === "xlink:href");
+        if (!navigation && value && !value.startsWith("#") && !value.startsWith("data:")) {
+          element.removeAttribute(attribute.name);
+        }
+      } else if (CSS_RESOURCE_HINT.test(value)) {
+        // Inline styles and presentation attributes (`fill`, `filter`, `mask`, …).
+        const css = neutralizeCssResources(value);
+        if (css === null) element.removeAttribute(attribute.name);
+        else if (css !== attribute.value) element.setAttribute(attribute.name, css);
+      }
     }
   }
   return root.outerHTML;

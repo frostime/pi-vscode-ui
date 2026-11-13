@@ -14,6 +14,7 @@ export { createRpcDialect, type RpcRuntime } from "./dialects/createRpcDialect.j
 export type { RpcDialect, RpcStartupNegotiation } from "./dialects/RpcDialect.js";
 export { PiRpcCommandError, PiRpcProcessError, PiRpcProtocolError } from "./protocol/protocolErrors.js";
 export { resolvePiExecutable, invocationExists, type PiInvocation, type ResolvePiExecutableOptions } from "./process/resolvePiExecutable.js";
+export { STDERR_EXCERPT_MARKER } from "./process/processDiagnostics.js";
 export type {
   RpcClearQueueResult,
   RpcCommand,

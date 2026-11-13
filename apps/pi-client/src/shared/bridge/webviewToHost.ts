@@ -97,6 +97,8 @@ const payloadSchema = z.discriminatedUnion("type", [
     requestId: z.string().min(1).max(128),
     sessionId: z.string().min(1).max(128),
     source: z.string().min(1).max(32_768),
+    // Present only for the user's explicit `Load image` action on an HTTPS source.
+    remote: z.literal(true).optional(),
   }),
   z.object({
     type: z.literal("sendPrompt"),

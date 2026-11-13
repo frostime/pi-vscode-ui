@@ -229,6 +229,18 @@ describe("renderMarkdownHtml", () => {
     expect(links[0]?.getAttribute("data-file-path")).toBe("data.bin");
     expect(links[1]?.getAttribute("data-file-path")).toBe("src/file.unknown");
   });
+
+  it.each([
+    ["title", `[a]: /u "${"x\n".repeat(150_000)}`],
+    ["label", `[${"x\n".repeat(150_000)}`],
+  ])("renders a never-closed link reference %s in linear time", (_part, source) => {
+    // markdown-it before 14.3.3 was quadratic here (GHSA-gfr2-rv44-r23c): this 300 KB
+    // input blocked the Webview for many seconds on every streamed re-render. Linear
+    // rendering takes a fraction of a second, so the bound has a wide margin both ways.
+    const started = performance.now();
+    renderMarkdownHtml(source);
+    expect(performance.now() - started).toBeLessThan(2_500);
+  });
 });
 
 describe("parseFileReference", () => {
@@ -297,6 +309,111 @@ describe("sanitizeMermaidSvg", () => {
 
     expect(cleaned).not.toContain("tracker.png");
     expect(cleaned).toContain("https://example.com/docs");
+  });
+
+  it("removes every implicit resource attribute but keeps inline data and fragments", () => {
+    const pixel = "data:image/png;base64,iVBORw0KGgo=";
+    const svg = [
+      '<svg xmlns="http://www.w3.org/2000/svg">',
+      `<image href="${pixel}"/><text><textPath href="#curve">Along</textPath></text>`,
+      '<a href="https://example.com/docs" ping="https://example.com/ping"><text>Docs</text></a>',
+      '<foreignObject><div xmlns="http://www.w3.org/1999/xhtml">',
+      '<img src="https://example.com/label.png" srcset="https://example.com/label-2x.png 2x" alt="label">',
+      '<video poster="https://example.com/poster.png"></video>',
+      '</div></foreignObject>',
+      '</svg>',
+    ].join("");
+    const cleaned = sanitizeMermaidSvg(svg) ?? "";
+
+    expect(cleaned).toContain(pixel);
+    expect(cleaned).toContain('href="#curve"');
+    expect(cleaned).toContain('href="https://example.com/docs"');
+    for (const leaked of ["ping", "label.png", "label-2x.png", "poster.png"]) expect(cleaned).not.toContain(leaked);
+  });
+
+  it("neutralizes external CSS resources and keeps same-document references", () => {
+    const svg = [
+      '<svg xmlns="http://www.w3.org/2000/svg">',
+      "<style>",
+      '@import url("https://example.com/theme.css");',
+      '@import "https://example.com/plain.css";',
+      "#d .marker{marker-end:url(#arrowhead);fill:url( '#gradient' )}",
+      "#d .node rect{background-image:url(https://example.com/sheet.png);cursor:URL( \"https://example.com/cursor.cur\" ),auto}",
+      '#d .label{background:image-set("https://example.com/set.png" 1x);color:red}',
+      "</style>",
+      '<rect style="background-image: url(https://example.com/inline.png); stroke: blue" fill="url(#gradient)" filter="url(https://example.com/filter.svg#blur)"/>',
+      '</svg>',
+    ].join("");
+    const cleaned = sanitizeMermaidSvg(svg) ?? "";
+
+    expect(cleaned).not.toContain("example.com");
+    expect(cleaned).not.toContain("@import");
+    expect(cleaned).toContain("marker-end:url(#arrowhead)");
+    expect(cleaned).toContain("fill:url( '#gradient' )");
+    expect(cleaned).toContain('fill="url(#gradient)"');
+    expect(cleaned).toContain("color:red");
+    expect(cleaned).toContain("stroke: blue");
+  });
+
+  it("fails closed when a stylesheet hides a resource behind escapes or comments", () => {
+    const sheet = (css: string): string => `<svg xmlns="http://www.w3.org/2000/svg"><style>${css}</style><rect/></svg>`;
+
+    expect(sanitizeMermaidSvg(sheet("#d rect{background:u\\72l(https://example.com/escaped.png)}"))).toBeNull();
+    expect(sanitizeMermaidSvg(sheet("#d rect{background:ur/**/l(https://example.com/commented.png)}"))).toBeNull();
+    expect(sanitizeMermaidSvg(sheet("@\\69mport 'https://example.com/escaped.css';"))).toBeNull();
+
+    const attribute = sanitizeMermaidSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg"><rect style="background:u\\72l(https://example.com/escaped.png)" width="2"/></svg>',
+    ) ?? "";
+    expect(attribute).not.toContain("example.com");
+    expect(attribute).toContain('width="2"');
+  });
+
+  it("cannot be made to assemble markup by editing a label style sheet", () => {
+    // Removing `@import …;` from an HTML-namespace <style> used to join "<" and
+    // "/style>" into an end tag, releasing the text after it as live, unsanitized markup.
+    const svg = [
+      '<svg xmlns="http://www.w3.org/2000/svg"><foreignObject width="10" height="10">',
+      '<div xmlns="http://www.w3.org/1999/xhtml"><span>label</span>',
+      '<style><@import ;/style><@import ;img src="https://example.com/x.png" onerror="alert(1)"></style>',
+      '</div></foreignObject></svg>',
+    ].join("");
+    const cleaned = sanitizeMermaidSvg(svg);
+
+    const host = document.createElement("div");
+    host.innerHTML = cleaned ?? "";
+    expect(host.querySelector("img")).toBeNull();
+    expect(host.querySelector("[onerror]")).toBeNull();
+    expect(host.querySelector("foreignObject style")).toBeNull();
+    if (cleaned !== null) expect(cleaned).toContain("label");
+  });
+
+  it("drops URL lists and beacon targets whatever their first entry is", () => {
+    const svg = [
+      '<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><div xmlns="http://www.w3.org/1999/xhtml">',
+      '<img src="data:image/png;base64,iVBORw0KGgo=" srcset="#a 1x, https://example.com/img-2x.png 2x">',
+      '<picture><source srcset="data:image/png;base64,AA== 1x, https://example.com/source-2x.png 2x"></picture>',
+      '<a href="https://example.com/docs" ping="#a https://example.com/beacon">docs</a>',
+      '</div></foreignObject></svg>',
+    ].join("");
+    const cleaned = sanitizeMermaidSvg(svg) ?? "";
+
+    for (const leaked of ["srcset", "ping", "img-2x.png", "source-2x.png", "beacon"]) expect(cleaned).not.toContain(leaked);
+    expect(cleaned).toContain('src="data:image/png;base64,iVBORw0KGgo="');
+    expect(cleaned).toContain('href="https://example.com/docs"');
+  });
+
+  it.each([
+    ["whitespace inside url()", (size: number) => `background:url(${" ".repeat(size)}x)`],
+    ["unterminated comments", (size: number) => "/* ".repeat(size / 3)],
+    ["repeated url(", (size: number) => "url(".repeat(size / 4)],
+  ])("sanitizes a style with %s in linear time", (_shape, make) => {
+    // Mermaid passes label styles through unchanged, up to its 50 000 character limit.
+    // Quadratic patterns took one to two seconds here; linear ones take milliseconds.
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><rect style="${make(48_000)}" width="2"/></svg>`;
+    const started = performance.now();
+    sanitizeMermaidSvg(svg);
+    expect(performance.now() - started).toBeLessThan(500);
   });
 
   it("keeps Mermaid label content inside foreignObject", () => {

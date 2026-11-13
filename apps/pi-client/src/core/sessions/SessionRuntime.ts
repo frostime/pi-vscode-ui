@@ -27,7 +27,7 @@ import { normalizeImageAttachments, validateProjectedImageAttachments } from "..
 import type { FrostPiConfiguration } from "../configuration/configurationTypes.js";
 import { assistantCacheHitPercent } from "../conversation/cacheMissDetection.js";
 import { ConversationProjection } from "../conversation/ConversationProjection.js";
-import { redactDiagnosticText } from "../diagnostics/diagnosticRedaction.js";
+import { diagnosticErrorText } from "../diagnostics/diagnosticRedaction.js";
 import type { RuntimeLogger } from "../diagnostics/RuntimeLogger.js";
 import { ExtensionUiCoordinator } from "../extension-ui/ExtensionUiCoordinator.js";
 import { QuestionToolExtensionBridge } from "../question-tool/QuestionToolExtensionBridge.js";
@@ -586,8 +586,15 @@ export class SessionRuntime {
     this.#notifyChange();
   }
 
+  /**
+   * Content-free by design: Pi and its extensions decide what reaches stderr (prompts,
+   * file contents, credentials), and no redaction can recognize all of that, so the
+   * export states only how much was captured. The text itself stays in the session's
+   * error display and the Host log.
+   */
   diagnosticsSummary(): string {
     const view = this.view;
+    const stderrLength = this.#connection?.getStderr().length ?? 0;
     return [
       `Session ${view.id}`,
       `Title: ${view.title}`,
@@ -602,8 +609,8 @@ export class SessionRuntime {
       `Turns: ${conversationTurns(view).length}`,
       `Tool calls: ${conversationTurns(view).reduce((count, turn) => count + turn.items.filter((item) => item.type === "tool").length, 0)}`,
       `Pending extension UI: ${view.pendingExtensionUi.length}`,
-      `Last error: ${view.error ?? "<none>"}`,
-      `Pi stderr tail: ${redactDiagnosticText(this.#connection?.getStderr() || "<empty>")}`,
+      `Last error: ${view.error ? diagnosticErrorText(view.error) : "<none>"}`,
+      `Pi stderr: ${stderrLength > 0 ? `${stderrLength} characters captured (content omitted)` : "<empty>"}`,
     ].join("\n");
   }
 

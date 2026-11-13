@@ -5,7 +5,7 @@ scope:
   - /apps/**
   - /packages/pi-rpc/**
   - /packages/provider-usage/**
-updated: 2026-11-03
+updated: 2026-11-12
 ---
 
 # Architecture Overview
@@ -53,7 +53,7 @@ Host adaptation is separate from Pi/OMP runtime compatibility. `apps/pi-client/s
 
 ## Data ownership and lifetime
 
-FrostPi has no telemetry endpoint or hosted account service. Pi/model-provider traffic, explicit Provider Usage queries and Desktop update checks/downloads are external data flows, not a claim that the GUI never uses the network.
+FrostPi has no telemetry endpoint or hosted account service. Pi/model-provider traffic, explicit Provider Usage queries, explicitly loaded remote Markdown images and Desktop update checks/downloads are external data flows, not a claim that the GUI never uses the network. All of them originate in a Host; the browser documents' Content Security Policies grant no remote origin, so rendered conversation content cannot start one.
 
 | Data | Owner and location | Lifetime and boundary |
 |---|---|---|
@@ -66,7 +66,7 @@ FrostPi has no telemetry endpoint or hosted account service. Pi/model-provider t
 | File-mention candidates | Host-side search/cache | Path metadata; mentions do not inject file contents. Explicit file/image operations have separate validated Host paths |
 | Credentials | Pi configuration/environment; VS Code proxy authentication separately uses SecretStorage | Provider Usage may read credentials in the Host to query official APIs, but does not refresh/write them or bridge them to UI. Desktop rejects credentials in persisted proxy URLs |
 | Provider Usage reports | Browser cache keyed by provider | Safe reports only; no disk persistence. Cache/source lifetime is defined by the Provider Usage and bridge SPECs |
-| Logs and diagnostics | Host logging; diagnostic export where the product supports it | No conversation/image payloads; redact common credentials and URL authentication. Paths and third-party stderr still require review before sharing |
+| Logs and diagnostics | Host logging; diagnostic export where the product supports it | No conversation/image payloads; redact common credentials and URL authentication. An export carries the size of Pi's stderr, never its text, and a bounded error without its stderr excerpt; that text stays in the session's error display and the Host log. Paths, session titles and error messages still require review before sharing |
 
 These are storage boundaries, not another conversation database or credential manager. Product-local constraints stay beside their code; product SPECs hold cross-file invariants. Query/credential behavior belongs in `packages/provider-usage/SPEC.md`.
 
