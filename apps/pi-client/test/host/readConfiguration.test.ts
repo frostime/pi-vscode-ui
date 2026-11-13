@@ -29,7 +29,7 @@ describe("FrostPi configuration reading", () => {
       piArguments: [],
       startSessionOnOpen: true,
       streamingBehavior: "followUp",
-      collapseTurnTrace: true,
+      collapseTurnTrace: true, focusView: true,
       questionToolEnabled: false,
       maxImageBytes: 10 * 1024 * 1024,
       diagnosticsLevel: "info",

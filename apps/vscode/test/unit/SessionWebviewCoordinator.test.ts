@@ -149,6 +149,80 @@ describe("Session Webview coordination", () => {
     coordinator.dispose();
   });
 
+  it("creates a Session directly in a tab beside its source without changing the sidebar selection", async () => {
+    const registryEvents = {
+      change: new vscodeMock.EventEmitter<void>(),
+      toast: new vscodeMock.EventEmitter<{ level: "info"; message: string }>(),
+      composer: new vscodeMock.EventEmitter<{ sessionId: string; text: string }>(),
+    };
+    const sessions = new Map([
+      ["sidebar", { id: "sidebar", title: "Sidebar", cwd: "/main" }],
+      ["source", { id: "source", title: "Source", cwd: "/worktree" }],
+    ]);
+    let created = 0;
+    const createSession = vi.fn(async (_ephemeral: boolean, options: { onRegistered?: (id: string) => void | Promise<void> }) => {
+      const id = `created-${++created}`;
+      sessions.set(id, { id, title: "New session", cwd: "/worktree" });
+      await options.onRegistered?.(id);
+      return id;
+    });
+    const registry = {
+      activeSessionId: "sidebar",
+      snapshot: () => ({
+        workspaceName: "workspace", workspacePath: "/main", sessions: [...sessions.values()],
+        activeSessionId: "sidebar", activeSession: sessions.get("sidebar"), piAvailable: true,
+      }),
+      sessionView: (sessionId: string) => sessions.get(sessionId) ?? null,
+      hasSession: (sessionId: string) => sessions.has(sessionId),
+      retainProvisionalSession: vi.fn(),
+      createSession,
+      onDidChange: registryEvents.change.event,
+      onDidToast: registryEvents.toast.event,
+      onDidSetComposerText: registryEvents.composer.event,
+    };
+    const coordinator = new SessionWebviewCoordinator(
+      registry as never,
+      { error: vi.fn(), info: vi.fn() } as never,
+      {} as never,
+      () => Promise.resolve(undefined),
+      { createEventEmitter: <T>() => new vscodeMock.EventEmitter<T>() } as never,
+    );
+    const createWebviewPanel = vi.mocked((await import("vscode")).window.createWebviewPanel);
+    coordinator.openPanel("source");
+    const sourcePanel = vscodeMock.panels.at(-1)!;
+    sourcePanel.viewColumn = 2;
+    expect(coordinator.commandTargetSessionId()).toBe("sidebar");
+
+    // Asked from the source tab itself: same group, same working directory.
+    await expect(coordinator.createSessionInPanel("source")).resolves.toBe("created-1");
+    expect(createSession).toHaveBeenLastCalledWith(false, expect.objectContaining({
+      selection: "preserve-sidebar-selection", workingDirectoryOf: "source",
+    }));
+    expect(createWebviewPanel.mock.calls.at(-1)?.[1]).toBe("FrostPi · New session");
+    expect(createWebviewPanel.mock.calls.at(-1)?.[2]).toEqual({ viewColumn: 2, preserveFocus: false });
+    expect(registry.retainProvisionalSession).toHaveBeenLastCalledWith("created-1");
+    expect(registry.activeSessionId).toBe("sidebar");
+
+    // Asked from a window command: the active Session Tab is the source.
+    (sourcePanel as { active?: boolean }).active = true;
+    expect(coordinator.commandTargetSessionId()).toBe("source");
+    await coordinator.createSessionInPanel();
+    expect(createSession).toHaveBeenLastCalledWith(false, expect.objectContaining({ workingDirectoryOf: "source" }));
+
+    // Asked from the sidebar while that tab is still the active editor: the sidebar
+    // has no source tab, so the directory choice stays the ordinary one.
+    await coordinator.createSessionInPanel(null);
+    expect(createSession.mock.calls.at(-1)?.[1]).not.toHaveProperty("workingDirectoryOf");
+    expect(createWebviewPanel.mock.calls.at(-1)?.[2]).toEqual({ viewColumn: 1, preserveFocus: false });
+
+    // With no Session Tab active there is no source: active group, ordinary directory choice.
+    (sourcePanel as { active?: boolean }).active = false;
+    await coordinator.createSessionInPanel();
+    expect(createSession.mock.calls.at(-1)?.[1]).not.toHaveProperty("workingDirectoryOf");
+    expect(createWebviewPanel.mock.calls.at(-1)?.[2]).toEqual({ viewColumn: 1, preserveFocus: false });
+    coordinator.dispose();
+  });
+
   it("distinguishes same-titled Sessions by surface and working directory", () => {
     const items = referenceDestinationItems([
       {

@@ -793,14 +793,15 @@ process.on("SIGTERM", () => process.exit(0));
     expect(runtime.view.cacheHitPercent).toBeUndefined();
     const launch = JSON.parse(await readFile(launchRecord, "utf8")) as { artifactPath: string; resultDirectory: string; hasToken: boolean };
     expect(launch).toMatchObject({ artifactPath, hasToken: true });
-    expect(runtime.view.commands.map((command) => command.name)).toEqual(["visible"]);
+    // The private adapter command is hidden; the Host commands this runtime supports are listed.
+    expect(runtime.view.commands.map((command) => command.name)).toEqual(["clear", "rewind", "visible"]);
     await runtime.refreshCommands();
-    expect(runtime.view.commands.map((command) => command.name)).toEqual(["visible"]);
+    expect(runtime.view.commands.map((command) => command.name)).toEqual(["clear", "rewind", "visible"]);
     await expect(runtime.probePiIntegration()).resolves.toEqual({
       available: true,
       commandName: "frostpi.session-tree:1",
     });
-    expect(runtime.view.commands.map((command) => command.name)).toEqual(["visible"]);
+    expect(runtime.view.commands.map((command) => command.name)).toEqual(["clear", "rewind", "visible"]);
     expect(runtime.view.conversationItems).toContainEqual(
       expect.objectContaining({
         type: "branchControl",
@@ -1160,7 +1161,7 @@ function runtimeConfiguration(piExecutable: string, runtimeCompatibility: Runtim
     piArguments: [],
     startSessionOnOpen: true,
     streamingBehavior: "followUp" as const,
-    collapseTurnTrace: true,
+    collapseTurnTrace: true, focusView: true,
     questionToolEnabled: false,
     maxImageBytes: 10 * 1024 * 1024,
     diagnosticsLevel: "info" as const,

@@ -47,6 +47,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         event.affectsConfiguration("frostpi.network.proxy")
         || event.affectsConfiguration("http.proxy")
         || event.affectsConfiguration("frostpi.attachments")
+        || event.affectsConfiguration("frostpi.conversation")
         || event.affectsConfiguration("frostpi.composer.fileMentions")
         || event.affectsConfiguration("frostpi.questionTool")
       ) {

@@ -1,4 +1,4 @@
-import type { BranchEndChoiceProjection } from "../../core/sessions/tree/sessionTreeProjection.js";
+import type { BranchEndChoiceProjection, RewindTargetProjection } from "../../core/sessions/tree/sessionTreeProjection.js";
 import type { SessionTreeSummaryOptions } from "../../core/sessions/tree/SessionTreeExtensionBridge.js";
 import type { ClientHost, HostQuickPickItem, HostQuickPickSeparator } from "../clientHost.js";
 
@@ -26,6 +26,45 @@ export async function pickBranchEnd(
     ignoreFocusOut: true,
   });
   return selected && "choice" in selected ? selected.choice : undefined;
+}
+
+interface RewindQuickPickItem extends HostQuickPickItem {
+  target: RewindTargetProjection;
+}
+
+/** `/rewind`: choose the earlier prompt the conversation returns to. */
+export async function pickRewindTarget(
+  host: ClientHost,
+  targets: readonly RewindTargetProjection[],
+): Promise<RewindTargetProjection | undefined> {
+  const items: RewindQuickPickItem[] = targets.map((target) => {
+    const later = target.removedMessageCount - 1;
+    return {
+      label: `$(history) ${target.label}${target.hasImages ? " $(file-media)" : ""}`,
+      description: sentLabel(target.sentAt),
+      detail: later > 0
+        ? `Returns to before this prompt · ${later} later ${later === 1 ? "message leaves" : "messages leave"} the context`
+        : "Returns to before this prompt",
+      target,
+    };
+  });
+  const selected = await host.window.showQuickPick(items, {
+    title: "Rewind conversation",
+    placeHolder: "Choose the prompt to go back to. It opens in the Composer; files on disk are not changed.",
+    matchOnDescription: true,
+    ignoreFocusOut: true,
+  });
+  return selected?.target;
+}
+
+function sentLabel(sentAt: number, now = Date.now()): string {
+  if (sentAt <= 0) return "";
+  const elapsed = Math.max(0, now - sentAt);
+  if (elapsed < 60_000) return "just now";
+  if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)}m ago`;
+  if (elapsed < 86_400_000) return `${Math.floor(elapsed / 3_600_000)}h ago`;
+  if (elapsed < 604_800_000) return `${Math.floor(elapsed / 86_400_000)}d ago`;
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(sentAt);
 }
 
 function branchItem(choice: BranchEndChoiceProjection): BranchQuickPickItem {

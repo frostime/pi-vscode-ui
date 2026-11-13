@@ -23,6 +23,17 @@ export interface BranchEndChoiceProjection {
   updatedAt: number;
 }
 
+/** A user prompt on the active path that the conversation can return to. */
+export interface RewindTargetProjection {
+  targetId: string;
+  /** One-line preview of the prompt. */
+  label: string;
+  hasImages: boolean;
+  /** Messages that leave the model's context, this prompt included. */
+  removedMessageCount: number;
+  sentAt: number;
+}
+
 export interface EditableTargetProjection {
   entryId: string;
   text: string;
@@ -102,6 +113,33 @@ export function projectBranchEndChoices(
     if (left.isCurrent !== right.isCurrent) return left.isCurrent ? -1 : 1;
     return right.updatedAt - left.updatedAt || left.targetId.localeCompare(right.targetId);
   });
+}
+
+/**
+ * Rewind targets are the user's own prompts, latest first. Navigating to one makes its
+ * parent the leaf, so the prompt and everything after it leave the context while the
+ * abandoned path stays reachable as a branch.
+ */
+export function projectRewindTargets(index: SessionTreeIndex): RewindTargetProjection[] {
+  const targets: RewindTargetProjection[] = [];
+  let messagesAfter = 0;
+  for (let pathIndex = index.activePath.length - 1; pathIndex >= 0; pathIndex -= 1) {
+    const entry = index.entriesById.get(index.activePath[pathIndex]!);
+    if (!entry) continue;
+    // Pi records prompt and tool-loadout changes as system messages; they are not conversation steps.
+    if (isMessageLike(entry) && !isSystemMessage(entry)) messagesAfter += 1;
+    if (entry.type !== "message" || !isRecord(entry.message) || entry.message.role !== "user") continue;
+    const editable = projectEditableTarget(entry);
+    if (!editable) continue;
+    targets.push({
+      targetId: entry.id,
+      label: entryPreview(entry, PREVIEW_LENGTH),
+      hasImages: editable.images.length > 0,
+      removedMessageCount: messagesAfter,
+      sentAt: entryTimestamp(entry),
+    });
+  }
+  return targets;
 }
 
 export function projectEditableTarget(entry: RpcSessionEntry): EditableTargetProjection | null {
@@ -371,6 +409,10 @@ function entryTimestamp(entry: RpcSessionEntry): number {
 
 function isMessageLike(entry: RpcSessionEntry | undefined): boolean {
   return entry?.type === "message" || entry?.type === "custom_message";
+}
+
+function isSystemMessage(entry: RpcSessionEntry): boolean {
+  return entry.type === "message" && isRecord(entry.message) && entry.message.role === "system";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -10,6 +10,8 @@ export interface RuntimeCapabilities {
   readonly slashCommands: boolean;
   readonly questionTool: boolean;
   readonly queuedPromptRecovery: boolean;
+  /** Replace the conversation in the running process (`new_session`), as `/clear` does. */
+  readonly newSession: boolean;
 }
 
 export interface RuntimeCompatibilityProfile {
@@ -31,6 +33,7 @@ const PI_PROFILE: RuntimeCompatibilityProfile = {
     slashCommands: true,
     questionTool: true,
     queuedPromptRecovery: true,
+    newSession: true,
   },
   defaultSessionRoot: () => join(homedir(), ".pi", "agent", "sessions"),
 };
@@ -45,6 +48,7 @@ const OH_MY_PI_PROFILE: RuntimeCompatibilityProfile = {
     slashCommands: true,
     questionTool: true,
     queuedPromptRecovery: true,
+    newSession: false,
   },
   defaultSessionRoot: () => join(homedir(), ".omp", "agent", "sessions"),
 };

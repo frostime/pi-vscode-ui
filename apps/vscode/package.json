@@ -56,6 +56,9 @@
   "activationEvents": [
     "onView:frostpi.chat",
     "onCommand:frostpi.newSession",
+    "onCommand:frostpi.newSessionInEditorTab",
+    "onCommand:frostpi.renameSession",
+    "onCommand:frostpi.toggleFocusView",
     "onCommand:frostpi.resumeSession",
     "onCommand:frostpi.focus",
     "onCommand:frostpi.sendSelection",
@@ -105,6 +108,21 @@
         "command": "frostpi.newSession",
         "title": "FrostPi: New Session",
         "icon": "$(add)"
+      },
+      {
+        "command": "frostpi.newSessionInEditorTab",
+        "title": "FrostPi: New Session in Editor Tab",
+        "icon": "$(add)"
+      },
+      {
+        "command": "frostpi.renameSession",
+        "title": "FrostPi: Rename Session",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "frostpi.toggleFocusView",
+        "title": "FrostPi: Toggle Focus View",
+        "icon": "$(list-tree)"
       },
       {
         "command": "frostpi.resumeSession",
@@ -160,6 +178,23 @@
         {
           "command": "frostpi.sendFile",
           "when": "resourceScheme == file",
+          "group": "frostpi@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "frostpi.newSessionInEditorTab",
+          "when": "activeWebviewPanelId == 'frostpi.session'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "frostpi.renameSession",
+          "when": "activeWebviewPanelId == 'frostpi.session'",
+          "group": "frostpi@1"
+        },
+        {
+          "command": "frostpi.toggleFocusView",
+          "when": "activeWebviewPanelId == 'frostpi.session'",
           "group": "frostpi@2"
         }
       ]
@@ -221,6 +256,12 @@
           "default": true,
           "scope": "resource",
           "description": "After a turn completes, collapse tools, reasoning, and interim replies into one summary above the final response."
+        },
+        "frostpi.conversation.focusView": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Fold each run of tool calls and reasoning into one expandable row, including while a turn is running. Replies stay visible. Use \"FrostPi: Toggle Focus View\" to switch."
         },
         "frostpi.questionTool.enabled": {
           "type": "boolean",
