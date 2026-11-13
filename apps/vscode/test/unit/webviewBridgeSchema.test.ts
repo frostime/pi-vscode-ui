@@ -87,7 +87,7 @@ describe("Webview bridge validation", () => {
     }
   });
 
-  it("accepts the Session Tab creation action", () => {
+  it("accepts the Session Tab, stop, delete and side-question dismissal actions with bounded ids", () => {
     expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "createSessionPanel" }).success).toBe(true);
     expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "createSessionPanel", ephemeral: true }).success).toBe(true);
     expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "createSessionPanel", ephemeral: "true" }).success).toBe(false);
@@ -95,6 +95,11 @@ describe("Webview bridge validation", () => {
       expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type, sessionId: "session-1" }).success).toBe(true);
       expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type }).success).toBe(false);
     }
+    const dismissal = { bridgeVersion: BRIDGE_VERSION, type: "dismissSideQuestion", sessionId: "session-1", questionId: "side-question-1" };
+    expect(webviewToHostSchema.safeParse(dismissal).success).toBe(true);
+    expect(webviewToHostSchema.safeParse({ ...dismissal, questionId: "" }).success).toBe(false);
+    expect(webviewToHostSchema.safeParse({ ...dismissal, questionId: "x".repeat(129) }).success).toBe(false);
+    expect(webviewToHostSchema.safeParse({ ...dismissal, sessionId: undefined }).success).toBe(false);
   });
 
   it("accepts bounded session-tree actions and rejects malformed fields", () => {

@@ -14,7 +14,7 @@ One `SessionRuntime` owns one Pi child. Its identity, cwd and configuration scop
 
 Runtime receives client version, a live host-proxy reader, read-only credentials, logging and event/editor-text hooks. Configuration/proxy refresh and launch read current values, not construction-time snapshots. Credentials are read at launch only. Changed executable/proxy/credentials/Question configuration never silently interrupts a running turn; changes apply on explicit start/restart.
 
-Private tree/Question artifact paths are explicit product inputs. Both products bundle the same sources under `pi-extensions`; bridges own tokens, temporary files, validation and cancellation. Host Pi arguments remain intact; custom launch tokens are appended last, reused on restart, never persisted/logged. No generic extension manager is implied.
+Private tree/Question/side-question artifact paths are explicit product inputs. Both products bundle the same sources under `pi-extensions`; bridges own tokens, temporary files, validation and cancellation. Host Pi arguments remain intact; custom launch tokens are appended last, reused on restart, never persisted/logged. No generic extension manager is implied.
 
 A file-backed Host owns the final Registry metadata drain before closing its store; the [lifecycle contract](src/host/session-lifecycle.SPEC.md#retention-restoration-and-shutdown) defines stop/drain ordering and save-failure semantics. Desktop owns that sequence, while VS Code owns its native storage lifetime.
 

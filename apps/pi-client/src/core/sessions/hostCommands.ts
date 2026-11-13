@@ -5,20 +5,20 @@ import { normalizePiSlashPrompt } from "./normalizePiSlashPrompt.js";
 
 /** Slash commands FrostPi answers itself instead of submitting them to the runtime. */
 export type HostCommand =
-  | { name: "compact" | "name" | "alias"; argument: string }
+  | { name: "compact" | "name" | "alias" | "btw"; argument: string }
   | { name: "new" | "rewind" | "reload"; argument: "" };
 
 /**
  * `/new`, `/rewind` and `/reload` take no argument, so text after any of them stays
- * an ordinary prompt for the runtime; `/compact`, `/name` and `/alias` own everything
- * after their name.
+ * an ordinary prompt for the runtime; `/compact`, `/name`, `/alias` and `/btw` own
+ * everything after their name.
  */
 export function parseHostCommand(text: string): HostCommand | null {
   const normalized = normalizePiSlashPrompt(text);
   if (normalized === "/new") return { name: "new", argument: "" };
   if (normalized === "/rewind") return { name: "rewind", argument: "" };
   if (normalized === "/reload") return { name: "reload", argument: "" };
-  for (const name of ["compact", "name", "alias"] as const) {
+  for (const name of ["compact", "name", "alias", "btw"] as const) {
     if (normalized === `/${name}`) return { name, argument: "" };
     if (normalized.startsWith(`/${name} `)) return { name, argument: normalized.slice(name.length + 2).trim() };
   }
@@ -29,6 +29,7 @@ export function parseHostCommand(text: string): HostCommand | null {
 export interface HostCommandSupport {
   capabilities: RuntimeCapabilities;
   sessionTreeAdapter: boolean;
+  sideQuestionAdapter: boolean;
 }
 
 /**
@@ -46,6 +47,8 @@ export function answersHostCommand(name: HostCommand["name"], support: HostComma
     case "rewind":
     case "reload":
       return support.capabilities.sessionTree && support.sessionTreeAdapter;
+    case "btw":
+      return support.capabilities.sideQuestion && support.sideQuestionAdapter;
   }
 }
 
@@ -55,6 +58,7 @@ const GATED_COMMANDS: readonly (RpcCommandDescriptor & { name: HostCommand["name
   { name: "reload", description: "Reload Pi's extensions, skills, prompt templates and context files", source: "frostpi" },
   { name: "name", description: "Rename this session", source: "frostpi" },
   { name: "alias", description: "Rename this session (same as /name)", source: "frostpi" },
+  { name: "btw", description: "Ask a side question that is not added to the conversation", source: "frostpi" },
 ];
 
 /**
