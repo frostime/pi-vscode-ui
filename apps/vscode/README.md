@@ -149,7 +149,7 @@ For best workspace and session discovery, install `fd` and `rg` on the Extension
 
 ### Session tabs
 
-A session can live in an editor tab instead of the sidebar. **FrostPi: New Session in Editor Tab** starts one there directly; the `+` button in a session tab, or in the editor title bar, opens another in the same tab group and working directory. Click a session tab's title to rename it, also while Pi is working, or run **FrostPi: Rename Session**. The sidebar keeps its own selection throughout.
+A session can live in an editor tab instead of the sidebar. **FrostPi: New Session in Editor Tab** starts one there directly; the `+` button in a session tab, or in the editor title bar, opens another in the same tab group and working directory. Click a session tab's title to rename it, also while Pi is working, or run **FrostPi: Rename Session**. In the sidebar, use the pencil button next to the session title or double-click the title. The sidebar keeps its own selection throughout.
 
 ### Conversation commands
 
@@ -157,9 +157,11 @@ FrostPi answers a few slash commands itself. They never become a prompt, and the
 
 - `/compact [instructions]` runs Pi's own context compaction.
 - `/clear` starts a new conversation in the same session view. The model, thinking level and Pi process stay. The earlier conversation remains in Pi's session history, so **Resume session** can reopen it. Stop a running response first.
+- `/name <name>` or `/alias <name>` renames the session. Without a name, FrostPi asks for one.
+- `/reload` reloads Pi's extensions, skills, prompt templates, themes and context files without restarting the session. Stop a running response first.
 - `/rewind` lists your earlier prompts, returns the conversation to just before the one you pick, and puts that prompt back in the Composer for editing. It is **Branch here** with a picker: the path you left stays available through **Switch branch**. Files on disk are not restored; only the conversation changes.
 
-`/clear` and `/rewind` need Pi. With the `oh-my-pi` compatibility profile FrostPi does not offer them and passes such text to the runtime unchanged.
+`/clear`, `/rewind` and `/reload` need Pi. With the `oh-my-pi` compatibility profile FrostPi does not offer them and passes such text to the runtime unchanged.
 
 ### Focus view
 

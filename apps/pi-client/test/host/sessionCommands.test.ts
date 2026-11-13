@@ -22,7 +22,7 @@ describe("Host slash commands through the real Registry and child-process path",
     const fixture = await host();
     const sessionId = await fixture.startSession();
     expect(fixture.view(sessionId).commands.map(({ name, source }) => `${name}:${source}`)).toEqual([
-      "clear:frostpi", "rewind:frostpi", "visible:extension",
+      "clear:frostpi", "rewind:frostpi", "reload:frostpi", "name:frostpi", "alias:frostpi", "visible:extension",
     ]);
   });
 
@@ -31,7 +31,7 @@ describe("Host slash commands through the real Registry and child-process path",
     const fixture = await host([], { adapters: false });
     const { view } = fixture;
     const sessionId = await fixture.startSession();
-    expect(view(sessionId).commands.map((command) => command.name)).toEqual(["clear", "visible"]);
+    expect(view(sessionId).commands.map((command) => command.name)).toEqual(["clear", "name", "alias", "visible"]);
 
     await fixture.converse(sessionId, "/rewind");
 
@@ -44,12 +44,54 @@ describe("Host slash commands through the real Registry and child-process path",
     const fixture = await host(["--adapters-not-loaded"]);
     const { view } = fixture;
     const sessionId = await fixture.startSession();
-    expect(view(sessionId).commands.map((command) => command.name)).toEqual(["clear", "visible"]);
+    expect(view(sessionId).commands.map((command) => command.name)).toEqual(["clear", "name", "alias", "visible"]);
 
     await fixture.converse(sessionId, "/rewind");
 
     expect(userPrompts(view(sessionId))).toEqual(["/rewind"]);
     expect(fixture.shownQuickPicks).toEqual([]);
+  });
+
+  describe("/name, /alias and /reload", () => {
+    it("renames from the Composer, with or without a name, also while a turn runs", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+      await fixture.converse(sessionId, "first");
+      await registry.sendPrompt(sessionId, "hold", []);
+      await fixture.waitFor(() => view(sessionId).isStreaming);
+
+      await registry.sendPrompt(sessionId, "/alias  Parser   work ", [], "steer");
+      expect(view(sessionId).title).toBe("Parser   work");
+      fixture.inputBoxes.push("From the input box");
+      await registry.sendPrompt(sessionId, "/name", []);
+      expect(view(sessionId).title).toBe("From the input box");
+      // Dismissing the input box changes nothing.
+      await registry.sendPrompt(sessionId, "/name", []);
+      expect(view(sessionId).title).toBe("From the input box");
+
+      expect(view(sessionId)).toMatchObject({ isStreaming: true, queuedSteers: [], queuedFollowUps: [] });
+      expect(userPrompts(view(sessionId))).toEqual(["first", "hold"]);
+      await registry.abort(sessionId);
+    });
+
+    it("reloads Pi's resources in place and reads the command list again", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+      await fixture.converse(sessionId, "first");
+
+      await registry.sendPrompt(sessionId, "/reload", []);
+
+      expect(view(sessionId).commands.map((command) => command.name)).toContain("added-by-reload");
+      expect(notices(view(sessionId))).toEqual([expect.stringContaining("Reloaded Pi's extensions")]);
+      expect(userPrompts(view(sessionId))).toEqual(["first"]);
+
+      await registry.sendPrompt(sessionId, "hold", []);
+      await fixture.waitFor(() => view(sessionId).isStreaming);
+      await expect(registry.sendPrompt(sessionId, "/reload", [], "steer")).rejects.toThrow("Stop the current response before reloading.");
+      await registry.abort(sessionId);
+    });
   });
 
   describe("/clear", () => {

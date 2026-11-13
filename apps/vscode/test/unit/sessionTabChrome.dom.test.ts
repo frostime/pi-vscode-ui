@@ -91,6 +91,25 @@ describe("sidebar launcher", () => {
     historyStatus: "loaded", requiresUserInput: false,
   };
 
+  it("renames the sidebar's Session from its rename button or a double-click on the title", async () => {
+    const summary = { id: "session", title: "Parser work", cwd: "/workspace", status: "running", isEphemeral: false } as SessionSummaryView;
+    const view = render(SessionHeader, { sessions: [summary], active: session() });
+
+    await fireEvent.click(view.getByRole("button", { name: "Rename session" }));
+    let input = view.getByRole("textbox", { name: "Session name" });
+    await fireEvent.input(input, { target: { value: "Tokenizer" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+    await fireEvent.blur(input);
+
+    await fireEvent.dblClick(view.getByText("Parser work"));
+    input = view.getByRole("textbox", { name: "Session name" });
+    await fireEvent.input(input, { target: { value: "Discarded" } });
+    await fireEvent.keyDown(input, { key: "Escape" });
+    await fireEvent.blur(input);
+
+    expect(posted()).toEqual([{ type: "renameSession", sessionId: "session", name: "Tokenizer" }]);
+  });
+
   it("offers a new Session in an editor tab only on a host with editor tabs", async () => {
     const view = render(SessionHeader, { sessions: [summary], active: session({ status: "ready", isStreaming: false }) });
     await fireEvent.click(view.getByRole("button", { name: "New or resume session" }));

@@ -603,6 +603,36 @@ export class SessionRuntime {
     return models;
   }
 
+  /**
+   * `/reload`: Pi reloads its extensions, skills, prompt templates, themes and context
+   * files inside the running process. The conversation and model stay; the command
+   * list and model catalogue are read again because either may have changed.
+   */
+  async reloadResources(): Promise<void> {
+    if (!this.#runtimeCapabilities().sessionTree) throw new Error("/reload is not supported by the selected runtime.");
+    this.#assertNotClearing();
+    const api = this.#requireApi();
+    await this.#discoverAdapters(api);
+    const bridge = this.#sessionTreeBridge;
+    if (!bridge?.available) throw new Error("/reload is unavailable in this Pi process. Update Pi, restart the session, and check FrostPi diagnostics.");
+    if (this.view.status !== "ready" || this.view.isStreaming || this.view.isCompacting) throw new Error("Stop the current response before reloading.");
+    if (this.view.pendingExtensionUi.length > 0) throw new Error("Answer the pending Pi request before reloading.");
+    await bridge.reload(api);
+    if (this.#disposed || api !== this.#api) return;
+    const [state, commands, models] = await Promise.all([
+      api.getState(),
+      api.getCommands().catch(() => undefined),
+      api.getAvailableModels().catch(() => undefined),
+    ]);
+    if (this.#disposed || api !== this.#api) return;
+    this.#viewState.applyState(state);
+    if (commands) this.#viewState.setCommands(this.#visibleCommands(commands));
+    if (models) this.#viewState.setModels(models);
+    this.#viewState.setSessionTreeAvailable(this.#sessionTreeBridge?.available ?? false);
+    this.#conversation.appendNotice("Reloaded Pi's extensions, skills, prompt templates and context files.", "info");
+    this.#notifyChange();
+  }
+
   async refreshCommands(): Promise<void> {
     if (!this.#runtimeCapabilities().slashCommands) {
       this.#viewState.setCommands([]);

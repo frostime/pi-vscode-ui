@@ -48,7 +48,7 @@ Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 
 - Root/composition: `ClientApp.svelte`, `shell/SidebarShell.svelte`, `shell/SessionInteraction.svelte`; editor availability: `../shared/model/clientUiCapabilities.ts`.
 - Session Header/New/Resume: `features/sessions/SessionHeader.svelte` and `SessionList.svelte`; the Session Tab's own header: `features/sessions/PanelSessionHeader.svelte`.
-- Host slash commands (`/compact`, `/clear`, `/rewind`): parsing, runtime gating and the per-Session completion entries in `../core/sessions/hostCommands.ts`; dispatch in `../host/SessionRegistry.ts` (`sendPrompt`). `features/composer/frostPiCommands.ts` holds only the static, runtime-independent entries.
+- Host slash commands (`/compact`, `/clear`, `/rewind`, `/reload`, `/name`, `/alias`): parsing, runtime gating and the per-Session completion entries in `../core/sessions/hostCommands.ts`; dispatch in `../host/SessionRegistry.ts` (`sendPrompt`). `features/composer/frostPiCommands.ts` holds only the static, runtime-independent entries.
 - Focus view and turn summary: `features/conversation/collapseTurnTrace.ts` plans, `AgentTurn.svelte` renders.
 - Composer/mentions/attachments: `features/composer/Composer.svelte` and `composer.SPEC.md`; shared file search: `../host/file-search/`; VS Code editor capture: `apps/vscode/src/extension/composer/`.
 - Pending-message recovery: `../core/sessions/QueuedPromptRecovery.ts` owns backend ordering/results; `features/composer/queuedPromptRecoveryStore.svelte.ts` owns UI correlation/feedback. Group entry: `features/conversation/ConversationView.svelte`; draft authority: bridge contract, not a second queue.

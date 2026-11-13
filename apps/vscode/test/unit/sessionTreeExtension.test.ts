@@ -32,6 +32,36 @@ afterEach(async () => {
 });
 
 describe("session-tree Pi extension", () => {
+  it("runs Pi's reload flow for /reload and touches nothing of the context afterwards", async () => {
+    const { handler } = registeredHandler();
+    const reload = vi.fn().mockResolvedValue(undefined);
+    let reloaded = false;
+    const context = {
+      ...createContext(["leaf"]),
+      reload: vi.fn(async () => { await reload(); reloaded = true; }),
+      // A context used after reload is stale in Pi; reading it then is a bug.
+      sessionManager: { getLeafId: () => { if (reloaded) throw new Error("stale context"); return "leaf"; } },
+    };
+
+    await handler(encodeReload({ requestId: "reload-1" }), context);
+
+    expect(context.waitForIdle).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenCalledOnce();
+    expect(context.navigateTree).not.toHaveBeenCalled();
+    await expect(readResult("reload-1")).resolves.toEqual({ version: 1, requestId: "reload-1", status: "committed", leafId: "leaf" });
+  });
+
+  it("reports a Pi that cannot reload from a command, and refuses a malformed reload request", async () => {
+    const { handler } = registeredHandler();
+    await expect(handler(encodeReload({ requestId: "reload-2" }), createContext(["leaf"]))).rejects.toThrow("cannot reload");
+    await expect(readResult("reload-2")).resolves.toMatchObject({ status: "failed" });
+
+    for (const request of [{ requestId: "bad", action: "reload", targetId: "x" }, { requestId: "bad", action: "restart" }]) {
+      const encoded = Buffer.from(JSON.stringify({ token: "runtime-token", ...request }), "utf8").toString("base64url");
+      await expect(handler(encoded, createContext(["leaf"]))).rejects.toThrow("Invalid FrostPi session-tree request fields");
+    }
+  });
+
   it("registers one private command and commits a no-summary navigation", async () => {
     const { handler, commandName, description } = registeredHandler();
     const context = createContext(["old-leaf", "target-entry"]);
@@ -158,6 +188,10 @@ function createContext(
       getLeafId: () => leafIds[Math.min(leafIndex++, leafIds.length - 1)] ?? null,
     },
   };
+}
+
+function encodeReload(overrides: Record<string, unknown>): string {
+  return Buffer.from(JSON.stringify({ token: "runtime-token", action: "reload", ...overrides }), "utf8").toString("base64url");
 }
 
 function encodeRequest(overrides: Record<string, unknown>): string {

@@ -30,6 +30,7 @@ let entries = [];
 let leafId = null;
 let sequence = 0;
 let streaming = false;
+let reloads = 0;
 let finishHeldTurn;
 let releaseNewSession;
 let failNextState = false;
@@ -103,7 +104,7 @@ function handle(command) {
     case "get_available_models": respond(id, { models: MODELS }); return;
     case "get_commands":
       releaseNewSession?.();
-      respond(id, { commands: [...privateCommands(), { name: "visible", description: "User command", source: "extension" }] });
+      respond(id, { commands: [...privateCommands(), { name: "visible", description: "User command", source: "extension" }, ...(reloads > 0 ? [{ name: "added-by-reload", description: "Loaded on reload", source: "extension" }] : [])] });
       return;
     case "get_session_stats":
       respond(id, {
@@ -154,6 +155,16 @@ function prompt(command) {
   const text = command.message;
   if (text.startsWith("/frostpi.session-tree ")) {
     const request = decode(text);
+    if (request.action === "reload") {
+      // Like Pi's reload: extensions load again, so the command list may change.
+      reloads += 1;
+      fs.writeFileSync(
+        path.join(process.env.FROSTPI_SESSION_TREE_RESULT_DIR, `${request.requestId}.json`),
+        JSON.stringify({ version: 1, requestId: request.requestId, status: "committed", leafId }),
+      );
+      respond(id);
+      return;
+    }
     const target = entries.find((entry) => entry.id === request.targetId);
     leafId = target?.message.role === "user" ? target.parentId : request.targetId;
     fs.writeFileSync(

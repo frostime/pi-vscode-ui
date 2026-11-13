@@ -60,6 +60,8 @@
   }
 
   function commitRename(): void {
+    // Enter or Escape removes the input, whose blur must not commit a second time.
+    if (!editing) return;
     const name = titleDraft.trim();
     if (name && name !== active.title) postToHost({ type: "renameSession", sessionId: active.id, name });
     editing = false;
@@ -147,6 +149,7 @@
             bind:this={titleInput}
             bind:value={titleDraft}
             aria-label="Session name"
+            maxlength="160"
             onkeydown={(event) => {
               if (event.key === "Enter") commitRename();
               if (event.key === "Escape") editing = false;
@@ -163,6 +166,7 @@
           aria-expanded={sessionListOpen}
           title={active.cwd}
           onclick={() => { sessionListOpen = !sessionListOpen; menuOpen = false; launcherOpen = false; }}
+          ondblclick={beginRename}
         >
           <StatusDot status={active.status} />
           <span class="session-title">{active.title}</span>
@@ -190,6 +194,9 @@
     </div>
 
     <div class="session-actions">
+      {#if !editing}
+        <IconButton icon="edit" label="Rename session" onclick={beginRename} />
+      {/if}
       <div class="session-menu-wrap">
         <IconButton icon="add" label="New or resume session" active={launcherOpen} onclick={() => { launcherOpen = !launcherOpen; menuOpen = false; sessionListOpen = false; }} />
         {#if launcherOpen}

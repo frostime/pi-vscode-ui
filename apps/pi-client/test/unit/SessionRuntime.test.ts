@@ -794,14 +794,14 @@ process.on("SIGTERM", () => process.exit(0));
     const launch = JSON.parse(await readFile(launchRecord, "utf8")) as { artifactPath: string; resultDirectory: string; hasToken: boolean };
     expect(launch).toMatchObject({ artifactPath, hasToken: true });
     // The private adapter command is hidden; the Host commands this runtime supports are listed.
-    expect(runtime.view.commands.map((command) => command.name)).toEqual(["clear", "rewind", "visible"]);
+    expect(runtime.view.commands.map((command) => command.name)).toEqual(["clear", "rewind", "reload", "name", "alias", "visible"]);
     await runtime.refreshCommands();
-    expect(runtime.view.commands.map((command) => command.name)).toEqual(["clear", "rewind", "visible"]);
+    expect(runtime.view.commands.map((command) => command.name)).toEqual(["clear", "rewind", "reload", "name", "alias", "visible"]);
     await expect(runtime.probePiIntegration()).resolves.toEqual({
       available: true,
       commandName: "frostpi.session-tree:1",
     });
-    expect(runtime.view.commands.map((command) => command.name)).toEqual(["clear", "rewind", "visible"]);
+    expect(runtime.view.commands.map((command) => command.name)).toEqual(["clear", "rewind", "reload", "name", "alias", "visible"]);
     expect(runtime.view.conversationItems).toContainEqual(
       expect.objectContaining({
         type: "branchControl",

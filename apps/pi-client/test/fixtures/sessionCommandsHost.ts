@@ -30,6 +30,8 @@ export async function sessionCommandsHost(piArguments: string[] = [], { adapters
   const quickPicks: QuickPickChoice[] = [];
   const shownQuickPicks: Array<{ title: string | undefined; labels: string[] }> = [];
   const warningDialogs: string[] = [];
+  /** Answers for the next input boxes, in order; an unanswered box is dismissed. */
+  const inputBoxes: string[] = [];
   let warningDialogAnswer: string | undefined = "first-button";
   const configuration: Record<string, unknown> = {
     "pi.executable": fileURLToPath(new NodeURL("./session-commands-pi.cjs", import.meta.url)),
@@ -65,7 +67,7 @@ export async function sessionCommandsHost(piArguments: string[] = [], { adapters
         shownQuickPicks.push({ title: options?.title, labels: choices.map((item) => item.label) });
         return Promise.resolve(quickPicks.shift()?.(choices, options) as T | undefined);
       },
-      showInputBox: () => Promise.resolve(undefined),
+      showInputBox: () => Promise.resolve(inputBoxes.shift()),
     },
     editor: {},
   };
@@ -98,7 +100,7 @@ export async function sessionCommandsHost(piArguments: string[] = [], { adapters
   };
 
   return {
-    directory, registry, errors, quickPicks, shownQuickPicks, warningDialogs, discoveries, view, waitFor,
+    directory, registry, errors, quickPicks, inputBoxes, shownQuickPicks, warningDialogs, discoveries, view, waitFor,
     answerWarningDialogs(answer: "first-button" | undefined): void { warningDialogAnswer = answer; },
     persistedSessions(): Array<{ id: string; title: string; sessionFile?: string }> {
       const value = [...stored.values()].at(-1) as { sessions?: Array<{ id: string; title: string; sessionFile?: string }> } | undefined;
