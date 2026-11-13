@@ -24,7 +24,7 @@ const sessions: SessionSummaryView[] = [
   summary("b-fail", "Beta failed", { cwd: "C:\\Projects\\Beta", status: "failed" }),
   summary("b-run", "Beta running", { cwd: "C:\\Projects\\Beta", status: "running" }),
   summary("stopped", "Alpha stopped", { status: "stopped" }),
-  // A Session the host has not associated with a Project cannot be placed in the sidebar.
+  // A Session the navigation metadata cannot place has no row.
   summary("orphan", "Orphan running", { status: "running" }),
 ];
 
@@ -84,17 +84,20 @@ function mount(allSessions: SessionSummaryView[] = sessions, activeSessionId: st
 }
 
 describe("Desktop Sessions section", () => {
-  it("queues wait, then fail, then running Sessions across Projects and leaves idle history out", () => {
+  it("lists every loaded Session, ordered wait then fail then running then the calm tail", () => {
     const view = mount();
-    expect(view.sessionTitles()).toEqual(["Alpha waiting", "Beta failed", "Alpha running", "Beta running"]);
-    expect(view.queryByText("Alpha idle")).toBeNull();
-    expect(view.queryByText("Alpha stopped")).toBeNull();
+    // A Session must not vanish when its turn settles, so idle and stopped rows stay listed.
+    expect(view.sessionTitles()).toEqual([
+      "Alpha waiting", "Beta failed", "Alpha running", "Beta running", "Alpha idle", "Alpha stopped",
+    ]);
     expect(view.queryByText("Orphan running")).toBeNull();
     const section = within(view.sidebar().querySelector<HTMLElement>(".sect.sessions")!);
     expect(section.getByText("Sessions")).toBeTruthy();
+    // The header counts only the Sessions that need you.
     expect(section.getByText("2")).toBeTruthy();
-    // Project name rides on the row so a cross-Project row is unambiguous.
+    // An urgent row names its state; a calm row carries only its Project.
     expect(section.getByText("Beta \u00b7 failed")).toBeTruthy();
+    expect(section.getAllByText("Alpha")).toHaveLength(2);
   });
 
   it("opens the clicked Session, including one that belongs to another Project", async () => {
@@ -122,16 +125,16 @@ describe("Desktop Sessions section", () => {
     const view = mount();
     await fireEvent.click(view.getByRole("button", { name: "Toggle Projects" }));
     expect(view.projectRows()).toHaveLength(0);
-    expect(view.sessionTitles()).toHaveLength(4);
+    expect(view.sessionTitles()).toHaveLength(6);
     await fireEvent.click(view.getByRole("button", { name: "Toggle Sessions" }));
     expect(view.sessionTitles()).toHaveLength(0);
     expect(within(view.sidebar()).getByText("Sessions")).toBeTruthy();
     await fireEvent.click(view.getByRole("button", { name: "Toggle Sessions" }));
-    expect(view.sessionTitles()).toHaveLength(4);
+    expect(view.sessionTitles()).toHaveLength(6);
   });
 
-  it("renders no Sessions section at all when nothing is running or waiting", () => {
-    const view = mount([summary("a-idle", "Alpha idle"), summary("stopped", "Alpha stopped", { status: "stopped" })]);
+  it("renders no Sessions section when none is loaded, and leaves calm rows out of Project tags", () => {
+    const view = mount([]);
     expect(view.sidebar().querySelector(".sect.sessions")).toBeNull();
     expect(view.sidebar().querySelector(".splitter")).toBeNull();
     expect(view.projectRows()).toHaveLength(2);

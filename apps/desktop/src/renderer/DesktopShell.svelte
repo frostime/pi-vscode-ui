@@ -22,11 +22,11 @@
   const SESSIONS_MIN_HEIGHT = 96;
   /** Nominal bound for assistive technology; pointer drags clamp to the footer instead. */
   const SESSIONS_MAX_HEIGHT = 480;
-  const SESSIONS_DEFAULT_HEIGHT = 190;
-  /** Mutual priority: something waiting on you outranks a failure, which outranks plain work. */
-  const SESSION_STATE_ORDER = ["wait", "fail", "run"] as const;
+  const SESSIONS_DEFAULT_HEIGHT = 240;
+  /** List order, most urgent first; idle Sessions keep the tail rather than being hidden. */
+  const SESSION_STATE_ORDER = ["wait", "fail", "run", "idle"] as const;
   type SessionState = (typeof SESSION_STATE_ORDER)[number];
-  type LiveSession = { session: SessionSummaryView; state: SessionState; projectId: string; projectName: string };
+  type SessionRow = { session: SessionSummaryView; state: SessionState; projectId: string; projectName: string };
   const clampWidth = (value: number): number =>
     Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(value)));
 
@@ -122,16 +122,16 @@
           .filter((id) => id !== activeSessionId)
       : [];
   });
-  // Idle and stopped Sessions are history, not a queue: only these three states earn a row.
-  const liveSessions = $derived.by<LiveSession[]>(() => {
+  // Every loaded Session is listed; urgency only decides the order, never visibility.
+  // A Session with no Project association has no placement, so it is skipped rather than guessed.
+  const sessionRows = $derived.by<SessionRow[]>(() => {
     const owners = view.navigation?.sessionProjects ?? {};
     const names = new Map(view.projects.map((project) => [project.id, project.name]));
-    const rows: LiveSession[] = [];
+    const rows: SessionRow[] = [];
     for (const session of allSessions) {
-      const state = sessionState(session);
       const projectId = owners[session.id];
       const projectName = projectId ? names.get(projectId) : undefined;
-      if (state && projectId && projectName) rows.push({ session, state, projectId, projectName });
+      if (projectId && projectName) rows.push({ session, state: sessionState(session), projectId, projectName });
     }
     // Stable: state priority only, so rows keep the registry order inside a state.
     return rows.sort((a, b) => SESSION_STATE_ORDER.indexOf(a.state) - SESSION_STATE_ORDER.indexOf(b.state));
@@ -139,14 +139,15 @@
   // Row tags read one Map instead of scanning every Session per Project.
   const liveByProject = $derived.by(() => {
     const counts = new Map<string, { wait: number; fail: number; run: number }>();
-    for (const row of liveSessions) {
+    for (const row of sessionRows) {
+      if (row.state === "idle") continue;
       const entry = counts.get(row.projectId) ?? { wait: 0, fail: 0, run: 0 };
       entry[row.state] += 1;
       counts.set(row.projectId, entry);
     }
     return counts;
   });
-  const needsYouCount = $derived(liveSessions.filter((row) => row.state !== "run").length);
+  const needsYouCount = $derived(sessionRows.filter((row) => row.state === "wait" || row.state === "fail").length);
   const splitHandleActive = $derived(!projectsFolded && !sessionsFolded);
   const projectsLabel = $derived(narrow || hidden ? "Projects" : "Hide");
   const projectsAriaLabel = $derived(
@@ -240,11 +241,16 @@
     return activity.running > 0 ? `${total} · ${activity.running} running` : total;
   }
 
-  function sessionState(session: SessionSummaryView): SessionState | null {
+  function sessionState(session: SessionSummaryView): SessionState {
     if (session.requiresUserInput) return "wait";
     if (session.status === "failed") return "fail";
     if (session.status === "running") return "run";
-    return null;
+    return "idle";
+  }
+
+  /** Calm rows carry only their Project; saying "ready" next to every idle Session is noise. */
+  function rowLabel(row: SessionRow): string {
+    return row.state === "idle" ? row.projectName : `${row.projectName} · ${stateLabel(row.state)}`;
   }
 
   function stateLabel(state: SessionState): string {
@@ -253,7 +259,7 @@
 
   /** A Project tag opens that state's first Session, the same action the old warning badge had. */
   function openFirstInState(projectId: string, state: SessionState): void {
-    const row = liveSessions.find((candidate) => candidate.projectId === projectId && candidate.state === state);
+    const row = sessionRows.find((candidate) => candidate.projectId === projectId && candidate.state === state);
     if (row) selectSession(row.session.id);
   }
 
@@ -590,7 +596,7 @@
       {/if}
     </div>
 
-    {#if liveSessions.length > 0}
+    {#if sessionRows.length > 0}
       <!-- One separator between the sections; it is the drag handle only while both are open. -->
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <div class="splitter" class:draggable={splitHandleActive} role="separator" aria-orientation="horizontal"
@@ -615,18 +621,20 @@
         </div>
         {#if !sessionsFolded}
           <div class="session-list">
-            {#each liveSessions as row (row.session.id)}
+            {#each sessionRows as row (row.session.id)}
               <button type="button" class="session-row"
                 class:active={row.session.id === activeSessionId}
                 title={`${row.session.title} — ${row.projectName}`}
                 onclick={() => selectSession(row.session.id)}>
                 <span class="session-mark {row.state}" aria-hidden="true">
                   {#if row.state === "run"}<span class="session-pulse"></span>
-                  {:else}<span class={`codicon codicon-${row.state === "wait" ? "warning" : "error"}`}></span>{/if}
+                  {:else if row.state === "wait"}<span class="codicon codicon-warning"></span>
+                  {:else if row.state === "fail"}<span class="codicon codicon-error"></span>
+                  {:else}<span class="session-idle-dot"></span>{/if}
                 </span>
                 <span class="session-copy">
                   <span class="session-title">{row.session.title}</span>
-                  <span class="session-meta">{row.projectName} · {stateLabel(row.state)}</span>
+                  <span class="session-meta">{rowLabel(row)}</span>
                 </span>
               </button>
             {/each}
@@ -887,6 +895,7 @@
   .session-mark.fail { color: var(--frost-error); }
   .session-mark.run { color: var(--frost-success); }
   .session-pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: session-pulse 1.6s ease-in-out infinite; }
+  .session-idle-dot { width: 5px; height: 5px; border-radius: 50%; border: 1px solid var(--frost-faint); }
   @keyframes session-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .32; } }
   .session-copy { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
   .session-title {
