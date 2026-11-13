@@ -2,7 +2,7 @@
   import type { AgentTurnItemView, AgentTurnView } from "$shared/model/conversationModel";
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
-  import { formatTraceSummaryLabel, planTurnItems } from "./collapseTurnTrace";
+  import { formatStepGroupLabel, formatTraceSummaryLabel, planTurnItems } from "./collapseTurnTrace";
   import BranchPointControl from "./BranchPointControl.svelte";
   import BranchSummaryBlock from "./BranchSummaryBlock.svelte";
   import CompactionBlock from "./CompactionBlock.svelte";
@@ -16,13 +16,30 @@
 
   let { turn, session }: { turn: AgentTurnView; session: SessionViewModel } = $props();
   let traceOpen = $state(false);
+  /** Focus-view groups the reader opened, by group id. */
+  let openGroupIds = $state<string[]>([]);
 
-  const plan = $derived(planTurnItems(turn, session.collapseTurnTrace));
+  const plan = $derived(planTurnItems(turn, session.collapseTurnTrace, session.focusView));
   const summaryLabel = $derived(plan.mode === "collapsed" ? formatTraceSummaryLabel(plan.summary) : "");
 
   $effect(() => {
     if (plan.mode !== "collapsed") traceOpen = false;
   });
+
+  function toggleGroup(groupId: string): void {
+    openGroupIds = openGroupIds.includes(groupId)
+      ? openGroupIds.filter((id) => id !== groupId)
+      : [...openGroupIds, groupId];
+  }
+
+  function isItemShown(itemId: string): boolean {
+    if (plan.mode === "collapsed") return !plan.collapsedItemIds.has(itemId) || traceOpen;
+    if (plan.mode === "grouped") {
+      const groupId = plan.groupIdByItemId.get(itemId);
+      return groupId === undefined || openGroupIds.includes(groupId);
+    }
+    return true;
+  }
 </script>
 
 <section class="agent-turn" data-turn-id={turn.id}>
@@ -60,8 +77,37 @@
         </button>
       {/if}
 
-      {#if plan.mode !== "collapsed" || !plan.collapsedItemIds.has(item.id) || traceOpen}
-        {@render turnItemRow(item)}
+      {#if plan.mode === "grouped"}
+        {@const group = plan.groupsByFirstItemId.get(item.id)}
+        {#if group}
+          {@const groupOpen = openGroupIds.includes(group.id)}
+          <div class="turn-trace-header turn-step-group">
+            <button
+              type="button"
+              class="activity-trigger"
+              aria-expanded={groupOpen}
+              aria-label={`${groupOpen ? "Collapse" : "Expand"} ${formatStepGroupLabel(group)}: ${group.detail}`}
+              onclick={() => toggleGroup(group.id)}
+            >
+              <span class="codicon codicon-list-tree activity-leading" aria-hidden="true"></span>
+              <span class="activity-title">{group.steps} steps</span>
+              {#if group.errors > 0}
+                <span class="turn-step-group-errors">{group.errors === 1 ? "1 error" : `${group.errors} errors`}</span>
+              {/if}
+              <span class="turn-trace-meta" title={group.detail}>{group.detail}</span>
+              {#if group.active}<span class="thinking-pulse" role="status" aria-label="In progress"></span>{/if}
+              <span class={`codicon codicon-chevron-${groupOpen ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
+            </button>
+          </div>
+        {/if}
+      {/if}
+
+      {#if isItemShown(item.id)}
+        {#if plan.mode === "grouped" && plan.groupIdByItemId.has(item.id)}
+          <div class="turn-step-group-item">{@render turnItemRow(item)}</div>
+        {:else}
+          {@render turnItemRow(item)}
+        {/if}
       {/if}
     {/each}
   </div>
@@ -106,6 +152,16 @@
     white-space: nowrap;
     color: var(--frost-muted);
     font-size: calc(var(--font-size-ui) - 2.5px);
+  }
+
+  .turn-step-group-errors { flex: none; color: var(--frost-error); font-size: calc(var(--font-size-ui) - 2.5px); }
+
+  /* An opened group keeps its steps visually attached to its summary row. */
+  .turn-step-group-item {
+    min-width: 0;
+    margin-left: 9px;
+    padding-left: 6px;
+    border-left: 1px solid var(--frost-border-soft);
   }
 
   .turn-trace-break {
