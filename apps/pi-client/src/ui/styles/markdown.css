@@ -51,6 +51,9 @@
   opacity: 0;
   transition: opacity .12s ease;
 }
+/* Hidden chrome must not hit-test: an invisible overlay would swallow clicks and
+   block mousedown-drag selection over the code it floats above. */
+.markdown-body pre:not(:hover):not(:focus-within) .code-actions { pointer-events: none; }
 .markdown-body pre:hover .code-actions,
 .markdown-body pre:focus-within .code-actions { opacity: 1; }
 .markdown-body pre .code-actions button {

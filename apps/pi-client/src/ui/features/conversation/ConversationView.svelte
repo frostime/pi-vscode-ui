@@ -93,7 +93,11 @@
 </script>
 
 <div class="conversation-frame">
-  <div class="conversation" bind:this={scroller} onscroll={handleScroll}>
+  <!-- Focusable transcript: a text-selection drag must not leave the document body focused.
+       VS Code's webview restores focus to the last focused control before running an editing
+       command; that would move focus into the Composer and destroy the selection, so Ctrl+C and
+       the native Copy menu would copy nothing. Focusing this container keeps the selection. -->
+  <div class="conversation" bind:this={scroller} onscroll={handleScroll} tabindex="-1">
     <div class="conversation-inner" bind:this={content}>
       {#if session.conversationItems.length === 0}
         <div class="conversation-empty">

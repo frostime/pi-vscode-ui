@@ -100,6 +100,26 @@ describe("optional sidebar navigation roster", () => {
   });
 });
 
+describe("transcript text selection", () => {
+  // VS Code's webview restores focus to the last focused control before it executes an
+  // editing command. If a selection drag leaves the document body focused, that restore
+  // focuses the Composer and destroys the selection, so Ctrl+C and the native Copy menu
+  // copy nothing. A focusable transcript keeps the drag selection and its copy target.
+  it("keeps the conversation scroller focusable", () => {
+    presentationStore.set({
+      ...EMPTY_PRESENTATION, workspaceName: "Project", workspacePath: "/synthetic",
+      sessions: [summary()], activeSessionId: "session", displayedSession: activeSession(),
+    });
+    try {
+      const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
+      const conversation = view.container.querySelector(".conversation");
+      expect(conversation).not.toBeNull();
+      expect(conversation!.getAttribute("tabindex")).toBe("-1");
+      view.unmount();
+    } finally { presentationStore.set(EMPTY_PRESENTATION); }
+  });
+});
+
 describe("injected provider usage source", () => {
   it.each(["sidebar", "panel"] as const)("opens provider usage from the ClientApp %s surface", async (kind) => {
     composerDrafts.set({});

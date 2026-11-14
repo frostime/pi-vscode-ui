@@ -37,6 +37,8 @@ Both browser entries consume the common style entry. Product-specific palettes a
 
 Disclosure, form input and conversation scroll position belong to the user. Live content and scalar status updates must not reopen collapsed sections, discard unfinished input or reset those choices. On initial display, Session switch or a new turn, the conversation may follow output; once the user scrolls away, preserve the viewport and offer a jump-to-latest action. A stats refresh is not a new conversation item.
 
+Selecting and copying transcript text is user-owned. A host may restore focus to the last focused control before executing an editing command (VS Code's webview `execCommand` path does this when the document body has focus), which focuses the Composer and destroys the drag selection, so `Ctrl+C` and the native Copy menu copy nothing. Keep the transcript scroller programmatically focusable so a selection drag focuses it rather than the body. Hidden hover chrome (code-block actions, message action rows) must also stay out of hit testing so it cannot swallow the click or start a drag that selects nothing.
+
 An explicit annotation review may temporarily replace conversation/Composer, but remains presentation-local and produces an editable draft rather than another persisted conversation. Required extension input must remain reachable. Reviews may survive Session switches inside that document without being transferred between Sidebar and Session Tab presentations; the annotation and bridge SPECs own the details.
 
 Collapsing or hiding an input panel does not cancel its Host-owned request. Keep the request bound to its Session and retain a visible route to required input. Do not auto-confirm it or answer through whichever Pi became foreground later.
