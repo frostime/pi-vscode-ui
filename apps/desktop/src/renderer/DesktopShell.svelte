@@ -19,9 +19,8 @@
   const KEY_STEP = 8;
   const NARROW_WIDTH = 640;
   const SESSIONS_KEY_STEP = 12;
-  const SESSIONS_MIN_HEIGHT = 96;
-  /** Nominal bound for assistive technology; pointer drags clamp to the footer instead. */
-  const SESSIONS_MAX_HEIGHT = 480;
+  const PROJECTS_MIN_HEIGHT = 120;
+  const SECTION_SPLITTER_HEIGHT = 5;
   const SESSIONS_DEFAULT_HEIGHT = 240;
   /** List order, most urgent first; idle Sessions keep the tail rather than being hidden. */
   const SESSION_STATE_ORDER = ["wait", "fail", "run", "idle"] as const;
@@ -100,8 +99,13 @@
   let sessionsFolded = $state(false);
   /** Null until the splitter is used: before that the section hugs its rows. */
   let sessionsHeight = $state<number | null>(null);
-  let sessionsSplitting = false;
-  let splitStart: { y: number; height: number; max: number } | null = null;
+  let sidebarHeight = $state(0);
+  let footerHeight = $state(0);
+  let projectsHeaderHeight = $state(0);
+  let sessionsHeaderHeight = $state(0);
+  let renderedSessionsHeight = $state(0);
+  let sessionsSection: HTMLDivElement;
+  let splitStart: { y: number; height: number } | null = null;
 
   const nextTheme = $derived(theme === "dark" ? "light" : "dark");
   const themeAction = $derived(`Switch to ${desktopThemes[nextTheme].label}`);
@@ -150,7 +154,10 @@
   });
   const needsYouCount = $derived(sessionRows.filter((row) => row.state === "wait" || row.state === "fail").length);
   const splitHandleActive = $derived(!projectsFolded && !sessionsFolded);
-  const effectiveSessionsHeight = $derived(sessionsHeight ?? SESSIONS_DEFAULT_HEIGHT);
+  // Reserve the fixed chrome at its actual size, including footer errors and font/zoom changes.
+  const sessionsMaxHeight = $derived(Math.max(sessionsHeaderHeight,
+    sidebarHeight - footerHeight - Math.max(PROJECTS_MIN_HEIGHT, projectsHeaderHeight) - SECTION_SPLITTER_HEIGHT));
+  const effectiveSessionsHeight = $derived(Math.min(sessionsHeight ?? SESSIONS_DEFAULT_HEIGHT, sessionsMaxHeight));
   const projectsLabel = $derived(narrow || hidden ? "Projects" : "Hide");
   const projectsAriaLabel = $derived(
     narrow
@@ -463,17 +470,8 @@
     commitSidebar();
   }
 
-  function sessionsSectionHeight(): number {
-    const section = shell?.querySelector<HTMLElement>(".sect.sessions");
-    return section ? Math.round(section.getBoundingClientRect().height) : SESSIONS_DEFAULT_HEIGHT;
-  }
-
-  /** Dragging the section split is a transient preference, so only the width is persisted. */
-  function splitBound(): number {
-    const sidebar = shell?.querySelector<HTMLElement>(".sidebar");
-    const footer = shell?.querySelector<HTMLElement>(".sidebar-footer");
-    if (!sidebar || !footer) return SESSIONS_MAX_HEIGHT;
-    return Math.max(SESSIONS_MIN_HEIGHT + 40, Math.round(footer.getBoundingClientRect().top - sidebar.getBoundingClientRect().top - 120));
+  function clampSessionsHeight(height: number): number {
+    return Math.min(sessionsMaxHeight, Math.max(sessionsHeaderHeight, Math.round(height)));
   }
 
   function startSplit(event: PointerEvent): void {
@@ -481,24 +479,20 @@
     if (!splitHandleActive || event.button !== 0 || !(handle instanceof HTMLElement)) return;
     event.preventDefault();
     handle.focus();
-    sessionsSplitting = true;
-    // A hug-content section has no explicit height yet; adopt its measured one so the
-    // boundary follows the pointer on the very first drag.
-    sessionsHeight ??= sessionsSectionHeight();
-    splitStart = { y: event.clientY, height: sessionsHeight, max: splitBound() };
+    // Keep content-fitting mode until the pointer actually changes the section's height.
+    splitStart = { y: event.clientY, height: sessionsSection.offsetHeight };
     handle.setPointerCapture(event.pointerId);
   }
 
   function moveSplit(event: PointerEvent): void {
-    if (!sessionsSplitting || !splitStart) return;
-    const next = splitStart.height + (splitStart.y - event.clientY);
-    sessionsHeight = Math.min(splitStart.max, Math.max(SESSIONS_MIN_HEIGHT, Math.round(next)));
+    if (!splitStart) return;
+    const next = clampSessionsHeight(splitStart.height + splitStart.y - event.clientY);
+    if (next !== sessionsSection.offsetHeight) sessionsHeight = next;
   }
 
   function finishSplit(event: PointerEvent): void {
-    if (!sessionsSplitting) return;
+    if (!splitStart) return;
     const handle = event.currentTarget;
-    sessionsSplitting = false;
     splitStart = null;
     if (handle instanceof HTMLElement && handle.hasPointerCapture(event.pointerId)) {
       handle.releasePointerCapture(event.pointerId);
@@ -507,17 +501,15 @@
 
   function splitKeyDown(event: KeyboardEvent): void {
     if (!splitHandleActive) return;
-    const step = event.key === "ArrowUp" ? -SESSIONS_KEY_STEP
-      : event.key === "ArrowDown" ? SESSIONS_KEY_STEP
+    const step = event.key === "ArrowUp" ? SESSIONS_KEY_STEP
+      : event.key === "ArrowDown" ? -SESSIONS_KEY_STEP
         : 0;
     if (step === 0 && event.key !== "Home" && event.key !== "End") return;
     event.preventDefault();
-    const max = splitBound();
-    sessionsHeight ??= sessionsSectionHeight();
-    const next = event.key === "Home" ? SESSIONS_MIN_HEIGHT
-      : event.key === "End" ? max
-        : sessionsHeight + step;
-    sessionsHeight = Math.min(max, Math.max(SESSIONS_MIN_HEIGHT, Math.round(next)));
+    const next = event.key === "Home" ? sessionsHeaderHeight
+      : event.key === "End" ? sessionsMaxHeight
+        : sessionsSection.offsetHeight + step;
+    sessionsHeight = clampSessionsHeight(next);
   }
 </script>
 
@@ -532,9 +524,10 @@
   <aside id="desktop-projects" class="sidebar" aria-label="Projects" inert={!sidebarAvailable}
     data-projects-folded={projectsFolded} data-sessions-folded={sessionsFolded}
     data-sessions-sized={sessionsHeight !== null}
-    style={`--sessions-height: ${effectiveSessionsHeight}px`}>
+    bind:clientHeight={sidebarHeight}
+    style={`--sessions-height: ${effectiveSessionsHeight}px; --projects-header-height: ${projectsHeaderHeight}px; --sessions-header-height: ${sessionsHeaderHeight}px; --section-splitter-height: ${SECTION_SPLITTER_HEIGHT}px`}>
     <div class="sect projects">
-      <div class="sect-head">
+      <div class="sect-head" bind:offsetHeight={projectsHeaderHeight}>
         <button type="button" class="sect-chevron" aria-expanded={!projectsFolded} aria-label="Toggle Projects"
           onclick={() => (projectsFolded = !projectsFolded)}>
           <span class="codicon codicon-chevron-down" aria-hidden="true"></span>
@@ -612,13 +605,17 @@
       <!-- One separator between the sections; it is the drag handle only while both are open. -->
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <div class="splitter" class:draggable={splitHandleActive} role="separator" aria-orientation="horizontal"
-        aria-label="Resize Sessions" aria-valuemin={SESSIONS_MIN_HEIGHT} aria-valuemax={SESSIONS_MAX_HEIGHT}
-        aria-valuenow={effectiveSessionsHeight} tabindex={splitHandleActive ? 0 : -1}
+        aria-label="Resize Sessions" aria-controls="desktop-sessions"
+        aria-valuemin={splitHandleActive ? sessionsHeaderHeight : undefined}
+        aria-valuemax={splitHandleActive ? sessionsMaxHeight : undefined}
+        aria-valuenow={splitHandleActive ? renderedSessionsHeight : undefined}
+        aria-valuetext={splitHandleActive ? `${renderedSessionsHeight} pixels high` : undefined}
+        tabindex={splitHandleActive ? 0 : -1}
         onpointerdown={startSplit} onpointermove={moveSplit} onpointerup={finishSplit}
         onpointercancel={finishSplit} onkeydown={splitKeyDown}
       ></div>
-      <div class="sect sessions">
-        <div class="sect-head">
+      <div id="desktop-sessions" class="sect sessions" bind:this={sessionsSection} bind:offsetHeight={renderedSessionsHeight}>
+        <div class="sect-head" bind:offsetHeight={sessionsHeaderHeight}>
           <button type="button" class="sect-chevron" aria-expanded={!sessionsFolded} aria-label="Toggle Sessions"
             onclick={() => (sessionsFolded = !sessionsFolded)}>
             <span class="codicon codicon-chevron-down" aria-hidden="true"></span>
@@ -655,7 +652,7 @@
       </div>
     {/if}
 
-    <div class="sidebar-footer">
+    <div class="sidebar-footer" bind:offsetHeight={footerHeight}>
       {#if view.stateError}<p class="state-error" role="alert">{view.stateError}</p>{/if}
       {#if error}<p class="state-error" role="alert">{error}</p>{/if}
       {#if resume && !resume.visible}
@@ -787,8 +784,8 @@
 
   /* Two sections share one skeleton: fixed header, own scroll area, same insets. */
   .sect { display: flex; flex-direction: column; min-height: 0; }
-  .sect.projects { flex: 1 1 auto; }
-  .sect.sessions { flex: 0 0 auto; }
+  .sect.projects { flex: 1 1 auto; min-height: var(--projects-header-height); }
+  .sect.sessions { flex: 0 0 auto; min-height: var(--sessions-header-height); }
   /* Projects folded + Sessions open: Sessions takes the remaining height. */
   .sidebar[data-projects-folded="true"] .sect.projects { flex: 0 0 auto; }
   .sidebar[data-projects-folded="true"][data-sessions-folded="false"] .sect.sessions { flex: 1 1 auto; }
@@ -825,7 +822,7 @@
 
   /* A hairline normally; a drag handle only while both sections are open. */
   .splitter { flex: none; position: relative; height: 1px; margin: 0 10px 0 18px; background: var(--frost-border-soft); }
-  .splitter.draggable { height: 5px; margin: 0; background: transparent; cursor: row-resize; touch-action: none; }
+  .splitter.draggable { height: var(--section-splitter-height); margin: 0; background: transparent; cursor: row-resize; touch-action: none; }
   .splitter.draggable::after {
     content: ""; position: absolute; left: 10px; right: 10px; top: 2px; height: 1px;
     background: var(--frost-border-soft); transition: background 120ms ease;

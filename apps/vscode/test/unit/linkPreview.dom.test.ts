@@ -16,9 +16,6 @@ describe("MarkdownHtml link preview", () => {
       ...EMPTY_PRESENTATION,
       displayedSession: { cwd: "C:\\repo" } as SessionViewModel,
     });
-    // The preview element is shared across mounted messages, so retire the previous test's state.
-    const existing = preview();
-    if (existing) existing.dataset["visible"] = "false";
   });
 
   afterEach(() => {
@@ -46,6 +43,37 @@ describe("MarkdownHtml link preview", () => {
     await fireEvent.pointerOver(siteLink!);
     vi.advanceTimersByTime(1_000);
     expect(preview()?.textContent).toBe("https://example.com/docs");
+  });
+
+  it("retires visible and pending previews when streaming replaces the link markup", async () => {
+    const view = render(MarkdownHtml, { props: { content: "[old](https://example.com/old)" } });
+    await fireEvent.pointerOver(view.container.querySelector("a")!);
+    vi.advanceTimersByTime(1_000);
+    expect(preview()?.dataset["visible"]).toBe("true");
+    await view.rerender({ content: "[new](https://example.com/new)" });
+    expect(preview()?.dataset["visible"] ?? "false").toBe("false");
+
+    await fireEvent.pointerOver(view.container.querySelector("a")!);
+    await view.rerender({ content: "No link left." });
+    vi.advanceTimersByTime(1_000);
+    expect(preview()?.dataset["visible"] ?? "false").toBe("false");
+  });
+
+  it("keeps the shared preview usable until the last message unmounts", async () => {
+    const first = render(MarkdownHtml, { props: { content: "[first](https://example.com/first)" } });
+    const second = render(MarkdownHtml, { props: { content: "[second](https://example.com/second)" } });
+    const link = second.container.querySelector("a")!;
+    await fireEvent.focusIn(link);
+    expect(preview()?.dataset["visible"]).toBe("true");
+    first.unmount();
+    expect(preview()?.dataset["visible"]).toBe("true");
+    await fireEvent.scroll(window);
+    expect(preview()?.dataset["visible"]).toBe("false");
+    await fireEvent.focusIn(link);
+    await fireEvent.resize(window);
+    expect(preview()?.dataset["visible"]).toBe("false");
+    second.unmount();
+    expect(preview()).toBeNull();
   });
 
   it("retires a pending preview when the pointer leaves early", async () => {

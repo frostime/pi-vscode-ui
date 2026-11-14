@@ -1092,13 +1092,12 @@ function assistantActivities(
     if (part.type === "thinking") {
       const run = thinkingRunText(parts, index);
       index = run.lastIndex;
-      const reasoningText = run.text.trim();
-      // Pi can emit an empty thinking block between real ones; it carries nothing to read.
-      if (reasoningText) {
+      // Trim only to detect empty runs: leading spaces can be Markdown code indentation.
+      if (run.text.trim()) {
         activities.push({
           id: `${messageId}:reasoning:${part.contentIndex}`,
           type: "reasoning",
-          text: reasoningText,
+          text: run.text,
           status,
           timestamp,
         });
@@ -1162,8 +1161,8 @@ function thinkingRunText(
 }
 
 function joinThinking(left: string, right: string): string {
-  if (!left) return right;
-  if (!right) return left;
+  if (!left.trim()) return right;
+  if (!right.trim()) return left;
   return `${left}\n\n${right}`;
 }
 

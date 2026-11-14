@@ -15,29 +15,35 @@
   let previewElement: HTMLDivElement | undefined;
   let previewTimer: ReturnType<typeof setTimeout> | undefined;
   let previewAnchor: Element | undefined;
+  let previewOwner: HTMLElement | undefined;
+  let mountedMessages = 0;
 
-  function scheduleLinkPreview(anchor: Element): void {
+  function scheduleLinkPreview(anchor: Element, owner: HTMLElement): void {
     cancelLinkPreview();
     previewAnchor = anchor;
+    previewOwner = owner;
     previewTimer = setTimeout(() => {
       previewTimer = undefined;
-      showLinkPreview(anchor);
+      showLinkPreview(anchor, owner);
     }, LINK_PREVIEW_DELAY_MS);
   }
 
   function cancelLinkPreview(): void {
+    if (!previewAnchor && previewTimer === undefined) return;
     if (previewTimer !== undefined) {
       clearTimeout(previewTimer);
       previewTimer = undefined;
     }
     previewAnchor = undefined;
+    previewOwner = undefined;
     if (previewElement) previewElement.dataset.visible = "false";
   }
 
-  function showLinkPreview(anchor: Element): void {
+  function showLinkPreview(anchor: Element, owner: HTMLElement): void {
     const label = linkPreviewLabel(anchor);
     if (!label) return;
     previewAnchor = anchor;
+    previewOwner = owner;
     const element = previewElement ?? createPreviewElement();
     element.textContent = label;
     positionLinkPreview(element, anchor);
@@ -153,7 +159,10 @@
       pre.querySelector(":scope > .code-actions")?.remove();
       pre.prepend(createCodeBlockActions(wrapped));
     }
-    return () => images.destroy();
+    return () => {
+      images.destroy();
+      if (previewOwner === root) cancelLinkPreview();
+    };
   });
 
   function createCodeBlockActions(wrapped: boolean): HTMLDivElement {
@@ -269,7 +278,7 @@
   function handlePointerOver(event: PointerEvent): void {
     const anchor = anchorFromEvent(event);
     if (!anchor || anchor === previewAnchor) return;
-    scheduleLinkPreview(anchor);
+    scheduleLinkPreview(anchor, event.currentTarget as HTMLElement);
   }
 
   function handlePointerOut(event: PointerEvent): void {
@@ -284,7 +293,7 @@
     const anchor = anchorFromEvent(event);
     if (!anchor) return;
     cancelLinkPreview();
-    showLinkPreview(anchor);
+    showLinkPreview(anchor, event.currentTarget as HTMLElement);
   }
 
   function linkActions(node: HTMLElement): { destroy(): void } {
@@ -294,9 +303,11 @@
     node.addEventListener("pointerout", handlePointerOut);
     node.addEventListener("focusin", handleFocusIn);
     node.addEventListener("focusout", hide);
-    // A fixed preview does not follow its anchor, so any scroll or resize retires it.
-    window.addEventListener("scroll", hide, true);
-    window.addEventListener("resize", hide);
+    // One global listener pair serves the shared preview, regardless of transcript length.
+    if (mountedMessages++ === 0) {
+      window.addEventListener("scroll", cancelLinkPreview, true);
+      window.addEventListener("resize", cancelLinkPreview);
+    }
     return {
       destroy: () => {
         node.removeEventListener("click", handleClick);
@@ -304,9 +315,13 @@
         node.removeEventListener("pointerout", handlePointerOut);
         node.removeEventListener("focusin", handleFocusIn);
         node.removeEventListener("focusout", hide);
-        window.removeEventListener("scroll", hide, true);
-        window.removeEventListener("resize", hide);
-        if (previewAnchor && node.contains(previewAnchor)) cancelLinkPreview();
+        if (previewOwner === node) cancelLinkPreview();
+        if (--mountedMessages === 0) {
+          window.removeEventListener("scroll", cancelLinkPreview, true);
+          window.removeEventListener("resize", cancelLinkPreview);
+          previewElement?.remove();
+          previewElement = undefined;
+        }
       },
     };
   }

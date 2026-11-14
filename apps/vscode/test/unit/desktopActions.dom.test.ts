@@ -36,7 +36,7 @@ beforeAll(() => {
       else Reflect.deleteProperty(prototype, key);
     });
   }
-  vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   vi.stubGlobal("frostpiDesktop", { projectAction });
 });
 afterEach(() => {
