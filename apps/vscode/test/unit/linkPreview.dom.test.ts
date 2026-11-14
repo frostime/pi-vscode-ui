@@ -21,6 +21,7 @@ describe("MarkdownHtml link preview", () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("reveals the target of the link under the pointer", async () => {
@@ -59,9 +60,14 @@ describe("MarkdownHtml link preview", () => {
     expect(preview()?.dataset["visible"] ?? "false").toBe("false");
   });
 
-  it("keeps the shared preview usable until the last message unmounts", async () => {
+  it("keeps one global listener pair and the shared preview until the last message unmounts", async () => {
+    const added = vi.spyOn(window, "addEventListener");
+    const removed = vi.spyOn(window, "removeEventListener");
     const first = render(MarkdownHtml, { props: { content: "[first](https://example.com/first)" } });
     const second = render(MarkdownHtml, { props: { content: "[second](https://example.com/second)" } });
+    for (const type of ["scroll", "resize"]) {
+      expect(added.mock.calls.filter(([event]) => event === type)).toHaveLength(1);
+    }
     const link = second.container.querySelector("a")!;
     await fireEvent.focusIn(link);
     expect(preview()?.dataset["visible"]).toBe("true");
@@ -74,6 +80,9 @@ describe("MarkdownHtml link preview", () => {
     expect(preview()?.dataset["visible"]).toBe("false");
     second.unmount();
     expect(preview()).toBeNull();
+    for (const type of ["scroll", "resize"]) {
+      expect(removed.mock.calls.filter(([event]) => event === type)).toHaveLength(1);
+    }
   });
 
   it("retires a pending preview when the pointer leaves early", async () => {

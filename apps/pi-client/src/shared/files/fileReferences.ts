@@ -261,9 +261,10 @@ function joinAbsolutePath(cwd: string, path: string): string {
   const separator = windows ? "\\" : "/";
   const drive = windows ? /^[a-z]:/i.exec(cwd)?.[0] ?? "" : "";
   const unc = drive === "" && windows;
-  const rootLength = drive.length + (unc ? 2 : 0);
+  // The server/share belongs to the root, so parent segments cannot remove either.
+  const root = unc ? /^\\\\(?:\?\\UNC\\)?[^\\/]+[\\/]+[^\\/]+/i.exec(cwd)![0] : drive;
   const segments: string[] = [];
-  for (const segment of `${cwd.slice(rootLength)}${separator}${path}`.split(/[\\/]+/)) {
+  for (const segment of `${cwd.slice(root.length)}${separator}${path}`.split(windows ? /[\\/]+/ : /\/+/)) {
     if (segment === "" || segment === ".") continue;
     if (segment === "..") {
       segments.pop();
@@ -271,6 +272,5 @@ function joinAbsolutePath(cwd: string, path: string): string {
     }
     segments.push(segment);
   }
-  const prefix = drive ? `${drive}${separator}` : unc ? "\\\\" : separator;
-  return `${prefix}${segments.join(separator)}`;
+  return `${root}${separator}${segments.join(separator)}`;
 }

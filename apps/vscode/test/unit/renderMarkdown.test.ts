@@ -345,8 +345,13 @@ describe("absoluteFileReferencePath", () => {
     expect(absoluteFileReferencePath("../b.ts", "C:\\repo\\src")).toBe("C:\\repo\\b.ts");
   });
 
-  it("resolves against a UNC share", () => {
+  it("resolves against a UNC share without traversing above the share root", () => {
     expect(absoluteFileReferencePath("src/a.ts", "\\\\server\\share")).toBe("\\\\server\\share\\src\\a.ts");
+    expect(absoluteFileReferencePath("../../a.ts", "\\\\server\\share\\src")).toBe("\\\\server\\share\\a.ts");
+  });
+
+  it("preserves literal backslashes in POSIX filenames", () => {
+    expect(absoluteFileReferencePath("src\\a.ts", "/home/user/repo")).toBe("/home/user/repo/src\\a.ts");
   });
 
   it("leaves the reference as written without a usable cwd", () => {

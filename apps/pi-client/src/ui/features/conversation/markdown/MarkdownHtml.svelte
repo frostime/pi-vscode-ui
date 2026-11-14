@@ -79,6 +79,8 @@
   }
 
   function positionLinkPreview(element: HTMLDivElement, anchor: Element): void {
+    // A retained left offset constrains auto width, giving the next label a false height.
+    element.style.left = "0px";
     const anchorRect = anchor.getBoundingClientRect();
     const { width, height } = element.getBoundingClientRect();
     const maxLeft = window.innerWidth - width - LINK_PREVIEW_EDGE_PX;
