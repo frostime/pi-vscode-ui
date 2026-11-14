@@ -23,7 +23,7 @@ This extension is available on both **[VS Code Marketplace](https://marketplace.
 
 If network restrictions prevent access to the extension registries, you can also download a `.vsix` file from [GitHub Releases](https://github.com/frostime/pi-vscode-ui/releases) and install it manually.
 
-The separate [experimental Windows Desktop app](https://github.com/frostime/pi-vscode-ui#desktop-experimental-windows) has MSI installation and its own Settings → Updates. This extension continues to use VS Code's update mechanism.
+The separate [experimental Windows Desktop app](https://github.com/frostime/pi-vscode-ui#desktop-experimental-windows) has MSI installation and its own Settings → Updates. Its sidebar lists loaded Sessions across Projects and prioritizes those needing attention. This extension continues to use VS Code's update mechanism.
 
 ## Why FrostPi
 
@@ -91,6 +91,8 @@ FrostPi keeps Pi's functional workflows available from the GUI:
 **Rich conversation rendering.**
 
 One assistant message, rendered live — Mermaid diagrams, KaTeX math, embedded images, and word-level diff highlighting.
+
+Hover over a Markdown link for one second, or focus it with the keyboard, to preview its file path or full external URL before opening it.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/frostime/pi-vscode-ui/main/assets/screenshots/RenderMD.webp" alt="Rendered Markdown in FrostPi" width="640">

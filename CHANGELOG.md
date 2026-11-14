@@ -6,13 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.6] - 2026-11-14
+
 ### Added
 
-- Show where a Markdown link leads when the pointer rests over it: a file reference reveals its resolved path and line, an external link reveals the full URL.
+- Add a Desktop sidebar Sessions section across Projects, with waiting, failed, and running Sessions first. Sessions stay listed after a turn completes, and selecting one also selects its Project. Projects and Sessions fold independently, and their separator resizes the Sessions section.
+- Preview Markdown link targets after a one-second hover or immediately on keyboard focus. File references show their path resolved against the Session directory and their line/column details; external links show the full URL.
 
 ### Fixed
 
-- Show one Reasoning entry for adjacent thinking blocks in the same assistant reply instead of a stack of identical rows, and skip empty thinking blocks that rendered a blank row.
+- Show one Reasoning entry for adjacent thinking blocks in the same assistant reply instead of repeated rows. Skip blank thinking blocks and preserve the original Markdown whitespace.
 
 ## [0.16.5] - 2026-11-08
 
@@ -575,7 +578,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.5...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.6...HEAD
+[0.16.6]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.5...v0.16.6
 [0.16.5]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.4...v0.16.5
 [0.16.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.3...v0.16.4
 [0.16.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.2...v0.16.3
