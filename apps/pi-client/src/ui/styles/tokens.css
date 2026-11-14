@@ -87,16 +87,19 @@
   border-radius: 12px 12px 4px 12px;
   box-shadow: 0 1px 2px rgba(0,0,0,.08);
 }
+/* Hidden action rows stay out of hit testing so they cannot swallow clicks or
+   start a drag that produces no text selection. */
 .message-actions {
   min-height: 23px;
   display: flex;
   justify-content: flex-end;
   padding-top: 3px;
   opacity: 0;
+  pointer-events: none;
   transition: opacity var(--motion-fast) ease;
 }
-.message-user:hover .message-actions { opacity: 1; }
-.message-user:focus-within .message-actions { opacity: 1; }
+.message-user:hover .message-actions { opacity: 1; pointer-events: auto; }
+.message-user:focus-within .message-actions { opacity: 1; pointer-events: auto; }
 .message-actions button {
   min-height: 20px;
   display: inline-flex;

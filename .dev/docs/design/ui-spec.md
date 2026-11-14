@@ -4,7 +4,7 @@ description: Cross-feature layout, stylesheet ownership, accessibility and user-
 scope:
   - /apps/pi-client/src/ui/**
   - /apps/desktop/src/renderer/**
-updated: 2026-11-14
+updated: 2026-11-15
 ---
 
 # UI Design Specification
@@ -36,6 +36,8 @@ Both browser entries consume the common style entry. Product-specific palettes a
 ## User-owned interaction state
 
 Disclosure, form input and conversation scroll position belong to the user. Live content and scalar status updates must not reopen collapsed sections, discard unfinished input or reset those choices. On initial display, Session switch or a new turn, the conversation may follow output; once the user scrolls away, preserve the viewport and offer a jump-to-latest action. A stats refresh is not a new conversation item.
+
+Keep the transcript scroller focusable by mouse without adding a Tab stop. Some VS Code webview hosts restore the last focused control before an editing command when the document body has focus; returning focus to Composer would clear the transcript selection. Hidden code-block and message actions must not intercept pointer events; hover or keyboard focus reveals them and restores pointer interaction.
 
 An explicit annotation review may temporarily replace conversation/Composer, but remains presentation-local and produces an editable draft rather than another persisted conversation. Required extension input must remain reachable. Reviews may survive Session switches inside that document without being transferred between Sidebar and Session Tab presentations; the annotation and bridge SPECs own the details.
 
