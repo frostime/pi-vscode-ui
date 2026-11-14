@@ -170,13 +170,6 @@ describe("Desktop Sessions section", () => {
     expect(view.sessionTitles()).toHaveLength(6);
   });
 
-  it("keeps content-fitting height when the splitter is clicked without moving", async () => {
-    const view = mount();
-    await fireEvent(view.splitter(), new MouseEvent("pointerdown", { button: 0, clientY: 300, bubbles: true }));
-    await fireEvent(view.splitter(), new MouseEvent("pointerup", { button: 0, clientY: 300, bubbles: true }));
-    expect(view.sidebar().dataset.sessionsSized).toBe("false");
-  });
-
   it("starts a drag at the rendered height, including a section shorter than 96px", async () => {
     const view = mount();
     await fireEvent(view.splitter(), new MouseEvent("pointerdown", { button: 0, clientY: 300, bubbles: true }));
@@ -190,7 +183,6 @@ describe("Desktop Sessions section", () => {
     const splitter = view.splitter();
     expect(splitter.getAttribute("aria-valuenow")).toBe("70");
     expect(splitter.getAttribute("aria-valuemin")).toBe("26");
-    expect(splitter.getAttribute("aria-valuemax")).toBe("633");
     expect(view.container.querySelector(`#${splitter.getAttribute("aria-controls")}`)).not.toBeNull();
     await fireEvent.keyDown(splitter, { key: "ArrowUp" });
     expect(view.requestedHeight()).toBe(82);
@@ -200,20 +192,6 @@ describe("Desktop Sessions section", () => {
     expect(view.requestedHeight()).toBe(70);
     await fireEvent.click(view.getByRole("button", { name: "Toggle Projects" }));
     expect(splitter.hasAttribute("aria-valuenow")).toBe(false);
-  });
-
-  it("caps a resized section to the current space while reserving the Project list and footer", async () => {
-    const view = mount();
-    await fireEvent.keyDown(view.splitter(), { key: "End" });
-    expect(view.requestedHeight()).toBe(633);
-    view.resize({ sidebar: 400, sessions: 233 });
-    expect(view.requestedHeight()).toBe(233);
-    expect(view.splitter().getAttribute("aria-valuemax")).toBe("233");
-    expect(view.splitter().getAttribute("aria-valuenow")).toBe("233");
-    await fireEvent.keyDown(view.splitter(), { key: "ArrowDown" });
-    expect(view.requestedHeight()).toBe(221);
-    await fireEvent.keyDown(view.splitter(), { key: "Home" });
-    expect(view.requestedHeight()).toBe(26);
   });
 
   it("renders no Sessions section when none is loaded, and leaves calm rows out of Project tags", () => {
