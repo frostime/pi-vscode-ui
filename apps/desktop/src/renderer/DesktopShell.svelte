@@ -104,7 +104,7 @@
   let projectsHeaderHeight = $state(0);
   let sessionsHeaderHeight = $state(0);
   let renderedSessionsHeight = $state(0);
-  let sessionsSection: HTMLDivElement;
+  let sessionsSection = $state<HTMLDivElement>();
   let splitStart: { y: number; height: number } | null = null;
 
   const nextTheme = $derived(theme === "dark" ? "light" : "dark");
@@ -480,14 +480,14 @@
     event.preventDefault();
     handle.focus();
     // Keep content-fitting mode until the pointer actually changes the section's height.
-    splitStart = { y: event.clientY, height: sessionsSection.offsetHeight };
+    splitStart = { y: event.clientY, height: sessionsSection!.offsetHeight };
     handle.setPointerCapture(event.pointerId);
   }
 
   function moveSplit(event: PointerEvent): void {
     if (!splitStart) return;
     const next = clampSessionsHeight(splitStart.height + splitStart.y - event.clientY);
-    if (next !== sessionsSection.offsetHeight) sessionsHeight = next;
+    if (next !== sessionsSection!.offsetHeight) sessionsHeight = next;
   }
 
   function finishSplit(event: PointerEvent): void {
@@ -508,7 +508,7 @@
     event.preventDefault();
     const next = event.key === "Home" ? sessionsHeaderHeight
       : event.key === "End" ? sessionsMaxHeight
-        : sessionsSection.offsetHeight + step;
+        : sessionsSection!.offsetHeight + step;
     sessionsHeight = clampSessionsHeight(next);
   }
 </script>
