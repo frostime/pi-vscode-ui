@@ -1044,6 +1044,23 @@ describe("ConversationProjection", () => {
     ]);
   });
 
+  it("preserves Markdown whitespace while joining live thinking blocks", () => {
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("Explain", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "assistant", content: [], timestamp: 2 } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "thinking_start", contentIndex: 0 } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", contentIndex: 0, delta: "    code\n" } });
+    const first = turns(projection.read().items)[0]?.items[0];
+    expect(first).toMatchObject({ type: "reasoning", text: "    code\n" });
+
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "thinking_start", contentIndex: 1 } });
+    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", contentIndex: 1, delta: "Next thought.\n" } });
+    const [turn] = turns(projection.read().items);
+    expect(turn?.items).toHaveLength(1);
+    expect(turn?.items[0]).toMatchObject({ id: first?.id, type: "reasoning", text: "    code\n\n\nNext thought.\n" });
+  });
+
   it("projects one indexed tool card through preparation, binding, execution, final replacement, and persisted takeover", () => {
     const projection = new ConversationProjection();
     projection.appendUserPrompt("Inspect", [], 1);

@@ -4,7 +4,7 @@ description: Cross-feature layout, stylesheet ownership, accessibility and user-
 scope:
   - /apps/pi-client/src/ui/**
   - /apps/desktop/src/renderer/**
-updated: 2026-10-24
+updated: 2026-11-14
 ---
 
 # UI Design Specification
@@ -25,7 +25,7 @@ Navigation may narrow or hide, giving space back to the conversation. Keep a key
 
 The sidebar owns Session management. Session Tabs are pinned conversation projections, not another place to expose the whole collection or its New/Resume and administrative controls. When the selected Session is externalized, keep sidebar navigation and show its tab-reveal placeholder rather than a second editable conversation. Native placement and handoff rules are in `apps/pi-client/src/shared/bridge/webview-bridge.SPEC.md`.
 
-Desktop's Project navigation is a product-owned outer shell around the same client. Do not apply the Session-Tab model to it or recreate ClientApp when hiding/resizing its sidebar. Its Sessions section lists every loaded Session, ordered by waiting, failed, running and then the rest, rather than filtering to the urgent ones: a Session must not disappear when its turn settles. It owns no Session state and routes every row through `activateSession`. Section folding is transient; the split between Sections is a view preference. Both sections keep one header-and-scroll skeleton so their titles and right-aligned actions share one inset.
+Desktop's Project navigation is a product-owned outer shell around the same client. Do not apply the Session-Tab model to it or recreate ClientApp when hiding/resizing its sidebar. Its Sessions section lists every loaded Session, ordered by waiting, failed, running and then the rest, rather than filtering to the urgent ones: a Session must not disappear when its turn settles. It owns no Session state and routes every row through `activateSession`. Section folding and split height are transient view preferences and are not persisted. Both sections keep one header-and-scroll skeleton so their titles and right-aligned actions share one inset.
 
 ## Stylesheet ownership
 

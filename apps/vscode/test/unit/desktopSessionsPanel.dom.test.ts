@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, within } from "@testing-library/svelte";
-import { createRawSnippet } from "svelte";
+import { createRawSnippet, flushSync } from "svelte";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import DesktopShell from "../../../desktop/src/renderer/DesktopShell.svelte";
 import type { DesktopProject, DesktopProjectsView, DesktopProjectActivity } from "../../../desktop/src/shared/desktopBridge.js";
@@ -33,12 +33,18 @@ const activity: Record<string, DesktopProjectActivity> = {
   beta: { total: 2, running: 1, waitingSessionIds: [] },
 };
 
+const resizeObservers = new Set<{
+  targets: Set<Element>;
+  callback: ResizeObserverCallback;
+}>();
 const browserMethods: Array<() => void> = [];
 beforeAll(() => {
   for (const [prototype, key, implementation] of [
     [HTMLDialogElement.prototype, "showModal", function (this: HTMLDialogElement) { this.open = true; }],
     [HTMLDialogElement.prototype, "close", function (this: HTMLDialogElement) { this.open = false; }],
     [HTMLElement.prototype, "scrollIntoView", () => undefined],
+    [HTMLElement.prototype, "setPointerCapture", () => undefined],
+    [HTMLElement.prototype, "hasPointerCapture", () => false],
   ] as const) {
     const original = Object.getOwnPropertyDescriptor(prototype, key);
     Object.defineProperty(prototype, key, { configurable: true, value: implementation });
@@ -47,7 +53,13 @@ beforeAll(() => {
       else Reflect.deleteProperty(prototype, key);
     });
   }
-  vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
+  vi.stubGlobal("ResizeObserver", class {
+    targets = new Set<Element>();
+    constructor(public callback: ResizeObserverCallback) { resizeObservers.add(this); }
+    observe(target: Element) { this.targets.add(target); }
+    unobserve(target: Element) { this.targets.delete(target); }
+    disconnect() { this.targets.clear(); resizeObservers.delete(this); }
+  });
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 afterAll(() => {
@@ -56,7 +68,21 @@ afterAll(() => {
 });
 
 function mount(allSessions: SessionSummaryView[] = sessions, activeSessionId: string | null = "a-run") {
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1200, 800));
+  const geometry = { sidebar: 800, footer: 42, projectsHeader: 26, sessionsHeader: 26, sessions: 70 };
+  function height(element: HTMLElement): number {
+    if (element.matches(".sidebar")) return geometry.sidebar;
+    if (element.matches(".sidebar-footer")) return geometry.footer;
+    if (element.matches(".projects > .sect-head")) return geometry.projectsHeader;
+    if (element.matches(".sessions > .sect-head")) return geometry.sessionsHeader;
+    if (element.matches(".sect.sessions")) return geometry.sessions;
+    return 0;
+  }
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) { return height(this); });
+  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) { return height(this); });
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    const top = this.matches(".sidebar-footer") ? geometry.sidebar - geometry.footer : 0;
+    return new DOMRect(0, top, 1200, this.matches(".desktop-shell") ? geometry.sidebar : height(this));
+  });
   const view: DesktopProjectsView = {
     projects, activeProjectId: "alpha",
     navigation: {
@@ -80,7 +106,18 @@ function mount(allSessions: SessionSummaryView[] = sessions, activeSessionId: st
   const sidebar = () => rendered.container.querySelector<HTMLElement>("#desktop-projects")!;
   const sessionTitles = () => [...sidebar().querySelectorAll(".session-title")].map((el) => el.textContent);
   const projectRows = () => [...sidebar().querySelectorAll(".project-row")];
-  return { ...rendered, sidebar, sessionTitles, projectRows, onsession, onproject };
+  function resize(next: Partial<typeof geometry>) {
+    Object.assign(geometry, next);
+    flushSync(() => {
+      for (const observer of resizeObservers) {
+        const entries = [...observer.targets].map((target) => ({ target }) as ResizeObserverEntry);
+        observer.callback(entries, observer as unknown as ResizeObserver);
+      }
+    });
+  }
+  const splitter = () => rendered.getByRole("separator", { name: "Resize Sessions" });
+  const requestedHeight = () => Number.parseFloat(sidebar().style.getPropertyValue("--sessions-height"));
+  return { ...rendered, sidebar, sessionTitles, projectRows, onsession, onproject, resize, splitter, requestedHeight };
 }
 
 describe("Desktop Sessions section", () => {
@@ -131,6 +168,52 @@ describe("Desktop Sessions section", () => {
     expect(within(view.sidebar()).getByText("Sessions")).toBeTruthy();
     await fireEvent.click(view.getByRole("button", { name: "Toggle Sessions" }));
     expect(view.sessionTitles()).toHaveLength(6);
+  });
+
+  it("keeps content-fitting height when the splitter is clicked without moving", async () => {
+    const view = mount();
+    await fireEvent(view.splitter(), new MouseEvent("pointerdown", { button: 0, clientY: 300, bubbles: true }));
+    await fireEvent(view.splitter(), new MouseEvent("pointerup", { button: 0, clientY: 300, bubbles: true }));
+    expect(view.sidebar().dataset.sessionsSized).toBe("false");
+  });
+
+  it("starts a drag at the rendered height, including a section shorter than 96px", async () => {
+    const view = mount();
+    await fireEvent(view.splitter(), new MouseEvent("pointerdown", { button: 0, clientY: 300, bubbles: true }));
+    await fireEvent(view.splitter(), new MouseEvent("pointermove", { clientY: 299, bubbles: true }));
+    expect(view.requestedHeight()).toBe(71);
+    await fireEvent(view.splitter(), new MouseEvent("pointerup", { clientY: 299, bubbles: true }));
+  });
+
+  it("moves the boundary up with ArrowUp and reports actual section dimensions", async () => {
+    const view = mount();
+    const splitter = view.splitter();
+    expect(splitter.getAttribute("aria-valuenow")).toBe("70");
+    expect(splitter.getAttribute("aria-valuemin")).toBe("26");
+    expect(splitter.getAttribute("aria-valuemax")).toBe("633");
+    expect(view.container.querySelector(`#${splitter.getAttribute("aria-controls")}`)).not.toBeNull();
+    await fireEvent.keyDown(splitter, { key: "ArrowUp" });
+    expect(view.requestedHeight()).toBe(82);
+    view.resize({ sessions: 82 });
+    expect(splitter.getAttribute("aria-valuenow")).toBe("82");
+    await fireEvent.keyDown(splitter, { key: "ArrowDown" });
+    expect(view.requestedHeight()).toBe(70);
+    await fireEvent.click(view.getByRole("button", { name: "Toggle Projects" }));
+    expect(splitter.hasAttribute("aria-valuenow")).toBe(false);
+  });
+
+  it("caps a resized section to the current space while reserving the Project list and footer", async () => {
+    const view = mount();
+    await fireEvent.keyDown(view.splitter(), { key: "End" });
+    expect(view.requestedHeight()).toBe(633);
+    view.resize({ sidebar: 400, sessions: 233 });
+    expect(view.requestedHeight()).toBe(233);
+    expect(view.splitter().getAttribute("aria-valuemax")).toBe("233");
+    expect(view.splitter().getAttribute("aria-valuenow")).toBe("233");
+    await fireEvent.keyDown(view.splitter(), { key: "ArrowDown" });
+    expect(view.requestedHeight()).toBe(221);
+    await fireEvent.keyDown(view.splitter(), { key: "Home" });
+    expect(view.requestedHeight()).toBe(26);
   });
 
   it("renders no Sessions section when none is loaded, and leaves calm rows out of Project tags", () => {
