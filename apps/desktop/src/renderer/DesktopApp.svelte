@@ -124,7 +124,8 @@
   }
 </script>
 
-<DesktopShell view={projects} sessions={projectSessions} activeSessionId={$presentationStore.activeSessionId} {resume}
+<DesktopShell view={projects} sessions={projectSessions} allSessions={$presentationStore.sessions}
+  activeSessionId={$presentationStore.activeSessionId} {resume}
   error={!settingsOpen ? settingsError : ""}
   onproject={(id) => window.frostpiDesktop.selectProject(id)}
   onadd={() => window.frostpiDesktop.addProject()}
