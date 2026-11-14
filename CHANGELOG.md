@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.6] - 2026-11-14
+
 ### Fixed
 
 - Fix copying transcript text in the VS Code webview. Selecting text with the mouse and pressing `Ctrl+C` (or using the native Copy menu) used to move focus into the Composer and copy nothing: the webview restores focus to the last focused control before running an editing command, which destroyed the drag selection. The transcript scroller is now programmatically focusable so a selection keeps its copy target. Hidden hover chrome (code-block actions, message action rows) also no longer hit-tests, so it cannot swallow a click or start a drag that selects nothing.
@@ -571,7 +573,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.5...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.6...HEAD
+[0.16.6]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.5...v0.16.6
 [0.16.5]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.4...v0.16.5
 [0.16.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.3...v0.16.4
 [0.16.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.2...v0.16.3
