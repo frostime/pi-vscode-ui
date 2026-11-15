@@ -102,8 +102,8 @@ export class SessionRuntime {
   readonly #questionToolBridge: QuestionToolExtensionBridge | null;
   /** False until a command list from this process has shown which bundled adapters it loaded. */
   #adaptersDiscovered = false;
-  /** True from the `/clear` request until its new conversation is loaded or the request fails. */
-  #clearing = false;
+  /** True from the `/new` request until its new conversation is loaded or the request fails. */
+  #startingNewConversation = false;
 
   constructor(
     id: string,
@@ -217,7 +217,7 @@ export class SessionRuntime {
 
   async sendPrompt(text: string, images: WebviewImageInput[], requestedStreamingBehavior?: StreamingBehavior): Promise<void> {
     if (this.view.isForking) throw new Error("Wait for the session fork to finish before sending a prompt.");
-    this.#assertNotClearing();
+    this.#assertNotStartingNewConversation();
     const api = this.#requireApi();
     const configuration = this.#configurationProvider();
     const normalizedImages = normalizeImageAttachments(images, configuration.maxImageBytes);
@@ -310,7 +310,7 @@ export class SessionRuntime {
   }
 
   async compact(customInstructions?: string): Promise<void> {
-    this.#assertNotClearing();
+    this.#assertNotStartingNewConversation();
     await this.#requireApi().compact(customInstructions);
   }
 
@@ -387,27 +387,27 @@ export class SessionRuntime {
   }
 
   /**
-   * `/clear`: Pi replaces the conversation inside the running process. The process,
+   * `/new`: Pi replaces the conversation inside the running process. The process,
    * FrostPi identity, model and thinking level stay; the earlier conversation stays in
    * Pi's session file, where Resume finds it.
    *
    * `onCommitted` runs synchronously once Pi has replaced the conversation and before
    * anything here changes, so an owner can move its own records across the same boundary.
    */
-  async clearConversation(onCommitted?: () => void): Promise<{ cancelled: boolean }> {
-    if (!this.#runtimeCapabilities().newSession) throw new Error("/clear is not supported by the selected runtime.");
-    this.#assertNotClearing();
+  async startNewConversation(onCommitted?: () => void): Promise<{ cancelled: boolean }> {
+    if (!this.#runtimeCapabilities().newSession) throw new Error("/new is not supported by the selected runtime.");
+    this.#assertNotStartingNewConversation();
     const view = this.view;
-    if (view.isForking || view.isNavigatingTree) throw new Error("Wait for the current session operation to finish before clearing the conversation.");
+    if (view.isForking || view.isNavigatingTree) throw new Error("Wait for the current session operation to finish before starting a new conversation.");
     if (view.status !== "ready" || view.isStreaming || view.isCompacting) {
-      throw new Error("Stop the current response before clearing the conversation.");
+      throw new Error("Stop the current response before starting a new conversation.");
     }
     if (view.historyStatus === "queued" || view.historyStatus === "loading") {
-      throw new Error("Wait for conversation history to finish loading before clearing the conversation.");
+      throw new Error("Wait for conversation history to finish loading before starting a new conversation.");
     }
-    if (view.pendingExtensionUi.length > 0) throw new Error("Answer the pending Pi request before clearing the conversation.");
+    if (view.pendingExtensionUi.length > 0) throw new Error("Answer the pending Pi request before starting a new conversation.");
     if (view.queuedSteers.length > 0 || view.queuedFollowUps.length > 0) {
-      throw new Error("Wait for queued prompts to settle before clearing the conversation.");
+      throw new Error("Wait for queued prompts to settle before starting a new conversation.");
     }
 
     const api = this.#requireApi();
@@ -418,7 +418,7 @@ export class SessionRuntime {
     this.#extensionUi?.clearSessionDecorations();
     // Other requests wait: Pi reads its input concurrently, and one that lands around
     // the switch would apply to whichever conversation Pi holds at that instant.
-    this.#clearing = true;
+    this.#startingNewConversation = true;
     try {
       let result: { cancelled?: boolean } | undefined;
       try {
@@ -435,14 +435,14 @@ export class SessionRuntime {
       onCommitted?.();
       this.#conversation.clearQueuedPrompts();
       this.#viewState.resetForNewConversation(NEW_SESSION_TITLE);
-      return await this.#loadClearedConversation(api, previousModel, previousThinkingLevel, hadConversation);
+      return await this.#loadNewConversation(api, previousModel, previousThinkingLevel, hadConversation);
     } finally {
-      this.#clearing = false;
+      this.#startingNewConversation = false;
       this.#notifyChange();
     }
   }
 
-  async #loadClearedConversation(
+  async #loadNewConversation(
     api: PiRpcApi,
     previousModel: SessionViewModel["model"],
     previousThinkingLevel: ThinkingLevel,
@@ -450,7 +450,7 @@ export class SessionRuntime {
   ): Promise<{ cancelled: false }> {
     try {
       let state = await api.getState();
-      // A new Pi session starts on Pi's default model; clearing keeps the one in use.
+      // A new Pi session starts on Pi's default model; /new keeps the one in use.
       let restored = false;
       if (previousModel && (state.model?.provider !== previousModel.provider || state.model?.id !== previousModel.id)) {
         restored = await api.setModel(previousModel.provider, previousModel.id).then(() => true, () => false);
@@ -464,15 +464,15 @@ export class SessionRuntime {
         api.getSessionStats().catch(() => undefined),
         this.#runtimeCapabilities().slashCommands ? api.getCommands().catch(() => undefined) : Promise.resolve(undefined),
       ]);
-      if (this.#disposed || api !== this.#api) throw new Error("The session process changed while clearing the conversation.");
+      if (this.#disposed || api !== this.#api) throw new Error("The session process changed while starting a new conversation.");
       this.#viewState.applyState(state);
       this.#replacePersistedEntries(entryData.entries, entryData.leafId);
       if (stats) this.#viewState.updateStats(stats);
       if (commands) this.#viewState.setCommands(this.#visibleCommands(commands));
       if (hadConversation) {
         this.#conversation.appendNotice(this.isEphemeral
-          ? "Conversation cleared."
-          : "Conversation cleared. The earlier conversation stays in Pi's session history; use Resume session to reopen it.", "info");
+          ? "New conversation started."
+          : "New conversation started. The earlier conversation stays in Pi's session history; use Resume session to reopen it.", "info");
       }
       return { cancelled: false };
     } catch (error) {
@@ -492,7 +492,7 @@ export class SessionRuntime {
 
   async executeFork(entryId: string): Promise<ForkExecutionResult> {
     if (!this.#runtimeCapabilities().fork) throw new Error("Fork is not supported by the selected runtime.");
-    this.#assertNotClearing();
+    this.#assertNotStartingNewConversation();
     if (this.view.status !== "ready" || this.view.isStreaming || this.view.isCompacting) {
       throw new Error("Wait for the current Pi operation to finish before forking.");
     }
@@ -570,7 +570,7 @@ export class SessionRuntime {
   }
 
   async rename(name: string): Promise<void> {
-    this.#assertNotClearing();
+    this.#assertNotStartingNewConversation();
     const normalized = name.trim();
     await this.#requireApi().setSessionName(normalized);
     this.#viewState.setTitle(normalized || "Untitled session");
@@ -578,7 +578,7 @@ export class SessionRuntime {
   }
 
   async setModel(provider: string, modelId: string): Promise<void> {
-    this.#assertNotClearing();
+    this.#assertNotStartingNewConversation();
     const model = await this.#requireApi().setModel(provider, modelId);
     const state = await this.#requireApi().getState();
     this.#viewState.applyState({ ...state, model });
@@ -586,7 +586,7 @@ export class SessionRuntime {
   }
 
   async setThinkingLevel(level: ThinkingLevel): Promise<void> {
-    this.#assertNotClearing();
+    this.#assertNotStartingNewConversation();
     await this.#requireApi().setThinkingLevel(level);
     const state = await this.#requireApi().getState();
     this.#viewState.applyState(state);
@@ -610,7 +610,7 @@ export class SessionRuntime {
    */
   async reloadResources(): Promise<void> {
     if (!this.#runtimeCapabilities().sessionTree) throw new Error("/reload is not supported by the selected runtime.");
-    this.#assertNotClearing();
+    this.#assertNotStartingNewConversation();
     const api = this.#requireApi();
     await this.#discoverAdapters(api);
     const bridge = this.#sessionTreeBridge;
@@ -1207,8 +1207,8 @@ export class SessionRuntime {
     return conversationTurns(this.view).some((turn) => turn.id === turnId && turn.status === "running");
   }
 
-  #assertNotClearing(): void {
-    if (this.#clearing) throw new Error("Wait for the conversation to finish clearing.");
+  #assertNotStartingNewConversation(): void {
+    if (this.#startingNewConversation) throw new Error("Wait for the new conversation to finish starting.");
   }
 
   /**
@@ -1252,7 +1252,7 @@ export class SessionRuntime {
 
   #assertTreeNavigable(): SessionTreeExtensionBridge {
     if (!this.#runtimeCapabilities().sessionTree) throw new Error("Session tree navigation is not supported by the selected runtime.");
-    this.#assertNotClearing();
+    this.#assertNotStartingNewConversation();
     const bridge = this.#sessionTreeBridge;
     if (!bridge?.available) throw new Error("Session tree navigation is unavailable in this Pi process. Update Pi, restart the session, and check FrostPi diagnostics.");
     if (this.view.status !== "ready" || this.view.isStreaming || this.view.isCompacting) throw new Error("Wait for the current Pi operation to finish before switching branches.");

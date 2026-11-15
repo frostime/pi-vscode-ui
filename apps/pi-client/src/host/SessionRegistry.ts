@@ -433,8 +433,8 @@ export class SessionRegistry {
           await runtime.compact(hostCommand.argument || undefined);
           runtime.clearComposerSeed();
           return;
-        case "clear":
-          await this.clearConversation(sessionId);
+        case "new":
+          await this.startNewConversation(sessionId);
           return;
         case "rewind":
           // The chosen prompt returns as a Composer seed, which must outlive this submission.
@@ -458,20 +458,20 @@ export class SessionRegistry {
   }
 
   /**
-   * `/clear` keeps the application identity and its presentation; only Pi's conversation
+   * `/new` keeps the application identity and its presentation; only Pi's conversation
    * is replaced. Nothing here changes until Pi commits. From that point the entry is
    * Provisional again, because the new conversation has no file to restore until its
    * first prompt, and retained, because the user chose to continue in it. That holds
    * even when loading the new conversation then fails: the old file is no longer this
    * entry's conversation and must not be what a restart reopens.
    */
-  async clearConversation(sessionId: string): Promise<{ cancelled: boolean }> {
+  async startNewConversation(sessionId: string): Promise<{ cancelled: boolean }> {
     this.#assertSessionOutsideFork(sessionId);
-    // A clear is a session-tree interaction too: a branch switch or a second clear must not interleave.
+    // /new is a session-tree interaction too: a branch switch or a second /new must not interleave.
     return this.#withTreeInteraction(sessionId, async () => {
       const runtime = this.#requireRuntime(sessionId);
       await this.#ensureRunning(runtime);
-      if (!await confirmClear(this.#host, runtime)) return { cancelled: true };
+      if (!await confirmNewConversation(this.#host, runtime)) return { cancelled: true };
 
       let committed = false;
       const onCommitted = (): void => {
@@ -484,7 +484,7 @@ export class SessionRegistry {
         if (record) this.#records.set(sessionId, { id: record.id, title: record.title, cwd: record.cwd, updatedAt: Date.now() });
       };
       try {
-        return await runtime.clearConversation(onCommitted);
+        return await runtime.startNewConversation(onCommitted);
       } finally {
         if (committed && !this.#disposed) {
           await Promise.resolve(this.#persist()).catch(() => undefined);
@@ -1216,16 +1216,16 @@ function forkSessionName(title: string): string {
   return (source ? `Fork: ${source}` : "Fork session").slice(0, 160);
 }
 
-async function confirmClear(host: ClientHost, runtime: SessionRuntime): Promise<boolean> {
+async function confirmNewConversation(host: ClientHost, runtime: SessionRuntime): Promise<boolean> {
   const view = runtime.view;
   const losesConversation = view.isEphemeral
     && view.conversationItems.some((item) => item.type === "turn" && item.userMessage?.role === "user");
   if (!losesConversation) return true;
   const choice = await host.window.showWarningDialog(
-    "Clearing this temporary session will permanently discard its conversation. This cannot be undone.",
-    ["Clear conversation"],
+    "Starting a new conversation in this temporary session will permanently discard the current one. This cannot be undone.",
+    ["Start new conversation"],
   );
-  return choice === "Clear conversation";
+  return choice === "Start new conversation";
 }
 
 async function confirmClose(host: ClientHost, runtime: SessionRuntime): Promise<boolean> {

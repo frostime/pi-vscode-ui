@@ -159,12 +159,12 @@ A session can live in an editor tab instead of the sidebar. **FrostPi: New Sessi
 FrostPi answers a few slash commands itself. They never become a prompt, and they take precedence over a Pi extension command or prompt template with the same name.
 
 - `/compact [instructions]` runs Pi's own context compaction.
-- `/clear` starts a new conversation in the same session view. The model, thinking level and Pi process stay. The earlier conversation remains in Pi's session history, so **Resume session** can reopen it. Stop a running response first.
+- `/new` starts a new conversation in the same session view. The model, thinking level and Pi process stay. The earlier conversation remains in Pi's session history, so **Resume session** can reopen it. Stop a running response first.
 - `/name <name>` or `/alias <name>` renames the session. Without a name, FrostPi asks for one.
 - `/reload` reloads Pi's extensions, skills, prompt templates, themes and context files without restarting the session. Stop a running response first.
 - `/rewind` lists your earlier prompts, returns the conversation to just before the one you pick, and puts that prompt back in the Composer for editing. It is **Branch here** with a picker: the path you left stays available through **Switch branch**. Files on disk are not restored; only the conversation changes.
 
-`/clear`, `/rewind` and `/reload` need Pi. With the `oh-my-pi` compatibility profile FrostPi does not offer them and passes such text to the runtime unchanged.
+`/new`, `/rewind` and `/reload` need Pi. With the `oh-my-pi` compatibility profile FrostPi does not offer them and passes such text to the runtime unchanged.
 
 ### Focus view
 

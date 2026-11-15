@@ -10,7 +10,7 @@ export interface RuntimeCapabilities {
   readonly slashCommands: boolean;
   readonly questionTool: boolean;
   readonly queuedPromptRecovery: boolean;
-  /** Replace the conversation in the running process (`new_session`), as `/clear` does. */
+  /** Replace the conversation in the running process (`new_session`), as `/new` does. */
   readonly newSession: boolean;
 }
 

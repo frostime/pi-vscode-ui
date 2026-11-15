@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// A scripted Pi child for /clear and /rewind. It keeps a real entry tree, model
+// A scripted Pi child for /new and /rewind. It keeps a real entry tree, model
 // state and session identity, and answers FrostPi's private tree adapter command the
 // way the bundled extensions do, so Registry and Runtime run unmodified against it.
 const fs = require("node:fs");

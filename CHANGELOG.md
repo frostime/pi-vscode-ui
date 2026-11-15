@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The sidebar's session has a rename button next to its title, and double-clicking the title renames it too.
 - `/name <name>` and `/alias <name>` rename the session from the Composer, also while Pi is running a turn. Without a name they ask for one.
 - `/reload` reloads Pi's extensions, skills, prompt templates, themes and context files in the running session, like `/reload` in Pi's terminal UI. In RPC mode Pi used to receive it as an ordinary prompt.
-- `/clear` starts a new conversation in the same session view and keeps the model, thinking level and Pi process. The earlier conversation stays in Pi's session history for **Resume session**.
+- `/new` starts a new conversation in the same session view and keeps the model, thinking level and Pi process. The earlier conversation stays in Pi's session history for **Resume session**.
 - `/rewind` lists earlier prompts and returns the conversation to just before the one you pick, with that prompt back in the Composer. It uses Pi's session tree, so the path you left remains available; files on disk are not restored.
 - Focus view, on by default: each run of tool calls and reasoning folds into one expandable row while a turn is running, and replies stay visible. Switch with **FrostPi: Toggle Focus View** or `frostpi.conversation.focusView`.
 
