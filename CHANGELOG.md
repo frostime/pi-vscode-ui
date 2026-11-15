@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Omit Pi stderr content from FrostPi diagnostic exports and expand credential redaction in the remaining text. Session error displays remain available for local troubleshooting.
 - Block automatic Markdown image reads from Windows network shares other than the Session's own share, and reject device-namespace paths.
 
+### Fixed
+
+- Display AVIF and BMP conversation images from local files, inline data, and explicit HTTPS loads, alongside PNG, JPEG, WebP, GIF, and SVG. Prompt-attachment formats are unchanged.
+
 ## [0.16.5] - 2026-11-08
 
 ### Changed

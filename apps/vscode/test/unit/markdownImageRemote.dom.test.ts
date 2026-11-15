@@ -7,6 +7,7 @@ import { applyHostMessage } from "$ui/bridge/applyHostMessage";
 import { connectHostBridge } from "$ui/bridge/hostBridge";
 import MarkdownImage from "$ui/features/conversation/markdown/MarkdownImage.svelte";
 import { EMPTY_PRESENTATION, presentationStore } from "$ui/state/sessionViewStore.svelte";
+import { markdownRasterImages } from "../../../pi-client/test/fixtures/markdownRasterImages.js";
 
 const postMessage = vi.fn();
 let disconnectHost: () => void;
@@ -39,7 +40,10 @@ function answer(requestId: string, result: MarkdownImageLoadResult): void {
 }
 
 describe("remote Markdown image", () => {
-  it("contacts nothing until Load image, then shows Host-fetched bytes from memory", async () => {
+  it.each([
+    { mimeType: "image/png" as const, base64: "iVBORw0KGgo=" },
+    ...markdownRasterImages,
+  ])("loads $mimeType from Host bytes only after Load image", async ({ mimeType, base64 }) => {
     const { view, source } = mount();
     await Promise.resolve();
     expect(postMessage).not.toHaveBeenCalled();
@@ -54,7 +58,7 @@ describe("remote Markdown image", () => {
     expect(view.container.querySelector("img")).toBeNull();
     expect(view.container.textContent).toContain("Loading image…");
 
-    answer(request.requestId, { ok: true, mimeType: "image/png", data: "iVBORw0KGgo=" });
+    answer(request.requestId, { ok: true, mimeType, data: base64 });
     await waitFor(() => expect(view.container.querySelector("img")?.getAttribute("src")).toBe("blob:frostpi/remote-image"));
     expect(view.container.innerHTML).not.toContain("images.example.com/chart");
   });

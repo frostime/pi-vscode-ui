@@ -8,7 +8,7 @@ import { classifyMarkdownImageBytes } from "./MarkdownImageResolver.js";
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_REDIRECTS = 5;
 const REQUEST_HEADERS = {
-  Accept: "image/png,image/jpeg,image/webp,image/gif,image/svg+xml;q=0.9,*/*;q=0.1",
+  Accept: "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp,image/svg+xml;q=0.9,*/*;q=0.1",
   "User-Agent": "FrostPi",
 };
 

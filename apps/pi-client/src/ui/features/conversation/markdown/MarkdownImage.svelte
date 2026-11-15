@@ -7,6 +7,8 @@
   import { markdownImageCaption } from "./markdownImageCaption";
   import { sanitizeMarkdownSvg } from "./sanitizeMarkdownSvg";
 
+  const UNSUPPORTED_IMAGE_TYPE = "Unsupported image type. Supported: PNG, JPEG, WebP, GIF, AVIF, BMP, SVG.";
+
   let {
     source,
     alt,
@@ -104,10 +106,10 @@
       }
       svgWarning = sanitized.removedScripts;
       blob = new Blob([sanitized.svg], { type: mimeType });
-    } else if (["image/png", "image/jpeg", "image/webp", "image/gif"].includes(mimeType)) {
+    } else if (["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif", "image/bmp"].includes(mimeType)) {
       blob = new Blob([Uint8Array.from(bytes).buffer], { type: mimeType });
     } else {
-      fail("Unsupported image type");
+      fail(UNSUPPORTED_IMAGE_TYPE);
       return;
     }
     if (disposed) return;
@@ -145,7 +147,7 @@
       notFound: "Local image not found",
       notAFile: "Image source is not a file",
       tooLarge: "Image exceeds the configured size limit",
-      unsupportedType: "Unsupported image type",
+      unsupportedType: UNSUPPORTED_IMAGE_TYPE,
       readFailed: "Unable to read local image",
     };
     return messages[reason];
@@ -157,7 +159,7 @@
       notFound: "Remote image not found",
       notAFile: "Unable to load remote image",
       tooLarge: "Image exceeds the configured size limit",
-      unsupportedType: "Unsupported image type",
+      unsupportedType: UNSUPPORTED_IMAGE_TYPE,
       readFailed: "Unable to load remote image",
     };
     return messages[reason];
@@ -173,7 +175,7 @@
   }
 
   function decodeDataImage(value: string): { mimeType: string; bytes: Uint8Array } | null {
-    const match = value.match(/^data:(image\/(?:png|jpeg|webp|gif|svg\+xml));base64,([a-z\d+/=\s]+)$/i);
+    const match = value.match(/^data:(image\/(?:png|jpeg|webp|gif|avif|bmp|svg\+xml));base64,([a-z\d+/=\s]+)$/i);
     if (match) {
       try {
         return { mimeType: match[1]!.toLowerCase(), bytes: decodeBase64(match[2]!.replace(/\s/g, "")) };
@@ -259,7 +261,7 @@
   {:else if phase === "failed"}
     <span class="image-placeholder image-failed" role="status">
       <span class="placeholder-icon codicon codicon-warning" aria-hidden="true"></span>
-      <span class="placeholder-copy"><strong>{label}</strong><small>{error}</small></span>
+      <span class="placeholder-copy"><strong>{label}</strong><small title={error}>{error}</small></span>
     </span>
   {:else}
     <span class="image-placeholder" aria-hidden="true"></span>

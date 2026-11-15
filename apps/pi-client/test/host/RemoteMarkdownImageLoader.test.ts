@@ -5,6 +5,7 @@ import {
   type RemoteImageFetch,
   type RemoteImageResponse,
 } from "../../src/host/bridge/markdown-images/RemoteMarkdownImageLoader.js";
+import { markdownRasterImages } from "../fixtures/markdownRasterImages.js";
 
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 
@@ -17,13 +18,16 @@ function load(source: string, fetch: RemoteImageFetch, maxBytes = 1024) {
 }
 
 describe("loadRemoteMarkdownImage", () => {
-  it("returns image bytes identified by content, without credentials or a referrer", async () => {
-    const fetch = vi.fn<RemoteImageFetch>().mockResolvedValue(response(PNG, { headers: { "content-type": "text/plain" } }));
+  it.each([
+    { mimeType: "image/png", base64: Buffer.from(PNG).toString("base64") },
+    ...markdownRasterImages,
+  ])("identifies $mimeType by content, without credentials or a referrer", async ({ mimeType, base64 }) => {
+    const fetch = vi.fn<RemoteImageFetch>().mockResolvedValue(response(Buffer.from(base64, "base64"), { headers: { "content-type": "text/plain" } }));
 
     await expect(load("https://images.example.com/a?size=2", fetch)).resolves.toEqual({
       ok: true,
-      mimeType: "image/png",
-      data: Buffer.from(PNG).toString("base64"),
+      mimeType,
+      data: base64,
     });
 
     expect(fetch).toHaveBeenCalledOnce();
@@ -116,6 +120,20 @@ describe("loadRemoteMarkdownImage", () => {
     await expect(load("https://images.example.com/a.png", answer(200, null))).resolves.toEqual({ ok: false, reason: "unsupportedType" });
     await expect(load("https://images.example.com/a.svg", answer(200, '<svg xmlns="http://www.w3.org/2000/svg"/>')))
       .resolves.toMatchObject({ ok: true, mimeType: "image/svg+xml" });
+  });
+
+  it.each<[string, string, boolean]>([
+    // File-type box: size, "ftyp", major brand, minor version, compatible brands.
+    ["AVIF compatible brand", "00000018667479706d69663100000000617669666d696631", true],
+    ["animated AVIF major brand", "00000010667479706176697300000000", true],
+    ["avif only in the minor version", "000000146674797069736f6d6176696669736f6d", false],
+    ["avif outside the file-type box", "000000106674797069736f6d0000000061766966", false],
+    ["a truncated file-type box", "00000020667479706176696600000000", false],
+  ])("checks %s when identifying AVIF", async (_case, hex, accepted) => {
+    const fetch = vi.fn<RemoteImageFetch>().mockResolvedValue(response(Buffer.from(hex, "hex")));
+    await expect(load("https://images.example.com/image", fetch)).resolves.toMatchObject(
+      accepted ? { ok: true, mimeType: "image/avif" } : { ok: false, reason: "unsupportedType" },
+    );
   });
 
   it("reports a network failure or a timeout without detail", async () => {
