@@ -200,13 +200,14 @@
 
 <script lang="ts" module>
   import type { BoundToolCallView } from "$shared/model/toolCallModel";
+  import { isShellTool } from "$shared/model/shellTools";
 
   import { diffStats, type DiffStats } from "./diffPresentation";
 
   function toolIcon(name: string): string {
     if (["read", "grep", "find", "ls"].includes(name)) return "search";
     if (["edit", "write"].includes(name)) return "edit";
-    if (name === "bash") return "terminal";
+    if (isShellTool(name)) return "terminal";
     return "tools";
   }
 

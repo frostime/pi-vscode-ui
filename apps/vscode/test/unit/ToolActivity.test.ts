@@ -262,6 +262,24 @@ describe("ToolActivity sections", () => {
   });
 });
 
+describe("ToolActivity header", () => {
+  it("presents every shell command tool with the terminal icon", () => {
+    for (const name of ["bash", "powershell"]) {
+      const card = renderCard(bound({ name, args: { command: "git status --short" } }));
+
+      expect(card).toContain("codicon-terminal");
+      expect(card).not.toContain("codicon-tools");
+    }
+  });
+
+  it("keeps the tools icon for a call outside the shell set", () => {
+    const card = renderCard(bound({ name: "apply-patch", args: { patch: "…" } }));
+
+    expect(card).toContain("codicon-tools");
+    expect(card).not.toContain("codicon-terminal");
+  });
+});
+
 function renderCard(tool: ToolCallView): string {
   return render(ToolActivity, { props: { activity: activity(tool) } }).body;
 }

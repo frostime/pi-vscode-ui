@@ -711,6 +711,30 @@ describe("ConversationProjection", () => {
     }
   });
 
+  it("labels a shell command tool with its command instead of repeating the tool name", () => {
+    const projection = new ConversationProjection();
+    projection.appendUserPrompt("Run two commands", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({
+      type: "message_end",
+      message: {
+        id: "assistant-1",
+        role: "assistant",
+        content: [
+          { type: "toolCall", id: "t1", name: "powershell", arguments: { command: "git status --short" } },
+          { type: "toolCall", id: "t2", name: "bash", arguments: { command: "git status --short" } },
+        ],
+        stopReason: "toolUse",
+        timestamp: 100,
+      },
+    });
+
+    // `powershell` is the same shell operation as `bash` on Pi's Windows shell, so both cards
+    // read out the command; the tool name stays as it arrived.
+    expect(projectedTool(projection, "t1")).toMatchObject({ name: "powershell", label: "git status --short" });
+    expect(projectedTool(projection, "t2")).toMatchObject({ name: "bash", label: "git status --short" });
+  });
+
   it("gives each tool of a multi-call assistant message its own recorded duration", () => {
     const projection = new ConversationProjection();
     projection.replaceEntries([
