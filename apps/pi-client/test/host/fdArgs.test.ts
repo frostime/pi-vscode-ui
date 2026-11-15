@@ -3,8 +3,9 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
-  buildFdArguments,
+  buildFdArgumentPasses,
   buildFdFuzzyPattern,
+  buildFdSubstringPattern,
   resolveQueryScope,
   type WorkspaceFileSearchOptions,
 } from "../../src/host/file-search/fdArgs.js";
@@ -14,6 +15,20 @@ describe("fd arguments", () => {
     const pattern = buildFdFuzzyPattern("/workspace", "ss[c]/x");
     expect(pattern).toContain("s.*s.*\\[.*c.*\\].*[\\\\/].*x");
     expect(new RegExp(pattern, "i").test("/workspace/docs/ss[c]/x.ts")).toBe(true);
+  });
+
+  it("matches a contiguous query, by name or by path when it holds a slash", () => {
+    const pattern = buildFdSubstringPattern("/workspace", "core/run[x]");
+    expect(new RegExp(pattern, "i").test("/workspace/src/core/run[x].ts")).toBe(true);
+    expect(new RegExp(pattern, "i").test("/workspace/src/core/r-u-n[x].ts")).toBe(false);
+
+    const options: WorkspaceFileSearchOptions = { excludeRules: [], respectIgnoreFiles: true, followSymlinks: false };
+    const byName = buildFdArgumentPasses({ baseDirectory: "/workspace", displayPrefix: "", query: "time.ts" }, options);
+    expect(byName.exact).not.toContain("--full-path");
+    expect(byName.exact?.at(-1)).toBe("time\\.ts");
+    const byPath = buildFdArgumentPasses({ baseDirectory: "/workspace", displayPrefix: "", query: "core/run" }, options);
+    expect(byPath.exact).toContain("--full-path");
+    expect(buildFdArgumentPasses({ baseDirectory: "/workspace", displayPrefix: "", query: "" }, options).exact).toBeUndefined();
   });
 
   it("scopes continued directory completion to that directory", () => {
@@ -40,7 +55,7 @@ describe("fd arguments", () => {
       followSymlinks: true,
     };
 
-    const args = buildFdArguments({ baseDirectory: "/workspace", displayPrefix: "", query: "src" }, options);
+    const args = buildFdArgumentPasses({ baseDirectory: "/workspace", displayPrefix: "", query: "src" }, options).fuzzy;
 
     expect(args).toContain("500");
     expect(args).toContain("--no-ignore");

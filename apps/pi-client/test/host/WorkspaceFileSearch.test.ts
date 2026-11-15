@@ -8,7 +8,7 @@ import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { isWorkspacePathExcluded, WorkspaceFileSearch } from "../../src/host/file-search/WorkspaceFileSearch.js";
-import type { WorkspaceFileSearchOptions } from "../../src/host/file-search/fdArgs.js";
+import { MAX_FD_RESULTS, type WorkspaceFileSearchOptions } from "../../src/host/file-search/fdArgs.js";
 import { parseFdVersion, type FdExecutable } from "../../src/host/file-search/fdExecutable.js";
 
 const temporaryDirectories: string[] = [];
@@ -106,6 +106,49 @@ describe("workspace path search", () => {
     expect(processes[0]?.kill).toHaveBeenCalledWith("SIGKILL");
   });
 
+  it("adds names that contain the query when the fuzzy run reaches its result cap", async () => {
+    const processes: FakeFdProcess[] = [];
+    const argumentLists: string[][] = [];
+    const search = searchWithProcesses(processes, undefined, argumentLists);
+    const result = search.search(process.cwd(), "ntime.ts", 5, new Set(), searchOptions);
+    await vi.waitFor(() => expect(processes).toHaveLength(1));
+    // 500 weak fuzzy matches, none of them the file the user means.
+    processes[0]?.finish(0, Array.from({ length: MAX_FD_RESULTS }, (_, index) => `vendor/n${index}/t/i/m/e.ts\0`).join(""));
+    await vi.waitFor(() => expect(processes).toHaveLength(2));
+    processes[1]?.finish(0, "src/core/SessionRuntime.ts\0");
+
+    expect((await result)[0]).toMatchObject({ path: "src/core/SessionRuntime.ts" });
+    expect(argumentLists[1]).not.toContain("--full-path");
+    expect(argumentLists[1]?.at(-1)).toBe("ntime\\.ts");
+  });
+
+  it("runs fd once when the fuzzy run is complete", async () => {
+    const processes: FakeFdProcess[] = [];
+    const search = searchWithProcesses(processes);
+    const result = search.search(process.cwd(), "time", 5, new Set(), searchOptions);
+    await vi.waitFor(() => expect(processes).toHaveLength(1));
+    processes[0]?.finish(0, "src/runtime.ts\0");
+
+    await expect(result).resolves.toMatchObject([{ path: "src/runtime.ts" }]);
+    expect(processes).toHaveLength(1);
+  });
+
+  it("keeps the fuzzy matches when the exact run uses up the time left", async () => {
+    vi.useFakeTimers();
+    const processes: FakeFdProcess[] = [];
+    const search = searchWithProcesses(processes, 50);
+    const result = search.search(process.cwd(), "e", 3, new Set(), searchOptions);
+    await vi.advanceTimersByTimeAsync(0);
+    processes[0]?.finish(0, Array.from({ length: MAX_FD_RESULTS }, (_, index) => `d${index}/e.ts\0`).join(""));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(processes).toHaveLength(2);
+
+    await vi.advanceTimersByTimeAsync(50);
+
+    await expect(result).resolves.toHaveLength(3);
+    expect(processes[1]?.kill).toHaveBeenCalledWith("SIGKILL");
+  });
+
   it("honors conditional files.exclude rules only when the sibling exists", () => {
     const cwd = mkdtempSync(join(tmpdir(), "frostpi-exclude-"));
     temporaryDirectories.push(cwd);
@@ -117,10 +160,11 @@ describe("workspace path search", () => {
   });
 });
 
-function searchWithProcesses(processes: FakeFdProcess[], timeoutMs?: number): WorkspaceFileSearch {
+function searchWithProcesses(processes: FakeFdProcess[], timeoutMs?: number, argumentLists: string[][] = []): WorkspaceFileSearch {
   return new WorkspaceFileSearch({
     discoverFd: () => Promise.resolve(modernFd),
-    spawnFd: () => {
+    spawnFd: (_command, args) => {
+      argumentLists.push([...args]);
       const process = new FakeFdProcess();
       processes.push(process);
       return process as unknown as ChildProcess;

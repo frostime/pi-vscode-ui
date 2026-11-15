@@ -5,10 +5,10 @@ import { basename, dirname, extname, resolve } from "node:path";
 import { minimatch } from "minimatch";
 
 import {
-  buildFdArguments,
+  buildFdArgumentPasses,
+  MAX_FD_RESULTS,
   normalizeGlob,
   resolveQueryScope,
-  type ScopedQuery,
   type WorkspaceFileExcludeRule,
   type WorkspaceFileSearchOptions,
 } from "./fdArgs.js";
@@ -63,17 +63,40 @@ export class WorkspaceFileSearch {
     }
 
     const scope = resolveQueryScope(cwd, query, isDirectory);
-    const entries = await this.#runFd(fd, scope, options, version);
-    if (version !== this.#searchVersion) return [];
+    const passes = buildFdArgumentPasses(scope, options, fd.supportsDirectoryMarkers);
+    const deadline = Date.now() + this.#timeoutMs;
+    const candidates = new Map<string, WorkspaceFileCandidateView>();
+    const collect = (entries: readonly FdEntry[]): void => {
+      for (const entry of entries) {
+        const path = `${scope.displayPrefix}${entry.path}`;
+        if (candidates.has(path) || isAlwaysExcluded(path) || isWorkspacePathExcluded(cwd, path, options.excludeRules)) continue;
+        const candidate = rankFileCandidate(path, query, boosts, entry.isDirectory);
+        if (candidate) candidates.set(path, candidate);
+      }
+    };
 
-    const candidates = entries
-      .map((entry) => ({ ...entry, path: `${scope.displayPrefix}${entry.path}` }))
-      .filter((entry) => !isAlwaysExcluded(entry.path))
-      .filter((entry) => !isWorkspacePathExcluded(cwd, entry.path, options.excludeRules))
-      .map((entry) => rankFileCandidate(entry.path, query, boosts, entry.isDirectory))
-      .filter((candidate): candidate is WorkspaceFileCandidateView => Boolean(candidate))
-      .sort((left, right) => right.score - left.score || left.path.localeCompare(right.path));
-    return candidates.slice(0, limit);
+    let fuzzy: FdEntry[];
+    try {
+      fuzzy = await this.#runFd(fd, passes.fuzzy, version, this.#timeoutMs);
+    } catch (error) {
+      throw error instanceof FdTimeoutError ? new Error(`Workspace path search timed out after ${this.#timeoutMs} ms.`) : error;
+    }
+    if (version !== this.#searchVersion) return [];
+    collect(fuzzy);
+    // A cut-off fuzzy run may have missed files whose names contain the query. The exact run
+    // gets the time left; if it runs out, the fuzzy matches still stand.
+    if (passes.exact && fuzzy.length >= MAX_FD_RESULTS) {
+      try {
+        const exact = await this.#runFd(fd, passes.exact, version, Math.max(deadline - Date.now(), 0));
+        if (version !== this.#searchVersion) return [];
+        collect(exact);
+      } catch (error) {
+        if (!(error instanceof FdTimeoutError)) throw error;
+      }
+    }
+    return [...candidates.values()]
+      .sort((left, right) => right.score - left.score || left.path.localeCompare(right.path))
+      .slice(0, limit);
   }
 
   dispose(): void {
@@ -93,13 +116,7 @@ export class WorkspaceFileSearch {
     }
   }
 
-  async #runFd(
-    fd: FdExecutable,
-    scope: ScopedQuery,
-    options: WorkspaceFileSearchOptions,
-    version: number,
-  ): Promise<FdEntry[]> {
-    const args = buildFdArguments(scope, options, fd.supportsDirectoryMarkers);
+  async #runFd(fd: FdExecutable, args: readonly string[], version: number, timeoutMs: number): Promise<FdEntry[]> {
     return new Promise((resolvePromise, reject) => {
       const child = this.#spawnFd(fd.command, args);
       this.#activeProcess = child;
@@ -115,9 +132,9 @@ export class WorkspaceFileSearch {
       const timer = setTimeout(() => {
         if (this.#activeProcess === child) this.#activeProcess = undefined;
         if (version !== this.#searchVersion) finish(() => resolvePromise([]));
-        else finish(() => reject(new Error(`Workspace path search timed out after ${this.#timeoutMs} ms.`)));
+        else finish(() => reject(new FdTimeoutError()));
         child.kill("SIGKILL");
-      }, this.#timeoutMs);
+      }, timeoutMs);
 
       child.stdout?.on("data", (chunk: Buffer) => stdout.push(chunk));
       child.stderr?.setEncoding("utf8");
@@ -138,6 +155,8 @@ export class WorkspaceFileSearch {
     });
   }
 }
+
+class FdTimeoutError extends Error {}
 
 /** Applies workspace `files.exclude` rules, including conditional sibling-file rules. */
 export function isWorkspacePathExcluded(cwd: string, path: string, rules: readonly WorkspaceFileExcludeRule[]): boolean {
