@@ -378,11 +378,15 @@ export class SessionRegistry {
     if (runtime.view.historyStatus === "queued" || runtime.view.historyStatus === "loading") {
       throw new Error("Wait for conversation history to finish loading before sending a prompt.");
     }
-    if (runtime.view.isCompacting) throw new Error("Wait for context compaction to finish before sending a prompt.");
     const compactInstructions = compactCommandInstructions(text);
-    if (compactInstructions !== null && images.length > 0) throw new Error("/compact does not support image attachments.");
-    if (compactInstructions !== null) await runtime.compact(compactInstructions || undefined);
-    else await runtime.sendPrompt(text, images, streamingBehavior);
+    if (compactInstructions !== null) {
+      // An ordinary prompt waits in the queue until compaction ends; /compact acts now, so it cannot.
+      if (runtime.view.isCompacting) throw new Error("Wait for context compaction to finish before running this command.");
+      if (images.length > 0) throw new Error("/compact does not support image attachments.");
+      await runtime.compact(compactInstructions || undefined);
+    } else {
+      await runtime.sendPrompt(text, images, streamingBehavior);
+    }
     runtime.clearComposerSeed();
     if (compactInstructions === null && this.#temporarySessionIds.delete(sessionId)) {
       this.#retainedProvisionalSessionIds.delete(sessionId);
