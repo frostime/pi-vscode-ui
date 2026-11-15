@@ -16,6 +16,8 @@ describe("Session Tab Host authorization", () => {
       createSession: vi.fn(),
       activateSession: vi.fn(),
       closeSession: vi.fn(),
+      stopSession: vi.fn(),
+      deleteSession: vi.fn(),
       startIfStopped: vi.fn().mockResolvedValue(undefined),
       rename: vi.fn().mockResolvedValue(undefined),
       abort: vi.fn(),
@@ -116,9 +118,13 @@ describe("Session Tab Host authorization", () => {
     const { dispatcher, registry, sidebarConnection } = setup();
     await dispatcher.dispatch({ type: "activateSession", bridgeVersion: "3.0", sessionId: "other" } as never, sidebarConnection);
     await dispatcher.dispatch({ type: "closeSession", bridgeVersion: "3.0", sessionId: "other" } as never, sidebarConnection);
+    await dispatcher.dispatch({ type: "stopSession", bridgeVersion: "3.0", sessionId: "other" } as never, sidebarConnection);
+    await dispatcher.dispatch({ type: "deleteSession", bridgeVersion: "3.0", sessionId: "other" } as never, sidebarConnection);
 
     expect(registry.activateSession).toHaveBeenCalledWith("other");
     expect(registry.closeSession).toHaveBeenCalledWith("other");
+    expect(registry.stopSession).toHaveBeenCalledWith("other");
+    expect(registry.deleteSession).toHaveBeenCalledWith("other");
   });
 
   it("returns local Markdown image failures inline to the originating connection", async () => {
@@ -231,8 +237,15 @@ describe("Session Tab Host authorization", () => {
       bridgeVersion: "3.0",
       sessionId: "other",
     } as never, connection)).rejects.toThrow("available only from the FrostPi sidebar");
+    // A Session Tab stops or deletes its Session through the native commands, which confirm natively.
+    for (const type of ["stopSession", "deleteSession"]) {
+      await expect(dispatcher.dispatch({ type, bridgeVersion: "3.0", sessionId: "source" } as never, connection))
+        .rejects.toThrow("available only from the FrostPi sidebar");
+    }
     expect(registry.abort).not.toHaveBeenCalled();
     expect(registry.closeSession).not.toHaveBeenCalled();
+    expect(registry.stopSession).not.toHaveBeenCalled();
+    expect(registry.deleteSession).not.toHaveBeenCalled();
   });
 
   it("returns Composer editor contention to the originating panel", async () => {

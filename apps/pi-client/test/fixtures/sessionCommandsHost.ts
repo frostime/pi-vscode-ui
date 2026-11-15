@@ -100,7 +100,7 @@ export async function sessionCommandsHost(piArguments: string[] = [], { adapters
   };
 
   return {
-    directory, registry, errors, quickPicks, inputBoxes, shownQuickPicks, warningDialogs, discoveries, view, waitFor,
+    directory, host, registry, errors, quickPicks, inputBoxes, shownQuickPicks, warningDialogs, discoveries, view, waitFor,
     answerWarningDialogs(answer: "first-button" | undefined): void { warningDialogAnswer = answer; },
     persistedSessions(): Array<{ id: string; title: string; sessionFile?: string }> {
       const value = [...stored.values()].at(-1) as { sessions?: Array<{ id: string; title: string; sessionFile?: string }> } | undefined;

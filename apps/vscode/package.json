@@ -60,6 +60,8 @@
     "onCommand:frostpi.newTemporarySession",
     "onCommand:frostpi.newTemporarySessionInEditorTab",
     "onCommand:frostpi.renameSession",
+    "onCommand:frostpi.stopSession",
+    "onCommand:frostpi.deleteSession",
     "onCommand:frostpi.toggleFocusView",
     "onCommand:frostpi.resumeSession",
     "onCommand:frostpi.focus",
@@ -132,6 +134,16 @@
         "icon": "$(edit)"
       },
       {
+        "command": "frostpi.stopSession",
+        "title": "FrostPi: Stop Session",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "frostpi.deleteSession",
+        "title": "FrostPi: Delete Session",
+        "icon": "$(trash)"
+      },
+      {
         "command": "frostpi.toggleFocusView",
         "title": "FrostPi: Toggle Focus View",
         "icon": "$(list-tree)"
@@ -151,7 +163,7 @@
       },
       {
         "command": "frostpi.stop",
-        "title": "FrostPi: Stop Active Session",
+        "title": "FrostPi: Stop Response",
         "icon": "$(debug-stop)"
       },
       {
@@ -214,6 +226,16 @@
           "command": "frostpi.toggleFocusView",
           "when": "activeWebviewPanelId == 'frostpi.session'",
           "group": "frostpi@2"
+        },
+        {
+          "command": "frostpi.stopSession",
+          "when": "activeWebviewPanelId == 'frostpi.session'",
+          "group": "frostpi-session@1"
+        },
+        {
+          "command": "frostpi.deleteSession",
+          "when": "activeWebviewPanelId == 'frostpi.session'",
+          "group": "frostpi-session@2"
         }
       ]
     },

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { access } from "node:fs/promises";
+import { access, unlink } from "node:fs/promises";
 import { basename, normalize, resolve } from "node:path";
 
 import type { RpcExtensionUiResponse, StreamingBehavior, ThinkingLevel } from "@frostime/pi-rpc";
@@ -390,6 +390,80 @@ export class SessionRegistry {
     }
     await this.#persist();
     this.#emitChange();
+  }
+
+  /**
+   * Stops the Session's Pi process and keeps the Session listed. Selecting it, opening it
+   * in a tab or sending a prompt starts it again from its file. A Temporary Session has no
+   * file to start from, so it can only be closed.
+   */
+  async stopSession(sessionId: string): Promise<void> {
+    this.#assertSessionOutsideFork(sessionId);
+    const runtime = this.#requireRuntime(sessionId);
+    if (runtime.isEphemeral) throw new Error("A temporary session cannot start again once stopped. Close it instead.");
+    // A start already under way finishes first, so it cannot bring the process back afterwards.
+    await this.#startJobs.get(sessionId)?.catch(() => undefined);
+    const status = runtime.view.status;
+    if (status === "stopped" || status === "stopping") return;
+    if (!await confirmStop(this.#host, runtime)) return;
+    await runtime.stop();
+    this.#emitChange();
+  }
+
+  /**
+   * Deletes the Session: stops its Pi process, removes Pi's session file (to the trash
+   * where the host has one, as Pi's own session picker does) and closes it. Other files
+   * of the same session tree, such as forks, stay. If the file cannot be removed, the
+   * Session stays listed, stopped.
+   */
+  async deleteSession(sessionId: string): Promise<void> {
+    this.#assertSessionOutsideFork(sessionId);
+    const runtime = this.#requireRuntime(sessionId);
+    if (runtime.isEphemeral) throw new Error("A temporary session is never saved, so there is nothing to delete. Close it instead.");
+    const sessionFile = runtime.view.sessionFile ?? this.#records.get(sessionId)?.sessionFile;
+    if (sessionFile && !sessionFile.endsWith(".jsonl")) throw new Error(`Refusing to delete a file that is not a Pi session: ${sessionFile}`);
+    const canTrash = this.#host.moveToTrash !== undefined;
+    const choice = await this.#host.window.showWarningDialog(
+      sessionFile
+        ? `Delete the session "${runtime.view.title}"? Its Pi session file will be ${canTrash ? "moved to the trash" : "permanently deleted"}: ${sessionFile}`
+        : `Delete the session "${runtime.view.title}"? Pi has not saved it yet, so it is only closed.`,
+      ["Delete session"],
+    );
+    if (choice !== "Delete session") return;
+    await this.#startJobs.get(sessionId)?.catch(() => undefined);
+    await runtime.stop();
+    this.#emitChange();
+    if (sessionFile) await this.#removeSessionFile(sessionFile);
+    await runtime.dispose();
+    this.#removeSession(sessionId);
+    if (this.#activeSessionId === sessionId) this.#activeSessionId = [...this.#runtimes.keys()].at(-1) ?? null;
+    await this.#persist();
+    this.#emitChange();
+  }
+
+  async #removeSessionFile(sessionFile: string): Promise<void> {
+    const exists = async (): Promise<boolean> => access(sessionFile).then(() => true, () => false);
+    if (this.#host.moveToTrash) {
+      try {
+        await this.#host.moveToTrash(sessionFile);
+        return;
+      } catch (error) {
+        if (!await exists()) return;
+        const reason = error instanceof Error ? error.message : String(error);
+        const choice = await this.#host.window.showWarningDialog(
+          `The session file could not be moved to the trash (${reason}). Delete it permanently instead? ${sessionFile}`,
+          ["Delete permanently"],
+        );
+        if (choice !== "Delete permanently") throw new Error("The session was stopped but not deleted.");
+      }
+    }
+    try {
+      await unlink(sessionFile);
+    } catch (error) {
+      // Pi writes the file only once there is something to save.
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
   }
 
   async retrySession(sessionId?: string): Promise<void> {
@@ -1070,7 +1144,11 @@ export class SessionRegistry {
     if (runtime.isEphemeral && (status === "stopped" || status === "failed")) {
       throw new Error("This temporary session has stopped and cannot be restarted. Close it and create a new session.");
     }
-    if (status === "queued" || status === "stopped" || status === "failed") await this.#startRuntime(runtime);
+    if (status === "queued" || status === "stopped" || status === "failed") {
+      await this.#startRuntime(runtime);
+      // The prompt waits for the history the start reloads, as one typed after it would.
+      await this.#historyJobs.get(runtime.id)?.catch(() => undefined);
+    }
     if (!this.#runtimes.has(runtime.id)) throw new Error("The session's worktree is no longer available.");
   }
 
@@ -1314,6 +1392,16 @@ async function confirmClose(host: ClientHost, runtime: SessionRuntime): Promise<
     ["Close session"],
   );
   return choice === "Close session";
+}
+
+async function confirmStop(host: ClientHost, runtime: SessionRuntime): Promise<boolean> {
+  const view = runtime.view;
+  if (!view.isStreaming && view.pendingExtensionUi.length === 0) return true;
+  const choice = await host.window.showWarningDialog(
+    "Stopping this FrostPi session will stop its active response, tools, and pending extension UI requests. Persisted Pi history is retained.",
+    ["Stop session"],
+  );
+  return choice === "Stop session";
 }
 
 async function confirmRestart(host: ClientHost, runtimes: readonly SessionRuntime[]): Promise<boolean> {

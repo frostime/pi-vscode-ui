@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { rm } from "node:fs/promises";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { SessionNoticeView } from "../../src/shared/model/conversationModel.js";
@@ -407,6 +410,109 @@ describe("Host slash commands through the real Registry and child-process path",
       expect(registry.snapshot().sessions.map((session) => session.id)).toEqual([sessionId]);
       expect(view(sessionId).isStreaming).toBe(true);
       await registry.abort(sessionId);
+    });
+  });
+
+  describe("stop and delete", () => {
+    it("stops a Session's Pi process but keeps it listed, and starts it again from its file", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+      await fixture.converse(sessionId, "first");
+      const file = view(sessionId).sessionFile!;
+
+      await registry.stopSession(sessionId);
+
+      expect(view(sessionId).status).toBe("stopped");
+      expect(registry.snapshot().sessions.map((session) => session.id)).toEqual([sessionId]);
+      expect(fixture.persistedSessions()).toEqual([expect.objectContaining({ id: sessionId, sessionFile: file })]);
+      // Stopping again does nothing.
+      await registry.stopSession(sessionId);
+
+      await fixture.converse(sessionId, "second");
+      expect(view(sessionId).sessionFile).toBe(file);
+      expect(userPrompts(view(sessionId))).toEqual(["first", "second"]);
+    });
+
+    it("asks before stopping a running reply, and leaves it running when declined", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+      await registry.sendPrompt(sessionId, "hold", []);
+      await fixture.waitFor(() => view(sessionId).isStreaming);
+
+      fixture.answerWarningDialogs(undefined);
+      await registry.stopSession(sessionId);
+      expect(fixture.warningDialogs.at(-1)).toContain("Stopping this FrostPi session will stop its active response");
+      expect(view(sessionId).isStreaming).toBe(true);
+
+      fixture.answerWarningDialogs("first-button");
+      await registry.stopSession(sessionId);
+      expect(view(sessionId).status).toBe("stopped");
+    });
+
+    it("neither stops nor deletes a temporary Session, which could not start again", async () => {
+      const fixture = await host();
+      const sessionId = await fixture.startSession(true);
+      await expect(fixture.registry.stopSession(sessionId)).rejects.toThrow("Close it instead");
+      await expect(fixture.registry.deleteSession(sessionId)).rejects.toThrow("Close it instead");
+      expect(fixture.view(sessionId).status).toBe("ready");
+    });
+
+    it("deletes the Session with its Pi file after confirmation, and keeps both when declined", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const kept = await fixture.startSession();
+      await fixture.converse(kept, "keep me");
+      const sessionId = await fixture.startSession();
+      await fixture.converse(sessionId, "delete me");
+      const file = view(sessionId).sessionFile!;
+      expect(existsSync(file)).toBe(true);
+
+      fixture.answerWarningDialogs(undefined);
+      await registry.deleteSession(sessionId);
+      expect(fixture.warningDialogs.at(-1)).toContain(`permanently deleted: ${file}`);
+      expect(existsSync(file)).toBe(true);
+      expect(view(sessionId).status).toBe("ready");
+
+      fixture.answerWarningDialogs("first-button");
+      await registry.deleteSession(sessionId);
+      expect(existsSync(file)).toBe(false);
+      expect(registry.snapshot().sessions.map((session) => session.id)).toEqual([kept]);
+      expect(registry.activeSessionId).toBe(kept);
+      expect(fixture.persistedSessions().map((session) => session.id)).toEqual([kept]);
+      expect(existsSync(view(kept).sessionFile!)).toBe(true);
+    });
+
+    it("moves the file to the host's trash, and asks before deleting permanently when that fails", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const trashed: string[] = [];
+      fixture.host.moveToTrash = (path) => { trashed.push(path); return rm(path); };
+      const first = await fixture.startSession();
+      await fixture.converse(first, "one");
+      const firstFile = view(first).sessionFile!;
+
+      await registry.deleteSession(first);
+      expect(fixture.warningDialogs.at(-1)).toContain("moved to the trash");
+      expect(trashed).toEqual([firstFile]);
+      expect(existsSync(firstFile)).toBe(false);
+
+      fixture.host.moveToTrash = () => Promise.reject(new Error("no trash here"));
+      const second = await fixture.startSession();
+      await fixture.converse(second, "two");
+      const secondFile = view(second).sessionFile!;
+      let dialogs = 0;
+      fixture.host.window.showWarningDialog = (message, buttons) => {
+        fixture.warningDialogs.push(message);
+        dialogs += 1;
+        // Confirm the deletion, then decline the permanent fallback.
+        return Promise.resolve(dialogs === 1 ? buttons[0] : undefined);
+      };
+      await expect(registry.deleteSession(second)).rejects.toThrow("stopped but not deleted");
+      expect(fixture.warningDialogs.at(-1)).toContain("could not be moved to the trash (no trash here)");
+      expect(existsSync(secondFile)).toBe(true);
+      expect(view(second).status).toBe("stopped");
     });
   });
 

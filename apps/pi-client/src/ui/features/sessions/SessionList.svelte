@@ -6,6 +6,8 @@
     activeId,
     onselect,
     onclose,
+    onstop,
+    ondelete,
     onexternalize,
     oncreate,
     onresume,
@@ -14,6 +16,10 @@
     activeId: string;
     onselect: (sessionId: string) => void;
     onclose: (sessionId: string) => void;
+    /** Stops the Pi process and keeps the Session listed. */
+    onstop: (sessionId: string) => void;
+    /** Deletes the Session together with Pi's session file. */
+    ondelete: (sessionId: string) => void;
     /** Editor-tab detaching is a host capability; absent capability hides the affordance. */
     onexternalize: ((sessionId: string) => void) | undefined;
     oncreate: () => void;
@@ -75,6 +81,21 @@
           >
             <span class="codicon codicon-layout" aria-hidden="true"></span>
           </button>
+        {/if}
+        {#if !session.isEphemeral && session.status !== "stopped" && session.status !== "stopping"}
+          <button class="session-list-action" type="button" aria-label={`Stop ${session.title}`} title="Stop session · keeps it in the list" onclick={() => onstop(session.id)}>
+            <span class="codicon codicon-debug-stop" aria-hidden="true"></span>
+          </button>
+        {:else}
+          <!-- Holds the column so every row's actions line up. -->
+          <span aria-hidden="true"></span>
+        {/if}
+        {#if !session.isEphemeral}
+          <button class="session-list-action session-list-delete" type="button" aria-label={`Delete ${session.title}`} title="Delete session and its Pi file" onclick={() => ondelete(session.id)}>
+            <span class="codicon codicon-trash" aria-hidden="true"></span>
+          </button>
+        {:else}
+          <span aria-hidden="true"></span>
         {/if}
         <button class="session-list-close" type="button" aria-label={`Close ${session.title}`} title="Close session" onclick={() => onclose(session.id)}>
           <span class="codicon codicon-close" aria-hidden="true"></span>

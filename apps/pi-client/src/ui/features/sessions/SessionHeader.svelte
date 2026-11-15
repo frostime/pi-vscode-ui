@@ -100,6 +100,16 @@
     postToHost({ type: "closeSession", sessionId });
   }
 
+  function stopSession(sessionId: string): void {
+    closeMenus();
+    postToHost({ type: "stopSession", sessionId });
+  }
+
+  function deleteSession(sessionId: string): void {
+    closeMenus();
+    postToHost({ type: "deleteSession", sessionId });
+  }
+
   function openSessionPanel(sessionId?: string): void {
     const targetId = sessionId ?? active.id;
     // Do not hand a possibly stale Webview draft to a new panel before its recovery result merges.
@@ -180,6 +190,8 @@
           activeId={active.id}
           onselect={selectSession}
           onclose={closeSession}
+          onstop={stopSession}
+          ondelete={deleteSession}
           onexternalize={editorTabs ? openSessionPanel : undefined}
           oncreate={createSession}
           onresume={resumeSession}
@@ -234,7 +246,12 @@
             {#if active.historyStatus === "deferred" || active.historyStatus === "failed"}
               <button type="button" onclick={() => { closeMenus(); postToHost({ type: "loadHistory", sessionId: active.id }); }}><span class="codicon codicon-history"></span> Load conversation history</button>
             {/if}
-            <button type="button" disabled={active.isEphemeral} title={active.isEphemeral ? "Temporary sessions cannot be restarted" : undefined} onclick={() => { closeMenus(); postToHost({ type: "restartSession", sessionId: active.id }); }}><span class="codicon codicon-debug-restart"></span> Restart session</button>
+            {#if active.status === "stopped" && !active.isEphemeral}
+              <button type="button" onclick={() => { closeMenus(); postToHost({ type: "restartSession", sessionId: active.id }); }}><span class="codicon codicon-debug-start"></span> Start session</button>
+            {:else}
+              <button type="button" disabled={active.isEphemeral} title={active.isEphemeral ? "Temporary sessions cannot be restarted" : undefined} onclick={() => { closeMenus(); postToHost({ type: "restartSession", sessionId: active.id }); }}><span class="codicon codicon-debug-restart"></span> Restart session</button>
+              <button type="button" disabled={active.isEphemeral || active.status === "stopping"} title={active.isEphemeral ? "A temporary session cannot start again once stopped" : "Stop Pi and keep the session in the list"} onclick={() => stopSession(active.id)}><span class="codicon codicon-debug-stop"></span> Stop session</button>
+            {/if}
             {#if active.sessionFile}
               <button
                 type="button"
@@ -295,6 +312,9 @@
             {/if}
             <div class="menu-separator"></div>
             <button class="danger" type="button" onclick={() => closeSession(active.id)}><span class="codicon codicon-close"></span> Close session</button>
+            {#if !active.isEphemeral}
+              <button class="danger" type="button" title="Delete the session and its Pi session file" onclick={() => deleteSession(active.id)}><span class="codicon codicon-trash"></span> Delete session</button>
+            {/if}
           </div>
         {/if}
       </div>

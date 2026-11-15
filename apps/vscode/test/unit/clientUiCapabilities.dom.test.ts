@@ -156,7 +156,7 @@ describe("explicit client UI capabilities", () => {
     const hidden = render(SessionList, {
       props: {
         sessions: [summary()], activeId: "session",
-        onselect: vi.fn(), onclose: vi.fn(), onexternalize: undefined, oncreate: vi.fn(), onresume: vi.fn(),
+        onselect: vi.fn(), onclose: vi.fn(), onstop: vi.fn(), ondelete: vi.fn(), onexternalize: undefined, oncreate: vi.fn(), onresume: vi.fn(),
       },
     });
     expect(hidden.queryByTitle("Open in editor tab")).toBeNull();
@@ -166,7 +166,7 @@ describe("explicit client UI capabilities", () => {
     const shown = render(SessionList, {
       props: {
         sessions: [summary()], activeId: "session",
-        onselect: vi.fn(), onclose: vi.fn(), onexternalize: vi.fn(), oncreate: vi.fn(), onresume: vi.fn(),
+        onselect: vi.fn(), onclose: vi.fn(), onstop: vi.fn(), ondelete: vi.fn(), onexternalize: vi.fn(), oncreate: vi.fn(), onresume: vi.fn(),
       },
     });
     expect(shown.getByTitle("Open in editor tab")).toBeTruthy();

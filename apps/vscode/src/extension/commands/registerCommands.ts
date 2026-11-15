@@ -58,6 +58,16 @@ export function registerCommands(
       if (!normalized || normalized === session.title) return;
       await registry.rename(sessionId, normalized);
     })),
+    vscode.commands.registerCommand("frostpi.stopSession", () => reportFailure(async () => {
+      const sessionId = coordinator.commandTargetSessionId();
+      if (!sessionId) return void vscode.window.showInformationMessage("Open a FrostPi session first.");
+      await registry.stopSession(sessionId);
+    })),
+    vscode.commands.registerCommand("frostpi.deleteSession", () => reportFailure(async () => {
+      const sessionId = coordinator.commandTargetSessionId();
+      if (!sessionId) return void vscode.window.showInformationMessage("Open a FrostPi session first.");
+      await registry.deleteSession(sessionId);
+    })),
     vscode.commands.registerCommand("frostpi.toggleFocusView", () => reportFailure(async () => {
       // Read and write in the scope of the Session the command means, at the level its
       // effective value comes from, so the toggle changes what that Session shows.

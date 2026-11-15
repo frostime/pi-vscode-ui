@@ -53,6 +53,8 @@ const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
   "resumeSession",
   "activateSession",
   "closeSession",
+  "stopSession",
+  "deleteSession",
   "openSessionPanel",
   "revealSessionPanel",
   "openSettings",
@@ -68,6 +70,8 @@ const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
 const SIDEBAR_COLLECTION_TARGET_ACTIONS = new Set<WebviewToHostMessage["type"]>([
   "activateSession",
   "closeSession",
+  "stopSession",
+  "deleteSession",
   "renameSession",
   // The session list opens any listed Session in a tab, also before one is displayed.
   "openSessionPanel",
@@ -207,6 +211,12 @@ export class WebviewActionDispatcher {
         return;
       case "closeSession":
         await this.#registry.closeSession(message.sessionId);
+        return;
+      case "stopSession":
+        await this.#registry.stopSession(message.sessionId);
+        return;
+      case "deleteSession":
+        await this.#registry.deleteSession(message.sessionId);
         return;
       case "renameSession":
         await this.#registry.rename(message.sessionId, message.name);

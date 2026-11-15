@@ -158,4 +158,6 @@ export interface ClientHost {
   systemToast?(title: string, message: string): Promise<boolean>;
   /** Diagnostics export with host file access; absent = explicit failure of the action. */
   exportDiagnostics?(summary: string): Promise<void>;
+  /** Moves a file to the platform trash; absent = deleting a session removes its file permanently. */
+  moveToTrash?(fsPath: string): Promise<void>;
 }

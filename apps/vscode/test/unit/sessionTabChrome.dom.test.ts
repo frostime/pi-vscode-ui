@@ -145,3 +145,53 @@ describe("sidebar launcher", () => {
     expect(view.getByRole("button", { name: /New session with arguments/ })).toBeTruthy();
   });
 });
+
+describe("stop and delete from the sidebar", () => {
+  const summaries: SessionSummaryView[] = [
+    { id: "session", title: "Parser work", cwd: "/workspace", status: "ready", isActive: true, isEphemeral: false, historyStatus: "loaded", requiresUserInput: false },
+    { id: "stopped", title: "Old work", cwd: "/workspace", status: "stopped", isActive: false, isEphemeral: false, historyStatus: "loaded", requiresUserInput: false },
+    { id: "temp", title: "Scratch", cwd: "/workspace", status: "ready", isActive: false, isEphemeral: true, historyStatus: "loaded", requiresUserInput: false },
+  ];
+
+  it("offers stop only for a running saved Session and delete for every saved one in the session list", async () => {
+    const view = render(SessionHeader, { sessions: summaries, active: session({ status: "ready", isStreaming: false }) });
+    await fireEvent.click(view.getByRole("button", { name: /Parser work/ }));
+
+    expect(view.queryByRole("button", { name: "Stop Old work" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Stop Scratch" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Delete Scratch" })).toBeNull();
+    await fireEvent.click(view.getByRole("button", { name: "Stop Parser work" }));
+    await fireEvent.click(view.getByRole("button", { name: /Parser work/ }));
+    await fireEvent.click(view.getByRole("button", { name: "Delete Old work" }));
+
+    expect(posted()).toEqual([{ type: "stopSession", sessionId: "session" }, { type: "deleteSession", sessionId: "stopped" }]);
+  });
+
+  it("stops, starts and deletes the shown Session from its actions menu", async () => {
+    const running = render(SessionHeader, { sessions: summaries, active: session({ status: "ready", isStreaming: false }) });
+    await fireEvent.click(running.getByRole("button", { name: "Session actions" }));
+    expect(running.queryByRole("button", { name: /Start session/ })).toBeNull();
+    await fireEvent.click(running.getByRole("button", { name: /Stop session/ }));
+    await fireEvent.click(running.getByRole("button", { name: "Session actions" }));
+    await fireEvent.click(running.getByRole("button", { name: /Delete session/ }));
+    cleanup();
+
+    const stopped = render(SessionHeader, { sessions: summaries, active: session({ status: "stopped", isStreaming: false }) });
+    await fireEvent.click(stopped.getByRole("button", { name: "Session actions" }));
+    expect(stopped.queryByRole("button", { name: /Stop session/ })).toBeNull();
+    await fireEvent.click(stopped.getByRole("button", { name: /Start session/ }));
+
+    expect(posted()).toEqual([
+      { type: "stopSession", sessionId: "session" },
+      { type: "deleteSession", sessionId: "session" },
+      { type: "restartSession", sessionId: "session" },
+    ]);
+  });
+
+  it("offers a temporary Session neither stop nor delete in its actions menu", async () => {
+    const view = render(SessionHeader, { sessions: summaries, active: session({ isEphemeral: true, status: "ready", isStreaming: false }) });
+    await fireEvent.click(view.getByRole("button", { name: "Session actions" }));
+    expect((view.getByRole("button", { name: /Stop session/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(view.queryByRole("button", { name: /Delete session/ })).toBeNull();
+  });
+});

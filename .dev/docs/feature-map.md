@@ -26,6 +26,7 @@ Use this map to locate a feature's source and nearest contract. Paths are worksp
 - Fork of a busy session in a second Pi process: `SessionRegistry.#forkInNewProcess`.
 - Model-selection flags dropped on resume: `apps/pi-client/src/core/configuration/resumeLaunchArguments.ts`.
 - Closing a session with its editor tab: `SessionPanelManager.onDidCloseTab` and `SessionWebviewCoordinator`.
+- Stopping a session while keeping it listed, and deleting it with Pi's file: `SessionRegistry.stopSession` and `deleteSession`; the trash is `ClientHost.moveToTrash`.
 - `/rewind` target list: `projectRewindTargets` in `apps/pi-client/src/core/sessions/tree/sessionTreeProjection.ts` and `pickRewindTarget` in the tree picker; it then follows the Branch here path.
 - Pi-side tree/Question artifacts: `apps/pi-client/pi-extensions/`; both products bundle the same sources into their distributions.
 - Catalog contract: `apps/pi-client/src/host/catalog/session-catalog.SPEC.md`.
