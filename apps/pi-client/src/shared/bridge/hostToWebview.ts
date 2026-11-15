@@ -20,7 +20,7 @@ export type MarkdownImageFailureReason =
 export type MarkdownImageLoadResult =
   | {
       ok: true;
-      mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif" | "image/svg+xml";
+      mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif" | "image/avif" | "image/bmp" | "image/svg+xml";
       data: string;
     }
   | { ok: false; reason: MarkdownImageFailureReason };

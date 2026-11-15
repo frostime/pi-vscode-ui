@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { listProviders, queryUsage } from "@frostime/provider-usage";
 import { resolvePiAgentDirectory } from "../../core/_shared/pi-settings/loadPiSettings.js";
 
-import type { HostToWebviewPayload } from "../../shared/bridge/hostToWebview.js";
+import type { HostToWebviewPayload, MarkdownImageLoadResult } from "../../shared/bridge/hostToWebview.js";
 import type { WebviewToHostMessage } from "../../shared/bridge/webviewToHost.js";
 import type { ComposerDraftView } from "../../shared/model/composerDraftModel.js";
 import type { QueuedPromptRecoveryOutcome } from "../../shared/model/queuedPromptRecoveryModel.js";
@@ -16,6 +16,7 @@ import type { ClientHost } from "../clientHost.js";
 import type { SessionRegistry } from "../SessionRegistry.js";
 import type { ComposerDraftCache } from "./ComposerDraftCache.js";
 import { resolveLocalMarkdownImage } from "./markdown-images/MarkdownImageResolver.js";
+import { loadRemoteMarkdownImage } from "./markdown-images/RemoteMarkdownImageLoader.js";
 import type { ConnectionContext } from "./webviewTypes.js";
 
 export interface DispatchConnection extends ConnectionContext {
@@ -138,13 +139,8 @@ export class WebviewActionDispatcher {
               throw new Error("Unknown usage provider.");
             }
             // Use the current proxy setting
-            const proxy = readConfiguration(this.#host, cwd).proxy;
-            const vscodeProxy = proxy.mode === "vscode" ? readHostProxy(this.#host, cwd) : undefined;
-            const credentials = proxy.mode === "custom" || proxy.mode === "vscode"
-              ? await this.#getProxyCredentials()
-              : undefined;
+            const queryEnvironment = await this.#hostRequestEnvironment(environment, cwd);
             signal.throwIfAborted();
-            const queryEnvironment = buildProviderUsageEnvironment(environment, proxy, credentials, vscodeProxy);
             // query the provider's usage, with proxy setting
             const results = await queryUsage(message.scope, { ...input, environment: queryEnvironment }, signal);
             if (connection.finishProviderUsageRequest(message.requestId, signal)) {
@@ -409,15 +405,43 @@ export class WebviewActionDispatcher {
     }
 
     const session = this.#displayedSession(connection);
-    const result = session
-      ? await resolveLocalMarkdownImage(message.source, session.cwd, session.attachmentLimits.maxImageBytes)
-      : { ok: false as const, reason: "invalidSource" as const };
+    const maxBytes = session?.attachmentLimits.maxImageBytes ?? 0;
+    const result: MarkdownImageLoadResult = !session
+      ? { ok: false, reason: "invalidSource" }
+      : message.remote
+        ? await this.#loadRemoteMarkdownImage(message.source, maxBytes)
+        : await resolveLocalMarkdownImage(message.source, session.cwd, maxBytes);
     connection.post({
       type: "markdownImageResult",
       requestId: message.requestId,
       sessionId: message.sessionId,
       result,
     });
+  }
+
+  /**
+   * Only an explicit `remote` request reaches the network: the Webview sends it after
+   * the user's `Load image` action, never while rendering. Failures stay content-free.
+   */
+  async #loadRemoteMarkdownImage(source: string, maxBytes: number): Promise<MarkdownImageLoadResult> {
+    try {
+      const cwd = this.#registry.snapshot().workspacePath || homedir();
+      const environment = await this.#hostRequestEnvironment({ ...process.env }, cwd);
+      return await loadRemoteMarkdownImage(source, { maxBytes, environment });
+    } catch {
+      // An unconfigured or unusable proxy fails closed instead of connecting directly.
+      return { ok: false, reason: "readFailed" };
+    }
+  }
+
+  /** Current workspace proxy policy for a Host-initiated request; Pi's environment is untouched. */
+  async #hostRequestEnvironment(base: NodeJS.ProcessEnv, cwd: string): Promise<NodeJS.ProcessEnv> {
+    const proxy = readConfiguration(this.#host, cwd).proxy;
+    const vscodeProxy = proxy.mode === "vscode" ? readHostProxy(this.#host, cwd) : undefined;
+    const credentials = proxy.mode === "custom" || proxy.mode === "vscode"
+      ? await this.#getProxyCredentials()
+      : undefined;
+    return buildProviderUsageEnvironment(base, proxy, credentials, vscodeProxy);
   }
 
   #authorizeSessionTarget(message: WebviewToHostMessage, connection: ConnectionContext): void {

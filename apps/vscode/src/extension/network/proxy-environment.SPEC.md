@@ -8,7 +8,7 @@ Proxy policy is resolved only when a Pi process starts. New and restarted sessio
 - `custom` accepts one endpoint; bare `host:port` is normalized to `http://host:port`. HTTP(S)/bare endpoints set `HTTP_PROXY` and `HTTPS_PROXY`; SOCKS endpoints set `ALL_PROXY` only.
 - Empty `noProxy` in `custom` or `vscode` mode uses `localhost,127.0.0.1,::1`.
 - Proxy variables apply to Pi and inheriting child commands; third-party extensions that ignore them are outside FrostPi's guarantee.
-- Credentials remain in VS Code `SecretStorage`, and diagnostics/exported stderr redact them.
+- Credentials remain in VS Code `SecretStorage`. Logged errors and exported diagnostics redact them, and an export omits Pi's stderr text altogether.
 - Readers preserve legacy `network.proxy.http` / `https` / `all` fallback when `endpoint` is empty; guided custom-mode writes store `endpoint` and clear those legacy keys.
 
 `apps/pi-client/src/core/network` owns proxy types/defaults and pure environment calculation; `extension/network` owns VS Code configuration and credential storage/policy, and `packages/pi-rpc` owns generic environment merging. Runtime receives a live host-proxy reader and a read-only credential provider rather than importing VS Code storage or configuration.
@@ -28,3 +28,12 @@ credential and NO_PROXY rules. Empty explicit endpoints fail without a request.
 HTTP(S) proxies are supported; SOCKS remains an explicit package error, never a
 fallback to inherited HTTP proxy or direct traffic. No global environment/dispatcher
 is changed, and no proxy URL or credential crosses the bridge.
+
+## Remote Markdown image requests
+
+A remote Markdown image that the user explicitly loads is fetched by the Host under the
+same rules as a usage request: current workspace-scoped settings and SecretStorage
+credentials for that request, a local environment copy, and no change to a running Pi
+process. An empty, invalid or SOCKS proxy fails the image load; it never falls back to
+an inherited proxy or direct traffic. The request contract belongs to the
+[Markdown rendering SPEC](../../../../pi-client/src/ui/features/conversation/markdown/markdown.SPEC.md).

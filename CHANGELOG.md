@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Preserve selected transcript text when copying with `Ctrl+C` or the native Copy menu in VS Code and VSCodium versions that restore input focus before copying.
 - Prevent hidden code-block and message action buttons from intercepting clicks and text-selection drags.
+- Display AVIF and BMP conversation images from local files, inline data, and explicit HTTPS loads, alongside PNG, JPEG, WebP, GIF, and SVG. Prompt-attachment formats are unchanged.
+
+### Security
+
+- Update Mermaid to 11.16.1, markdown-it to 14.3.3, DOMPurify to 3.4.17 and KaTeX to 0.18.2 for rendering security fixes.
+- Block implicit remote image requests from rendered diagrams. Explicit `Load image` actions fetch HTTPS Markdown images through the Host and configured FrostPi proxy, with download time and size limits.
+- Store `/editor` drafts in a private temporary directory and clean it up when the draft is closed or the extension shuts down.
+- Omit Pi stderr content from FrostPi diagnostic exports and expand credential redaction in the remaining text. Session error displays remain available for local troubleshooting.
+- Block automatic Markdown image reads from Windows network shares other than the Session's own share, and reject device-namespace paths.
 
 ## [0.16.6] - 2026-11-14
 

@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { resolveLocalMarkdownImage } from "@frostime/pi-client/host/bridge/markdown-images/MarkdownImageResolver";
+import { markdownRasterImages } from "../../../pi-client/test/fixtures/markdownRasterImages.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -28,6 +29,14 @@ describe("resolveLocalMarkdownImage", () => {
 
     const literalPercent = await resolveLocalMarkdownImage("100%.png", directory, 1024);
     expect(literalPercent).toMatchObject({ ok: true, mimeType: "image/png" });
+  });
+
+  it.each(markdownRasterImages)("loads $mimeType by content rather than its filename", async ({ mimeType, base64 }) => {
+    const directory = await temporaryDirectory();
+    await writeFile(join(directory, "image.txt"), Buffer.from(base64, "base64"));
+
+    await expect(resolveLocalMarkdownImage("image.txt", directory, 1024))
+      .resolves.toEqual({ ok: true, mimeType, data: base64 });
   });
 
   it("returns stable failures for absent, oversized, and unsupported files", async () => {
