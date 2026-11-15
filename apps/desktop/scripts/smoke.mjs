@@ -4,6 +4,8 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { createServer } from "node:net";
+import { pathToFileURL } from "node:url";
+import { markdownRasterImages } from "../../pi-client/test/fixtures/markdownRasterImages.ts";
 import { devtoolsClient, openDebuggingSocket } from "./cdp-client.mjs";
 import { powerShellLiteral, runPowerShell } from "./powershell.mjs";
 
@@ -473,6 +475,42 @@ async function verifySidebarSections() {
   }
 }
 
+async function verifyMarkdownImages() {
+  const lines = [];
+  for (const image of markdownRasterImages) {
+    const path = join(directory, `image-fixture.${image.extension}`);
+    writeFileSync(path, Buffer.from(image.base64, "base64"));
+    lines.push(`![${image.extension} local](${pathToFileURL(path).href})`);
+    lines.push(`![${image.extension} data](data:${image.mimeType};base64,${image.base64})`);
+  }
+  lines.push("![Remote consent](https://images.example.invalid/consent.png)");
+  await send(lines.join("\n\n"));
+  await until(() => client.evaluate("[...document.querySelectorAll('.remote-placeholder')].some(e=>e.textContent.includes('Remote consent')) && !document.querySelector('[aria-label=\"Stop Pi\"]')"), "image fixture turn completes");
+  await client.evaluate("[...document.querySelectorAll('.message-user')].at(-1).scrollIntoView({block:'end'})");
+  for (const image of markdownRasterImages) {
+    for (const source of ["local", "data"]) {
+      const selector = `img[alt="${image.extension} ${source}"]`;
+      await until(() => client.evaluate(`(() => {const image=document.querySelector(${JSON.stringify(selector)});return image?.complete && image.naturalWidth===${image.width} && image.naturalHeight===${image.height} && image.src.startsWith('blob:');})()`), `${image.extension} ${source} decodes through the packaged client`);
+    }
+    await client.evaluate(`document.querySelector('img[alt="${image.extension} local"]').closest('.image-trigger').click()`);
+    await until(() => client.evaluate(`document.querySelector('.image-lightbox img')?.naturalWidth===${image.width}`), `${image.extension} Lightbox decodes`);
+    await client.evaluate("document.querySelector('.lightbox-close').click()");
+  }
+  assert.equal(await client.evaluate("[...document.querySelectorAll('.remote-placeholder')].some(e=>e.textContent.includes('Remote consent') && e.querySelector('button')?.textContent==='Load image')"), true);
+  checks.push("AVIF/BMP local and inline images decode through native IPC/shared UI; Lightbox and remote consent remain available");
+
+  const blocked = await client.evaluate(`new Promise(resolve => {
+    const source='https://images.example.invalid/csp-probe.png';
+    const finish=value=>{clearTimeout(timer);document.removeEventListener('securitypolicyviolation',onViolation);resolve(value)};
+    const onViolation=event=>{if(event.blockedURI.startsWith('https://images.example.invalid'))finish(event.effectiveDirective==='img-src')};
+    const timer=setTimeout(()=>finish(false),3000);
+    document.addEventListener('securitypolicyviolation',onViolation);
+    const image=new Image();image.src=source;
+  })`);
+  assert.equal(blocked, true, "native CSP blocks a direct remote image request");
+  checks.push("native WebView2 CSP blocks remote image URLs while allowing packaged and Blob resources");
+}
+
 async function verifyOversizedPrompt() {
   await client.typeIntoComposer("desktop-limit-draft");
   await client.evaluate(`(() => {
@@ -519,6 +557,7 @@ try {
   await send("mermaid");
   await until(() => client.evaluate("Boolean(document.querySelector('.mermaid-host svg'))"), "Mermaid vendor loads");
   checks.push("Mermaid bundled assets render in WebView2");
+  await verifyMarkdownImages();
   await verifyTrayBehavior();
   await verifyOversizedPrompt();
   await verifyParallelAndResume();

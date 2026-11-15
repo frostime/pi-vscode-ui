@@ -46,8 +46,8 @@
 </div>
 
 <style>
-.response-activity:hover > .response-actions { opacity: 1; }
-.response-activity:focus-within > .response-actions { opacity: 1; }
+.response-activity:hover > .response-actions { opacity: 1; pointer-events: auto; }
+.response-activity:focus-within > .response-actions { opacity: 1; pointer-events: auto; }
 .message-footnote { margin-top: 6px; color: var(--frost-muted); font-size: var(--font-size-detail); font-style: italic; }
 .response-activity { min-width: 0; padding: 4px 2px 7px; }
 /* Sibling chrome crosses component instances; keep unscoped. */

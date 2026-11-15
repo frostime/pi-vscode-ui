@@ -234,7 +234,7 @@
           "maximum": 52428800,
           "default": 10485760,
           "scope": "resource",
-          "description": "Maximum size in bytes for each pasted image."
+          "description": "Maximum size in bytes per image. Pasted images over this limit cannot be attached. Images loaded from local files or HTTPS links in the conversation are also rejected if they exceed the limit."
         },
         "frostpi.diagnostics.level": {
           "type": "string",
@@ -321,11 +321,11 @@
     "@frostime/provider-usage": "workspace:*",
     "@vscode/codicons": "^0.0.44",
     "bits-ui": "^2.18.1",
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.17",
     "highlight.js": "^11.11.1",
-    "katex": "^0.18.1",
-    "markdown-it": "^14.3.0",
-    "mermaid": "^11.16.0",
+    "katex": "^0.18.2",
+    "markdown-it": "^14.3.3",
+    "mermaid": "^11.16.1",
     "minimatch": "^10.2.5",
     "svelte": "^5.56.5",
     "zod": "^4.4.3"

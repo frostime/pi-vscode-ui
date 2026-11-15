@@ -121,7 +121,7 @@ Agent output stays readable instead of collapsing into plain text:
 - **Link targets** — hover over a Markdown link for one second, or focus it with the keyboard, to preview its file path or full external URL before opening it.
 - **Mermaid** diagrams — incomplete fences remain plain source while streaming; complete ones render as diagrams.
 - **Math** via KaTeX — inline `$...$` and block `$$...$$` display formulas.
-- **Embedded images** — PNG, JPEG, WebP, GIF, and SVG with captions, the shared Lightbox, lazy local loading, and click-to-load for remote HTTPS images.
+- **Embedded images** — PNG, JPEG, WebP, GIF, AVIF, BMP, and SVG with captions, the shared Lightbox, lazy local loading, and click-to-load for remote HTTPS images.
 - **Diffs** — `diff`/`patch` fences and tool diffs use VS Code diff colors, down to word-level intra-line additions and deletions.
 
 <p align="center">

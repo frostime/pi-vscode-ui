@@ -93,7 +93,10 @@
 </script>
 
 <div class="conversation-frame">
-  <div class="conversation" bind:this={scroller} onscroll={handleScroll}>
+  <!-- Some VS Code webview hosts restore Composer focus before copying when the body has
+       focus, clearing the transcript selection. Let a selection drag focus this container
+       without adding a Tab stop. -->
+  <div class="conversation" bind:this={scroller} onscroll={handleScroll} tabindex="-1">
     <div class="conversation-inner" bind:this={content}>
       {#if session.conversationItems.length === 0}
         <div class="conversation-empty">

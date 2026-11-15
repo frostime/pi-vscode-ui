@@ -17,6 +17,8 @@ interface CachedResult {
 }
 
 const REQUEST_TIMEOUT_MS = 15_000;
+// Longer than the Host's own remote fetch deadline, so its structured failure arrives first.
+const REMOTE_REQUEST_TIMEOUT_MS = 30_000;
 const CACHE_TTL_MS = 30_000;
 const MAX_CACHE_ENTRIES = 24;
 const MAX_CACHE_CHARACTERS = 24 * 1024 * 1024;
@@ -26,10 +28,22 @@ const inFlight = new Map<string, Promise<MarkdownImageLoadResult>>();
 const cache = new Map<string, CachedResult>();
 
 export function loadLocalMarkdownImage(source: string): Promise<MarkdownImageLoadResult> {
+  return requestMarkdownImage(source, false);
+}
+
+/**
+ * Asks the Host to fetch an HTTPS image. Call only from the user's explicit load
+ * action: the Webview itself has no permission to contact a remote origin.
+ */
+export function loadRemoteMarkdownImage(source: string): Promise<MarkdownImageLoadResult> {
+  return requestMarkdownImage(source, true);
+}
+
+function requestMarkdownImage(source: string, remote: boolean): Promise<MarkdownImageLoadResult> {
   const sessionId = get(presentationStore).displayedSession?.id;
   if (!sessionId) return Promise.resolve({ ok: false, reason: "invalidSource" });
 
-  const key = `${sessionId}\0${source}`;
+  const key = `${sessionId}\0${remote ? "remote" : "local"}\0${source}`;
   const cached = cachedResult(key);
   if (cached) return Promise.resolve(cached);
 
@@ -41,9 +55,9 @@ export function loadLocalMarkdownImage(source: string): Promise<MarkdownImageLoa
     const timeout = setTimeout(() => {
       if (!pending.delete(requestId)) return;
       resolve({ ok: false, reason: "readFailed" });
-    }, REQUEST_TIMEOUT_MS);
+    }, remote ? REMOTE_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
     pending.set(requestId, { sessionId, timeout, resolve });
-    postToHost({ type: "loadMarkdownImage", requestId, sessionId, source });
+    postToHost({ type: "loadMarkdownImage", requestId, sessionId, source, ...(remote ? { remote: true as const } : {}) });
   }).then((result) => {
     if (result.ok) cacheResult(key, result);
     return result;
