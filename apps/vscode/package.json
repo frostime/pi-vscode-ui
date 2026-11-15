@@ -57,6 +57,8 @@
     "onView:frostpi.chat",
     "onCommand:frostpi.newSession",
     "onCommand:frostpi.newSessionInEditorTab",
+    "onCommand:frostpi.newTemporarySession",
+    "onCommand:frostpi.newTemporarySessionInEditorTab",
     "onCommand:frostpi.renameSession",
     "onCommand:frostpi.toggleFocusView",
     "onCommand:frostpi.resumeSession",
@@ -113,6 +115,16 @@
         "command": "frostpi.newSessionInEditorTab",
         "title": "FrostPi: New Session in Editor Tab",
         "icon": "$(add)"
+      },
+      {
+        "command": "frostpi.newTemporarySession",
+        "title": "FrostPi: New Temporary Session",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "frostpi.newTemporarySessionInEditorTab",
+        "title": "FrostPi: New Temporary Session in Editor Tab",
+        "icon": "$(eye-closed)"
       },
       {
         "command": "frostpi.renameSession",
@@ -184,8 +196,14 @@
       "editor/title": [
         {
           "command": "frostpi.newSessionInEditorTab",
+          "alt": "frostpi.newTemporarySessionInEditorTab",
           "when": "activeWebviewPanelId == 'frostpi.session'",
           "group": "navigation@1"
+        },
+        {
+          "command": "frostpi.newTemporarySessionInEditorTab",
+          "when": "activeWebviewPanelId == 'frostpi.session'",
+          "group": "frostpi@0"
         },
         {
           "command": "frostpi.renameSession",

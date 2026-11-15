@@ -5,7 +5,7 @@ scope:
   - /apps/pi-client/src/core/sessions/**
   - /apps/pi-client/src/host/**
   - /apps/vscode/src/extension/webview-host/**
-updated: 2026-11-12
+updated: 2026-11-14
 ---
 
 # Pi Session Lifecycle
@@ -60,7 +60,7 @@ Cancel Fork stops that child and restarts the original so a late response cannot
 
 **Rewind is tree navigation with a list.** `/rewind` offers the user prompts on the active path, latest first, then follows Branch here exactly: the same preconditions, summary choice, commit boundary and one-shot Composer seed. It changes which entries Pi sends to the model. The abandoned path remains a branch of the same session file, and files on disk are never restored.
 
-**A Session created for its own presentation leaves the sidebar alone.** New-in-tab preserves the sidebar selection and does not discard the sidebar's unretained Provisional Session; with nothing selected, the new Session becomes the selection so the collection stays reachable. Asked from an existing Session, it reuses that Session's working directory only while discovery still allows the directory, and otherwise falls back to the ordinary Host choice. The presentation is told about the entry before its child starts; if the presentation cannot open, the Session still starts and the failure is reported.
+**A Session created for its own presentation leaves the sidebar alone.** New-in-tab preserves the sidebar selection and does not discard the sidebar's unretained Provisional Session; with nothing selected, the new Session becomes the selection so the collection stays reachable. Asked from an existing Session, it reuses that Session's working directory only while discovery still allows the directory, and otherwise falls back to the ordinary Host choice. The presentation is told about the entry before its child starts; if the presentation cannot open, the Session still starts and the failure is reported. Such a Session may be Ephemeral: that sets what Pi saves and never where the Session is presented.
 
 ## Retention, restoration and shutdown
 

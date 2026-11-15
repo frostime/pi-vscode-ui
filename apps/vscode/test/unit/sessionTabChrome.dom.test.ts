@@ -78,10 +78,11 @@ describe("Session Tab header", () => {
     expect(posted()).toEqual([{ type: "renameSession", sessionId: "session", name: "By blur" }]);
   });
 
-  it("opens a new Session in an editor tab from the tab itself", async () => {
+  it("opens a new Session, saved or temporary, in an editor tab from the tab itself", async () => {
     const view = render(PanelSessionHeader, { session: session() });
     await fireEvent.click(view.getByRole("button", { name: "New session in editor tab" }));
-    expect(posted()).toEqual([{ type: "createSessionPanel" }]);
+    await fireEvent.click(view.getByRole("button", { name: "New temporary session in editor tab" }));
+    expect(posted()).toEqual([{ type: "createSessionPanel" }, { type: "createSessionPanel", ephemeral: true }]);
   });
 });
 
@@ -110,10 +111,10 @@ describe("sidebar launcher", () => {
     expect(posted()).toEqual([{ type: "renameSession", sessionId: "session", name: "Tokenizer" }]);
   });
 
-  it("offers a new Session in an editor tab only on a host with editor tabs", async () => {
+  it("offers a new Session in an editor tab beside the sidebar one, only on a host with editor tabs", async () => {
     const view = render(SessionHeader, { sessions: [summary], active: session({ status: "ready", isStreaming: false }) });
     await fireEvent.click(view.getByRole("button", { name: "New or resume session" }));
-    await fireEvent.click(view.getByRole("button", { name: "More ways to start a session" }));
+    // The editor-tab entry is at the menu's top level, not among the further ways to start.
     await fireEvent.click(view.getByRole("button", { name: /New session in editor tab/ }));
     expect(posted()).toEqual([{ type: "createSessionPanel" }]);
     cleanup();
@@ -122,7 +123,22 @@ describe("sidebar launcher", () => {
     const withoutTabs = render(SessionHeader, { sessions: [summary], active: session({ status: "ready", isStreaming: false }) });
     await fireEvent.click(withoutTabs.getByRole("button", { name: "New or resume session" }));
     await fireEvent.click(withoutTabs.getByRole("button", { name: "More ways to start a session" }));
-    expect(withoutTabs.queryByRole("button", { name: /New session in editor tab/ })).toBeNull();
+    expect(withoutTabs.queryByRole("button", { name: /in editor tab/ })).toBeNull();
     expect(withoutTabs.getByRole("button", { name: /New temporary session/ })).toBeTruthy();
+  });
+
+  it("starts a temporary Session in the sidebar or in an editor tab", async () => {
+    const view = render(SessionHeader, { sessions: [summary], active: session({ status: "ready", isStreaming: false }) });
+    const openVariants = async (): Promise<void> => {
+      await fireEvent.click(view.getByRole("button", { name: "New or resume session" }));
+      await fireEvent.click(view.getByRole("button", { name: "More ways to start a session" }));
+    };
+
+    await openVariants();
+    await fireEvent.click(view.getByRole("button", { name: /^New temporary session Start/ }));
+    await openVariants();
+    await fireEvent.click(view.getByRole("button", { name: /New temporary session in editor tab/ }));
+
+    expect(posted()).toEqual([{ type: "createSession", ephemeral: true }, { type: "createSessionPanel", ephemeral: true }]);
   });
 });

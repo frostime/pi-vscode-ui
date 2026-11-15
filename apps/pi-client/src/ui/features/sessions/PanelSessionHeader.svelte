@@ -85,6 +85,7 @@
   {/if}
   <div class="session-actions">
     <IconButton icon="add" label="New session in editor tab" onclick={() => postToHost({ type: "createSessionPanel" })} />
+    <IconButton icon="eye-closed" label="New temporary session in editor tab" onclick={() => postToHost({ type: "createSessionPanel", ephemeral: true })} />
   </div>
 </header>
 

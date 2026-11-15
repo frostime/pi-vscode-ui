@@ -82,9 +82,9 @@
     postToHost({ type: "createSessionWithArguments" });
   }
 
-  function createSessionPanel(): void {
+  function createSessionPanel(ephemeral = false): void {
     closeMenus();
-    postToHost({ type: "createSessionPanel" });
+    postToHost(ephemeral ? { type: "createSessionPanel", ephemeral: true } : { type: "createSessionPanel" });
   }
 
   function toggleLauncherVariants(): void {
@@ -217,16 +217,21 @@
                 <span class="codicon" class:codicon-chevron-right={!launcherVariantsOpen} class:codicon-chevron-down={launcherVariantsOpen} aria-hidden="true"></span>
               </button>
             </div>
+            {#if editorTabs}
+              <button type="button" onclick={() => createSessionPanel()}>
+                <span class="codicon codicon-layout"></span><span><strong>New session in editor tab</strong><small>Start it directly in its own tab</small></span>
+              </button>
+            {/if}
             {#if launcherVariantsOpen}
               <div class="launcher-variants">
-                {#if editorTabs}
-                  <button type="button" onclick={createSessionPanel}>
-                    <span class="codicon codicon-layout"></span><span><strong>New session in editor tab</strong><small>Start it directly in its own tab</small></span>
-                  </button>
-                {/if}
                 <button type="button" onclick={createTemporarySession}>
                   <span class="codicon codicon-eye-closed"></span><span><strong>New temporary session</strong><small>Start a conversation that is never saved</small></span>
                 </button>
+                {#if editorTabs}
+                  <button type="button" onclick={() => createSessionPanel(true)}>
+                    <span class="codicon codicon-eye-closed"></span><span><strong>New temporary session in editor tab</strong><small>Never saved, in its own tab</small></span>
+                  </button>
+                {/if}
                 <button type="button" onclick={createSessionWithArguments}>
                   <span class="codicon codicon-terminal"></span><span><strong>New session with arguments…</strong><small>Pass extra Pi CLI flags for this launch</small></span>
                 </button>

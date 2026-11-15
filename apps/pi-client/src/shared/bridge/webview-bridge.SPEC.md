@@ -7,7 +7,7 @@ scope:
   - /apps/pi-client/src/ui/bridge/**
   - /apps/vscode/src/extension/webview-host/**
   - /apps/desktop/src/**
-updated: 2026-11-12
+updated: 2026-11-14
 ---
 
 # Webview Bridge Compatibility Contract
@@ -32,7 +32,7 @@ Host `WebviewConnection` consumes a structural message/visibility endpoint, not 
 
 The Host authorizes actions from immutable Connection context. Panel messages may target only the pinned Session, regardless of any client-supplied id. Sidebar collection-management actions, including opening a Session in an editor tab, may target any listed Session, while sidebar conversation actions remain scoped to the Session displayed by that Connection. New, Resume, selection, close/restart, externalization, configuration, diagnostics, and other collection-management actions are sidebar-only and are rejected from panels even if manually posted. `/resume` is Host-local and is rejected from a panel with sidebar guidance.
 
-A panel manages only its own Session. It may rename the pinned Session, at any time including a running turn; a rename naming another Session is rejected like any cross-Session message. It may also ask for a new Session in its own editor tab with `createSessionPanel`, which is likewise available to the sidebar. That request carries no Session id, directory or placement: the Host derives the tab group and working directory from the asking Connection's pinned Session, and for the sidebar uses the active group and the ordinary directory choice. The new Session never changes the sidebar selection. A Host without editor tabs rejects the request before creating anything.
+A panel manages only its own Session. It may rename the pinned Session, at any time including a running turn; a rename naming another Session is rejected like any cross-Session message. It may also ask for a new Session in its own editor tab with `createSessionPanel`, which is likewise available to the sidebar. That request carries no Session id, directory or placement, only whether the new Session is Temporary (`ephemeral`): the Host derives the tab group and working directory from the asking Connection's pinned Session, and for the sidebar uses the active group and the ordinary directory choice. The new Session never changes the sidebar selection. A Host without editor tabs rejects the request before creating anything.
 
 Registry/global Host toasts preserve the former single-Webview behavior and are delivered best-effort to the Sidebar Connection only. Action results, failures, and contention notices return only to their originating Connection.
 

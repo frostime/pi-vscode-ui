@@ -437,6 +437,21 @@ describe("Host slash commands through the real Registry and child-process path",
       expect(fixture.registry.activeSessionId).toBe(created);
     });
 
+    it("can be temporary: never saved, and kept when the sidebar moves on", async () => {
+      const fixture = await host();
+      const { registry } = fixture;
+      const sidebar = await fixture.startSession();
+
+      const temporary = await registry.createSession(true, { selection: "preserve-sidebar-selection", workingDirectoryOf: sidebar });
+
+      expect(registry.activeSessionId).toBe(sidebar);
+      expect(fixture.view(temporary!)).toMatchObject({ isEphemeral: true, status: "ready" });
+      expect(fixture.view(temporary!).sessionFile).toBeUndefined();
+      // The sidebar replaces its own unused session; the temporary one in its tab stays.
+      const next = await registry.createSession();
+      expect(registry.snapshot().sessions.map((session) => session.id)).toEqual([temporary, next]);
+    });
+
     it("still starts the session when its presentation cannot open, and reports that failure", async () => {
       const fixture = await host();
       const { registry } = fixture;

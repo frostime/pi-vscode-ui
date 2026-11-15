@@ -89,6 +89,8 @@ describe("Webview bridge validation", () => {
 
   it("accepts the Session Tab creation action", () => {
     expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "createSessionPanel" }).success).toBe(true);
+    expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "createSessionPanel", ephemeral: true }).success).toBe(true);
+    expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "createSessionPanel", ephemeral: "true" }).success).toBe(false);
   });
 
   it("accepts bounded session-tree actions and rejects malformed fields", () => {

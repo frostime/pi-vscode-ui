@@ -64,7 +64,7 @@ const payloadSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("createSessionWithArguments") }),
   z.object({ type: z.literal("resumeSession") }),
   // A new Session that opens in its own editor tab; from a Session Tab it joins that tab's group.
-  z.object({ type: z.literal("createSessionPanel") }),
+  z.object({ type: z.literal("createSessionPanel"), ephemeral: z.boolean().optional() }),
   z.object({
     type: z.literal("openSessionPanel"),
     sessionId: z.string().min(1).max(128),

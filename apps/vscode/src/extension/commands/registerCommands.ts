@@ -36,6 +36,11 @@ export function registerCommands(
       if (sessionId) await viewProvider.reveal();
     }),
     vscode.commands.registerCommand("frostpi.newSessionInEditorTab", () => reportFailure(() => coordinator.createSessionInPanel())),
+    vscode.commands.registerCommand("frostpi.newTemporarySession", () => reportFailure(async () => {
+      const sessionId = await registry.createSession(true);
+      if (sessionId) await viewProvider.reveal();
+    })),
+    vscode.commands.registerCommand("frostpi.newTemporarySessionInEditorTab", () => reportFailure(() => coordinator.createSessionInPanel(undefined, true))),
     vscode.commands.registerCommand("frostpi.renameSession", () => reportFailure(async () => {
       const sessionId = coordinator.commandTargetSessionId();
       const session = sessionId ? registry.sessionView(sessionId) : null;

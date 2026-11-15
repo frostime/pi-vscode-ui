@@ -83,10 +83,16 @@ describe("Session Tab Host authorization", () => {
     const { dispatcher, registry, createSessionPanel, connection, sidebarConnection } = setup();
 
     await dispatcher.dispatch({ type: "createSessionPanel", bridgeVersion: BRIDGE_VERSION } as never, connection);
-    expect(createSessionPanel).toHaveBeenLastCalledWith("source");
+    expect(createSessionPanel).toHaveBeenLastCalledWith("source", false);
 
     await dispatcher.dispatch({ type: "createSessionPanel", bridgeVersion: BRIDGE_VERSION } as never, sidebarConnection);
-    expect(createSessionPanel).toHaveBeenLastCalledWith(null);
+    expect(createSessionPanel).toHaveBeenLastCalledWith(null, false);
+
+    // A Temporary Session takes the same placement; only its persistence differs.
+    await dispatcher.dispatch({ type: "createSessionPanel", bridgeVersion: BRIDGE_VERSION, ephemeral: true } as never, connection);
+    expect(createSessionPanel).toHaveBeenLastCalledWith("source", true);
+    await dispatcher.dispatch({ type: "createSessionPanel", bridgeVersion: BRIDGE_VERSION, ephemeral: true } as never, sidebarConnection);
+    expect(createSessionPanel).toHaveBeenLastCalledWith(null, true);
     // Placement and creation belong to the product; the shared path creates nothing itself.
     expect(registry.createSession).not.toHaveBeenCalled();
   });

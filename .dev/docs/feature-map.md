@@ -51,7 +51,7 @@ Use this map to locate a feature's source and nearest contract. Paths are worksp
 Paths below are relative to `apps/pi-client/src/ui/` unless stated otherwise.
 
 - Root/composition: `ClientApp.svelte`, `shell/SidebarShell.svelte`, `shell/SessionInteraction.svelte`; editor availability: `../shared/model/clientUiCapabilities.ts`.
-- Session Header/New/Resume: `features/sessions/SessionHeader.svelte` and `SessionList.svelte`; the Session Tab's own header: `features/sessions/PanelSessionHeader.svelte`.
+- Session Header/New/Resume: `features/sessions/SessionHeader.svelte` and `SessionList.svelte`; the Session Tab's own header: `features/sessions/PanelSessionHeader.svelte`; the page shown while no Session exists: `features/onboarding/OnboardingView.svelte`. A new Session in an editor tab, saved or Temporary, goes through `createSessionPanel` to `SessionWebviewCoordinator.createSessionInPanel`.
 - Host slash commands (`/compact`, `/new`, `/rewind`, `/reload`, `/name`, `/alias`): parsing, runtime gating and the per-Session completion entries in `../core/sessions/hostCommands.ts`; dispatch in `../host/SessionRegistry.ts` (`sendPrompt`). `features/composer/frostPiCommands.ts` holds only the static, runtime-independent entries.
 - Focus view and turn summary: `features/conversation/collapseTurnTrace.ts` plans, `AgentTurn.svelte` renders.
 - Composer/mentions/attachments: `features/composer/Composer.svelte` and `composer.SPEC.md`; shared file search: `../host/file-search/`; VS Code editor capture: `apps/vscode/src/extension/composer/`.

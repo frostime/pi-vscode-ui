@@ -53,7 +53,7 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
       openPanel: (sessionId, draft) => this.openPanel(sessionId, draft),
       revealPanel: (sessionId) => this.revealPanel(sessionId),
       openComposerEditor: (sessionId, text) => this.#externalEditor.open(sessionId, text),
-      createSessionPanel: (sourceSessionId) => this.createSessionInPanel(sourceSessionId),
+      createSessionPanel: (sourceSessionId, ephemeral) => this.createSessionInPanel(sourceSessionId, ephemeral),
     });
     this.#panels = new SessionPanelManager(
       registry,
@@ -140,13 +140,14 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
    * Starts a Session directly in an editor tab. Asked from a Session Tab, or by a
    * window command while one is active, the new tab joins that tab's group and working
    * directory. Asked from the sidebar it opens in the active group with the ordinary
-   * directory choice. The sidebar keeps its own selection either way.
+   * directory choice. The sidebar keeps its own selection either way. `ephemeral` makes
+   * it a Temporary Session, which changes what Pi saves, not where the tab opens.
    */
-  async createSessionInPanel(sourceSessionId?: string | null): Promise<string | undefined> {
+  async createSessionInPanel(sourceSessionId?: string | null, ephemeral = false): Promise<string | undefined> {
     // `null` is the sidebar asking: it has no source tab, whatever editor is active.
     const source = sourceSessionId === undefined ? this.#panels.activeSessionId() : sourceSessionId;
     const viewColumn = source ? this.#panels.viewColumn(source) : undefined;
-    return this.#registry.createSession(false, {
+    return this.#registry.createSession(ephemeral, {
       selection: "preserve-sidebar-selection",
       ...(source ? { workingDirectoryOf: source } : {}),
       onRegistered: (sessionId) => this.#panels.open(sessionId, viewColumn),

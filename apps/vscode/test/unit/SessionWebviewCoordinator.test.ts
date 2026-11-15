@@ -278,6 +278,13 @@ describe("Session Webview coordination", () => {
     await coordinator.createSessionInPanel();
     expect(createSession.mock.calls.at(-1)?.[1]).not.toHaveProperty("workingDirectoryOf");
     expect(createWebviewPanel.mock.calls.at(-1)?.[2]).toEqual({ viewColumn: 1, preserveFocus: false });
+
+    // A Temporary Session is placed the same way: beside its source tab, sidebar untouched.
+    await coordinator.createSessionInPanel("source", true);
+    expect(createSession).toHaveBeenLastCalledWith(true, expect.objectContaining({
+      selection: "preserve-sidebar-selection", workingDirectoryOf: "source",
+    }));
+    expect(createWebviewPanel.mock.calls.at(-1)?.[2]).toEqual({ viewColumn: 2, preserveFocus: false });
     coordinator.dispose();
   });
 

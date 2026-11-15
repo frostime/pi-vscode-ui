@@ -40,10 +40,10 @@ export interface WebviewActionDispatcherDependencies {
   openComposerEditor(sessionId: string, text: string): Promise<"opened" | "already-open">;
   /**
    * Creates a Session directly in an editor tab. `sourceSessionId` is the Session Tab
-   * that asked, whose tab group and working directory the new one shares. Hosts without
-   * editor tabs leave it out.
+   * that asked, whose tab group and working directory the new one shares. `ephemeral`
+   * asks for a Temporary Session. Hosts without editor tabs leave it out.
    */
-  createSessionPanel?(sourceSessionId: string | null): Promise<unknown>;
+  createSessionPanel?(sourceSessionId: string | null, ephemeral: boolean): Promise<unknown>;
 }
 
 const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
@@ -92,7 +92,7 @@ export class WebviewActionDispatcher {
   readonly #openPanel: (sessionId: string, draft?: ComposerDraftView) => void | Promise<void>;
   readonly #revealPanel: (sessionId: string) => void | Promise<void>;
   readonly #openComposerEditor: (sessionId: string, text: string) => Promise<"opened" | "already-open">;
-  readonly #createSessionPanel: ((sourceSessionId: string | null) => Promise<unknown>) | undefined;
+  readonly #createSessionPanel: ((sourceSessionId: string | null, ephemeral: boolean) => Promise<unknown>) | undefined;
 
   constructor(dependencies: WebviewActionDispatcherDependencies) {
     this.#host = dependencies.host;
@@ -106,7 +106,7 @@ export class WebviewActionDispatcher {
     this.#revealPanel = (sessionId) => dependencies.revealPanel(sessionId);
     this.#openComposerEditor = (sessionId, text) => dependencies.openComposerEditor(sessionId, text);
     this.#createSessionPanel = dependencies.createSessionPanel
-      ? (sourceSessionId) => dependencies.createSessionPanel!(sourceSessionId)
+      ? (sourceSessionId, ephemeral) => dependencies.createSessionPanel!(sourceSessionId, ephemeral)
       : undefined;
   }
 
@@ -180,7 +180,7 @@ export class WebviewActionDispatcher {
         return;
       case "createSessionPanel":
         if (!this.#createSessionPanel) throw unsupportedHostAction("createSessionPanel");
-        await this.#createSessionPanel(connection.surface.kind === "panel" ? connection.sessionId : null);
+        await this.#createSessionPanel(connection.surface.kind === "panel" ? connection.sessionId : null, message.ephemeral ?? false);
         return;
       case "openSessionPanel":
         await this.#openPanel(message.sessionId, message.draft);
