@@ -1,10 +1,21 @@
 ---
 title: 合并上游 PR #12 与 #17 到 quasi-main
 created: 2026-11-15T04:59:11+08:00
-consumed: false # Reader: set to true once you have read this. Questions about missing context go under "Clarifications".
+consumed: true
 ---
 
 # Handover: 合并上游 PR #12 与 #17 到 quasi-main
+
+## Integration Update — 2026-11-15
+
+本文后续章节保留交接时的状态；继续集成前先读本节。
+
+- 用户已授权先接纳 #17，再处理 CHANGELOG 与契约文档；本轮不处理 #12，不推送、不发版。
+- 从 `quasi-main` 的 `16200d0` 建立 `fix/upstream-17-transcript-copy`，将上游修复 `73b3947` cherry-pick 为 `23a0b77`，没有接纳 `a39b575` 的定版。CHANGELOG 冲突已解决：修复记录进入 `[Unreleased]`，本地 0.16.6 发布记录与版本号不变。
+- UI 契约与源码注释限定了受影响的宿主行为。本机 VS Code 1.146.0 已检查非空选区并避免恢复输入框焦点；对应上游提交为 `microsoft/vscode@b0f28160b1616d55c91b24827c22972da3722488`。因此复制故障不是所有当前宿主都必现，#17 不需要按品牌或版本分支。
+- 浏览器前后对照已复现旧宿主逻辑下选区丢失、修复后保留，以及新宿主逻辑下两者均能复制。隐藏操作按钮的命中和 Tab 可达性也已检查。该证据来自无头 Edge 中的共享组件与模拟宿主复制逻辑，不是完整 Extension Host 验收。用户报告本机现有版本复制正常。
+- `23a0b77` 的 `pnpm check` 已通过：1113 个包测试与 13 个工程脚本测试、lint、类型检查、双产品 JS 构建和包体积检查均成功。`pnpm package:vsix` 与 `pnpm verify:vsix` 也通过。`webview.css` 为 155.9 / 156.3 KiB，余量约 0.4 KiB。集成后代码已重新通过上述浏览器前后对照；没有运行完整 Extension Host 或原生 Desktop GUI 验收。
+- 用户已授权将 #17 集成分支以 `--no-ff` 合入 `quasi-main`。继续工作时先用 Git 核实合并状态，不要重复接纳 #17。#12 仍未接纳，其 Windows 路径测试缺陷待单独处理。0.16.7 定版、推送和发布仍未执行。
 
 ## Assume Reader
 
