@@ -231,10 +231,11 @@ function fileReferenceAttributes(reference: FileReference): string {
 
 function applyImagePlugin(md: MarkdownIt): void {
   const validateLink = md.validateLink.bind(md);
-  // markdown-it rejects file: destinations before rendering. Relax that check
-  // only while parsing image syntax; ordinary links retain the existing policy.
+  const imageOnlySource = /^(?:file:|data:image\/(?:png|jpeg|webp|gif|avif|bmp|svg\+xml)(?:;|,))/i;
+  // These sources become inert image placeholders, not navigable links. markdown-it
+  // rejects file: and some data: formats by default; allow them only in image syntax.
   md.inline.ruler.at("image", (state, silent) => {
-    state.md.validateLink = (url) => /^file:/i.test(url) || validateLink(url);
+    state.md.validateLink = (url) => imageOnlySource.test(url) || validateLink(url);
     try {
       return imageRule(state, silent);
     } finally {

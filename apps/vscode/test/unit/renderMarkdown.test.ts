@@ -7,6 +7,7 @@ import {
   renderMarkdownHtml,
   sanitizeMermaidSvg,
 } from "$ui/features/conversation/markdown/renderMarkdown.js";
+import { markdownRasterImages } from "../../../pi-client/test/fixtures/markdownRasterImages.js";
 
 describe("renderMarkdownHtml", () => {
   beforeAll(async () => {
@@ -163,6 +164,18 @@ describe("renderMarkdownHtml", () => {
     fileUri.innerHTML = renderMarkdownHtml("![local](file:///C:/tmp/build.png)");
     expect(fileUri.querySelector("[data-image-source]")?.getAttribute("data-image-source"))
       .toBe("file:///C:/tmp/build.png");
+  });
+
+  it.each([
+    ...markdownRasterImages.map(({ mimeType, base64 }) => ({ mimeType, source: `data:${mimeType};base64,${base64}` })),
+    { mimeType: "image/svg+xml", source: "data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22/%3E" },
+  ])("accepts $mimeType data only as an inert image, not an ordinary link", ({ source }) => {
+    const root = document.createElement("div");
+    root.innerHTML = renderMarkdownHtml(`![fixture](${source})\n\n[ordinary link](${source})`);
+
+    expect(root.querySelector("[data-image-source]")?.getAttribute("data-image-source")).toBe(source);
+    expect(root.querySelector("img")).toBeNull();
+    expect(root.querySelector("a")).toBeNull();
   });
 
   it("preserves a link around an inert Markdown image", () => {
