@@ -1,4 +1,5 @@
 import type { ImageAttachmentView, MessageBlockView } from "../../shared/model/conversationModel.js";
+import { isShellTool } from "../../shared/model/shellTools.js";
 import type { BoundToolCallView } from "../../shared/model/toolCallModel.js";
 
 export function contentToBlocks(content: unknown, attachments: unknown, idPrefix: string): MessageBlockView[] {
@@ -116,7 +117,7 @@ function toolFilePath(args: Record<string, unknown>): string | undefined {
 }
 
 function toolLabel(name: string, args: Record<string, unknown>): string {
-  if (name === "bash" && typeof args.command === "string") return args.command;
+  if (isShellTool(name) && typeof args.command === "string") return args.command;
   const path = toolFilePath(args);
   if (path) return path;
   if (name === "grep" && typeof args.pattern === "string") return args.pattern;

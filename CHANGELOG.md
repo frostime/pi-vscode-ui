@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Render PowerShell tool calls as shell commands: the collapsed card shows the terminal icon and the command itself instead of repeating the tool name.
 - Preserve selected transcript text when copying with `Ctrl+C` or the native Copy menu in VS Code and VSCodium versions that restore input focus before copying.
 - Prevent hidden code-block and message action buttons from intercepting clicks and text-selection drags.
 - Display AVIF and BMP conversation images from local files, inline data, and explicit HTTPS loads, alongside PNG, JPEG, WebP, GIF, and SVG. Prompt-attachment formats are unchanged.
