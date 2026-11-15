@@ -6,6 +6,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { SessionViewModel } from "../../src/shared/model/sessionViewModel.js";
 import { queuedRecoveryHost, waitForRecovery } from "../fixtures/queuedRecoveryHost.js";
 
+const image = {
+  id: "original", name: "pixel.png", mimeType: "image/png" as const,
+  data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7nkAAAAASUVORK5CYII=", size: 68,
+};
+
 function userPrompts(session: SessionViewModel | null): string[] {
   return (session?.conversationItems ?? []).flatMap((item) => item.type === "turn" && item.userMessage
     ? [item.userMessage.blocks.map((block) => block.type === "text" ? block.text : "").join("")]
@@ -97,6 +102,46 @@ describe("prompts sent while Pi compacts the context", () => {
     await waitForRecovery(() => view()?.isStreaming === false && userPrompts(view()).length === 2);
     expect(userPrompts(view())).toEqual(["auto-compact", "steer me"]);
     expect(errors).toEqual([]);
+  });
+
+  it("withdraws held prompts into the Composer during compaction, images included, and sends nothing", async () => {
+    const fixture = await host();
+    const { registry, sessionId, view, release } = fixture;
+    const surface = fixture.presentation();
+    surface.send({ type: "ready" });
+    const compact = registry.sendPrompt(sessionId, "/compact", []);
+    await waitForRecovery(() => view()?.isCompacting === true);
+    await registry.sendPrompt(sessionId, "first", [image], "followUp");
+    await registry.sendPrompt(sessionId, "second", [], "steer");
+    expect(view()?.queuedPromptRecovery).toEqual({ state: "ready" });
+
+    surface.send({ type: "restoreQueuedPrompts", sessionId, requestId: "withdraw", draftImageCount: 0 });
+    await waitForRecovery(() => surface.messages.some((message) => message.type === "restoreQueuedPromptsResult"));
+    const result = surface.messages.find((message) => message.type === "restoreQueuedPromptsResult");
+    expect(result).toMatchObject({
+      ok: true,
+      outcome: {
+        certainty: "confirmed", recoveredCount: 2, notRemovedCount: 0, warnings: [],
+        content: { text: "first\n\nsecond", images: [{ name: "pixel.png", mimeType: "image/png", data: image.data }] },
+      },
+    });
+    expect(pending(view())).toEqual([]);
+
+    await release("compact");
+    await compact;
+    await waitForRecovery(() => view()?.isCompacting === false);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(userPrompts(view())).toEqual([]);
+  });
+
+  it("keeps withdrawal unavailable during an automatic compaction, when Pi holds the queue", async () => {
+    const { registry, sessionId, view, release } = await host();
+    await registry.sendPrompt(sessionId, "auto-compact", []);
+    await waitForRecovery(() => view()?.isCompacting === true);
+    await registry.sendPrompt(sessionId, "steer me", [], "steer");
+    expect(view()?.queuedPromptRecovery).toEqual({ state: "unavailable", reason: "compacting" });
+    await release("compact");
+    await release("release");
   });
 
   it("drops the held prompts when the user stops the compaction, as Stop does with a queue", async () => {
