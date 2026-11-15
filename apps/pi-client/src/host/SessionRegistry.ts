@@ -383,7 +383,10 @@ export class SessionRegistry {
       // An ordinary prompt waits in the queue until compaction ends; /compact acts now, so it cannot.
       if (runtime.view.isCompacting) throw new Error("Wait for context compaction to finish before running this command.");
       if (images.length > 0) throw new Error("/compact does not support image attachments.");
-      await runtime.compact(compactInstructions || undefined);
+      // Return once compaction is under way, so the Composer is free again and queues what is
+      // sent meanwhile. A failure after that is reported by compaction_end in the conversation.
+      const { done } = await runtime.beginCompaction(compactInstructions || undefined);
+      void done.catch((error: unknown) => this.#logger.error(`Compaction of session ${sessionId} failed`, error));
     } else {
       await runtime.sendPrompt(text, images, streamingBehavior);
     }
