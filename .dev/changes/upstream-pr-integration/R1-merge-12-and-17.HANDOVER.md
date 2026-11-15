@@ -6,36 +6,39 @@ consumed: true
 
 # Handover: 合并上游 PR #12 与 #17 到 quasi-main
 
-## Integration Update — 2026-11-15
+## Integration Result — 2026-11-15
 
-本文后续章节保留交接时的状态；继续集成前先读本节。
+**#17 与 #12 已合入 `quasi-main`，不再处于等待合并状态。** 用户授权了本地集成，没有授权推送或发布。以下 `Assume Reader` 起为原始交接历史，不能据其中的旧分支状态重复执行合并。
 
-- #17 已获准接纳；#12 已获准修正 Windows 图片路径测试、恢复 AVIF/BMP 正文图片支持并更新文案，尚未获准合入 `quasi-main`。不推送、不发版。
-- 从 `quasi-main` 的 `16200d0` 建立 `fix/upstream-17-transcript-copy`，将上游修复 `73b3947` cherry-pick 为 `23a0b77`，没有接纳 `a39b575` 的定版。CHANGELOG 冲突已解决：修复记录进入 `[Unreleased]`，本地 0.16.6 发布记录与版本号不变。
-- UI 契约与源码注释限定了受影响的宿主行为。本机 VS Code 1.146.0 已检查非空选区并避免恢复输入框焦点；对应上游提交为 `microsoft/vscode@b0f28160b1616d55c91b24827c22972da3722488`。因此复制故障不是所有当前宿主都必现，#17 不需要按品牌或版本分支。
-- 浏览器前后对照已复现旧宿主逻辑下选区丢失、修复后保留，以及新宿主逻辑下两者均能复制。隐藏操作按钮的命中和 Tab 可达性也已检查。该证据来自无头 Edge 中的共享组件与模拟宿主复制逻辑，不是完整 Extension Host 验收。用户报告本机现有版本复制正常。
-- `23a0b77` 的 `pnpm check` 已通过：1113 个包测试与 13 个工程脚本测试、lint、类型检查、双产品 JS 构建和包体积检查均成功。`pnpm package:vsix` 与 `pnpm verify:vsix` 也通过。`webview.css` 为 155.9 / 156.3 KiB，余量约 0.4 KiB。集成后代码已重新通过上述浏览器前后对照；没有运行完整 Extension Host 或原生 Desktop GUI 验收。
-- #17 已以 `--no-ff` 合入 `quasi-main`，合并提交 `8d06e4b`，不要重复接纳。对应 Issue 为 #16；后续合入默认分支 `main` 的提交正文须写 `Closes #16`。0.16.7 定版、推送和发布仍未执行。
+### 已合入的内容
 
-### PR #12 Windows 图片路径测试
+- #17：合并提交 `8d06e4b`。只接纳复制修复 `73b3947`，没有带入上游的定版提交 `a39b575`。本机 VS Code 1.146.0 已有宿主侧选区保护，因此不是所有版本都能复现原故障；浏览器对照确认 FrostPi 修复适用于旧宿主逻辑且不破坏新逻辑。
+- #12：合并提交 `fb72d2f`。从上游 `0ac4391` 衍生的 `fix/pr12-windows-image-tests` 已与本地成果、#17 组合验证；集成分支最终代码为 `e37fdcb`。合并后的树与该验证分支完全一致。
+- `fb72d2f` 正文已写 `Closes #16`，对应 #17 的复制问题。尚未推送默认分支，不代表 GitHub Issue 此时已关闭；后续合入 `main` 时保留此关联。
+- CHANGELOG 将两项PR及图片兼容修正整理进 `[Unreleased]`，保留本地0.16.6发布历史。版本仍为0.16.6；0.16.7定版、推送、tag与发布是后续授权事项。#13/#14仍不在本次范围。
 
-用户接受增加显式图片加载操作，但要求设计支持范围内的图片仍有可用加载入口；SOCKS 与 Remote-SSH 场景本轮明确不考虑。用户已接受保留默认10 MiB大小限制并澄清设置说明。失败后没有原地重试入口仍未修正，尚未获准直接合入整个 PR。
+### 集成时完成的修正
 
-Windows 路径判断目前没有已确认的产品缺陷；已确认的问题是测试使用虚构路径接触真实磁盘/共享，并假定访问结果必为 `notFound`。修正位于 `fix/pr12-windows-image-tests@fa75bfb`，基于 PR #12 head `0ac4391`，工作树为 `.worktrees/pr12-windows-image-tests`，尚未合入 `quasi-main`。
+Windows图片路径测试已隔离真实磁盘与网络共享：拒绝路径断言零文件系统访问，允许路径断言准确读取；真实文件用例保留临时目录。没有为测试扩张产品接口。一次性移除保护后，16个拒绝用例失败，恢复后全绿。
 
-该提交只改测试：原 `MarkdownImageResolver.test.ts` 保留真实临时文件用例；新 `MarkdownImageResolver.windows.test.ts` mock 文件系统，验证16个拒绝路径零访问、8个允许路径准确调用一次 `stat` 与 `readFile`。没有修改产品代码或新增注入接口。27个 focused 用例全部通过；一次性绕过网络路径 guard 后16个拒绝用例全部失败，恢复 guard 后重新全绿。
+正文图片支持PNG/JPEG/WebP/GIF/AVIF/BMP/SVG，覆盖本地文件、支持的内嵌data及显式HTTPS加载；模型附件格式仍为原有PNG/JPEG/WebP。原生烟测发现Markdown解析器会在组件之前拒绝AVIF/BMP内嵌图片，`e37fdcb`已修正图片语法的入口校验，并验证普通链接策略没有放宽。
 
-先构建共享包后，该独立分支的 `pnpm check` 通过：1209个包测试通过、1个现有平台条件用例跳过、13个工程脚本测试通过，lint、类型检查、双产品 JS 构建与包体积检查通过。此结果仅针对上游 PR #12 加测试修正，不是它与本地 `quasi-main` / #17 的组合验收。日志在该工作树的 `tmp/`，尚未做 GUI 或打包验证。
+用户接受保留默认10 MiB限制。VS Code与Desktop的设置说明已明确：超限粘贴图片不能作为附件添加，超限本地文件/HTTPS正文图片不能加载。设置键不变，Desktop已有入口为 Settings → Conversation & Pi → Reading & input → Image size limit，以MiB编辑。
 
-### PR #12 图片兼容与设置说明
+### 组合验证证据
 
-该独立分支现为 `fix/pr12-windows-image-tests@1ef5f6f`。`cc5c01d` 更新了 VS Code 与 Desktop 的大小限制说明并重新生成共享设置定义：超限的粘贴图片不能添加为附件，超限的本地文件/HTTPS正文图片不能加载。设置键和10 MiB默认值不变；Desktop已有入口为 Settings → Conversation & Pi → Reading & input → Image size limit，以MiB编辑。
+以下结果针对 `e37fdcb`，不是仅对上游PR单独验证：
 
-用户明确要求恢复 AVIF/BMP 加载支持。`1ef5f6f` 补齐字节识别、结果MIME类型、HTTPS Accept、前端Blob/内嵌data展示，更新格式错误提示、Markdown SPEC、两份README与CHANGELOG。正文支持PNG/JPEG/WebP/GIF/AVIF/BMP/SVG；粘贴给模型的附件格式仍为原有PNG/JPEG/WebP，没有放宽附件协议。
+- `pnpm check`成功：1242个包测试通过，1个既有平台条件用例跳过，13个工程脚本测试通过；lint、类型检查、双产品JS构建与包体积检查通过。`webview.css`为156.0 / 156.3 KiB。
+- `pnpm package:vsix` 与 `pnpm verify:vsix`成功；验证包为 `.worktrees/pr12-windows-image-tests/artifacts/FrostPi-0.16.6.vsix`，仅作集成验收，不是0.16.7发布包。
+- 完整Desktop原生构建与GUI smoke成功。真实WebView2验证了Mermaid资源、AVIF/BMP本地及内嵌图片解码、放大预览、远程图片加载入口，以及CSP拒绝直接远程图片请求；其余既有的双Project并行、Settings、窗口/进程生命周期检查也通过。
+- 无头Edge共享组件检查覆盖两种格式各自的本地、内嵌data、HTTPS加载流程。HTTPS正向用例使用注入传输响应；此前会话对相同loader做过真实HTTPS/代理实验，不能将该历史证据描述成本轮完整Extension Host验收。
 
-修复前新增测试复现了Host、本地读取和前端对AVIF/BMP的拒绝；修复后转绿。无头Edge验证了两种真实图片在本地文件、HTTPS加载流程、内嵌data共6种情况下的解码、尺寸和放大预览；HTTPS使用注入传输响应，实际执行共享loader与前端桥消息，不是完整Extension Host或原生Desktop验收。浏览器证据位于该工作树 `tmp/image-formats/component-browser-result.json`。
+日志位于 `.worktrees/pr12-windows-image-tests/tmp/`：`integration-final-check.log`、`integration-final-package-vsix.log`、`integration-final-verify-vsix.log`、`integration-desktop-build-final.log`、`integration-desktop-smoke-final.log`。原生smoke的完整结果目录见最后一份日志。工作树及分支保留，便于核查产物。
 
-`1ef5f6f` 的独立分支验证通过：1220个包测试、13个工程脚本测试，1个既有平台用例跳过，完整 `pnpm check` 与VSIX打包/校验成功。日志为该工作树 `tmp/formats-*.log`。产物保留上游分支0.16.5版本，仅作验证；未定版0.16.7、未合入quasi-main、未推送或发布，仍需组合验收。
+### 已知边界，不作为本次合并阻塞
+
+SOCKS与Remote-SSH图片场景由用户明确排除本轮范围。图片失败后原地手动重试、诊断规则误删某些普通错误字段仍是未修改的改进项，不能宣称已经解决。此次没有运行官方VS Code完整GUI验收、真实模型请求或tray右键Exit的人工验收；原生smoke已明确保留其人工检查边界。
 
 ## Assume Reader
 
