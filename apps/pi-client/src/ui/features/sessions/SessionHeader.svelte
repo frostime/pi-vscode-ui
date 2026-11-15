@@ -170,7 +170,7 @@
         >
           <StatusDot status={active.status} />
           <span class="session-title">{active.title}</span>
-          {#if active.isEphemeral}<span class="ephemeral-badge">临时</span>{/if}
+          {#if active.isEphemeral}<span class="ephemeral-badge">Temporary</span>{/if}
           <span class="session-inline-status">
             {#if active.workingDirectoryLabel}
               <span class="session-cwd-pill" title={active.cwd}>{active.workingDirectoryLabel}</span>

@@ -56,7 +56,7 @@
         >
           <span class="session-list-mark">{session.id === activeId ? "✓" : ""}</span>
           <span class="session-list-copy">
-            <strong class="session-list-title"><span class="session-title-text">{session.title}</span>{#if session.isEphemeral}<span class="ephemeral-badge">临时</span>{/if}</strong>
+            <strong class="session-list-title"><span class="session-title-text">{session.title}</span>{#if session.isEphemeral}<span class="ephemeral-badge">Temporary</span>{/if}</strong>
             <small class:attention={session.requiresUserInput}>
               {#if session.workingDirectoryLabel}
                 <span class="session-cwd-pill">{session.workingDirectoryLabel}</span>
