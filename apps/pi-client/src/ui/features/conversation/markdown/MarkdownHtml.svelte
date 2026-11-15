@@ -287,10 +287,12 @@
   }
 
   // VS Code's webview frame routes every anchor click it sees on the window to
-  // its own opener, ignoring defaultPrevented. For an external link that opener
-  // asks "Open / Copy / Cancel" after FrostPi has already opened the page; for
-  // a file link (href="#") it scrolls the frame to the top. Links FrostPi
-  // handles therefore stop here, before the click bubbles to the window.
+  // its own opener, ignoring defaultPrevented. For an external link that made a
+  // second opener beside FrostPi's openExternal, so the page opened without
+  // waiting for VS Code's "Open / Copy / Cancel" confirmation; for a file link
+  // (href="#") it scrolls the frame to the top. Links FrostPi handles therefore
+  // stop here, before the click bubbles to the window, and an external link
+  // opens once, through openExternal and VS Code's usual confirmation.
   function claimLinkClick(event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
