@@ -2,6 +2,7 @@
   import { get } from "svelte/store";
 
   import { absoluteFileReferencePath } from "$shared/files/fileReferences.js";
+  import { FILE_LINK_SECTION, LINK_TARGET_KEY, WEB_LINK_SECTION } from "$shared/model/linkContextMenu.js";
 
   import { clientCapabilities as capabilitiesStore } from "../../../state/clientCapabilities.svelte";
   import { presentationStore } from "../../../state/sessionViewStore.svelte";
@@ -90,6 +91,22 @@
     const top = below + height > window.innerHeight - LINK_PREVIEW_EDGE_PX && above >= LINK_PREVIEW_EDGE_PX ? above : below;
     element.style.left = `${Math.round(left)}px`;
     element.style.top = `${Math.round(top)}px`;
+  }
+
+  // VS Code's webview frame reads the closest `data-vscode-context` when its
+  // context menu opens, from a window listener that runs after this one. The
+  // target is resolved now, so it follows the current Session cwd, and the
+  // manifest's Copy Link Address / Copy Path entries copy what the preview shows.
+  function handleContextMenu(event: MouseEvent): void {
+    const anchor = anchorFromEvent(event);
+    if (!anchor) return;
+    const target = linkPreviewLabel(anchor);
+    if (!target) {
+      anchor.removeAttribute("data-vscode-context");
+      return;
+    }
+    const section = anchor.hasAttribute("data-file-path") ? FILE_LINK_SECTION : WEB_LINK_SECTION;
+    anchor.setAttribute("data-vscode-context", JSON.stringify({ webviewSection: section, [LINK_TARGET_KEY]: target }));
   }
 
   function anchorFromEvent(event: Event): Element | undefined {
@@ -311,6 +328,7 @@
   function linkActions(node: HTMLElement): { destroy(): void } {
     const hide = (): void => cancelLinkPreview();
     node.addEventListener("click", handleClick);
+    node.addEventListener("contextmenu", handleContextMenu);
     node.addEventListener("pointerover", handlePointerOver);
     node.addEventListener("pointerout", handlePointerOut);
     node.addEventListener("focusin", handleFocusIn);
@@ -323,6 +341,7 @@
     return {
       destroy: () => {
         node.removeEventListener("click", handleClick);
+        node.removeEventListener("contextmenu", handleContextMenu);
         node.removeEventListener("pointerover", handlePointerOver);
         node.removeEventListener("pointerout", handlePointerOut);
         node.removeEventListener("focusin", handleFocusIn);

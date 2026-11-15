@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Right-click a link in a message to copy it: **Copy Link Address** for a web link, **Copy Path** for a file link, which copies the full path with its line. VS Code's own **Copy** only copies selected text, so it copied nothing from a link.
+
 ### Fixed
 
 - Clicking a web link in a message opened it in the browser and then also showed VS Code's dialog asking whether to open, copy or cancel it. The link now just opens.
