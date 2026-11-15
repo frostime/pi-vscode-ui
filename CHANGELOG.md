@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.7] - 2026-11-16
+
 ### Fixed
 
 - Render PowerShell tool calls as shell commands: the collapsed card shows the terminal icon and the command itself instead of repeating the tool name.
@@ -593,7 +595,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.6...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.7...HEAD
+[0.16.7]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.6...v0.16.7
 [0.16.6]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.5...v0.16.6
 [0.16.5]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.4...v0.16.5
 [0.16.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.3...v0.16.4
