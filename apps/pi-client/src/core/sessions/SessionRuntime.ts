@@ -96,6 +96,8 @@ export class SessionRuntime {
    * Prompts sent during a manual compaction, which Pi refuses until it ends (Pi's terminal UI
    * keeps the same queue). Each is shown as a Pending bubble and sent, in order, at `compaction_end`.
    */
+  /** Resolvers waiting for the next `compaction_start`. */
+  readonly #compactionStartWaiters = new Set<() => void>();
   #heldForCompaction: Array<{ queuedId: string; text: string; images: WebviewImageInput[]; streamingBehavior: StreamingBehavior }> = [];
   #liveStatsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   #liveStatsRefreshVersion = 0;
@@ -360,8 +362,26 @@ export class SessionRuntime {
   }
 
   async compact(customInstructions?: string): Promise<void> {
+    await (await this.beginCompaction(customInstructions)).done;
+  }
+
+  /**
+   * Starts a manual compaction and resolves once Pi reports it under way, or once the request
+   * settles first (a refusal such as nothing to compact rejects here). `done` settles when the
+   * compaction ends, which can take minutes; the caller need not hold the Composer until then.
+   */
+  async beginCompaction(customInstructions?: string): Promise<{ done: Promise<void> }> {
     this.#assertNotStartingNewConversation();
-    await this.#requireApi().compact(customInstructions);
+    const done = this.#requireApi().compact(customInstructions).then(() => undefined);
+    let started!: () => void;
+    const start = new Promise<void>((resolve) => { started = resolve; });
+    this.#compactionStartWaiters.add(started);
+    try {
+      await Promise.race([start, done]);
+    } finally {
+      this.#compactionStartWaiters.delete(started);
+    }
+    return { done };
   }
 
   async abort(): Promise<void> {
@@ -1058,7 +1078,10 @@ export class SessionRuntime {
       if (!abortRequested && settledTurn?.status === "completed") this.#hooks.onAgentTurnCompleted?.(this);
       void this.#refreshAfterSettled();
     }
-    if (event.type === "compaction_start") this.#compactionReason = typeof event.reason === "string" ? event.reason : null;
+    if (event.type === "compaction_start") {
+      this.#compactionReason = typeof event.reason === "string" ? event.reason : null;
+      for (const started of this.#compactionStartWaiters) started();
+    }
     if (event.type === "compaction_end") {
       this.#compactionReason = null;
       void this.#refreshAfterCompaction();

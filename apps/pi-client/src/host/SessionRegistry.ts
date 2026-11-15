@@ -536,10 +536,14 @@ export class SessionRegistry {
       if (images.length > 0) throw new Error(`/${hostCommand.name} does not support image attachments.`);
       // Host commands never become a user prompt and never promote a Provisional Session.
       switch (hostCommand.name) {
-        case "compact":
-          await runtime.compact(hostCommand.argument || undefined);
+        case "compact": {
+          // Return once compaction is under way, so the Composer is free again and queues what is
+          // sent meanwhile. A failure after that is reported by compaction_end in the conversation.
+          const { done } = await runtime.beginCompaction(hostCommand.argument || undefined);
           runtime.clearComposerSeed();
+          void done.catch((error: unknown) => this.#logger.error(`Compaction of session ${sessionId} failed`, error));
           return;
+        }
         case "new":
           await this.startNewConversation(sessionId);
           return;
