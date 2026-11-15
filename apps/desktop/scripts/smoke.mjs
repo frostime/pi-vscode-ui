@@ -281,25 +281,22 @@ async function verifyProjectActions() {
   await client.evaluate("document.querySelector('.project-menu .configure').click()");
   await until(() => client.evaluate("Boolean(document.querySelector('.action-settings'))"), "gear opens Actions inside Settings");
   assert.equal(await client.evaluate("document.getElementById('settings-title').textContent"), "Settings");
-  assert.equal(await client.evaluate("document.querySelector('.scope-tabs [aria-pressed=true]').textContent.trim().startsWith('Global')"), true);
-  assert.equal(await client.evaluate("Boolean(document.getElementById('action-project'))"), false);
-  await client.evaluate("document.querySelector('.add-action').click()");
-  await until(() => client.evaluate("Boolean(document.getElementById('action-label'))"), "add global command");
+  assert.deepEqual(await client.evaluate("[...document.querySelectorAll('.action-group .group-name')].map(element=>element.textContent)"), ["Global"]);
+  await client.evaluate("document.querySelector('.action-group .group-add').click()");
+  await until(() => client.evaluate("Boolean(document.querySelector('.action-editor input'))"), "add global command");
   const command = "[IO.File]::WriteAllText((Join-Path {{cwd}} 'action-proof.json'), (@{cwd=(Get-Location).ProviderPath; executable=[Diagnostics.Process]::GetCurrentProcess().MainModule.FileName} | ConvertTo-Json -Compress)); exit";
-  await client.evaluate("(()=>{const field=document.getElementById('action-label');field.value='Terminal proof';field.dispatchEvent(new Event('input',{bubbles:true}))})()");
-  await client.evaluate(`(()=>{const field=document.getElementById('action-command');field.value=${JSON.stringify(command)};field.dispatchEvent(new Event('input',{bubbles:true}))})()`);
-  await client.evaluate("[...document.querySelectorAll('.scope-tabs button')].find(b=>b.textContent.trim()==='Project').click()");
-  assert.equal(await client.evaluate("document.getElementById('action-project').value"), "");
-  assert.equal(await client.evaluate("Boolean(document.getElementById('action-label'))"), false);
-  await client.evaluate(`(()=>{const select=document.getElementById('action-project');select.value=${JSON.stringify(other.id)};select.dispatchEvent(new Event('change',{bubbles:true}))})()`);
-  await client.evaluate("document.querySelector('.add-action').click()");
-  await until(() => client.evaluate("Boolean(document.getElementById('action-label'))"), "explicit Project command");
-  await client.evaluate("(()=>{const field=document.getElementById('action-label');field.value='Other Project only';field.dispatchEvent(new Event('input',{bubbles:true}))})()");
-  await client.evaluate("(()=>{const field=document.getElementById('action-command');field.value='Write-Output isolated';field.dispatchEvent(new Event('input',{bubbles:true}))})()");
+  await client.evaluate("(()=>{const field=document.querySelector('.action-editor input');field.value='Terminal proof';field.dispatchEvent(new Event('input',{bubbles:true}))})()");
+  await client.evaluate(`(()=>{const field=document.querySelector('.action-editor textarea');field.value=${JSON.stringify(command)};field.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+  await client.evaluate(`(()=>{const select=document.querySelector('.add-target select');select.value=${JSON.stringify(other.id)};select.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  await until(() => client.evaluate(`Boolean([...document.querySelectorAll('.action-group')].find(group=>group.getAttribute('aria-label')===${JSON.stringify(`${other.name} Actions`)})?.querySelector('.action-editor input'))`), "explicit Project command");
+  await client.evaluate("(()=>{const field=document.querySelector('.action-editor input');field.value='Other Project only';field.dispatchEvent(new Event('input',{bubbles:true}))})()");
+  await client.evaluate("(()=>{const field=document.querySelector('.action-editor textarea');field.value='Write-Output isolated';field.dispatchEvent(new Event('input',{bubbles:true}))})()");
   await client.evaluate("[...document.querySelectorAll('.settings-dialog .categories button')].find(b=>b.textContent.includes('Appearance')).click()");
   await client.evaluate("[...document.querySelectorAll('.settings-dialog .categories button')].find(b=>b.textContent.includes('Actions')).click()");
-  assert.equal(await client.evaluate("document.getElementById('action-project').value"), other.id);
-  assert.equal(await client.evaluate("document.getElementById('action-label').value"), "Other Project only");
+  await client.evaluate("[...document.querySelectorAll('.action-row')].find(row=>row.querySelector('.action-name').textContent==='Other Project only').click()");
+  assert.equal(await client.evaluate("document.querySelector('.action-editor input').value"), "Other Project only");
+  assert.equal(await client.evaluate("document.querySelector('.action-editor textarea').value"), "Write-Output isolated");
+  assert.equal(await client.evaluate("document.querySelector('.action-editor').closest('.action-group').getAttribute('aria-label')"), `${other.name} Actions`);
   await client.evaluate("document.querySelector('.settings-dialog .save').click()");
   await until(() => client.evaluate("document.querySelector('.settings-dialog .save').disabled && document.querySelector('.save-status').textContent.includes('No unsaved')"), "central Settings saves Actions");
   assert.equal(await client.evaluate("document.querySelector('.project-context .context-name').textContent"), active.name);
@@ -308,7 +305,7 @@ async function verifyProjectActions() {
   await client.evaluate("document.querySelector('.project-context').click()");
   await until(() => client.evaluate("[...document.querySelectorAll('.project-menu [role=menuitem]')].some(b=>b.textContent.trim()==='Terminal proof')"), "saved global Action refreshes menu");
   assert.equal(await client.evaluate("document.querySelector('.project-menu').textContent.includes('Other Project only')"), false);
-  checks.push("Actions stay in Settings, default global, require explicit Project selection, preserve drafts and refresh correctly scoped menus");
+  checks.push("Actions stay in one scoped Settings list, require explicit add targets, preserve drafts and refresh correctly scoped menus");
   const tools = JSON.parse(runPowerShell("@{ wt=[bool](Get-Command wt.exe -ErrorAction SilentlyContinue); pwsh=[bool](Get-Command pwsh.exe -ErrorAction SilentlyContinue); powershell=[bool](Get-Command powershell.exe -ErrorAction SilentlyContinue) } | ConvertTo-Json -Compress", { capture: true }));
   assert.equal(view.actions.some(action => action.id === "terminal"), tools.wt);
   if (tools.pwsh || tools.powershell) {
@@ -430,6 +427,52 @@ async function verifyInstalledPi() {
   assert.deepEqual(JSON.parse(readFileSync(join(profile,"state.json"),"utf8")).workspaceState["frostpi.sessions.v1"].sessions, []);
   checks.push("installed Pi from desktop PATH: offline command, confirmation and ephemeral message; no model request");
 }
+async function verifySidebarSections() {
+  const measure = () => client.evaluate(`(() => {
+    const sidebar = document.querySelector('#desktop-projects');
+    const section = sidebar.querySelector('.sect.sessions');
+    const splitter = sidebar.querySelector('.splitter');
+    return {
+      sized: sidebar.dataset.sessionsSized, height: section.offsetHeight,
+      value: Number(splitter.getAttribute('aria-valuenow')), max: Number(splitter.getAttribute('aria-valuemax')),
+      footerBottom: sidebar.querySelector('.sidebar-footer').getBoundingClientRect().bottom,
+      sidebarBottom: sidebar.getBoundingClientRect().bottom,
+      projectsHeight: sidebar.querySelector('.sect.projects').offsetHeight,
+      projectsHeaderHeight: sidebar.querySelector('.projects > .sect-head').offsetHeight,
+    };
+  })()`);
+  const press = (key) => client.evaluate(`document.querySelector('#desktop-projects .splitter').dispatchEvent(new KeyboardEvent('keydown', {key:${JSON.stringify(key)}, bubbles:true, cancelable:true}))`);
+  await client.command('Emulation.setDeviceMetricsOverride', { width: 1200, height: 800, deviceScaleFactor: 1, mobile: false });
+  try {
+    await until(() => client.evaluate("Boolean(document.querySelector('#desktop-sessions .session-row'))"), 'Sessions section populated');
+    await until(async () => { const size = await measure(); return size.height === size.value && size.max > size.height; }, 'initial Sessions measurement');
+    const initial = await measure();
+    assert.equal(initial.sized, 'false');
+    const handle = await client.evaluate(`(() => { const r = document.querySelector('#desktop-projects .splitter').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
+    await client.command('Input.dispatchMouseEvent', { type: 'mousePressed', ...handle, button: 'left', clickCount: 1 });
+    await client.command('Input.dispatchMouseEvent', { type: 'mouseReleased', ...handle, button: 'left', clickCount: 1 });
+    assert.equal((await measure()).sized, 'false', 'clicking alone keeps content-fitting mode');
+    await press('ArrowUp');
+    await until(async () => (await measure()).height === initial.height + 12, 'ArrowUp grows Sessions from its rendered height');
+    await press('End');
+    await until(async () => { const size = await measure(); return size.height === size.max && size.value === size.height; }, 'Sessions reaches its reported maximum');
+    await client.command('Emulation.setDeviceMetricsOverride', { width: 1200, height: 400, deviceScaleFactor: 1, mobile: false });
+    let shortWindow;
+    try {
+      await until(async () => {
+        shortWindow = await measure();
+        return Math.abs(shortWindow.sidebarBottom - 400) <= 1 && shortWindow.footerBottom <= shortWindow.sidebarBottom + 1
+          && shortWindow.projectsHeight > shortWindow.projectsHeaderHeight && shortWindow.height === shortWindow.max && shortWindow.value === shortWindow.height;
+      }, 'short window retains the footer, Project rows, and accurate Sessions bounds');
+    } catch (error) {
+      throw withDiagnostics(error, { sidebar: shortWindow, viewport: await client.evaluate('({width:innerWidth,height:innerHeight,scale:devicePixelRatio})') });
+    }
+    checks.push('Sessions splitter keeps content-fitting clicks, keyboard direction, live bounds and footer visibility');
+  } finally {
+    await client.command('Emulation.clearDeviceMetricsOverride');
+  }
+}
+
 async function verifyOversizedPrompt() {
   await client.typeIntoComposer("desktop-limit-draft");
   await client.evaluate(`(() => {
@@ -472,6 +515,7 @@ try {
   await until(() => client.evaluate("document.querySelector('.conversation')?.textContent.includes('desktop-smoke-prompt') || document.querySelector('.conversation-frame')?.textContent.includes('desktop-smoke-prompt')"), "conversation round trip");
   await until(() => client.evaluate("document.querySelector('.conversation-frame')?.textContent.includes('E2E response') && !document.querySelector('[aria-label=\"Stop Pi\"]')"), "assistant response completes");
   checks.push("controlled Pi prompt crosses Rust/Node/shared UI");
+  await verifySidebarSections();
   await send("mermaid");
   await until(() => client.evaluate("Boolean(document.querySelector('.mermaid-host svg'))"), "Mermaid vendor loads");
   checks.push("Mermaid bundled assets render in WebView2");

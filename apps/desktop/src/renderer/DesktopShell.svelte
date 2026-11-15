@@ -18,6 +18,14 @@
   const MAX_WIDTH = DESKTOP_SIDEBAR_WIDTH.max;
   const KEY_STEP = 8;
   const NARROW_WIDTH = 640;
+  const SESSIONS_KEY_STEP = 12;
+  const PROJECTS_MIN_HEIGHT = 120;
+  const SECTION_SPLITTER_HEIGHT = 5;
+  const SESSIONS_DEFAULT_HEIGHT = 240;
+  /** List order, most urgent first; idle Sessions keep the tail rather than being hidden. */
+  const SESSION_STATE_ORDER = ["wait", "fail", "run", "idle"] as const;
+  type SessionState = (typeof SESSION_STATE_ORDER)[number];
+  type SessionRow = { session: SessionSummaryView; state: SessionState; projectId: string; projectName: string };
   const clampWidth = (value: number): number =>
     Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(value)));
 
@@ -29,6 +37,7 @@
   let {
     view,
     sessions,
+    allSessions = [],
     activeSessionId,
     resume,
     error = "",
@@ -47,7 +56,10 @@
     onresume,
   }: {
     view: DesktopProjectsView;
+    /** Sessions of the selected Project, the only ones the Resume/Choose menus list. */
     sessions: SessionSummaryView[];
+    /** Every loaded Session across Projects; the Sessions section reads live states from it. */
+    allSessions?: SessionSummaryView[];
     activeSessionId: string | null;
     resume: DesktopResumeView | null;
     error?: string;
@@ -83,6 +95,17 @@
   let dropTarget = $state<DropTarget | null>(null);
   let resizeStart: { x: number; width: number } | null = null;
   let keyboardDirty = false;
+  let projectsFolded = $state(false);
+  let sessionsFolded = $state(false);
+  /** Null until the splitter is used: before that the section hugs its rows. */
+  let sessionsHeight = $state<number | null>(null);
+  let sidebarHeight = $state(0);
+  let footerHeight = $state(0);
+  let projectsHeaderHeight = $state(0);
+  let sessionsHeaderHeight = $state(0);
+  let renderedSessionsHeight = $state(0);
+  let sessionsSection = $state<HTMLDivElement>();
+  let splitStart: { y: number; height: number } | null = null;
 
   const nextTheme = $derived(theme === "dark" ? "light" : "dark");
   const themeAction = $derived(`Switch to ${desktopThemes[nextTheme].label}`);
@@ -104,6 +127,37 @@
           .filter((id) => id !== activeSessionId)
       : [];
   });
+  // Every loaded Session is listed; urgency only decides the order, never visibility.
+  // A Session with no Project association has no placement, so it is skipped rather than guessed.
+  const sessionRows = $derived.by<SessionRow[]>(() => {
+    const owners = view.navigation?.sessionProjects ?? {};
+    const names = new Map(view.projects.map((project) => [project.id, project.name]));
+    const rows: SessionRow[] = [];
+    for (const session of allSessions) {
+      const projectId = owners[session.id];
+      const projectName = projectId ? names.get(projectId) : undefined;
+      if (projectId && projectName) rows.push({ session, state: sessionState(session), projectId, projectName });
+    }
+    // Stable: state priority only, so rows keep the registry order inside a state.
+    return rows.sort((a, b) => SESSION_STATE_ORDER.indexOf(a.state) - SESSION_STATE_ORDER.indexOf(b.state));
+  });
+  // Row tags read one Map instead of scanning every Session per Project.
+  const liveByProject = $derived.by(() => {
+    const counts = new Map<string, { wait: number; fail: number; run: number }>();
+    for (const row of sessionRows) {
+      if (row.state === "idle") continue;
+      const entry = counts.get(row.projectId) ?? { wait: 0, fail: 0, run: 0 };
+      entry[row.state] += 1;
+      counts.set(row.projectId, entry);
+    }
+    return counts;
+  });
+  const needsYouCount = $derived(sessionRows.filter((row) => row.state === "wait" || row.state === "fail").length);
+  const splitHandleActive = $derived(!projectsFolded && !sessionsFolded);
+  // Reserve the fixed chrome at its actual size, including footer errors and font/zoom changes.
+  const sessionsMaxHeight = $derived(Math.max(sessionsHeaderHeight,
+    sidebarHeight - footerHeight - Math.max(PROJECTS_MIN_HEIGHT, projectsHeaderHeight) - SECTION_SPLITTER_HEIGHT));
+  const effectiveSessionsHeight = $derived(Math.min(sessionsHeight ?? SESSIONS_DEFAULT_HEIGHT, sessionsMaxHeight));
   const projectsLabel = $derived(narrow || hidden ? "Projects" : "Hide");
   const projectsAriaLabel = $derived(
     narrow
@@ -194,6 +248,28 @@
     if (activity.total === 0) return "No sessions";
     const total = `${activity.total} session${activity.total === 1 ? "" : "s"}`;
     return activity.running > 0 ? `${total} · ${activity.running} running` : total;
+  }
+
+  function sessionState(session: SessionSummaryView): SessionState {
+    if (session.requiresUserInput) return "wait";
+    if (session.status === "failed") return "fail";
+    if (session.status === "running") return "run";
+    return "idle";
+  }
+
+  /** Calm rows carry only their Project; saying "ready" next to every idle Session is noise. */
+  function rowLabel(row: SessionRow): string {
+    return row.state === "idle" ? row.projectName : `${row.projectName} · ${stateLabel(row.state)}`;
+  }
+
+  function stateLabel(state: SessionState): string {
+    return state === "wait" ? "needs input" : state === "fail" ? "failed" : "running";
+  }
+
+  /** A Project tag opens that state's first Session, the same action the old warning badge had. */
+  function openFirstInState(projectId: string, state: SessionState): void {
+    const row = sessionRows.find((candidate) => candidate.projectId === projectId && candidate.state === state);
+    if (row) selectSession(row.session.id);
   }
 
   function sessionStatusLabel(session: SessionSummaryView): string {
@@ -337,11 +413,6 @@
     onsession(id);
   }
 
-  function openWaitingSession(waitingIds: string[]): void {
-    const id = waitingIds[0];
-    if (id) selectSession(id);
-  }
-
   function openBackgroundWaiting(): void {
     const id = backgroundWaitingIds[0];
     if (id) selectSession(id);
@@ -398,6 +469,48 @@
     keyboardDirty = false;
     commitSidebar();
   }
+
+  function clampSessionsHeight(height: number): number {
+    return Math.min(sessionsMaxHeight, Math.max(sessionsHeaderHeight, Math.round(height)));
+  }
+
+  function startSplit(event: PointerEvent): void {
+    const handle = event.currentTarget;
+    if (!splitHandleActive || event.button !== 0 || !(handle instanceof HTMLElement)) return;
+    event.preventDefault();
+    handle.focus();
+    // Keep content-fitting mode until the pointer actually changes the section's height.
+    splitStart = { y: event.clientY, height: sessionsSection!.offsetHeight };
+    handle.setPointerCapture(event.pointerId);
+  }
+
+  function moveSplit(event: PointerEvent): void {
+    if (!splitStart) return;
+    const next = clampSessionsHeight(splitStart.height + splitStart.y - event.clientY);
+    if (next !== sessionsSection!.offsetHeight) sessionsHeight = next;
+  }
+
+  function finishSplit(event: PointerEvent): void {
+    if (!splitStart) return;
+    const handle = event.currentTarget;
+    splitStart = null;
+    if (handle instanceof HTMLElement && handle.hasPointerCapture(event.pointerId)) {
+      handle.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function splitKeyDown(event: KeyboardEvent): void {
+    if (!splitHandleActive) return;
+    const step = event.key === "ArrowUp" ? SESSIONS_KEY_STEP
+      : event.key === "ArrowDown" ? -SESSIONS_KEY_STEP
+        : 0;
+    if (step === 0 && event.key !== "Home" && event.key !== "End") return;
+    event.preventDefault();
+    const next = event.key === "Home" ? sessionsHeaderHeight
+      : event.key === "End" ? sessionsMaxHeight
+        : sessionsSection!.offsetHeight + step;
+    sessionsHeight = clampSessionsHeight(next);
+  }
 </script>
 
 <div
@@ -408,22 +521,33 @@
   style={`--sidebar-width: ${width}px`}
   bind:this={shell}
 >
-  <aside id="desktop-projects" class="sidebar" aria-label="Projects" inert={!sidebarAvailable}>
-    <div class="sidebar-head">
-      <span class="sidebar-title">Projects</span>
-      <button type="button" class="icon-button" title="Add Project" aria-label="Add Project" onclick={onadd}>
-        <span class="codicon codicon-add" aria-hidden="true"></span>
-      </button>
-      {#if narrow}
-        <button type="button" class="icon-button" title="Close Projects" aria-label="Close Projects" bind:this={drawerClose} onclick={closeDrawer}>
-          <span class="codicon codicon-close" aria-hidden="true"></span>
+  <aside id="desktop-projects" class="sidebar" aria-label="Projects" inert={!sidebarAvailable}
+    data-projects-folded={projectsFolded} data-sessions-folded={sessionsFolded}
+    data-sessions-sized={sessionsHeight !== null}
+    bind:clientHeight={sidebarHeight}
+    style={`--sessions-height: ${effectiveSessionsHeight}px; --projects-header-height: ${projectsHeaderHeight}px; --sessions-header-height: ${sessionsHeaderHeight}px; --section-splitter-height: ${SECTION_SPLITTER_HEIGHT}px`}>
+    <div class="sect projects">
+      <div class="sect-head" bind:offsetHeight={projectsHeaderHeight}>
+        <button type="button" class="sect-chevron" aria-expanded={!projectsFolded} aria-label="Toggle Projects"
+          onclick={() => (projectsFolded = !projectsFolded)}>
+          <span class="codicon codicon-chevron-down" aria-hidden="true"></span>
         </button>
-      {/if}
-    </div>
+        <span class="sect-title">Projects</span>
+        <button type="button" class="icon-button" title="Add Project" aria-label="Add Project" onclick={onadd}>
+          <span class="codicon codicon-add" aria-hidden="true"></span>
+        </button>
+        {#if narrow}
+          <button type="button" class="icon-button" title="Close Projects" aria-label="Close Projects" bind:this={drawerClose} onclick={closeDrawer}>
+            <span class="codicon codicon-close" aria-hidden="true"></span>
+          </button>
+        {/if}
+      </div>
 
-    <div class="project-list" role={view.projects.length > 0 ? "list" : undefined}>
+      {#if !projectsFolded}
+      <div class="project-list" role={view.projects.length > 0 ? "list" : undefined}>
       {#each view.projects as project (project.id)}
         {@const activity = activityFor(project.id)}
+        {@const live = liveByProject.get(project.id)}
         {@const dropLine = dropLineFor(project.id)}
         <div class="project-row" role="listitem" class:active={project.id === view.activeProjectId}
           class:dragging={dragId === project.id}
@@ -445,13 +569,22 @@
             </span>
           </button>
           <div class="project-actions">
-            {#if activity.waitingSessionIds.length > 0}
-              <button type="button" class="waiting-button"
-                title={`${activity.waitingSessionIds.length} session${activity.waitingSessionIds.length === 1 ? "" : "s"} waiting for input`}
-                aria-label={`${activity.waitingSessionIds.length} session${activity.waitingSessionIds.length === 1 ? "" : "s"} waiting for input; open the first`}
-                onclick={() => openWaitingSession(activity.waitingSessionIds)}>
+            {#if live?.wait}
+              <button type="button" class="state-tag wait"
+                title={`${live.wait} session${live.wait === 1 ? "" : "s"} waiting for input`}
+                aria-label={`${live.wait} session${live.wait === 1 ? "" : "s"} waiting for input; open the first`}
+                onclick={() => openFirstInState(project.id, "wait")}>
                 <span class="codicon codicon-warning" aria-hidden="true"></span>
-                <span>{activity.waitingSessionIds.length}</span>
+                <span>{live.wait}</span>
+              </button>
+            {/if}
+            {#if live?.fail}
+              <button type="button" class="state-tag fail"
+                title={`${live.fail} failed session${live.fail === 1 ? "" : "s"}`}
+                aria-label={`${live.fail} failed session${live.fail === 1 ? "" : "s"}; open the first`}
+                onclick={() => openFirstInState(project.id, "fail")}>
+                <span class="codicon codicon-error" aria-hidden="true"></span>
+                <span>{live.fail}</span>
               </button>
             {/if}
             <button type="button" class="icon-button row-action" title="Project actions"
@@ -464,9 +597,62 @@
       {:else}
         <p class="empty-projects">No Projects yet.</p>
       {/each}
+      </div>
+      {/if}
     </div>
 
-    <div class="sidebar-footer">
+    {#if sessionRows.length > 0}
+      <!-- One separator between the sections; it is the drag handle only while both are open. -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+      <div class="splitter" class:draggable={splitHandleActive} role="separator" aria-orientation="horizontal"
+        aria-label="Resize Sessions" aria-controls="desktop-sessions"
+        aria-valuemin={splitHandleActive ? sessionsHeaderHeight : undefined}
+        aria-valuemax={splitHandleActive ? sessionsMaxHeight : undefined}
+        aria-valuenow={splitHandleActive ? renderedSessionsHeight : undefined}
+        aria-valuetext={splitHandleActive ? `${renderedSessionsHeight} pixels high` : undefined}
+        tabindex={splitHandleActive ? 0 : -1}
+        onpointerdown={startSplit} onpointermove={moveSplit} onpointerup={finishSplit}
+        onpointercancel={finishSplit} onkeydown={splitKeyDown}
+      ></div>
+      <div id="desktop-sessions" class="sect sessions" bind:this={sessionsSection} bind:offsetHeight={renderedSessionsHeight}>
+        <div class="sect-head" bind:offsetHeight={sessionsHeaderHeight}>
+          <button type="button" class="sect-chevron" aria-expanded={!sessionsFolded} aria-label="Toggle Sessions"
+            onclick={() => (sessionsFolded = !sessionsFolded)}>
+            <span class="codicon codicon-chevron-down" aria-hidden="true"></span>
+          </button>
+          <span class="sect-title">Sessions</span>
+          {#if needsYouCount > 0}
+            <span class="sect-count" title={`${needsYouCount} session${needsYouCount === 1 ? "" : "s"} needing you`}>
+              <span class="codicon codicon-warning" aria-hidden="true"></span>
+              <span>{needsYouCount}</span>
+            </span>
+          {/if}
+        </div>
+        {#if !sessionsFolded}
+          <div class="session-list">
+            {#each sessionRows as row (row.session.id)}
+              <button type="button" class="session-row"
+                class:active={row.session.id === activeSessionId}
+                title={`${row.session.title} — ${row.projectName}`}
+                onclick={() => selectSession(row.session.id)}>
+                <span class="session-mark {row.state}" aria-hidden="true">
+                  {#if row.state === "run"}<span class="session-pulse"></span>
+                  {:else if row.state === "wait"}<span class="codicon codicon-warning"></span>
+                  {:else if row.state === "fail"}<span class="codicon codicon-error"></span>
+                  {:else}<span class="session-idle-dot"></span>{/if}
+                </span>
+                <span class="session-copy">
+                  <span class="session-title">{row.session.title}</span>
+                  <span class="session-meta">{rowLabel(row)}</span>
+                </span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
+
+    <div class="sidebar-footer" bind:offsetHeight={footerHeight}>
       {#if view.stateError}<p class="state-error" role="alert">{view.stateError}</p>{/if}
       {#if error}<p class="state-error" role="alert">{error}</p>{/if}
       {#if resume && !resume.visible}
@@ -596,15 +782,71 @@
   }
   .desktop-shell[data-narrow="true"][data-drawer="open"] .sidebar { transform: translateX(0); }
 
-  .sidebar-head { flex: none; display: flex; align-items: center; gap: 2px; padding: 6px 6px 4px 10px; }
-  .sidebar-title {
-    flex: 1; min-width: 0; color: var(--frost-faint); font-size: calc(var(--font-size-ui) - 3px); font-weight: 600;
+  /* Two sections share one skeleton: fixed header, own scroll area, same insets. */
+  .sect { display: flex; flex-direction: column; min-height: 0; }
+  .sect.projects { flex: 1 1 auto; min-height: var(--projects-header-height); }
+  .sect.sessions { flex: 0 0 auto; min-height: var(--sessions-header-height); }
+  /* Projects folded + Sessions open: Sessions takes the remaining height. */
+  .sidebar[data-projects-folded="true"] .sect.projects { flex: 0 0 auto; }
+  .sidebar[data-projects-folded="true"][data-sessions-folded="false"] .sect.sessions { flex: 1 1 auto; }
+  /* Both open and never sized: Sessions grows with its rows up to the default cap. */
+  .sidebar[data-projects-folded="false"][data-sessions-folded="false"][data-sessions-sized="false"] .sect.sessions {
+    flex: 0 0 auto; max-height: var(--sessions-height);
+  }
+  /* Once the splitter is used the height is explicit, so the boundary follows the pointer. */
+  .sidebar[data-projects-folded="false"][data-sessions-folded="false"][data-sessions-sized="true"] .sect.sessions {
+    flex: 0 0 auto; height: var(--sessions-height);
+  }
+  /* Both folded: both titles sit at the top. */
+  .sidebar[data-projects-folded="true"][data-sessions-folded="true"] .sect { flex: 0 0 auto; }
+
+  .sect-head { flex: none; display: flex; align-items: center; gap: 2px; padding: 4px 6px 2px 4px; }
+  .sect-chevron {
+    flex: none; display: grid; place-items: center; width: 18px; height: 18px; padding: 0;
+    border: 0; border-radius: 3px; background: transparent; color: var(--frost-faint); cursor: pointer;
+  }
+  .sect-chevron:hover { color: var(--frost-text); background: var(--frost-hover); }
+  .sect-chevron .codicon { font-size: 14px; transition: transform 120ms ease; }
+  .sect-chevron[aria-expanded="false"] .codicon { transform: rotate(-90deg); }
+  .sect-title {
+    min-width: 0; color: var(--frost-faint); font-size: calc(var(--font-size-ui) - 3px); font-weight: 600;
     letter-spacing: .08em; text-transform: uppercase;
   }
+  .sect-count {
+    display: inline-flex; align-items: center; gap: 3px; margin-left: 2px;
+    color: var(--frost-warning); font-size: calc(var(--font-size-ui) - 3.5px); font-weight: 600;
+  }
+  .sect-count .codicon { font-size: 12px; }
+  .sect-head > .icon-button { margin-left: auto; }
+  .sect-title + .icon-button { margin-left: auto; }
+
+  /* A hairline normally; a drag handle only while both sections are open. */
+  .splitter { flex: none; position: relative; height: 1px; margin: 0 10px 0 18px; background: var(--frost-border-soft); }
+  .splitter.draggable { height: var(--section-splitter-height); margin: 0; background: transparent; cursor: row-resize; touch-action: none; }
+  .splitter.draggable::after {
+    content: ""; position: absolute; left: 10px; right: 10px; top: 2px; height: 1px;
+    background: var(--frost-border-soft); transition: background 120ms ease;
+  }
+  .splitter.draggable:hover::after, .splitter.draggable:focus-visible::after { background: var(--frost-focus); }
+  .splitter:focus-visible { outline: none; }
+
   .project-list {
     flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px;
-    padding: 2px 6px 6px; overflow-y: auto; overflow-x: hidden; scrollbar-color: var(--frost-scrollbar) transparent;
+    padding: 0 6px 6px; overflow-y: auto; overflow-x: hidden;
   }
+  .session-list {
+    flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 1px;
+    padding: 0 6px 6px; overflow-y: auto; overflow-x: hidden;
+  }
+  /* Scrollbars stay out of the way until the pointer is inside that section. */
+  .project-list, .session-list { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  .project-list::-webkit-scrollbar, .session-list::-webkit-scrollbar { width: 10px; }
+  .project-list::-webkit-scrollbar-track, .session-list::-webkit-scrollbar-track { background: transparent; }
+  .project-list::-webkit-scrollbar-thumb, .session-list::-webkit-scrollbar-thumb {
+    background: transparent; border: 3px solid transparent; background-clip: padding-box; border-radius: 99px;
+  }
+  .project-list:hover, .session-list:hover { scrollbar-color: var(--frost-scrollbar) transparent; }
+  .project-list:hover::-webkit-scrollbar-thumb, .session-list:hover::-webkit-scrollbar-thumb { background: var(--frost-scrollbar); }
   .project-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; border-radius: 5px; flex: none; }
   .project-row:hover { background: var(--frost-hover); }
   .project-row.active { background: var(--frost-active); }
@@ -641,17 +883,46 @@
   .row-action:focus-visible,
   .row-action[aria-expanded="true"] { opacity: 1; pointer-events: auto; }
   .row-action[aria-expanded="true"] { color: var(--frost-text); background: var(--frost-hover); }
-  .waiting-button {
+  .state-tag {
     align-self: center; display: inline-flex; align-items: center; gap: 3px; min-height: 20px;
-    margin: 0 4px 0 1px; padding: 0 4px; border-radius: 3px;
-    color: var(--frost-warning); background: transparent; font-size: calc(var(--font-size-ui) - 3.5px); font-weight: 600; cursor: pointer;
+    margin: 0 3px 0 1px; padding: 0 4px; border-radius: 3px;
+    background: transparent; font-size: calc(var(--font-size-ui) - 3.5px); font-weight: 600; cursor: pointer;
   }
-  .waiting-button:hover { background: color-mix(in srgb, var(--frost-warning) 16%, transparent); }
-  .waiting-button .codicon { font-size: 12px; }
+  .state-tag .codicon { font-size: 12px; }
+  .state-tag.wait { color: var(--frost-warning); }
+  .state-tag.wait:hover { background: color-mix(in srgb, var(--frost-warning) 16%, transparent); }
+  .state-tag.fail { color: var(--frost-error); }
+  .state-tag.fail:hover { background: color-mix(in srgb, var(--frost-error) 16%, transparent); }
   .empty-projects { padding: 6px 8px; color: var(--frost-faint); font-size: var(--font-size-detail); }
 
+  .session-row {
+    min-width: 0; display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 7px; align-items: start;
+    padding: 5px 4px 5px 8px; border: 0; border-radius: 5px; background: transparent;
+    color: var(--frost-text); text-align: left; cursor: pointer; flex: none;
+  }
+  .session-row:hover { background: var(--frost-hover); }
+  .session-row.active { background: var(--frost-active); }
+  .session-mark { display: grid; place-items: center; width: 14px; height: 14px; margin-top: 2px; }
+  .session-mark .codicon { font-size: 12px; }
+  .session-mark.wait { color: var(--frost-warning); }
+  .session-mark.fail { color: var(--frost-error); }
+  .session-mark.run { color: var(--frost-success); }
+  .session-pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: session-pulse 1.6s ease-in-out infinite; }
+  .session-idle-dot { width: 5px; height: 5px; border-radius: 50%; border: 1px solid var(--frost-faint); }
+  @keyframes session-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .32; } }
+  .session-copy { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .session-title {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--frost-text); font-size: var(--font-size-compact); line-height: 1.35;
+  }
+  .session-row.active .session-title { font-weight: 600; }
+  .session-meta {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--frost-faint); font-size: calc(var(--font-size-ui) - 3.5px); line-height: 1.3;
+  }
+
   .sidebar-footer {
-    flex: none; display: flex; flex-direction: column; gap: 4px;
+    flex: none; margin-top: auto; display: flex; flex-direction: column; gap: 4px;
     padding: 6px; border-top: 1px solid var(--frost-border-soft);
   }
   .state-error { margin: 2px 3px; color: var(--frost-error); font-size: calc(var(--font-size-ui) - 3px); line-height: 1.4; overflow-wrap: anywhere; }

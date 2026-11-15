@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve selected transcript text when copying with `Ctrl+C` or the native Copy menu in VS Code and VSCodium versions that restore input focus before copying.
+- Prevent hidden code-block and message action buttons from intercepting clicks and text-selection drags.
+- Display AVIF and BMP conversation images from local files, inline data, and explicit HTTPS loads, alongside PNG, JPEG, WebP, GIF, and SVG. Prompt-attachment formats are unchanged.
+
 ### Security
 
 - Update Mermaid to 11.16.1, markdown-it to 14.3.3, DOMPurify to 3.4.17 and KaTeX to 0.18.2 for rendering security fixes.
@@ -14,9 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Omit Pi stderr content from FrostPi diagnostic exports and expand credential redaction in the remaining text. Session error displays remain available for local troubleshooting.
 - Block automatic Markdown image reads from Windows network shares other than the Session's own share, and reject device-namespace paths.
 
+## [0.16.6] - 2026-11-14
+
+### Added
+
+- Add a Desktop sidebar Sessions section across Projects, with waiting, failed, and running Sessions first. Sessions stay listed after a turn completes, and selecting one also selects its Project. Projects and Sessions fold independently, and their separator resizes the Sessions section.
+- Preview Markdown link targets after a one-second hover or immediately on keyboard focus. File references show their path resolved against the Session directory and their line/column details; external links show the full URL.
+
 ### Fixed
 
-- Display AVIF and BMP conversation images from local files, inline data, and explicit HTTPS loads, alongside PNG, JPEG, WebP, GIF, and SVG. Prompt-attachment formats are unchanged.
+- Show one Reasoning entry for adjacent thinking blocks in the same assistant reply instead of repeated rows. Skip blank thinking blocks and preserve the original Markdown whitespace.
 
 ## [0.16.5] - 2026-11-08
 
@@ -579,7 +592,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.5...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.6...HEAD
+[0.16.6]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.5...v0.16.6
 [0.16.5]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.4...v0.16.5
 [0.16.4]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.3...v0.16.4
 [0.16.3]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.2...v0.16.3

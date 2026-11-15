@@ -4,7 +4,7 @@ description: Cross-feature layout, stylesheet ownership, accessibility and user-
 scope:
   - /apps/pi-client/src/ui/**
   - /apps/desktop/src/renderer/**
-updated: 2026-10-24
+updated: 2026-11-15
 ---
 
 # UI Design Specification
@@ -25,7 +25,7 @@ Navigation may narrow or hide, giving space back to the conversation. Keep a key
 
 The sidebar owns Session management. Session Tabs are pinned conversation projections, not another place to expose the whole collection or its New/Resume and administrative controls. When the selected Session is externalized, keep sidebar navigation and show its tab-reveal placeholder rather than a second editable conversation. Native placement and handoff rules are in `apps/pi-client/src/shared/bridge/webview-bridge.SPEC.md`.
 
-Desktop's Project navigation is a product-owned outer shell around the same client. Do not apply the Session-Tab model to it or recreate ClientApp when hiding/resizing its sidebar.
+Desktop's Project navigation is a product-owned outer shell around the same client. Do not apply the Session-Tab model to it or recreate ClientApp when hiding/resizing its sidebar. Its Sessions section lists every loaded Session, ordered by waiting, failed, running and then the rest, rather than filtering to the urgent ones: a Session must not disappear when its turn settles. It owns no Session state and routes every row through `activateSession`. Section folding and split height are transient view preferences and are not persisted. Both sections keep one header-and-scroll skeleton so their titles and right-aligned actions share one inset.
 
 ## Stylesheet ownership
 
@@ -36,6 +36,8 @@ Both browser entries consume the common style entry. Product-specific palettes a
 ## User-owned interaction state
 
 Disclosure, form input and conversation scroll position belong to the user. Live content and scalar status updates must not reopen collapsed sections, discard unfinished input or reset those choices. On initial display, Session switch or a new turn, the conversation may follow output; once the user scrolls away, preserve the viewport and offer a jump-to-latest action. A stats refresh is not a new conversation item.
+
+Keep the transcript scroller focusable by mouse without adding a Tab stop. Some VS Code webview hosts restore the last focused control before an editing command when the document body has focus; returning focus to Composer would clear the transcript selection. Hidden code-block and message actions must not intercept pointer events; hover or keyboard focus reveals them and restores pointer interaction.
 
 An explicit annotation review may temporarily replace conversation/Composer, but remains presentation-local and produces an editable draft rather than another persisted conversation. Required extension input must remain reachable. Reviews may survive Session switches inside that document without being transferred between Sidebar and Session Tab presentations; the annotation and bridge SPECs own the details.
 

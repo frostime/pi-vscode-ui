@@ -118,6 +118,7 @@ Create, resume, switch, rename, and concurrently run independent Pi sessions. If
 Agent output stays readable instead of collapsing into plain text:
 
 - Full **Markdown** with sanitization and syntax-highlighted code fences.
+- **Link targets** — hover over a Markdown link for one second, or focus it with the keyboard, to preview its file path or full external URL before opening it.
 - **Mermaid** diagrams — incomplete fences remain plain source while streaming; complete ones render as diagrams.
 - **Math** via KaTeX — inline `$...$` and block `$$...$$` display formulas.
 - **Embedded images** — PNG, JPEG, WebP, GIF, AVIF, BMP, and SVG with captions, the shared Lightbox, lazy local loading, and click-to-load for remote HTTPS images.
@@ -298,6 +299,8 @@ Currently, `/` slash commands support only OMP command files (`.omp/commands/*.m
 Create, resume, and switch between Pi sessions for different projects in one window. Have Pi work on a feature in one project while it updates documentation in another; switching projects keeps the original task running in the background. Think of several Pi terminals, with a GUI for switching between projects and sessions.
 
 Desktop uses your existing Pi configuration, extensions, and session history, and provides project and session management. When you need to inspect files, edit code, or debug, keep using your preferred IDE. We don't plan to put another development environment inside this window.
+
+The sidebar lists loaded Sessions across Projects, with waiting, failed, and running Sessions first. Select a Session to switch directly to its Project and conversation. Projects and Sessions fold independently; drag their separator to resize the Sessions section.
 
 <p align="center">
   <img src="assets/screenshots/desktop-preview.png" alt="FrostPi Desktop with a project list, a Pi conversation, and a session running in another project" width="960">

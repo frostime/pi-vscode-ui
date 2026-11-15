@@ -51,6 +51,9 @@
   opacity: 0;
   transition: opacity .12s ease;
 }
+/* Hidden chrome must not hit-test: an invisible overlay would swallow clicks and
+   block mousedown-drag selection over the code it floats above. */
+.markdown-body pre:not(:hover):not(:focus-within) .code-actions { pointer-events: none; }
 .markdown-body pre:hover .code-actions,
 .markdown-body pre:focus-within .code-actions { opacity: 1; }
 .markdown-body pre .code-actions button {
@@ -122,4 +125,30 @@
 }
 .markdown-body pre.language-diff .hljs-deletion .hljs-diff-emphasis {
   background: var(--vscode-diffEditor-removedTextBackground, color-mix(in srgb, var(--frost-error) 32%, transparent));
+}
+
+/* Link target preview: resting over a Markdown link names where it leads. */
+.link-preview {
+  position: fixed;
+  z-index: 90;
+  max-width: min(560px, 82vw);
+  padding: 5px 8px;
+  border: 1px solid var(--frost-border);
+  border-radius: 6px;
+  background: var(--frost-surface);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 30%);
+  color: var(--frost-text);
+  font-family: var(--font-mono);
+  font-size: calc(var(--vscode-font-size, 13px) - 3px);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity var(--motion-fast) ease;
+}
+.link-preview[data-visible="true"] {
+  visibility: visible;
+  opacity: 1;
 }
