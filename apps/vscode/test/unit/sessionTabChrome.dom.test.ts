@@ -111,34 +111,37 @@ describe("sidebar launcher", () => {
     expect(posted()).toEqual([{ type: "renameSession", sessionId: "session", name: "Tokenizer" }]);
   });
 
-  it("offers a new Session in an editor tab beside the sidebar one, only on a host with editor tabs", async () => {
+  it("lists every way to start in one flat menu, each new-session entry with its temporary variant beside it", async () => {
     const view = render(SessionHeader, { sessions: [summary], active: session({ status: "ready", isStreaming: false }) });
-    await fireEvent.click(view.getByRole("button", { name: "New or resume session" }));
-    // The editor-tab entry is at the menu's top level, not among the further ways to start.
-    await fireEvent.click(view.getByRole("button", { name: /New session in editor tab/ }));
-    expect(posted()).toEqual([{ type: "createSessionPanel" }]);
-    cleanup();
+    const open = (): Promise<boolean> => fireEvent.click(view.getByRole("button", { name: "New or resume session" }));
 
-    clientCapabilities.set({ ...VSCODE_CLIENT_UI_CAPABILITIES, sessionEditorTabs: false });
-    const withoutTabs = render(SessionHeader, { sessions: [summary], active: session({ status: "ready", isStreaming: false }) });
-    await fireEvent.click(withoutTabs.getByRole("button", { name: "New or resume session" }));
-    await fireEvent.click(withoutTabs.getByRole("button", { name: "More ways to start a session" }));
-    expect(withoutTabs.queryByRole("button", { name: /in editor tab/ })).toBeNull();
-    expect(withoutTabs.getByRole("button", { name: /New temporary session/ })).toBeTruthy();
+    await open();
+    const menu = view.container.querySelector(".session-launcher-menu")!;
+    expect([...menu.querySelectorAll("button")].map((button) => button.getAttribute("aria-label") ?? button.querySelector("strong")?.textContent)).toEqual([
+      "New session", "New temporary session",
+      "New session in editor tab", "New temporary session in editor tab",
+      "New session with arguments…", "Resume session",
+    ]);
+    expect(view.queryByRole("button", { name: "More ways to start a session" })).toBeNull();
+
+    for (const name of ["New session", "New temporary session", "New session in editor tab", "New temporary session in editor tab"]) {
+      await fireEvent.click(view.getByRole("button", { name: name === "New session" || name === "New session in editor tab" ? new RegExp(`^${name} Start`) : name }));
+      if (name !== "New temporary session in editor tab") await open();
+    }
+    expect(posted()).toEqual([
+      { type: "createSession" },
+      { type: "createSession", ephemeral: true },
+      { type: "createSessionPanel" },
+      { type: "createSessionPanel", ephemeral: true },
+    ]);
   });
 
-  it("starts a temporary Session in the sidebar or in an editor tab", async () => {
+  it("leaves out the editor tab entries on a host without editor tabs", async () => {
+    clientCapabilities.set({ ...VSCODE_CLIENT_UI_CAPABILITIES, sessionEditorTabs: false });
     const view = render(SessionHeader, { sessions: [summary], active: session({ status: "ready", isStreaming: false }) });
-    const openVariants = async (): Promise<void> => {
-      await fireEvent.click(view.getByRole("button", { name: "New or resume session" }));
-      await fireEvent.click(view.getByRole("button", { name: "More ways to start a session" }));
-    };
-
-    await openVariants();
-    await fireEvent.click(view.getByRole("button", { name: /^New temporary session Start/ }));
-    await openVariants();
-    await fireEvent.click(view.getByRole("button", { name: /New temporary session in editor tab/ }));
-
-    expect(posted()).toEqual([{ type: "createSession", ephemeral: true }, { type: "createSessionPanel", ephemeral: true }]);
+    await fireEvent.click(view.getByRole("button", { name: "New or resume session" }));
+    expect(view.queryByRole("button", { name: /in editor tab/ })).toBeNull();
+    expect(view.getByRole("button", { name: "New temporary session" })).toBeTruthy();
+    expect(view.getByRole("button", { name: /New session with arguments/ })).toBeTruthy();
   });
 });

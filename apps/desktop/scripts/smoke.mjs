@@ -412,9 +412,8 @@ async function verifyInstalledPi() {
   let temporary = false;
   for (let attempt = 0; attempt < 10 && !temporary; attempt++) {
     await client.evaluate("document.querySelector('[aria-label=\"New or resume session\"]').click()");
-    await until(() => client.evaluate("Boolean(document.querySelector('.launcher-expand'))"), "temporary session launcher");
-    await client.evaluate("document.querySelector('.launcher-expand').click()");
-    await client.evaluate("[...document.querySelectorAll('.launcher-variants button')].find(b=>b.textContent.includes('New temporary session')).click()");
+    await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"New temporary session\"]'))"), "temporary session launcher");
+    await client.evaluate("document.querySelector('[aria-label=\"New temporary session\"]').click()");
     temporary = await until(() => client.evaluate("Boolean(document.querySelector('.ephemeral-badge'))"), "temporary installed-Pi session", 1500).then(() => true, () => false);
     if (!temporary) await delay(200);
   }
