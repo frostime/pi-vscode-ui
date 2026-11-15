@@ -16,6 +16,13 @@ interface RecoveryOptions {
   readAvailability(): "ready" | "compacting" | "unavailable";
   getAttachmentLimits(): AttachmentLimitsView;
   onChange(): void;
+  /**
+   * Pending prompts the Runtime still holds itself through a manual compaction, in submission
+   * order. Pi has never seen them, so withdrawing them is certain, works during compaction and
+   * returns their images.
+   */
+  held(): ReadonlyArray<{ queuedId: string; text: string; images: readonly ComposerDraftImageView[] }>;
+  releaseHeld(queuedIds: readonly string[]): void;
 }
 
 /** One child process's non-aborting recovery, not a second queue or an agent-turn lock. */
@@ -66,6 +73,7 @@ export class QueuedPromptRecovery {
         content: { text: "", images: [] }, recoveredCount: 0, notRemovedCount: 0, warnings: [],
       };
       if (candidates.length === 0) return outcome;
+      if (this.#allPendingHeld()) return this.#withdrawHeld();
       this.#options.conversation.beginQueueRecovery();
       if (this.#options.runtime === "pi") {
         let cleared: RpcClearQueueResult;
@@ -132,12 +140,42 @@ export class QueuedPromptRecovery {
     this.#disposed = true;
   }
 
+  /** Every pending bubble is one the Runtime holds, none is in Pi's queue. */
+  #allPendingHeld(): boolean {
+    const { queuedSteers, queuedFollowUps } = this.#options.conversation.read();
+    const pending = [...queuedSteers, ...queuedFollowUps];
+    if (pending.length === 0) return false;
+    const held = new Set(this.#options.held().map((prompt) => prompt.queuedId));
+    return pending.every((prompt) => held.has(prompt.id));
+  }
+
+  #withdrawHeld(): QueuedPromptRecoveryOutcome {
+    const { queuedSteers, queuedFollowUps } = this.#options.conversation.read();
+    const pending = new Set([...queuedSteers, ...queuedFollowUps].map((prompt) => prompt.id));
+    const prompts = this.#options.held().filter((prompt) => pending.has(prompt.queuedId));
+    this.#options.releaseHeld(prompts.map((prompt) => prompt.queuedId));
+    for (const prompt of prompts) this.#options.conversation.removeQueuedPrompt(prompt.queuedId);
+    return {
+      certainty: "confirmed",
+      content: {
+        text: prompts.map((prompt) => prompt.text).filter(Boolean).join("\n\n"),
+        // Fresh ids: the Composer may hold new images since these were sent.
+        images: prompts.flatMap((prompt) => prompt.images.map((image) => ({ ...image, id: `recovered-${randomUUID()}` }))),
+      },
+      recoveredCount: prompts.length,
+      notRemovedCount: 0,
+      warnings: [],
+    };
+  }
+
   #unavailableReason(): QueuedPromptRecoveryView["reason"] {
     const availability = this.#options.readAvailability();
     if (availability === "unavailable") return "session-unavailable";
-    if (availability === "compacting") return "compacting";
     const { queuedSteers, queuedFollowUps } = this.#options.conversation.read();
     const imageCount = [...queuedSteers, ...queuedFollowUps].reduce((count, prompt) => count + prompt.images.length, 0);
+    if (this.#allPendingHeld()) return imageCount > this.#options.getAttachmentLimits().maxImages ? "image-limit" : undefined;
+    // During an automatic compaction Pi may already have taken a queued message for the next turn.
+    if (availability === "compacting") return "compacting";
     if (this.#options.runtime === "pi" && imageCount > 0) return "images-not-supported";
     if (imageCount > this.#options.getAttachmentLimits().maxImages) return "image-limit";
     return undefined;

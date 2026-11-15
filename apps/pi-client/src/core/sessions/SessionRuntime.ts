@@ -887,6 +887,11 @@ export class SessionRuntime {
       readAvailability: () => compatibilityProfile.capabilities.queuedPromptRecovery ? this.#viewState.queueRecoveryAvailability() : "unavailable",
       getAttachmentLimits: () => ({ maxImageBytes: this.#configurationProvider().maxImageBytes, maxImages: 12 }),
       onChange: () => this.#notifyChange(),
+      held: () => this.#heldForCompaction,
+      releaseHeld: (queuedIds) => {
+        const released = new Set(queuedIds);
+        this.#heldForCompaction = this.#heldForCompaction.filter((prompt) => !released.has(prompt.queuedId));
+      },
     });
     this.#queuedPromptRecovery = queueRecovery;
     this.#extensionUi = new ExtensionUiCoordinator(api, {

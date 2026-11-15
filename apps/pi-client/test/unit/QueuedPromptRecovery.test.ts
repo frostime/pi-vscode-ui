@@ -47,6 +47,7 @@ function setup(runtime: "pi" | "oh-my-pi", backend = new QueueBackend(), availab
   const recovery = new QueuedPromptRecovery({
     api: backend, runtime, conversation, readAvailability: availability,
     getAttachmentLimits: () => ({ maxImages: 12, maxImageBytes: 10 * 1024 * 1024 }), onChange() {},
+    held: () => [], releaseHeld() {},
   });
   return { recovery, conversation, backend };
 }
