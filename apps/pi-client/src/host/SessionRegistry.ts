@@ -528,10 +528,11 @@ export class SessionRegistry {
     if (runtime.view.historyStatus === "queued" || runtime.view.historyStatus === "loading") {
       throw new Error("Wait for conversation history to finish loading before sending a prompt.");
     }
-    if (runtime.view.isCompacting) throw new Error("Wait for context compaction to finish before sending a prompt.");
     const hostCommand = parseHostCommand(text);
     // A command this runtime cannot be answered for stays the runtime's own text.
     if (hostCommand && runtime.answersHostCommand(hostCommand.name)) {
+      // An ordinary prompt waits in the queue until compaction ends; a FrostPi command acts now, so it cannot.
+      if (runtime.view.isCompacting) throw new Error("Wait for context compaction to finish before running this command.");
       if (images.length > 0) throw new Error(`/${hostCommand.name} does not support image attachments.`);
       // Host commands never become a user prompt and never promote a Provisional Session.
       switch (hostCommand.name) {

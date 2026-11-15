@@ -90,6 +90,13 @@ export class SessionRuntime {
   #historyEventBuffer: RpcEvent[] | null = null;
   #disposed = false;
   #lifecycleVersion = 0;
+  /** `reason` of the compaction in progress, from its `compaction_start` event; null when unknown. */
+  #compactionReason: string | null = null;
+  /**
+   * Prompts sent during a manual compaction, which Pi refuses until it ends (Pi's terminal UI
+   * keeps the same queue). Each is shown as a Pending bubble and sent, in order, at `compaction_end`.
+   */
+  #heldForCompaction: Array<{ queuedId: string; text: string; images: WebviewImageInput[]; streamingBehavior: StreamingBehavior }> = [];
   #liveStatsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   #liveStatsRefreshVersion = 0;
   #appliedProxyFingerprint: string | null = null;
@@ -206,6 +213,8 @@ export class SessionRuntime {
     this.#adaptersDiscovered = false;
     // Local queue bubbles are ephemeral; a dead process cannot promote them.
     this.#conversation.clearQueuedPrompts();
+    this.#heldForCompaction = [];
+    this.#compactionReason = null;
     this.#viewState.setForking(false);
     this.#viewState.setStatus("stopped");
     this.refreshConfigurationState(false);
@@ -217,6 +226,10 @@ export class SessionRuntime {
   }
 
   async sendPrompt(text: string, images: WebviewImageInput[], requestedStreamingBehavior?: StreamingBehavior): Promise<void> {
+    return this.#submitPrompt(text, images, requestedStreamingBehavior, false);
+  }
+
+  async #submitPrompt(text: string, images: WebviewImageInput[], requestedStreamingBehavior: StreamingBehavior | undefined, afterCompaction: boolean): Promise<void> {
     if (this.view.isForking) throw new Error("Wait for the session fork to finish before sending a prompt.");
     this.#assertNotStartingNewConversation();
     const api = this.#requireApi();
@@ -246,7 +259,19 @@ export class SessionRuntime {
     // Park while streaming or while an earlier prompt still awaits promotion; otherwise an idle-gap
     // appendUserPrompt can steal the next agent_start and leave queue bubbles stuck.
     const hasQueuedPrompts = this.view.queuedSteers.length > 0 || this.view.queuedFollowUps.length > 0;
-    const queuePrompt = !extensionCommand && (this.view.isStreaming || hasQueuedPrompts);
+    if (!extensionCommand && this.view.isCompacting && this.#compactionHoldsPrompts()) {
+      const streamingBehavior = requestedStreamingBehavior ?? configuration.streamingBehavior;
+      const queuedId = streamingBehavior === "steer"
+        ? this.#conversation.enqueueSteer(message, images)
+        : this.#conversation.enqueueFollowUp(message, images);
+      this.#heldForCompaction.push({ queuedId, text: message, images, streamingBehavior });
+      this.#notifyChange();
+      return;
+    }
+    // Automatic compaction runs inside a Pi run, where Pi queues a prompt sent with a streaming
+    // behaviour, even before this view has seen the run's agent_start. A prompt held through a
+    // manual compaction goes the same way, so it starts a run or joins one that began meanwhile.
+    const queuePrompt = !extensionCommand && (this.view.isStreaming || hasQueuedPrompts || this.view.isCompacting || afterCompaction);
 
     if (queuePrompt) {
       const recovery = this.#queuedPromptRecovery;
@@ -302,6 +327,30 @@ export class SessionRuntime {
       if (!this.view.isStreaming) this.#conversation.completeTurn(turnId, "error");
       this.#notifyChange();
       throw error;
+    }
+  }
+
+  /** Pi refuses a prompt during manual compaction; automatic compaction happens inside a run. */
+  #compactionHoldsPrompts(): boolean {
+    return this.#compactionReason === "manual" || (this.#compactionReason === null && !this.view.isStreaming);
+  }
+
+  /** Sends the prompts held through a manual compaction, unless the user stopped it or the session. */
+  async #sendHeldPrompts(): Promise<void> {
+    const held = this.#heldForCompaction.splice(0);
+    if (held.length === 0) return;
+    const pending = new Set([...this.view.queuedSteers, ...this.view.queuedFollowUps].map((prompt) => prompt.id));
+    // Each one is shown again as it is submitted.
+    for (const item of held) this.#conversation.removeQueuedPrompt(item.queuedId);
+    this.#notifyChange();
+    if (this.#abortRequested || this.view.status !== "ready") return;
+    for (const item of held) {
+      if (!pending.has(item.queuedId)) continue;
+      try {
+        await this.#submitPrompt(item.text, item.images, item.streamingBehavior, true);
+      } catch {
+        // The failure is already a notice in the conversation; later prompts still go.
+      }
     }
   }
 
@@ -1009,7 +1058,12 @@ export class SessionRuntime {
       if (!abortRequested && settledTurn?.status === "completed") this.#hooks.onAgentTurnCompleted?.(this);
       void this.#refreshAfterSettled();
     }
-    if (event.type === "compaction_end") void this.#refreshAfterCompaction();
+    if (event.type === "compaction_start") this.#compactionReason = typeof event.reason === "string" ? event.reason : null;
+    if (event.type === "compaction_end") {
+      this.#compactionReason = null;
+      void this.#refreshAfterCompaction();
+      void this.#sendHeldPrompts();
+    }
   }
 
   async #handleQuestionUiRequest(request: RpcExtensionUiRequest): Promise<void> {
