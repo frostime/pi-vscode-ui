@@ -73,7 +73,9 @@
     "onCommand:frostpi.restartSession",
     "onCommand:frostpi.restartAllSessions",
     "onCommand:frostpi.configureProxy",
-    "onCommand:frostpi.configureProxyCredentials"
+    "onCommand:frostpi.configureProxyCredentials",
+    "onCommand:frostpi.copyLinkAddress",
+    "onCommand:frostpi.copyLinkPath"
   ],
   "contributes": {
     "viewsContainers": {
@@ -190,9 +192,39 @@
       {
         "command": "frostpi.configureProxyCredentials",
         "title": "FrostPi: Configure Proxy Credentials"
+      },
+      {
+        "command": "frostpi.copyLinkAddress",
+        "title": "Copy Link Address"
+      },
+      {
+        "command": "frostpi.copyLinkPath",
+        "title": "Copy Path"
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "frostpi.copyLinkAddress",
+          "when": "false"
+        },
+        {
+          "command": "frostpi.copyLinkPath",
+          "when": "false"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "frostpi.copyLinkAddress",
+          "when": "(webviewId == 'frostpi.chat' || webviewId =~ /^frostpi\\.session\\.[0-9]+$/) && webviewSection == 'frostpiWebLink'",
+          "group": "frostpi@1"
+        },
+        {
+          "command": "frostpi.copyLinkPath",
+          "when": "(webviewId == 'frostpi.chat' || webviewId =~ /^frostpi\\.session\\.[0-9]+$/) && webviewSection == 'frostpiFileLink'",
+          "group": "frostpi@1"
+        }
+      ],
       "editor/context": [
         {
           "command": "frostpi.sendSelection",
