@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Clicking a web link in a message opened it in the browser and then also showed VS Code's dialog asking whether to open, copy or cancel it. The link now just opens.
+
 ## [0.16.7] - 2026-11-16
 
 ### Fixed
