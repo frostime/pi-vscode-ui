@@ -10,7 +10,7 @@ consumed: true
 
 本文后续章节保留交接时的状态；继续集成前先读本节。
 
-- #17 已获准接纳；#12 目前只获准修正 Windows 图片路径测试，尚未获准合入 `quasi-main`。不推送、不发版。
+- #17 已获准接纳；#12 已获准修正 Windows 图片路径测试、恢复 AVIF/BMP 正文图片支持并更新文案，尚未获准合入 `quasi-main`。不推送、不发版。
 - 从 `quasi-main` 的 `16200d0` 建立 `fix/upstream-17-transcript-copy`，将上游修复 `73b3947` cherry-pick 为 `23a0b77`，没有接纳 `a39b575` 的定版。CHANGELOG 冲突已解决：修复记录进入 `[Unreleased]`，本地 0.16.6 发布记录与版本号不变。
 - UI 契约与源码注释限定了受影响的宿主行为。本机 VS Code 1.146.0 已检查非空选区并避免恢复输入框焦点；对应上游提交为 `microsoft/vscode@b0f28160b1616d55c91b24827c22972da3722488`。因此复制故障不是所有当前宿主都必现，#17 不需要按品牌或版本分支。
 - 浏览器前后对照已复现旧宿主逻辑下选区丢失、修复后保留，以及新宿主逻辑下两者均能复制。隐藏操作按钮的命中和 Tab 可达性也已检查。该证据来自无头 Edge 中的共享组件与模拟宿主复制逻辑，不是完整 Extension Host 验收。用户报告本机现有版本复制正常。
@@ -19,13 +19,23 @@ consumed: true
 
 ### PR #12 Windows 图片路径测试
 
-用户接受增加显式图片加载操作，但要求设计支持范围内的图片仍有可用加载入口；SOCKS 与 Remote-SSH 场景本轮明确不考虑。失败后没有原地重试入口、远程图片新增大小限制的行为仍未解决或接受，不要据此直接合入整个 PR。
+用户接受增加显式图片加载操作，但要求设计支持范围内的图片仍有可用加载入口；SOCKS 与 Remote-SSH 场景本轮明确不考虑。用户已接受保留默认10 MiB大小限制并澄清设置说明。失败后没有原地重试入口仍未修正，尚未获准直接合入整个 PR。
 
 Windows 路径判断目前没有已确认的产品缺陷；已确认的问题是测试使用虚构路径接触真实磁盘/共享，并假定访问结果必为 `notFound`。修正位于 `fix/pr12-windows-image-tests@fa75bfb`，基于 PR #12 head `0ac4391`，工作树为 `.worktrees/pr12-windows-image-tests`，尚未合入 `quasi-main`。
 
 该提交只改测试：原 `MarkdownImageResolver.test.ts` 保留真实临时文件用例；新 `MarkdownImageResolver.windows.test.ts` mock 文件系统，验证16个拒绝路径零访问、8个允许路径准确调用一次 `stat` 与 `readFile`。没有修改产品代码或新增注入接口。27个 focused 用例全部通过；一次性绕过网络路径 guard 后16个拒绝用例全部失败，恢复 guard 后重新全绿。
 
 先构建共享包后，该独立分支的 `pnpm check` 通过：1209个包测试通过、1个现有平台条件用例跳过、13个工程脚本测试通过，lint、类型检查、双产品 JS 构建与包体积检查通过。此结果仅针对上游 PR #12 加测试修正，不是它与本地 `quasi-main` / #17 的组合验收。日志在该工作树的 `tmp/`，尚未做 GUI 或打包验证。
+
+### PR #12 图片兼容与设置说明
+
+该独立分支现为 `fix/pr12-windows-image-tests@1ef5f6f`。`cc5c01d` 更新了 VS Code 与 Desktop 的大小限制说明并重新生成共享设置定义：超限的粘贴图片不能添加为附件，超限的本地文件/HTTPS正文图片不能加载。设置键和10 MiB默认值不变；Desktop已有入口为 Settings → Conversation & Pi → Reading & input → Image size limit，以MiB编辑。
+
+用户明确要求恢复 AVIF/BMP 加载支持。`1ef5f6f` 补齐字节识别、结果MIME类型、HTTPS Accept、前端Blob/内嵌data展示，更新格式错误提示、Markdown SPEC、两份README与CHANGELOG。正文支持PNG/JPEG/WebP/GIF/AVIF/BMP/SVG；粘贴给模型的附件格式仍为原有PNG/JPEG/WebP，没有放宽附件协议。
+
+修复前新增测试复现了Host、本地读取和前端对AVIF/BMP的拒绝；修复后转绿。无头Edge验证了两种真实图片在本地文件、HTTPS加载流程、内嵌data共6种情况下的解码、尺寸和放大预览；HTTPS使用注入传输响应，实际执行共享loader与前端桥消息，不是完整Extension Host或原生Desktop验收。浏览器证据位于该工作树 `tmp/image-formats/component-browser-result.json`。
+
+`1ef5f6f` 的独立分支验证通过：1220个包测试、13个工程脚本测试，1个既有平台用例跳过，完整 `pnpm check` 与VSIX打包/校验成功。日志为该工作树 `tmp/formats-*.log`。产物保留上游分支0.16.5版本，仅作验证；未定版0.16.7、未合入quasi-main、未推送或发布，仍需组合验收。
 
 ## Assume Reader
 
