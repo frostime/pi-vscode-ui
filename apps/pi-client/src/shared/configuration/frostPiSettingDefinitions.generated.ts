@@ -68,7 +68,7 @@ export const frostPiSettingDefinitions = {
     "maximum": 52428800,
     "default": 10485760,
     "scope": "resource",
-    "description": "Maximum size in bytes for each pasted image."
+    "description": "Maximum size in bytes per image. Pasted images over this limit cannot be attached. Images loaded from local files or HTTPS links in the conversation are also rejected if they exceed the limit."
   },
   "frostpi.diagnostics.level": {
     "type": "string",
