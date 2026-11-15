@@ -13,6 +13,7 @@ const admissionRelease = arg("--recovery-admission-release");
 const compactRelease = arg("--recovery-compact-release");
 let streaming = false;
 let compacting = false;
+let compactionReason;
 let sequence = 0;
 let activeAssistant;
 const entries = [];
@@ -85,7 +86,24 @@ async function handle(command) {
         tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 }); return;
     case "prompt": {
       if (command.message === "delayed") await waitForFile(admissionRelease);
+      // Like Pi, a manual compaction refuses prompts; an automatic one runs inside a run, which queues them.
+      if (compactionReason === "manual") throw new Error("Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry.");
       const item = { text: command.message, images: command.images };
+      if (!streaming && command.message === "auto-compact") {
+        streaming = true;
+        send({ type: "agent_start" });
+        user(item);
+        respond(id);
+        compacting = true;
+        compactionReason = "threshold";
+        send({ type: "compaction_start", reason: "threshold" });
+        await waitForFile(compactRelease);
+        compacting = false;
+        compactionReason = undefined;
+        send({ type: "compaction_end", reason: "threshold" });
+        assistantStart();
+        return;
+      }
       if (streaming) {
         (command.streamingBehavior === "steer" ? steering : followUp).push(item);
         queueUpdate();
@@ -115,10 +133,12 @@ async function handle(command) {
     }
     case "compact":
       compacting = true;
-      send({ type: "compaction_start" });
+      compactionReason = "manual";
+      send({ type: "compaction_start", reason: "manual" });
       await waitForFile(compactRelease);
       compacting = false;
-      send({ type: "compaction_end" });
+      compactionReason = undefined;
+      send({ type: "compaction_end", reason: "manual" });
       respond(id, {}); return;
     case "abort":
       finish(); respond(id); return;

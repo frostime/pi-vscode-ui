@@ -147,6 +147,7 @@ describe("queued recovery through the real Host and child-process path", () => {
     expect(recoveryError(surface.messages, "during-compact")).toContain("compaction");
     await writeFile(join(fixture.directory, "compact"), "1");
     await compact;
+    await waitForRecovery(() => registry.sessionView(sessionId)?.isCompacting === false);
     surface.send({ type: "restoreQueuedPrompts", sessionId, requestId: "after-compact", draftImageCount: 0 });
     await waitForRecovery(() => recoveryResult(surface.messages, "after-compact") !== undefined);
     expect(recoveryResult(surface.messages, "after-compact")).toMatchObject({ ok: true, outcome: { content: { text: "still queued" } } });
