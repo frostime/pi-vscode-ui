@@ -16,14 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/new` starts a new conversation in the same session view and keeps the model, thinking level and Pi process. The earlier conversation stays in Pi's session history for **Resume session**.
 - `/rewind` lists earlier prompts and returns the conversation to just before the one you pick, with that prompt back in the Composer. It uses Pi's session tree, so the path you left remains available; files on disk are not restored.
 - Focus view, on by default: each run of tool calls and reasoning folds into one expandable row while a turn is running, and replies stay visible. Switch with **FrostPi: Toggle Focus View** or `frostpi.conversation.focusView`.
+- The page shown when no session is open offers **Temporary session**, a conversation that is never saved, next to **New session** and **Resume session**.
+- A temporary session can start directly in an editor tab: from the crossed-eye button beside **New session in editor tab** in the sidebar's `+` menu, from the crossed-eye button in a session tab, by holding Alt while clicking the `+` in the editor title bar, from that title bar's `…` menu, or with **FrostPi: New Temporary Session in Editor Tab**. **FrostPi: New Temporary Session** starts one in the sidebar.
+- Stop a session without closing it: its Pi process ends and it stays in the list, ready to start again when you select it, send a prompt or choose **Start session**. Use the stop button on its row in the session list, **Stop session** in the `…` menu, or **FrostPi: Stop Session**, which is also in a session tab's title bar menu.
+- Delete a session: **Delete session** stops it and removes its Pi session file, to the trash where possible, after confirmation. It is in the same places, with a trash icon in the session list, and as **FrostPi: Delete Session**. Forks of the session keep their own files.
 
 ### Fixed
 
+- A prompt sent to a session that had stopped or failed could be refused with "Wait for conversation history to finish loading" while FrostPi started it again. The prompt now waits for the history and is sent.
 - Opening a session in an editor tab from the session list failed with "The Webview action does not target the Session displayed by this surface" until that session had been shown in the sidebar. A restored session opened this way now also starts and loads its history.
 - A model set in `frostpi.pi.arguments` (`--model`, `--provider`, `--thinking`) applies to new conversations only. Pi used to apply it to every resumed session too, replacing the model that session was using.
 
 ### Changed
 
+- **FrostPi: Stop Active Session** is now called **FrostPi: Stop Response**. It stops the running reply, as before; **FrostPi: Stop Session** is the new command that ends the Pi process.
+- The sidebar's `+` menu is one flat list: **New session**, **New session in editor tab**, **New session with arguments…** and **Resume session**. The two new-session entries each end in a crossed-eye button that starts the temporary variant. The arrow that expanded more ways to start is gone.
+- The badge beside a temporary session's title reads **Temporary**, like the menus and messages. It was in Chinese (临时).
 - A finished turn no longer collapses into one **Worked** summary. Each run of tool calls and reasoning folds into its own row, and replies between runs stay visible. `frostpi.conversation.collapseTurnTrace` controls this for finished turns.
 - A reasoning row shows one line of the model's thinking beside its title, and an opened reasoning row stays open when the next step folds it into a group.
 - A long session opens on its part since the last compaction, or on its recent prompts when it has none, with **Load full history** to see everything. Sessions larger than 8 MiB used to open with no history at all.
