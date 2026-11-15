@@ -117,7 +117,7 @@ Agent 的输出保持可读，不会退化成一堆纯文本：
 - 完整 **Markdown**：经过消毒处理，代码围栏带语法高亮。
 - **Mermaid** 图表——流式输出期间未完成的围栏保持源码显示，完整后才渲染为图表。
 - **数学公式**：基于 KaTeX，支持行内 `$...$` 与块级 `$$...$$`。
-- **嵌入图片**——PNG、JPEG、WebP、GIF、SVG，带标题、共享 Lightbox、本地图片懒加载，远程 HTTPS 图片需点击加载。
+- **嵌入图片**——PNG、JPEG、WebP、GIF、AVIF、BMP、SVG，带标题、共享 Lightbox、本地图片懒加载，远程 HTTPS 图片需点击加载。
 - **Diff 展示**——`diff`/`patch` 围栏与工具 diff 采用 VS Code diff 配色，并可深入到行内逐词标注增删。
 
 <p align="center">
