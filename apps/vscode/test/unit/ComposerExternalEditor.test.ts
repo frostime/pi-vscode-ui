@@ -96,7 +96,11 @@ describe("ComposerExternalEditor", () => {
     });
     await vi.waitFor(() => expect(applied).toEqual([{ sessionId: "session-1", text: "edited body" }]));
 
-    await expect(access(document.uri.fsPath)).rejects.toThrow();
+    // The apply callback runs before the draft directory is removed, so the cleanup needs
+    // its own wait: the two steps are separate async steps and both complete on their own.
+    await vi.waitFor(async () => {
+      await expect(access(document.uri.fsPath)).rejects.toThrow();
+    });
     editor.dispose();
   });
 
