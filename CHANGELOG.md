@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve selected transcript text when copying with `Ctrl+C` or the native Copy menu in VS Code and VSCodium versions that restore input focus before copying.
+- Prevent hidden code-block and message action buttons from intercepting clicks and text-selection drags.
+
 ## [0.16.6] - 2026-11-14
 
 ### Added

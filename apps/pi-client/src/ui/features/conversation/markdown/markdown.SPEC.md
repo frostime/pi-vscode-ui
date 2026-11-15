@@ -4,7 +4,7 @@ description: Sanitization, file references, streaming Mermaid, and source-text c
 scope:
   - /apps/pi-client/src/ui/features/conversation/markdown/**
   - /apps/pi-client/src/ui/features/conversation/diffPresentation.ts
-updated: 2026-11-14
+updated: 2026-11-15
 ---
 
 # Conversation Markdown Rendering
@@ -17,6 +17,6 @@ updated: 2026-11-14
 - Resting over a link for one second shows its target in one fixed tooltip shared by every mounted message; keyboard focus shows the same label immediately. A file reference resolves against the displayed Session cwd and appends its line, column, and range; parent segments cannot escape a Windows drive or UNC share root, and POSIX backslashes remain filename characters. An HTTP(S) link shows its full URL. The tooltip stays within the horizontal viewport and appears above its link when it fits there but not below. It labels the navigation target, not the host's resolved path, and retires on scroll, resize, pointer leave, when the hosting message replaces its markup, or when that message unmounts. One global scroll/resize listener pair serves the shared tooltip; the last message unmount removes those listeners and the tooltip element.
 - Incomplete Mermaid fences remain source text while streaming; only complete fences mount a diagram, and render failure shows the error plus original source.
 - Fenced code blocks get a hover/focus action group (injected by `MarkdownHtml.svelte`, not part of sanitized HTML). Copy sends the block's raw code text through `copyText` and confirms in place briefly. Wrap toggles soft wrapping for that block only, exposes its state through `aria-pressed`, and preserves an explicit choice across re-renders of the mounted message.
-- Fence chrome: the outer `pre` clips and hosts the hover chrome; the inner `.code-scroll` scrolls. Prose-like languages (`txt`, `text`, `plaintext`, `md`, `markdown`, `tex`, `latex`) wrap by default and therefore start with Wrap active; other and untagged fences start unwrapped. Either default can be toggled per block.
+- Fence chrome: the outer `pre` clips and hosts the hover chrome; the inner `.code-scroll` scrolls. Prose-like languages (`txt`, `text`, `plaintext`, `md`, `markdown`, `tex`, `latex`) wrap by default and therefore start with Wrap active; other and untagged fences start unwrapped. Either default can be toggled per block. While the code block is neither hovered nor focused within, its action group ignores pointer events; hovering or focusing within the block reveals the actions and restores pointer interaction.
 - `diff` and `patch` fences use VS Code Diff theme colors for full-line additions and deletions. Adjacent deletion/addition runs are compared as word-token streams (Latin words, single CJK characters, punctuation, whitespace), so one line can carry several separate emphasized ranges and the runs need not have equal sizes. Lines whose emphasis would cover most visible text fall back to whole-line highlighting, and oversized blocks skip intra-line emphasis. Recognized tool-result diffs share this classification and emphasis model while retaining their compact tool-card chrome.
 - Copy uses original protocol text in order, never rendered HTML, SVG, math markup, images, reasoning, tools, or notices.
