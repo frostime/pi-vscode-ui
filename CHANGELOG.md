@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Show a Session title as soon as Pi names or renames it, and adopt the stored Pi name for Sessions still labeled `New session` at startup.
+
 ## [0.16.7] - 2026-11-16
 
 ### Fixed

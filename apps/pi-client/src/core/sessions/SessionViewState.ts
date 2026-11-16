@@ -110,6 +110,10 @@ export class SessionViewState {
       case "compaction_end":
         this.#view.isCompacting = false;
         break;
+      case "session_info_changed":
+        // Pi reports a cleared name as an absent field; only a real name moves the title.
+        if (typeof event.name === "string" && event.name) this.setTitle(event.name);
+        break;
       default:
         return;
     }
