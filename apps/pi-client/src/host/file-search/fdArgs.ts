@@ -65,14 +65,25 @@ export function buildFdArgumentPasses(
   };
 }
 
+/** fd arguments that list every searchable path under `cwd`, for the workspace file index. */
+export function buildFdIndexArguments(
+  cwd: string,
+  options: WorkspaceFileSearchOptions,
+  includeDirectories = true,
+): string[] {
+  return baseFdArguments({ baseDirectory: cwd, displayPrefix: "", query: "" }, options, includeDirectories, null);
+}
+
 function baseFdArguments(
   scope: ScopedQuery,
   options: WorkspaceFileSearchOptions,
   includeDirectories: boolean,
+  /** `null` lists without a cap. */
+  maxResults: number | null = MAX_FD_RESULTS,
 ): string[] {
   const args = [
     "--base-directory", scope.baseDirectory,
-    "--max-results", String(MAX_FD_RESULTS),
+    ...(maxResults === null ? [] : ["--max-results", String(maxResults)]),
     "--type", "file",
   ];
   if (includeDirectories) args.push("--type", "directory");
