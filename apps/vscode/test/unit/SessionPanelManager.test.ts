@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it, vi } from "vitest";
 
 import * as vscode from "vscode";
@@ -41,7 +43,7 @@ function changeTabs({ closed = [], opened = [] }: { closed?: FakeTab[]; opened?:
   for (const listener of tabEvents.listeners) listener({ closed, opened });
 }
 
-const { SessionPanelManager } = await import("../../src/extension/webview-host/SessionPanelManager.js");
+const { RESTORABLE_SESSION_TABS, SessionPanelManager, sessionTabViewType } = await import("../../src/extension/webview-host/SessionPanelManager.js");
 
 describe("Session panel lifecycle", () => {
   it("pairs same-titled tabs by instance in either event order and ignores a move or old instance", () => {
@@ -185,6 +187,92 @@ describe("Session panel lifecycle", () => {
     manager.dispose();
   });
 
+  it("takes over a Session Tab VS Code restored, and closes one whose Session is gone or already open", () => {
+    const sessions = new Map([["kept", { id: "kept", title: "Kept" }]]);
+    const registry = {
+      sessionView: (id: string) => sessions.get(id) ?? null,
+      hasSession: (id: string) => sessions.has(id),
+      retainProvisionalSession: vi.fn(),
+    };
+    const connection = { dispose: vi.fn(), focusComposer: vi.fn() };
+    const manager = new SessionPanelManager(registry as never, {} as never, () => connection as never, () => {
+      throw new Error("a restored tab must not create a panel");
+    });
+
+    const restored = fakePanel("frostpi.session.4");
+    restored.value.title = "FrostPi · Old title";
+    restored.value.viewColumn = 2;
+    expect(manager.restore(restored.value as never, "kept")).toBe(true);
+    expect(manager.has("kept")).toBe(true);
+    expect(manager.viewColumn("kept")).toBe(2);
+    expect(restored.value.title).toBe("FrostPi · Kept");
+    expect(restored.value.webview.html).toContain('<meta name="frostpi-session-tab" content="kept" />');
+    expect(restored.value.webview).toHaveProperty("options", expect.objectContaining({ enableScripts: true }));
+    expect(registry.retainProvisionalSession).toHaveBeenCalledWith("kept");
+    expect(restored.value.dispose).not.toHaveBeenCalled();
+
+    for (const sessionId of ["kept", "temporary", undefined]) {
+      const stale = fakePanel("frostpi.session.5");
+      expect(manager.restore(stale.value as never, sessionId)).toBe(false);
+      expect(stale.value.dispose).toHaveBeenCalledOnce();
+    }
+    sessions.set("other", { id: "other", title: "Other" });
+    const foreign = fakePanel("frostpi.chat");
+    expect(manager.restore(foreign.value as never, "other")).toBe(false);
+    expect(foreign.value.dispose).toHaveBeenCalledOnce();
+
+    // The restored tab keeps its number: closing it closes its Session.
+    const closed: string[] = [];
+    manager.onDidCloseTab((sessionId) => closed.push(sessionId));
+    changeTabs({ closed: [webviewTab("frostpi.session.4")] });
+    restored.closeFromUser();
+    expect(closed).toEqual(["kept"]);
+    manager.dispose();
+  });
+
+  it("numbers Session Tabs within the restorable range, sparing numbers in use and recently used ones", () => {
+    const registry = { sessionView: (id: string) => ({ id, title: id }), hasSession: () => true, retainProvisionalSession: vi.fn() };
+    const viewTypes: string[] = [];
+    const panels = new Map<string, ReturnType<typeof fakePanel>>();
+    const manager = new SessionPanelManager(registry as never, {} as never, () => ({ dispose: vi.fn() }) as never, (viewType) => {
+      viewTypes.push(viewType);
+      const panel = fakePanel(viewType);
+      panels.set(viewType, panel);
+      return panel.value as never;
+    });
+    try {
+      // A tab VS Code restored that no serializer has taken over yet holds its number.
+      tabEvents.groups = [{ tabs: [webviewTab("frostpi.session.1")] }];
+      manager.open("a");
+      manager.open("b");
+      expect(viewTypes).toEqual(["frostpi.session.2", "frostpi.session.3"]);
+
+      tabEvents.groups = [];
+      changeTabs({ closed: [webviewTab("frostpi.session.2")] });
+      panels.get("frostpi.session.2")!.closeFromUser();
+      manager.open("c");
+      // A number not handed out yet comes before the one just freed.
+      expect(viewTypes.at(-1)).toBe("frostpi.session.1");
+
+      for (let index = 0; index < RESTORABLE_SESSION_TABS - 3; index += 1) manager.open(`fill-${index}`);
+      expect(viewTypes.at(-1)).toBe(`frostpi.session.${RESTORABLE_SESSION_TABS}`);
+      // Only the freed number is left in the range.
+      manager.open("d");
+      expect(viewTypes.at(-1)).toBe("frostpi.session.2");
+      manager.open("e");
+      expect(viewTypes.at(-1)).toBe(`frostpi.session.${RESTORABLE_SESSION_TABS + 1}`);
+    } finally {
+      tabEvents.groups = [];
+      manager.dispose();
+    }
+  });
+
+  it("activates for every restorable Session Tab number", () => {
+    const manifest = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { activationEvents: string[] };
+    const restorable = manifest.activationEvents.filter((event) => event.startsWith("onWebviewPanel:frostpi.session."));
+    expect(restorable).toEqual(Array.from({ length: RESTORABLE_SESSION_TABS }, (_, index) => `onWebviewPanel:${sessionTabViewType(index + 1)}`));
+  });
+
   it("disposes the mapped panel exactly once after Registry removal", () => {
     const sessions = new Map([["session", { id: "session", title: "Session" }]]);
     const registry = {
@@ -207,7 +295,7 @@ describe("Session panel lifecycle", () => {
   });
 });
 
-function fakePanel() {
+function fakePanel(viewType = "frostpi.session.1") {
   const disposeListeners = new Set<() => void>();
   const viewStateListeners = new Set<(event: { webviewPanel: { visible: boolean } }) => void>();
   let disposed = false;
@@ -218,6 +306,7 @@ function fakePanel() {
       return title;
     },
     set title(value: string) { title = value; },
+    viewType,
     visible: true,
     viewColumn: 1,
     webview: {

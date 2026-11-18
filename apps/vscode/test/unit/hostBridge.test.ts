@@ -90,6 +90,24 @@ describe("VS Code transport adapter", () => {
     disconnectAgain();
   });
 
+  it("saves a Session Tab's Session as Webview state so VS Code can restore the tab", async () => {
+    const setState = vi.fn();
+    vi.stubGlobal("window", Object.assign(new EventTarget(), { acquireVsCodeApi: () => ({ postMessage: vi.fn(), setState }) }));
+    vi.stubGlobal("document", { querySelector: (selector: string) => selector === 'meta[name="frostpi-session-tab"]' ? { content: "session-7" } : null });
+    const { createVsCodeTransport } = await import("../../src/webview/bridge/vscodeBridge");
+    createVsCodeTransport();
+    expect(setState).toHaveBeenCalledWith({ sessionId: "session-7" });
+  });
+
+  it("leaves the sidebar's Webview state alone", async () => {
+    const setState = vi.fn();
+    vi.stubGlobal("window", Object.assign(new EventTarget(), { acquireVsCodeApi: () => ({ postMessage: vi.fn(), setState }) }));
+    vi.stubGlobal("document", { querySelector: () => null });
+    const { createVsCodeTransport } = await import("../../src/webview/bridge/vscodeBridge");
+    createVsCodeTransport();
+    expect(setState).not.toHaveBeenCalled();
+  });
+
   it("fails visibly instead of substituting an empty native API", async () => {
     vi.stubGlobal("window", new EventTarget());
     const { createVsCodeTransport } = await import("../../src/webview/bridge/vscodeBridge");

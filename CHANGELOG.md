@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Session editor tabs come back after VS Code restarts, in the tab groups and order they had. A tab's session starts when the tab is first shown. A temporary session's tab does not come back, since nothing of that session was saved.
+
 ## [0.17.0] - 2026-11-25
 
 ### Added

@@ -41,3 +41,19 @@ describe("Webview Content Security Policy", () => {
     expect(Object.keys(policy).sort()).toEqual(["default-src", "font-src", "img-src", "script-src", "style-src"]);
   });
 });
+
+describe("Session Tab marker", () => {
+  const webview = { cspSource: "https://*.vscode-cdn.net", asWebviewUri: (uri: unknown) => uri };
+  const extension = { toString: () => "extension" };
+
+  it("names a Session Tab's Session for the page to save, and only on a Session Tab", () => {
+    expect(createWebviewHtml(webview as never, extension as never, "session-1")).toContain('<meta name="frostpi-session-tab" content="session-1" />');
+    expect(createWebviewHtml(webview as never, extension as never)).not.toContain("frostpi-session-tab");
+  });
+
+  it("escapes the Session id inside the attribute", () => {
+    const html = createWebviewHtml(webview as never, extension as never, '"><script>');
+    expect(html).toContain('content="&quot;&gt;&lt;script&gt;"');
+    expect(html).not.toContain('"><script>');
+  });
+});
