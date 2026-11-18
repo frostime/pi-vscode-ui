@@ -483,6 +483,29 @@ export class SessionRuntime {
     return answersHostCommand(name, this.#hostCommandSupport());
   }
 
+  /**
+   * The Pi entry of a displayed user message. The message of a running turn has none in
+   * the conversation until the turn ends, but Pi saves it as soon as it is sent, so it is
+   * read from Pi's entries without changing the projection. Pi keeps the message's own
+   * timestamp in the entry, which identifies it.
+   */
+  async userMessageEntryId(messageId: string): Promise<string> {
+    const message = this.#conversation.userMessageByViewId(messageId);
+    if (!message) throw new Error("The selected message is no longer available for forking.");
+    if (message.sourceEntryId) return message.sourceEntryId;
+    const api = this.#requireApi();
+    const cursor = this.#entries.cursor ?? undefined;
+    // A cursor Pi no longer knows (its session changed) reads every entry instead.
+    const { entries } = await api.getEntries(cursor).catch(() => api.getEntries());
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const entry = entries[index]!;
+      if (entry.type === "message" && isRecord(entry.message) && entry.message.role === "user" && entry.message.timestamp === message.timestamp) {
+        return entry.id;
+      }
+    }
+    throw new Error("Wait for Pi to save this message before forking it.");
+  }
+
   async executeFork(entryId: string): Promise<ForkExecutionResult> {
     if (!this.#runtimeCapabilities().fork) throw new Error("Fork is not supported by the selected runtime.");
     this.#assertNotStartingNewConversation();

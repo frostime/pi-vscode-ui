@@ -702,6 +702,68 @@ process.on("SIGTERM", () => process.exit(0));
     expect(runtime.view).toMatchObject({ isStreaming: true, status: "running" });
   });
 
+  it("finds the Pi entry of the running turn's message before the turn ends", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-runtime-live-entry-"));
+    const fakePi = join(dir, "fake-pi.cjs");
+    await writeFile(fakePi, String.raw`#!/usr/bin/env node
+let input = "";
+let streaming = false;
+const entries = [];
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => {
+  input += chunk;
+  while (input.includes("\n")) {
+    const index = input.indexOf("\n");
+    const command = JSON.parse(input.slice(0, index));
+    input = input.slice(index + 1);
+    const base = { type: "response", id: command.id, success: true };
+    if (command.type === "get_state") {
+      base.data = { model: null, thinkingLevel: "off", isStreaming: streaming, isCompacting: false, pendingMessageCount: 0, sessionId: "live-entry" };
+    } else if (command.type === "get_commands") base.data = { commands: [] };
+    else if (command.type === "get_available_models") base.data = { models: [] };
+    else if (command.type === "get_entries") {
+      const since = command.since ? entries.findIndex((entry) => entry.id === command.since) + 1 : 0;
+      base.data = { entries: entries.slice(since), leafId: entries.at(-1)?.id ?? null };
+    } else if (command.type === "get_session_stats") {
+      base.data = { sessionId: "live-entry", userMessages: 0, assistantMessages: 0, toolCalls: 0, toolResults: 0, totalMessages: 0, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 };
+    } else if (command.type === "prompt") {
+      process.stdout.write(JSON.stringify(base) + "\n");
+      streaming = true;
+      // An older message with the same text, then this prompt as Pi saves it, with its own timestamp.
+      const message = { role: "user", content: command.message, timestamp: 4242 };
+      entries.push({ type: "message", id: "older", parentId: null, message: { ...message, timestamp: 1 } });
+      entries.push({ type: "message", id: "saved-prompt", parentId: "older", message });
+      process.stdout.write(JSON.stringify({ type: "agent_start" }) + "\n");
+      process.stdout.write(JSON.stringify({ type: "message_start", message }) + "\n");
+      process.stdout.write(JSON.stringify({ type: "message_end", message }) + "\n");
+      continue;
+    }
+    process.stdout.write(JSON.stringify(base) + "\n");
+  }
+});
+process.on("SIGTERM", () => process.exit(0));
+`);
+
+    const runtime = new SessionRuntime("session", dir, "Live entry", () => runtimeConfiguration(fakePi), noProxyCredentials(), { error: vi.fn(), info: vi.fn() }, {
+      onChange: vi.fn(),
+      onEditorText: vi.fn(),
+    }, host);
+    runtimes.push(runtime);
+
+    await runtime.start();
+    await runtime.sendPrompt("fork me", []);
+    // A spawned fake Pi can be slow to answer while the whole suite runs in parallel.
+    await waitFor(() => runtime.view.isStreaming && conversationTurns(runtime.view)[0]?.userMessage?.timestamp === 4242, 5_000);
+    const message = conversationTurns(runtime.view)[0]!.userMessage!;
+    // The conversation learns the entry only when the turn ends.
+    expect(message.sourceEntryId).toBeUndefined();
+
+    await expect(runtime.userMessageEntryId(message.id)).resolves.toBe("saved-prompt");
+    expect(conversationTurns(runtime.view)[0]?.userMessage?.sourceEntryId).toBeUndefined();
+    await expect(runtime.userMessageEntryId("no-such-message")).rejects.toThrow("no longer available");
+    // The wait above may take most of the default test timeout on a loaded machine.
+  }, 15_000);
+
   it("refreshes session stats during a long running turn", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-runtime-live-stats-"));
     const fakePi = join(dir, "fake-pi.cjs");

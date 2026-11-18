@@ -56,6 +56,14 @@ describe("Webview bridge validation", () => {
     }).success).toBe(true);
   });
 
+  it("names a forked message by exactly one of its Pi entry id and its view id", () => {
+    const fork = { bridgeVersion: BRIDGE_VERSION, type: "forkMessage", requestId: "fork-1", sessionId: "session-1" };
+    expect(webviewToHostSchema.safeParse({ ...fork, messageId: "local-user-1" }).success).toBe(true);
+    expect(webviewToHostSchema.safeParse(fork).success).toBe(false);
+    expect(webviewToHostSchema.safeParse({ ...fork, entryId: "entry-1", messageId: "local-user-1" }).success).toBe(false);
+    expect(webviewToHostSchema.safeParse({ ...fork, messageId: "x".repeat(129) }).success).toBe(false);
+  });
+
   it("accepts bounded Markdown image requests", () => {
     expect(webviewToHostSchema.safeParse({
       bridgeVersion: BRIDGE_VERSION,

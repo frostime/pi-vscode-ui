@@ -186,6 +186,14 @@ export class ConversationProjection {
     return undefined;
   }
 
+  /** A user message by its view id, including a live one Pi has not reported an entry for yet. */
+  userMessageByViewId(messageId: string): ConversationMessageView | undefined {
+    for (const item of this.#store.read()) {
+      if (item.type === "turn" && item.userMessage?.id === messageId) return item.userMessage;
+    }
+    return undefined;
+  }
+
   appendUserPrompt(text: string, images: WebviewImageInput[], timestamp = Date.now()): string {
     const turn = this.#createUserTurn(text, images, timestamp);
     this.#store.appendItem(turn);
