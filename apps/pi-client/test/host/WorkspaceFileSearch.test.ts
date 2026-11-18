@@ -39,6 +39,7 @@ describe("workspace path search", () => {
         return process as unknown as ChildProcess;
       },
       onLegacyFd,
+      indexFiles: false,
     });
 
     const first = search.search(process.cwd(), "", 20, new Set(), searchOptions);
@@ -170,6 +171,7 @@ function searchWithProcesses(processes: FakeFdProcess[], timeoutMs?: number, arg
       return process as unknown as ChildProcess;
     },
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    indexFiles: false,
   });
 }
 

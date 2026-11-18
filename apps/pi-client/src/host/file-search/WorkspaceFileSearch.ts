@@ -6,6 +6,7 @@ import { minimatch } from "minimatch";
 
 import {
   buildFdArgumentPasses,
+  buildFdIndexArguments,
   MAX_FD_RESULTS,
   normalizeGlob,
   resolveQueryScope,
@@ -14,15 +15,21 @@ import {
 } from "./fdArgs.js";
 import { parseFdOutput, rankFileCandidate, type FdEntry } from "./fdResults.js";
 import { discoverFdExecutable, type FdExecutable } from "./fdExecutable.js";
+import { compareCandidates, rankIndexedEntries, WorkspaceFileIndex, type WorkspaceFileIndexOptions } from "./WorkspaceFileIndex.js";
 import type { WorkspaceFileCandidateView } from "../../shared/model/workspaceFileModel.js";
 
 const FD_TIMEOUT_MS = 7_000;
+/** Indexes kept at once, one per working directory and search configuration. */
+const MAX_INDEXES = 4;
 
 export interface WorkspaceFileSearchDependencies {
   discoverFd?: () => Promise<FdExecutable>;
   spawnFd?: (command: string, args: readonly string[]) => ChildProcess;
   timeoutMs?: number;
   onLegacyFd?: (fd: FdExecutable) => void;
+  /** Off, every query runs fd; tests of the per-query path turn it off. */
+  indexFiles?: boolean;
+  indexOptions?: Pick<WorkspaceFileIndexOptions, "now" | "ttlMs" | "buildTimeoutMs" | "retryMs" | "maxEntries">;
 }
 
 export class WorkspaceFileSearch {
@@ -30,6 +37,10 @@ export class WorkspaceFileSearch {
   readonly #spawnFd: (command: string, args: readonly string[]) => ChildProcess;
   readonly #timeoutMs: number;
   readonly #onLegacyFd: ((fd: FdExecutable) => void) | undefined;
+  readonly #indexFiles: boolean;
+  readonly #indexOptions: WorkspaceFileSearchDependencies["indexOptions"];
+  /** Most recently used last. */
+  readonly #indexes = new Map<string, WorkspaceFileIndex>();
   #activeProcess: ChildProcess | undefined;
   #fdDiscovery: Promise<FdExecutable> | undefined;
   #legacyFdReported = false;
@@ -43,6 +54,8 @@ export class WorkspaceFileSearch {
     }));
     this.#timeoutMs = dependencies.timeoutMs ?? FD_TIMEOUT_MS;
     this.#onLegacyFd = dependencies.onLegacyFd;
+    this.#indexFiles = dependencies.indexFiles ?? true;
+    this.#indexOptions = dependencies.indexOptions;
   }
 
   async search(
@@ -54,6 +67,7 @@ export class WorkspaceFileSearch {
   ): Promise<WorkspaceFileCandidateView[]> {
     const version = ++this.#searchVersion;
     this.#activeProcess?.kill("SIGKILL");
+    this.#activeProcess = undefined;
 
     const fd = await this.#resolvedFd();
     if (version !== this.#searchVersion) return [];
@@ -63,6 +77,14 @@ export class WorkspaceFileSearch {
     }
 
     const scope = resolveQueryScope(cwd, query, isDirectory);
+    const indexed = this.#indexFiles ? this.#index(cwd, options, fd).entries() : undefined;
+    if (indexed) {
+      // Rank a few extra in case conditional files.exclude rules drop some.
+      const ranked = await rankIndexedEntries(indexed, query, scope.displayPrefix, limit * 2, boosts, () => version !== this.#searchVersion);
+      if (!ranked) return [];
+      return ranked.filter((candidate) => !isWorkspacePathExcluded(cwd, candidate.path, options.excludeRules)).slice(0, limit);
+    }
+
     const passes = buildFdArgumentPasses(scope, options, fd.supportsDirectoryMarkers);
     const deadline = Date.now() + this.#timeoutMs;
     const candidates = new Map<string, WorkspaceFileCandidateView>();
@@ -94,15 +116,38 @@ export class WorkspaceFileSearch {
         if (!(error instanceof FdTimeoutError)) throw error;
       }
     }
-    return [...candidates.values()]
-      .sort((left, right) => right.score - left.score || left.path.localeCompare(right.path))
-      .slice(0, limit);
+    return [...candidates.values()].sort(compareCandidates).slice(0, limit);
   }
 
   dispose(): void {
+    for (const index of this.#indexes.values()) index.dispose();
+    this.#indexes.clear();
     this.#searchVersion++;
     this.#activeProcess?.kill("SIGKILL");
     this.#activeProcess = undefined;
+  }
+
+  #index(cwd: string, options: WorkspaceFileSearchOptions, fd: FdExecutable): WorkspaceFileIndex {
+    const args = buildFdIndexArguments(cwd, options, fd.supportsDirectoryMarkers);
+    const key = JSON.stringify([fd.command, args]);
+    let index = this.#indexes.get(key);
+    if (index) {
+      this.#indexes.delete(key);
+    } else {
+      index = new WorkspaceFileIndex({
+        ...this.#indexOptions,
+        list: () => this.#spawnFd(fd.command, args),
+        // Conditional rules depend on sibling files, so they apply per query instead.
+        isExcluded: isAlwaysExcluded,
+      });
+      for (const [oldKey, old] of this.#indexes) {
+        if (this.#indexes.size < MAX_INDEXES) break;
+        old.dispose();
+        this.#indexes.delete(oldKey);
+      }
+    }
+    this.#indexes.set(key, index);
+    return index;
   }
 
   async #resolvedFd(): Promise<FdExecutable> {
