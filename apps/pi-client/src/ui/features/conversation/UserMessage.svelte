@@ -6,7 +6,7 @@
   import MarkdownContent from "./MarkdownContent.svelte";
   import { copyMessageText, rawMessageText } from "./copyMessageClient";
   import { formatMessageTimestamp } from "./messageTimestamp";
-  import { pendingForkEntryId, requestMessageFork } from "./forkMessageClient";
+  import { pendingForkMessageId, requestMessageFork } from "./forkMessageClient";
   import { requestBranchHere } from "./sessionTreeClient";
 
   let { message, session }: { message: ConversationMessageView; session: SessionViewModel } = $props();
@@ -19,7 +19,13 @@
     !["ready", "running"].includes(session.status) || session.isCompacting || session.isForking || session.isNavigatingTree
     || session.historyStatus !== "loaded",
   );
-  const pending = $derived($pendingForkEntryId === message.sourceEntryId);
+  /**
+   * The message of the running turn can be forked before the conversation knows its Pi
+   * entry: the Fork keeps what came before it and puts this message back in the Composer,
+   * so the reply in progress is not part of it.
+   */
+  const forkable = $derived(message.sourceEntryId !== undefined || session.isStreaming);
+  const pending = $derived($pendingForkMessageId === message.id);
   const copyText = $derived(rawMessageText(message.blocks));
   const sentAtLabel = $derived(formatMessageTimestamp(message.timestamp));
 </script>
@@ -33,7 +39,7 @@
         {#if block.type === "error"}<div class="inline-error">{block.text}</div>{/if}
       {/each}
     </div>
-    {#if copyText || message.sourceEntryId}
+    {#if copyText || message.sourceEntryId || forkable}
       <div class="message-actions">
         {#if sentAtLabel}
           <time
@@ -55,17 +61,19 @@
             title={session.sessionTreeAvailable
               ? "Continue from this prompt in the same session"
               : "Session tree navigation is unavailable. Update Pi, restart the session, and check FrostPi diagnostics."}
-            disabled={unavailable || !session.sessionTreeAvailable || $pendingForkEntryId !== null}
+            disabled={unavailable || !session.sessionTreeAvailable || $pendingForkMessageId !== null}
             onclick={() => requestBranchHere(session, message)}
           >
             <span class="codicon codicon-source-control" aria-hidden="true"></span>
             <span>Branch here</span>
           </button>
+        {/if}
+        {#if forkable}
           <button
             type="button"
             aria-label="Fork session from this message"
             title="Create a new session from this message"
-            disabled={forkUnavailable || $pendingForkEntryId !== null}
+            disabled={forkUnavailable || $pendingForkMessageId !== null}
             onclick={() => requestMessageFork(session, message)}
           >
             <span class="codicon codicon-git-branch" aria-hidden="true"></span>

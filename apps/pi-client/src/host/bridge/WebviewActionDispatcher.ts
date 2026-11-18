@@ -273,7 +273,8 @@ export class WebviewActionDispatcher {
         let result: Awaited<ReturnType<SessionRegistry["forkMessage"]>>;
         try {
           const selection = connection.surface.kind === "sidebar" ? "select-result" : "preserve-sidebar-selection";
-          result = await this.#registry.forkMessage(message.sessionId, message.entryId, selection);
+          const entryId = message.entryId ?? await this.#registry.userMessageEntryId(message.sessionId, message.messageId!);
+          result = await this.#registry.forkMessage(message.sessionId, entryId, selection);
         } catch (error) {
           connection.post({
             type: "forkResult",

@@ -595,6 +595,11 @@ export class SessionRegistry {
     await operation.stopPromise;
   }
 
+  /** The Pi entry to fork at for a displayed user message, which may belong to a running turn. */
+  async userMessageEntryId(sessionId: string, messageId: string): Promise<string> {
+    return this.#requireRuntime(sessionId).userMessageEntryId(messageId);
+  }
+
   async forkMessage(
     sessionId: string,
     entryId: string,

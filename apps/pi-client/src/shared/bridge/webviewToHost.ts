@@ -56,6 +56,22 @@ const usageActionSchemas = [
   z.object({ type: z.literal("cancelProviderUsage"), requestId: z.string().min(1).max(128) }),
 ] as const;
 
+/**
+ * A Fork names its user message by Pi entry id, or by view message id when the message
+ * belongs to a running turn and the conversation has no entry id for it yet.
+ */
+const forkMessageSchema = z.object({
+  type: z.literal("forkMessage"),
+  requestId: z.string().min(1).max(128),
+  sessionId: z.string().min(1).max(128),
+  entryId: z.string().min(1).max(128).optional(),
+  messageId: z.string().min(1).max(128).optional(),
+}).superRefine((message, context) => {
+  if ((message.entryId === undefined) === (message.messageId === undefined)) {
+    context.addIssue({ code: "custom", message: "Fork needs exactly one of entryId and messageId", path: ["entryId"] });
+  }
+});
+
 const payloadSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ready") }),
   ...usageActionSchemas,
@@ -134,12 +150,7 @@ const payloadSchema = z.discriminatedUnion("type", [
     branchPointId: z.string().min(1).max(128).nullable(),
     hasDraft: z.boolean(),
   }),
-  z.object({
-    type: z.literal("forkMessage"),
-    requestId: z.string().min(1).max(128),
-    sessionId: z.string().min(1).max(128),
-    entryId: z.string().min(1).max(128),
-  }),
+  forkMessageSchema,
   z.object({
     type: z.literal("setModel"),
     sessionId: z.string().min(1).max(128),

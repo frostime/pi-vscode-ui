@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Fork the message you just sent while Pi is still replying to it. The fork keeps the conversation before that message and puts the message back in the new session's Composer, so the reply in progress is not part of it. Before, **Fork** appeared on that message only once the reply had finished.
 - Start a session directly in an editor tab with **FrostPi: New Session in Editor Tab**, the sidebar's New session menu, or the `+` button of a session tab. From a session tab the new one opens in the same tab group and working directory. The sidebar keeps its own selection.
 - Rename a session from its editor tab: click the title in the tab's new header, or run **FrostPi: Rename Session**. This also works while Pi is running a turn. Renaming used to be possible only from the sidebar's menu.
 - The sidebar's session has a rename button next to its title, and double-clicking the title renames it too.
