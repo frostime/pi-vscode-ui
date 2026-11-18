@@ -51,7 +51,7 @@ export {
   type FdEntry,
 } from "./file-search/fdResults.js";
 export {
-  buildFdArguments,
+  buildFdArgumentPasses,
   normalizeGlob,
   resolveQueryScope,
   type ScopedQuery,

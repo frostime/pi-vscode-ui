@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `@` file mentions find files whose name contains what you type, also in very large workspaces. Every keystroke used to search the workspace again with `fd`, and that search stopped at its first 500 matches, which could all be unrelated paths, or ran out of time before reaching the file. FrostPi now lists the workspace once and matches the list as you type; the list is refreshed in the background every 20 seconds while you use `@`. The first `@` in a session still searches with `fd` per query while the list is built.
+
 ## [0.16.7] - 2026-11-16
 
 ### Fixed
