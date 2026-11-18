@@ -12,6 +12,9 @@ export interface SessionPanelHandle {
 }
 
 export type PanelConnectionFactory = (endpoint: WebviewEndpoint) => WebviewConnection;
+/** The Webview type of a Session Tab, which VS Code restores through a panel serializer. */
+export const SESSION_TAB_VIEW_TYPE = "frostpi.session";
+
 export type WebviewPanelFactory = (sessionId: string, title: string, viewColumn?: vscode.ViewColumn) => vscode.WebviewPanel;
 
 /** A closed tab and its panel's disposal arrive as separate events, in either order. */
@@ -49,14 +52,13 @@ export class SessionPanelManager implements vscode.Disposable {
     this.#extensionUri = extensionUri;
     this.#createConnection = createConnection;
     this.#createPanel = createPanel ?? ((_sessionId, title, viewColumn) => vscode.window.createWebviewPanel(
-      "frostpi.session",
+      SESSION_TAB_VIEW_TYPE,
       title,
       { viewColumn: viewColumn ?? vscode.ViewColumn.Active, preserveFocus: false },
       {
-        enableScripts: true,
+        ...this.#webviewOptions(),
         // Keep a hidden Session Tab mounted so returning to it does not show the bootstrap UI.
         retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(this.#extensionUri, "dist", "webview")],
       },
     ));
     this.#subscriptions.push(vscode.window.tabGroups.onDidChangeTabs((event) => {
@@ -100,11 +102,38 @@ export class SessionPanelManager implements vscode.Disposable {
     }
     const session = this.#registry.sessionView(sessionId);
     if (!session) throw new Error("This FrostPi Session no longer exists.");
+    this.#attach(this.#createPanel(sessionId, panelTitle(session.title), viewColumn), sessionId);
+  }
 
-    const panel = this.#createPanel(sessionId, panelTitle(session.title), viewColumn);
+  /**
+   * Takes over a Session Tab VS Code restored after a restart, in the group and position
+   * it had. A tab whose Session is gone, such as a Temporary Session, or that is already
+   * open elsewhere, is closed instead. Returns whether the tab was kept.
+   */
+  restore(panel: vscode.WebviewPanel, sessionId: string | undefined): boolean {
+    const session = sessionId ? this.#registry.sessionView(sessionId) : null;
+    if (!sessionId || !session || this.#panels.has(sessionId)) {
+      panel.dispose();
+      return false;
+    }
+    panel.webview.options = this.#webviewOptions();
+    panel.title = panelTitle(session.title);
+    try {
+      this.#attach(panel, sessionId);
+    } catch {
+      return false;
+    }
+    return true;
+  }
+
+  #webviewOptions(): vscode.WebviewOptions {
+    return { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.#extensionUri, "dist", "webview")] };
+  }
+
+  #attach(panel: vscode.WebviewPanel, sessionId: string): void {
     let connection: WebviewConnection | undefined;
     try {
-      panel.webview.html = createWebviewHtml(panel.webview, this.#extensionUri);
+      panel.webview.html = createWebviewHtml(panel.webview, this.#extensionUri, sessionId);
       const endpoint = panelEndpoint(panel, sessionId);
       connection = this.#createConnection(endpoint);
       if (!this.#registry.hasSession(sessionId)) throw new Error("The Session was removed while its editor tab was opening.");

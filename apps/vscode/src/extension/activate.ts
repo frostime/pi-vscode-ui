@@ -9,6 +9,7 @@ import { GIT_BASE_SCHEME, GitBaseContentProvider } from "./file-changes/GitBaseC
 import { SessionStatusBar } from "./status-bar/SessionStatusBar.js";
 import { ProxySecretStore } from "./network/ProxySecretStore.js";
 import { PiViewProvider } from "./webview-host/PiViewProvider.js";
+import { SESSION_TAB_VIEW_TYPE } from "./webview-host/SessionPanelManager.js";
 import { SessionWebviewCoordinator } from "./webview-host/SessionWebviewCoordinator.js";
 
 let registryForDeactivate: SessionRegistry | undefined;
@@ -37,6 +38,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.registerTextDocumentContentProvider(GIT_BASE_SCHEME, gitBaseProvider),
     vscode.window.registerWebviewViewProvider(PiViewProvider.viewType, viewProvider, {
       webviewOptions: { retainContextWhenHidden: true },
+    }),
+    // Session Tabs open after a restart where they were; see SessionPanelManager.restore.
+    vscode.window.registerWebviewPanelSerializer(SESSION_TAB_VIEW_TYPE, {
+      deserializeWebviewPanel: (panel, state) => {
+        coordinator.restorePanel(panel, state);
+        return Promise.resolve();
+      },
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("frostpi.diagnostics.level")) {

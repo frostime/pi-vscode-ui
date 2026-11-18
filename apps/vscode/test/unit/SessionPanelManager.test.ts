@@ -157,6 +157,38 @@ describe("Session panel lifecycle", () => {
     manager.dispose();
   });
 
+  it("takes over a Session Tab VS Code restored, and closes one whose Session is gone or already open", () => {
+    const sessions = new Map([["kept", { id: "kept", title: "Kept" }]]);
+    const registry = {
+      sessionView: (id: string) => sessions.get(id) ?? null,
+      hasSession: (id: string) => sessions.has(id),
+      retainProvisionalSession: vi.fn(),
+    };
+    const connection = { dispose: vi.fn(), focusComposer: vi.fn() };
+    const manager = new SessionPanelManager(registry as never, {} as never, () => connection as never, () => {
+      throw new Error("a restored tab must not create a panel");
+    });
+
+    const restored = fakePanel();
+    restored.value.title = "FrostPi · Old title";
+    restored.value.viewColumn = 2;
+    expect(manager.restore(restored.value as never, "kept")).toBe(true);
+    expect(manager.has("kept")).toBe(true);
+    expect(manager.viewColumn("kept")).toBe(2);
+    expect(restored.value.title).toBe("FrostPi · Kept");
+    expect(restored.value.webview.html).toContain('<meta name="frostpi-session-tab" content="kept" />');
+    expect(restored.value.webview).toHaveProperty("options", expect.objectContaining({ enableScripts: true }));
+    expect(registry.retainProvisionalSession).toHaveBeenCalledWith("kept");
+    expect(restored.value.dispose).not.toHaveBeenCalled();
+
+    for (const sessionId of ["kept", "temporary", undefined]) {
+      const stale = fakePanel();
+      expect(manager.restore(stale.value as never, sessionId)).toBe(false);
+      expect(stale.value.dispose).toHaveBeenCalledOnce();
+    }
+    manager.dispose();
+  });
+
   it("disposes the mapped panel exactly once after Registry removal", () => {
     const sessions = new Map([["session", { id: "session", title: "Session" }]]);
     const registry = {

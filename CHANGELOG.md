@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Session editor tabs come back after VS Code restarts, in the tab groups and order they had. A tab's session starts when the tab is first shown. A temporary session's tab does not come back, since nothing of that session was saved.
 - Start a session directly in an editor tab with **FrostPi: New Session in Editor Tab**, the sidebar's New session menu, or the `+` button of a session tab. From a session tab the new one opens in the same tab group and working directory. The sidebar keeps its own selection.
 - Rename a session from its editor tab: click the title in the tab's new header, or run **FrostPi: Rename Session**. This also works while Pi is running a turn. Renaming used to be possible only from the sidebar's menu.
 - The sidebar's session has a rename button next to its title, and double-clicking the title renames it too.

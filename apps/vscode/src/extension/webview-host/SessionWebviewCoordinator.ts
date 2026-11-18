@@ -132,6 +132,30 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
     }
   }
 
+  /** Reopens a Session Tab VS Code restored after a restart, from the state its page saved. */
+  restorePanel(panel: vscode.WebviewPanel, state: unknown): void {
+    const sessionId = isRecord(state) && typeof state.sessionId === "string" ? state.sessionId : undefined;
+    if (!this.#panels.restore(panel, sessionId) || !sessionId) {
+      if (sessionId) this.#logger.info("Closed a restored FrostPi editor tab whose session is no longer open");
+      return;
+    }
+    // Its Pi process starts when the tab is first shown, as selecting a Session does,
+    // so restoring many background tabs does not start them all at once.
+    const start = (): void => void this.#registry.startIfStopped(sessionId).catch(() => undefined);
+    if (panel.visible) {
+      start();
+      return;
+    }
+    const shown = panel.onDidChangeViewState((event) => {
+      if (!event.webviewPanel.visible) return;
+      shown.dispose();
+      start();
+    });
+    panel.onDidDispose(() => {
+      shown.dispose();
+    });
+  }
+
   revealPanel(sessionId: string): void {
     this.#panels.reveal(sessionId);
   }
@@ -342,4 +366,8 @@ function chatTypographyChanged(event: vscode.ConfigurationChangeEvent): boolean 
     || event.affectsConfiguration("chat.fontSize")
     || event.affectsConfiguration("chat.editor.fontFamily")
     || event.affectsConfiguration("chat.editor.fontSize");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

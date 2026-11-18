@@ -55,6 +55,7 @@
   },
   "activationEvents": [
     "onView:frostpi.chat",
+    "onWebviewPanel:frostpi.session",
     "onCommand:frostpi.newSession",
     "onCommand:frostpi.newSessionInEditorTab",
     "onCommand:frostpi.newTemporarySession",
