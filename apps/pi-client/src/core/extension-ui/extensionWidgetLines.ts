@@ -27,7 +27,14 @@ function runLines(nodes: unknown[], depth: number): string[] {
     const id = typeof node.id === "string" && /^[0-9a-f]{8}-[0-9a-f-]+$/iu.test(node.id) ? node.id.slice(0, 8) : "";
     const name = id && (counts.get(label) ?? 0) > 1 ? `${label} (${id})` : label;
     const line = `${"  ".repeat(depth)}${name} · ${state}`;
-    return depth < maxChildDepth && Array.isArray(node.children) ? [line, ...runLines(node.children, depth + 1)] : [line];
+    if (depth >= maxChildDepth || !Array.isArray(node.children)) return [line];
+    const [step] = node.children as unknown[];
+    // A single-agent run also emits its own unnamed execution step. The run owns its status.
+    if (node.kind === "subagent" && node.children.length === 1 && isRecord(step) &&
+        step.kind === "step" && step.id === "step:0" && step.label === node.label) {
+      return Array.isArray(step.children) ? [line, ...runLines(step.children, depth + 1)] : [line];
+    }
+    return [line, ...runLines(node.children, depth + 1)];
   });
 }
 

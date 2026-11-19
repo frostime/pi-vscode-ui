@@ -71,6 +71,32 @@ describe("Pi extension UI coordination", () => {
     ]);
   });
 
+  it("shows a single worker once and preserves nested workers and separate workflow steps", () => {
+    const coordinator = new ExtensionUiCoordinator(
+      { sendExtensionUiResponse: vi.fn() } as never,
+      { onChange: vi.fn(), onNotify: vi.fn(), onTitle: vi.fn(), onEditorText: vi.fn() },
+    );
+    const step = { kind: "step", id: "step:0", label: "assistant", state: "queued" };
+    const worker = { kind: "subagent", label: "assistant", state: "running" };
+    const runs = [
+      { ...worker, id: "a40570e2-abcd-4000-8000-0123456789ab", children: [step] },
+      { ...worker, id: "3296afb7-abcd-4000-8000-0123456789ab", children: [
+        { ...step, children: [{ ...worker, state: "complete" }] },
+      ] },
+      { kind: "workflow", label: "review", state: "running", children: [
+        { ...step, label: "review" }, { ...step, id: "step:1", label: "check" },
+      ] },
+    ];
+    coordinator.handle({
+      type: "extension_ui_request", id: "w3", method: "setWidget", widgetKey: "subagent-async",
+      widgetLines: ["PI_SUBAGENT_ASYNC_JSON:" + JSON.stringify({ kind: "pi-subagents.async-status-snapshot", version: 1, runs })],
+    });
+    expect(coordinator.snapshot().widgets[0]?.lines).toEqual([
+      "Subagents", "assistant (a40570e2) · running", "assistant (3296afb7) · running", "  assistant · complete",
+      "review · running", "  review · queued", "  check · queued",
+    ]);
+  });
+
   it("preserves notify severity and multiline text while stripping terminal escapes", () => {
     const onNotify = vi.fn();
     const coordinator = new ExtensionUiCoordinator(
