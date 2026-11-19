@@ -1,77 +1,30 @@
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render } from "@testing-library/svelte";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import MarkdownHtml from "$ui/features/conversation/markdown/MarkdownHtml.svelte";
 
-import { BRIDGE_VERSION } from "$shared/bridge/bridgeVersion";
-import type { MarkdownImageLoadResult } from "$shared/bridge/hostToWebview";
-import { applyHostMessage } from "$ui/bridge/applyHostMessage";
-import { connectHostBridge } from "$ui/bridge/hostBridge";
-import MarkdownImage from "$ui/features/conversation/markdown/MarkdownImage.svelte";
-import { EMPTY_PRESENTATION, presentationStore } from "$ui/state/sessionViewStore.svelte";
-import { markdownRasterImages } from "../../../pi-client/test/fixtures/markdownRasterImages.js";
-
-const postMessage = vi.fn();
-let disconnectHost: () => void;
-let imageNumber = 0;
-
-beforeEach(() => {
-  postMessage.mockClear();
-  disconnectHost = connectHostBridge({ postMessage, onMessage: () => () => undefined });
-  presentationStore.set({ ...EMPTY_PRESENTATION, displayedSession: { id: "session-1" } as never });
-  // jsdom has no Blob URL registry.
-  URL.createObjectURL = vi.fn(() => "blob:frostpi/remote-image");
-  URL.revokeObjectURL = vi.fn();
-});
+const postToHost = vi.hoisted(() => vi.fn());
+vi.mock("$ui/bridge/hostBridge", () => ({ postToHost }));
 
 afterEach(() => {
   cleanup();
-  disconnectHost();
-  presentationStore.set(EMPTY_PRESENTATION);
+  postToHost.mockClear();
 });
 
-function mount() {
-  imageNumber += 1;
-  const source = `https://images.example.com/chart-${imageNumber}.png?d=context`;
-  const view = render(MarkdownImage, { source, alt: "Chart", title: undefined, linked: false });
-  return { view, source };
-}
-
-function answer(requestId: string, result: MarkdownImageLoadResult): void {
-  applyHostMessage({ bridgeVersion: BRIDGE_VERSION, type: "markdownImageResult", requestId, sessionId: "session-1", result });
-}
-
-describe("remote Markdown image", () => {
-  it.each([
-    { mimeType: "image/png" as const, base64: "iVBORw0KGgo=" },
-    ...markdownRasterImages,
-  ])("loads $mimeType from Host bytes only after Load image", async ({ mimeType, base64 }) => {
-    const { view, source } = mount();
-    await Promise.resolve();
-    expect(postMessage).not.toHaveBeenCalled();
-    expect(view.container.querySelector("img")).toBeNull();
-
-    await fireEvent.click(view.getByRole("button", { name: "Load image" }));
-
-    expect(postMessage).toHaveBeenCalledOnce();
-    const request = postMessage.mock.calls[0]![0] as { requestId: string };
-    expect(request).toMatchObject({ type: "loadMarkdownImage", sessionId: "session-1", source, remote: true });
-    // The browser is never pointed at the remote origin, before or after the answer.
-    expect(view.container.querySelector("img")).toBeNull();
-    expect(view.container.textContent).toContain("Loading image…");
-
-    answer(request.requestId, { ok: true, mimeType, data: base64 });
-    await waitFor(() => expect(view.container.querySelector("img")?.getAttribute("src")).toBe("blob:frostpi/remote-image"));
-    expect(view.container.innerHTML).not.toContain("images.example.com/chart");
+describe("Markdown image references", () => {
+  it("shows a remote image without a fetch action or live image source", async () => {
+    const { container, rerender } = render(MarkdownHtml, {
+      content: "![Chart](https://images.example.com",
+    });
+    await rerender({ content: "![Chart](https://images.example.com/chart.png?mode=guide)" });
+    expect(container.textContent).toContain("Remote image blocked · images.example.com");
+    expect(container.querySelector("img, a[href], button")).toBeNull();
+    expect(postToHost).not.toHaveBeenCalled();
   });
 
-  it("reports a failed remote load inline and does not retry by itself", async () => {
-    const { view } = mount();
-    await fireEvent.click(view.getByRole("button", { name: "Load image" }));
-    const request = postMessage.mock.calls[0]![0] as { requestId: string };
-
-    answer(request.requestId, { ok: false, reason: "readFailed" });
-
-    await waitFor(() => expect(view.container.textContent).toContain("Unable to load remote image"));
-    expect(view.container.querySelector("img")).toBeNull();
-    expect(postMessage).toHaveBeenCalledOnce();
+  it("keeps a local path inert when opening a message from history", () => {
+    const { container } = render(MarkdownHtml, { content: "![Chart](./chart.png)" });
+    expect(container.textContent).toContain("Ask Pi to read this image");
+    expect(container.querySelector("img, a[href], button")).toBeNull();
+    expect(postToHost).not.toHaveBeenCalled();
   });
 });

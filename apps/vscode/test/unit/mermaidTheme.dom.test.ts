@@ -1,9 +1,11 @@
-import { cleanup, render, waitFor } from "@testing-library/svelte";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MermaidBlock from "$ui/features/conversation/markdown/MermaidBlock.svelte";
 
 let activeTheme = "dark";
 let waitForLight: Promise<void> | undefined;
+const postToHost = vi.hoisted(() => vi.fn());
+vi.mock("$ui/bridge/hostBridge", () => ({ postToHost }));
 
 beforeEach(() => {
   document.body.dataset.vscodeThemeKind = "vscode-dark";
@@ -21,6 +23,21 @@ afterEach(() => {
   delete document.body.dataset.vscodeThemeKind;
   delete window.mermaid;
   waitForLight = undefined;
+  postToHost.mockClear();
+});
+
+it("routes an SVG link through the transcript confirmation without leaving a live target", async () => {
+  const url = "https://example.com/guide";
+  window.mermaid!.render = () => Promise.resolve({
+    svg: `<svg xmlns="http://www.w3.org/2000/svg"><a href="${url}"><text>Guide</text></a></svg>`,
+  });
+  const view = render(MermaidBlock, { source: "flowchart LR; guide" });
+  await waitFor(() => expect(view.container.querySelector("[data-transcript-url]")).not.toBeNull());
+  const link = view.container.querySelector("[data-transcript-url]")!;
+  expect(link.hasAttribute("href")).toBe(false);
+  expect(postToHost).not.toHaveBeenCalled();
+  await fireEvent.click(link);
+  expect(postToHost).toHaveBeenCalledExactlyOnceWith({ type: "openTranscriptLink", url });
 });
 
 describe("Mermaid color-scheme changes", () => {

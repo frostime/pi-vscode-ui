@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
+import { BRIDGE_VERSION } from "../../src/shared/bridge/bridgeVersion.js";
 
 const { WebviewActionDispatcher } = await import("../../src/host/bridge/WebviewActionDispatcher.js");
 
-function fakeHost(editor: Record<string, unknown> = {}) {
-  return { editor, exportDiagnostics: undefined, systemToast: undefined } as never;
+function fakeHost(editor: Record<string, unknown> = {}, window: Record<string, unknown> = {}) {
+  return { editor, window, exportDiagnostics: undefined, systemToast: undefined } as never;
 }
 
 describe("Session Tab Host authorization", () => {
-  function setup() {
+  function setup(host = fakeHost()) {
     const registry = {
       hasSession: vi.fn(() => true),
       sessionView: vi.fn(() => ({ cwd: "C:/workspace", attachmentLimits: { maxImageBytes: 1024 } })),
@@ -36,7 +37,7 @@ describe("Session Tab Host authorization", () => {
       openPanel,
       revealPanel: vi.fn(),
       openComposerEditor,
-      host: fakeHost(),
+      host,
     });
     const posted: unknown[] = [];
     const connection = {
@@ -75,24 +76,59 @@ describe("Session Tab Host authorization", () => {
     expect(registry.closeSession).toHaveBeenCalledWith("other");
   });
 
-  it("returns local Markdown image failures inline to the originating connection", async () => {
-    const { dispatcher, posted, connection } = setup();
+  it.each([
+    { source: "./diagram.png" },
+    { source: "https://example.com/chart.png", remote: true as const },
+  ])("denies legacy Markdown image loading requests", async (image) => {
+    const { dispatcher, posted, connection, registry } = setup();
     await dispatcher.dispatch({
       type: "loadMarkdownImage",
       bridgeVersion: "3.1",
       requestId: "image-1",
       sessionId: "source",
-      source: "missing.png",
+      ...image,
     } as never, connection);
 
     expect(posted).toEqual([{
       type: "markdownImageResult",
       requestId: "image-1",
       sessionId: "source",
-      result: { ok: false, reason: "notFound" },
+      result: { ok: false, reason: "invalidSource" },
     }]);
+    expect(registry.sessionView).not.toHaveBeenCalled();
   });
 
+  it("opens the exact URL once only after the user confirms it", async () => {
+    const openExternalUrl = vi.fn();
+    const showWarningDialog = vi.fn();
+    const { dispatcher, connection } = setup(fakeHost({ openExternalUrl }, { showWarningDialog }));
+    const url = "https://example.com/docs?mode=guide#intro";
+    const message = { type: "openTranscriptLink", bridgeVersion: BRIDGE_VERSION, url } as const;
+    showWarningDialog.mockResolvedValueOnce(undefined);
+    await dispatcher.dispatch(message, connection);
+    expect(showWarningDialog).toHaveBeenCalledWith(expect.stringContaining(url), ["Open in browser"]);
+    expect(showWarningDialog.mock.calls[0]?.[0]).toContain("If you run Pi in a sandbox");
+    expect(openExternalUrl).not.toHaveBeenCalled();
+
+    let confirm: (action: string) => void = () => undefined;
+    showWarningDialog.mockReturnValueOnce(new Promise<string>((resolve) => { confirm = resolve; }));
+    const pending = dispatcher.dispatch(message, connection);
+    await dispatcher.dispatch(message, connection);
+    expect(showWarningDialog).toHaveBeenCalledTimes(2);
+    expect(openExternalUrl).not.toHaveBeenCalled();
+    confirm("Open in browser");
+    await pending;
+    expect(openExternalUrl).toHaveBeenCalledExactlyOnceWith(url);
+  });
+
+  it("rejects a malformed or non-web transcript destination before asking", async () => {
+    const openExternalUrl = vi.fn();
+    const showWarningDialog = vi.fn();
+    const { dispatcher, connection } = setup(fakeHost({ openExternalUrl }, { showWarningDialog }));
+    await expect(dispatcher.dispatch({ type: "openTranscriptLink", bridgeVersion: BRIDGE_VERSION, url: "mailto:user@example.com" }, connection)).rejects.toThrow("Only HTTP(S)");
+    expect(showWarningDialog).not.toHaveBeenCalled();
+    expect(openExternalUrl).not.toHaveBeenCalled();
+  });
   it("returns a correlated inline failure when the displayed Session changes before an image read", async () => {
     const { dispatcher, posted, connection } = setup();
     await dispatcher.dispatch({
