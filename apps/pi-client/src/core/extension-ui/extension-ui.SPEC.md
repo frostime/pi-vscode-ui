@@ -37,6 +37,16 @@ A Webview remount restores Host-owned pending requests but not unsubmitted draft
 - `setTitle` changes the owning session title.
 - `set_editor_text` updates the active session composer; for an inactive session, the host retains the latest text until that session becomes active.
 
+## Background worker transcripts
+
+The pi-subagents status widget projects worker names, states, and elapsed times.
+An inspectable background worker can open a read-only transcript in the parent
+session. FrostPi requests recent recorded activity through the registered
+`subagents-inspect-rpc` command. The host accepts only run and child identifiers
+from the current session’s status widget and correlates each reply. Transcript
+text is displayed literally. The viewer refreshes while the worker runs and
+leaves approval requests in the parent chat.
+
 ## Unsupported UI
 
 Arbitrary custom TUI components, custom headers/footers/editors, raw terminal input listeners, and theme APIs are not emulated. Unknown structured methods are ignored rather than rendered from arbitrary JSON. This boundary prevents FrostPi from becoming a terminal UI runtime or executing extension-provided presentation code in the Webview.

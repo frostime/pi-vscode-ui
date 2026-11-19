@@ -12,6 +12,7 @@ import { deliverWorkspaceFileSuggestions } from "../features/composer/fileSugges
 import { promptSubmissionResult } from "../features/composer/promptSubmissionStore.svelte";
 import { claimQueuedPromptRecoveryResult } from "../features/composer/queuedPromptRecoveryStore.svelte";
 import { resolveForkResult } from "../features/conversation/forkMessageClient";
+import { deliverSubagentTranscript } from "../features/extension-ui/subagentTranscriptClient";
 import { deliverMarkdownImageResult } from "../features/conversation/markdown/markdownImageClient";
 import { composerFocusTick, presentationStore, showToast } from "../state/sessionViewStore.svelte";
 
@@ -74,6 +75,9 @@ export function applyHostMessage(message: HostToWebviewMessage): void {
     }
     case "markdownImageResult":
       deliverMarkdownImageResult(message.requestId, message.sessionId, message.result);
+      break;
+    case "subagentTranscriptResult":
+      deliverSubagentTranscript(message);
       break;
     case "forkResult":
       resolveForkResult(message);

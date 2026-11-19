@@ -128,6 +128,19 @@ export class WebviewActionDispatcher {
       await this.#loadMarkdownImage(message, connection);
       return;
     }
+    if (message.type === "inspectSubagent") {
+      const { requestId, sessionId, target } = message;
+      try {
+        this.#authorizeSessionTarget(message, connection);
+        const result = await this.#registry.inspectSubagent(sessionId, {
+          runId: target.runId, ...(target.childId ? { childId: target.childId } : {}),
+        });
+        if (connection.sessionId === sessionId) connection.post({ type: "subagentTranscriptResult", requestId, sessionId, result });
+      } catch {
+        connection.post({ type: "subagentTranscriptResult", requestId, sessionId, result: { error: "Could not load the worker transcript." } });
+      }
+      return;
+    }
     this.#authorizeSessionTarget(message, connection);
 
     switch (message.type) {

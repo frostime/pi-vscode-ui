@@ -1,10 +1,13 @@
 import { sanitizeExtensionUiText } from "./sanitizeExtensionUiText.js";
+import type { SubagentRowView, SubagentTarget } from "../../shared/model/extensionUiModel.js";
 
 const snapshotPrefix = "PI_SUBAGENT_ASYNC_JSON:";
 const runStates = new Set(["queued", "running", "complete", "failed", "partial", "paused", "stopped", "rejected"]);
 // pi-subagents' RPC widget emits at most 32 KiB, with a maximum child depth of three.
 const maxSnapshotBytes = 32 * 1024;
 const maxChildDepth = 3;
+const runIdPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iu;
+const stepIdPattern = /^[a-z0-9][a-z0-9._:-]{0,127}$/iu;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -15,7 +18,11 @@ function labelText(value: string): string {
 }
 
 // Read only display fields. Tool inputs, host paths and links are never interpreted.
-function runLines(nodes: unknown[], depth: number): string[] {
+function timestamp(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
+
+function runRows(nodes: unknown[], depth: number, parentRunId?: string): SubagentRowView[] {
   const runs = nodes.filter(isRecord).flatMap(node => {
     if (typeof node.label !== "string" || typeof node.state !== "string" || !runStates.has(node.state)) return [];
     const label = labelText(node.label);
@@ -24,23 +31,33 @@ function runLines(nodes: unknown[], depth: number): string[] {
   const counts = new Map<string, number>();
   for (const { label } of runs) counts.set(label, (counts.get(label) ?? 0) + 1);
   return runs.flatMap(({ label, node, state }) => {
-    const id = typeof node.id === "string" && /^[0-9a-f]{8}-[0-9a-f-]+$/iu.test(node.id) ? node.id.slice(0, 8) : "";
-    const name = id && (counts.get(label) ?? 0) > 1 ? `${label} (${id})` : label;
-    const line = `${"  ".repeat(depth)}${name} · ${state}`;
-    if (depth >= maxChildDepth || !Array.isArray(node.children)) return [line];
-    const [step] = node.children as unknown[];
-    // A single-agent run also emits its own unnamed execution step. The run owns its status.
-    if (node.kind === "subagent" && node.children.length === 1 && isRecord(step) &&
-        step.kind === "step" && step.id === "step:0" && step.label === node.label) {
-      return Array.isArray(step.children) ? [line, ...runLines(step.children, depth + 1)] : [line];
+    const id = typeof node.id === "string" ? node.id : "";
+    const runId = depth === 0 && runIdPattern.test(id) ? id : parentRunId;
+    const children = Array.isArray(node.children) ? node.children as unknown[] : [];
+    const step = children[0];
+    const singleStep = node.kind === "subagent" && children.length === 1 && isRecord(step) &&
+      step.kind === "step" && step.id === "step:0" && step.label === node.label ? step : undefined;
+    let target: SubagentTarget | undefined;
+    if (runId && depth === 0 && node.kind === "subagent" && (singleStep || children.length === 0)) {
+      target = { runId, childId: "step:0" };
+    } else if (runId && depth === 1 && node.kind === "step" && stepIdPattern.test(id)) {
+      target = { runId, childId: id };
     }
-    return [line, ...runLines(node.children, depth + 1)];
+    const startedAt = timestamp(singleStep?.startedAt ?? node.startedAt);
+    const endedAt = timestamp(singleStep?.endedAt ?? node.endedAt);
+    const row: SubagentRowView = {
+      name: runIdPattern.test(id) && (counts.get(label) ?? 0) > 1 ? `${label} (${id.slice(0, 8)})` : label,
+      state, depth, ...(target ? { target } : {}), ...(startedAt ? { startedAt } : {}), ...(endedAt ? { endedAt } : {}),
+    };
+    if (depth >= maxChildDepth) return [row];
+    const below = singleStep ? (Array.isArray(singleStep.children) ? singleStep.children : []) : children;
+    return [row, ...runRows(below, depth + 1, singleStep ? undefined : runId)];
   });
 }
 
-export function extensionWidgetLines(key: string, lines: string[]): string[] | undefined {
-  if (key !== "subagent-async" || !lines[0]?.startsWith(snapshotPrefix)) return lines.map(sanitizeExtensionUiText);
-  const unavailable = ["Subagent status unavailable"];
+export function projectExtensionWidget(key: string, lines: string[]): { lines: string[]; subagents?: SubagentRowView[] } | undefined {
+  if (key !== "subagent-async" || !lines[0]?.startsWith(snapshotPrefix)) return { lines: lines.map(sanitizeExtensionUiText) };
+  const unavailable = { lines: ["Subagent status unavailable"] };
   const json = lines[0].slice(snapshotPrefix.length);
   if (Buffer.byteLength(json, "utf8") > maxSnapshotBytes) return unavailable;
   let snapshot: unknown;
@@ -52,12 +69,13 @@ export function extensionWidgetLines(key: string, lines: string[]): string[] | u
   if (!isRecord(snapshot) || snapshot.kind !== "pi-subagents.async-status-snapshot" ||
       snapshot.version !== 1 || !Array.isArray(snapshot.runs)) return unavailable;
 
-  const rows = runLines(snapshot.runs, 0);
+  const subagents = runRows(snapshot.runs, 0);
+  const rows = subagents.map(({ name, state, depth }) => `${"  ".repeat(depth)}${name} · ${state}`);
   const omitted = snapshot.omitted;
   if (isRecord(omitted) && (omitted.byteLimitExceeded === true ||
       (typeof omitted.runs === "number" && omitted.runs > 0) || (typeof omitted.children === "number" && omitted.children > 0))) {
     rows.push("Additional activity omitted by Pi");
   }
-  if (rows.length) return ["Subagents", ...rows];
+  if (rows.length) return { lines: ["Subagents", ...rows], subagents };
   return snapshot.runs.length ? unavailable : undefined;
 }
