@@ -30,6 +30,7 @@ import { ConversationProjection } from "../conversation/ConversationProjection.j
 import { diagnosticErrorText } from "../diagnostics/diagnosticRedaction.js";
 import type { RuntimeLogger } from "../diagnostics/RuntimeLogger.js";
 import { ExtensionUiCoordinator } from "../extension-ui/ExtensionUiCoordinator.js";
+import { matchQuestionSelect } from "../extension-ui/matchQuestionSelect.js";
 import { QuestionToolExtensionBridge } from "../question-tool/QuestionToolExtensionBridge.js";
 import { commandName, normalizePiSlashPrompt } from "./normalizePiSlashPrompt.js";
 import { configuredPiInvocation } from "../configuration/configuredPiInvocation.js";
@@ -851,7 +852,7 @@ export class SessionRuntime {
     const abortRequested = this.#abortRequested;
     if (isExtensionUiRequest(event)) {
       if (this.#questionToolBridge?.recognizes(event)) void this.#handleQuestionUiRequest(event);
-      else this.#extensionUi?.handle(event);
+      else this.#extensionUi?.handle(event, event.method === "select" ? matchQuestionSelect(event, conversationTurns(this.view)) : undefined);
     } else {
       this.#viewState.applyEvent(event);
       this.#conversation.applyEvent(this.#ompPrompts?.projectEvent(event) ?? event);
