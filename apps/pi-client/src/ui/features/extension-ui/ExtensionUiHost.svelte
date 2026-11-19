@@ -12,7 +12,7 @@
 <QuestionToolHost {sessionId} requests={questionRequests} />
 
 {#if standardRequests.length}
-  <div class="extension-ui-host" class:has-choices={standardRequests.some((request) => request.method === "select" && (request.options?.length ?? 0) > 1)}>
+  <div class="extension-ui-host" class:has-choices={standardRequests.some((request) => request.questionSelect)}>
     {#each standardRequests as request (request.id)}
       <ExtensionUiRequestCard {sessionId} {request} />
     {/each}
