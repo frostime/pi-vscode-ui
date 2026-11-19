@@ -25,7 +25,7 @@ describe("Host slash commands through the real Registry and child-process path",
     const fixture = await host();
     const sessionId = await fixture.startSession();
     expect(fixture.view(sessionId).commands.map(({ name, source }) => `${name}:${source}`)).toEqual([
-      "new:frostpi", "rewind:frostpi", "reload:frostpi", "name:frostpi", "alias:frostpi", "visible:extension",
+      "new:frostpi", "reload:frostpi", "name:frostpi", "alias:frostpi", "visible:extension",
     ]);
   });
 
@@ -36,9 +36,9 @@ describe("Host slash commands through the real Registry and child-process path",
     const sessionId = await fixture.startSession();
     expect(view(sessionId).commands.map((command) => command.name)).toEqual(["new", "name", "alias", "visible"]);
 
-    await fixture.converse(sessionId, "/rewind");
+    await fixture.converse(sessionId, "/reload");
 
-    expect(userPrompts(view(sessionId))).toEqual(["/rewind"]);
+    expect(userPrompts(view(sessionId))).toEqual(["/reload"]);
     expect(fixture.shownQuickPicks).toEqual([]);
   });
 
@@ -49,9 +49,9 @@ describe("Host slash commands through the real Registry and child-process path",
     const sessionId = await fixture.startSession();
     expect(view(sessionId).commands.map((command) => command.name)).toEqual(["new", "name", "alias", "visible"]);
 
-    await fixture.converse(sessionId, "/rewind");
+    await fixture.converse(sessionId, "/reload");
 
-    expect(userPrompts(view(sessionId))).toEqual(["/rewind"]);
+    expect(userPrompts(view(sessionId))).toEqual(["/reload"]);
     expect(fixture.shownQuickPicks).toEqual([]);
   });
 
@@ -282,61 +282,6 @@ describe("Host slash commands through the real Registry and child-process path",
       const image = { id: "i", name: "i.png", mimeType: "image/png" as const, data: "AAAA", size: 3 };
       await expect(registry.sendPrompt(sessionId, "/new", [image])).rejects.toThrow("/new does not support image attachments.");
       expect(userPrompts(view(sessionId))).toEqual(["/new feature branch"]);
-    });
-  });
-
-  describe("/rewind", () => {
-    it("returns to before the chosen prompt and hands that prompt back to the Composer", async () => {
-      const fixture = await host();
-      const { registry, view } = fixture;
-      const sessionId = await fixture.startSession();
-      for (const text of ["first", "second", "third"]) await fixture.converse(sessionId, text);
-
-      fixture.quickPicks.push(
-        (items) => items.find((item) => item.label.includes("second")),
-        (items) => items[0],
-      );
-      await registry.sendPrompt(sessionId, "/rewind", []);
-
-      expect(fixture.shownQuickPicks).toEqual([
-        { title: "Rewind conversation", labels: ["$(history) third", "$(history) second", "$(history) first"] },
-        expect.objectContaining({ title: "Leave current branch" }),
-      ]);
-      expect(userPrompts(view(sessionId))).toEqual(["first"]);
-      // The seed survives the /rewind submission that produced it.
-      expect(view(sessionId).composerSeed).toMatchObject({ text: "second", images: [] });
-      expect(fixture.errors).toEqual([]);
-
-      await fixture.converse(sessionId, "second, revised");
-      expect(userPrompts(view(sessionId))).toEqual(["first", "second, revised"]);
-      expect(view(sessionId).composerSeed).toBeUndefined();
-    });
-
-    it("changes nothing when either picker is dismissed", async () => {
-      const fixture = await host();
-      const { registry, view } = fixture;
-      const sessionId = await fixture.startSession();
-      for (const text of ["first", "second"]) await fixture.converse(sessionId, text);
-
-      await expect(registry.rewind(sessionId)).resolves.toEqual({ cancelled: true });
-      fixture.quickPicks.push((items) => items[0]);
-      await expect(registry.rewind(sessionId)).resolves.toEqual({ cancelled: true });
-
-      expect(userPrompts(view(sessionId))).toEqual(["first", "second"]);
-      expect(view(sessionId).composerSeed).toBeUndefined();
-    });
-
-    it("explains why it cannot run instead of opening an empty or stale picker", async () => {
-      const fixture = await host();
-      const { registry, view } = fixture;
-      const sessionId = await fixture.startSession();
-      await expect(registry.sendPrompt(sessionId, "/rewind", [])).rejects.toThrow("This conversation has no earlier prompt to rewind to.");
-
-      await registry.sendPrompt(sessionId, "hold", []);
-      await fixture.waitFor(() => view(sessionId).isStreaming);
-      await expect(registry.sendPrompt(sessionId, "/rewind", [], "followUp")).rejects.toThrow("Wait for the current Pi operation to finish");
-      expect(fixture.shownQuickPicks).toEqual([]);
-      expect(view(sessionId).queuedFollowUps).toEqual([]);
     });
   });
 

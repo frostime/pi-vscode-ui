@@ -44,9 +44,7 @@ import {
   projectActiveBranchEdges,
   projectBranchEndChoices,
   projectEditableTarget,
-  projectRewindTargets,
   type BranchEndChoiceProjection,
-  type RewindTargetProjection,
 } from "./tree/sessionTreeProjection.js";
 import { SessionEntryState } from "./SessionEntryState.js";
 import { resolvePiModelScope } from "../models/resolvePiModelScope.js";
@@ -341,14 +339,6 @@ export class SessionRuntime {
     if (this.view.historyStatus !== "loaded") throw new Error("Load conversation history before switching branches.");
     const entryData = await this.#readEntries(this.#requireApi());
     return projectBranchEndChoices(buildSessionTreeIndex(entryData.entries, entryData.leafId), branchPointId);
-  }
-
-  /** User prompts on the active path, latest first: the points `/rewind` can return to. */
-  async listRewindTargets(): Promise<RewindTargetProjection[]> {
-    await this.#discoverAdapters(this.#requireApi());
-    this.#assertTreeNavigable();
-    const entryData = await this.#readEntries(this.#requireApi());
-    return projectRewindTargets(buildSessionTreeIndex(entryData.entries, entryData.leafId));
   }
 
   async navigateTree(targetId: string, summary: SessionTreeSummaryOptions): Promise<{ cancelled: boolean; seed?: ComposerSeedView }> {

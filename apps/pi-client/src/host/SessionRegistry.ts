@@ -17,7 +17,7 @@ import { readPiSessionMetadata, type PiSessionCatalogEntry } from "./catalog/Ses
 import { pickPiSession } from "./catalog/SessionCatalogPicker.js";
 import { parseLaunchArguments } from "./sessions/parseLaunchArguments.js";
 import { SessionPersistence } from "./sessions/SessionPersistence.js";
-import { confirmDraftReplacement, pickBranchEnd, pickBranchSummary, pickRewindTarget } from "./pickers/SessionTreePicker.js";
+import { confirmDraftReplacement, pickBranchEnd, pickBranchSummary } from "./pickers/SessionTreePicker.js";
 import {
   discoverSessionWorkingDirectories,
   findSessionWorkingDirectory,
@@ -520,10 +520,6 @@ export class SessionRegistry {
         case "new":
           await this.startNewConversation(sessionId);
           return;
-        case "rewind":
-          // The chosen prompt returns as a Composer seed, which must outlive this submission.
-          await this.rewind(sessionId);
-          return;
         case "reload":
           await this.#withTreeInteraction(sessionId, () => runtime.reloadResources());
           return;
@@ -575,24 +571,6 @@ export class SessionRegistry {
           this.#emitChange();
         }
       }
-    });
-  }
-
-  /** `/rewind`: Branch here, with the prompt chosen from a list instead of the transcript. */
-  async rewind(sessionId: string): Promise<{ cancelled: boolean }> {
-    return this.#withTreeInteraction(sessionId, async () => {
-      this.#assertNoForkOperation();
-      const runtime = this.#requireRuntime(sessionId);
-      await this.#ensureRunning(runtime);
-      const targets = await runtime.listRewindTargets();
-      if (targets.length === 0) throw new Error("This conversation has no earlier prompt to rewind to.");
-      const target = await pickRewindTarget(this.#host, targets);
-      if (!target) return { cancelled: true };
-      const summary = await pickBranchSummary(this.#host);
-      if (!summary) return { cancelled: true };
-      const result = await runtime.navigateTree(target.targetId, summary);
-      if (result.seed) runtime.setComposerSeed(result.seed);
-      return { cancelled: result.cancelled };
     });
   }
 

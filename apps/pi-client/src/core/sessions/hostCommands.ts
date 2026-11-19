@@ -6,17 +6,16 @@ import { normalizePiSlashPrompt } from "./normalizePiSlashPrompt.js";
 /** Slash commands FrostPi answers itself instead of submitting them to the runtime. */
 export type HostCommand =
   | { name: "compact" | "name" | "alias"; argument: string }
-  | { name: "new" | "rewind" | "reload"; argument: "" };
+  | { name: "new" | "reload"; argument: "" };
 
 /**
- * `/new`, `/rewind` and `/reload` take no argument, so text after any of them stays
+ * `/new` and `/reload` take no argument, so text after either of them stays
  * an ordinary prompt for the runtime; `/compact`, `/name` and `/alias` own everything
  * after their name.
  */
 export function parseHostCommand(text: string): HostCommand | null {
   const normalized = normalizePiSlashPrompt(text);
   if (normalized === "/new") return { name: "new", argument: "" };
-  if (normalized === "/rewind") return { name: "rewind", argument: "" };
   if (normalized === "/reload") return { name: "reload", argument: "" };
   for (const name of ["compact", "name", "alias"] as const) {
     if (normalized === `/${name}`) return { name, argument: "" };
@@ -43,7 +42,6 @@ export function answersHostCommand(name: HostCommand["name"], support: HostComma
       return true;
     case "new":
       return support.capabilities.newSession;
-    case "rewind":
     case "reload":
       return support.capabilities.sessionTree && support.sessionTreeAdapter;
   }
@@ -51,7 +49,6 @@ export function answersHostCommand(name: HostCommand["name"], support: HostComma
 
 const GATED_COMMANDS: readonly (RpcCommandDescriptor & { name: HostCommand["name"] })[] = [
   { name: "new", description: "Start a new conversation here; the current one stays resumable", source: "frostpi" },
-  { name: "rewind", description: "Go back to an earlier prompt in this conversation", source: "frostpi" },
   { name: "reload", description: "Reload Pi's extensions, skills, prompt templates and context files", source: "frostpi" },
   { name: "name", description: "Rename this session", source: "frostpi" },
   { name: "alias", description: "Rename this session (same as /name)", source: "frostpi" },
