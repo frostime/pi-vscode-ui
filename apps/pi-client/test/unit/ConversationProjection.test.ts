@@ -7,25 +7,30 @@ import type { BoundToolCallView } from "../../src/shared/model/toolCallModel.js"
 
 describe("ConversationProjection", () => {
   it("tracks reported output for each response and freezes Pi's final measurement", () => {
-    const projection = new ConversationProjection();
-    const first = { role: "assistant", id: "first", timestamp: 100, content: [] };
-    projection.applyEvent({ type: "message_start", message: first });
-    expect(projection.read().responseMetrics).toEqual({ startedAt: 100 });
-    projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
-    projection.applyEvent({ type: "message_update", usage: { output: 3 }, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "Hello" } });
-    expect(projection.read().responseMetrics).toEqual({ startedAt: 100, outputTokens: 3 });
-    projection.applyEvent({ type: "message_end", message: { ...first, usage: { output: 8 }, durationMs: 400, stopReason: "toolUse" } });
-    expect(projection.read().responseMetrics).toEqual({ startedAt: 100, durationMs: 400, outputTokens: 8 });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(500);
+    try {
+      const projection = new ConversationProjection();
+      const first = { role: "assistant", id: "first", timestamp: 100, content: [] };
+      projection.applyEvent({ type: "message_start", message: first });
+      expect(projection.read().responseMetrics).toEqual({ startedAt: 100 });
+      projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
+      projection.applyEvent({ type: "message_update", usage: { output: 3 }, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "Hello" } });
+      expect(projection.read().responseMetrics).toEqual({ startedAt: 100, outputTokens: 3 });
+      projection.applyEvent({ type: "message_end", message: { ...first, usage: { output: 8 }, durationMs: 400, stopReason: "toolUse" } });
+      expect(projection.read().responseMetrics).toEqual({ startedAt: 100, durationMs: 400, outputTokens: 8 });
 
-    const next = { ...first, id: "next", timestamp: 700 };
-    projection.applyEvent({ type: "message_start", message: next });
-    projection.applyEvent({ type: "message_end", message: { ...first, usage: { output: 99 }, durationMs: 900 } });
-    expect(projection.read().responseMetrics).toEqual({ startedAt: 700 });
-    projection.applyEvent({ type: "message_end", message: { ...next, usage: { output: 10 }, durationMs: 500, stopReason: "stop" } });
-    projection.applyEvent({ type: "agent_settled" });
-    expect(projection.read().responseMetrics).toEqual({ startedAt: 700, durationMs: 500, outputTokens: 10 });
-    projection.replaceEntries([], []);
-    expect(projection.read().responseMetrics).toBeUndefined();
+      const next = { ...first, id: "next", timestamp: 700 };
+      projection.applyEvent({ type: "message_start", message: next });
+      projection.applyEvent({ type: "message_end", message: { ...first, usage: { output: 99 }, durationMs: 900 } });
+      expect(projection.read().responseMetrics).toEqual({ startedAt: 700 });
+      projection.applyEvent({ type: "message_end", message: { ...next, usage: { output: 10 }, durationMs: 500, stopReason: "stop" } });
+      projection.applyEvent({ type: "agent_settled" });
+      expect(projection.read().responseMetrics).toEqual({ startedAt: 700, durationMs: 500, outputTokens: 10 });
+      projection.replaceEntries([], []);
+      expect(projection.read().responseMetrics).toBeUndefined();
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("clears an aborted response and discards a live timer when the process stops", () => {
@@ -39,23 +44,26 @@ describe("ConversationProjection", () => {
     expect(projection.read().responseMetrics).toBeUndefined();
   });
 
-  it("estimates growth without endpoint usage and retains the streamed rate at completion", () => {
-    const time = vi.spyOn(performance, "now").mockReturnValueOnce(100).mockReturnValueOnce(600);
+  it("uses request elapsed time when many output tokens arrive in one burst", () => {
+    let now = 4_000;
+    const wall = vi.spyOn(Date, "now").mockImplementation(() => now);
     try {
       const projection = new ConversationProjection();
-      const message = { role: "assistant", timestamp: 100, content: [] };
-      projection.applyEvent({ type: "message_start", message: { ...message, content: [{ type: "text", text: "abcd" }] } });
-      projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
-      projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "abcd" } });
-      expect(projection.read().responseMetrics).toEqual({ startedAt: 100, outputTokens: 1, estimated: true });
-      projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "efghijkl" } });
-      expect(projection.read().responseMetrics).toEqual({ startedAt: 100, outputTokens: 3, estimated: true, outputTokensPerSecond: 4 });
-      projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_end", contentIndex: 0, content: "abcdef" } });
-      expect(projection.read().responseMetrics?.outputTokens).toBe(2);
-      projection.applyEvent({ type: "message_end", message: { ...message, usage: { output: 1 }, durationMs: 900, stopReason: "stop" } });
-      expect(projection.read().responseMetrics).toEqual({ startedAt: 100, outputTokens: 1, outputTokensPerSecond: 4, durationMs: 900 });
+      const message = { role: "assistant", timestamp: 1_000, content: [] };
+      projection.applyEvent({ type: "message_start", message });
+      projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "thinking_start", contentIndex: 0 } });
+      projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", contentIndex: 0, delta: "abcd".repeat(200) } });
+      expect(projection.read().responseMetrics).toMatchObject({ outputTokens: 200, estimated: true });
+      now += 31;
+      projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 1 } });
+      projection.applyEvent({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 1, delta: "abcd".repeat(220) } });
+      expect(projection.read().responseMetrics).toEqual({
+        startedAt: 1_000, outputTokens: 420, estimated: true, outputTokensPerSecond: 420_000 / 3_031,
+      });
+      projection.applyEvent({ type: "message_end", message: { ...message, usage: { output: 420 }, durationMs: 3_500, stopReason: "stop" } });
+      expect(projection.read().responseMetrics).toEqual({ startedAt: 1_000, outputTokens: 420, durationMs: 3_500 });
     } finally {
-      time.mockRestore();
+      wall.mockRestore();
     }
   });
 

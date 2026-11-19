@@ -52,7 +52,7 @@ export interface ResponseMetricsView {
   startedAt: number;
   outputTokens?: number;
   estimated?: true;
-  /** Rate observed between streamed output updates, omitting the first batch. */
+  /** Live output rate averaged from the start of the Pi request. */
   outputTokensPerSecond?: number;
   /** Present when the response has finished. */
   durationMs?: number;

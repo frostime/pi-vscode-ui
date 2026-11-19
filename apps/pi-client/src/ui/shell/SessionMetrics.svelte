@@ -19,9 +19,7 @@
   const elapsedMs = $derived(Math.max(0, now - (response?.startedAt ?? now)));
   const tokensPerSecond = $derived(response?.outputTokensPerSecond ?? (response?.outputTokens && response.durationMs
     ? response.outputTokens * 1000 / response.durationMs : undefined));
-  const rateHelp = $derived(response?.outputTokensPerSecond !== undefined
-    ? "Rate estimated from the arrivals of streamed output."
-    : "Average rate over the full response, including the wait for the first token.");
+  const rateHelp = "Average output rate since the request started, including the wait for the first token.";
 
   $effect(() => {
     if (awaitingOutput === undefined) return;
@@ -49,7 +47,7 @@
           title={response.estimated ? `Token count estimated from streamed content. ${rateHelp}` : rateHelp}>
           {#if response.outputTokens !== undefined}
             {response.estimated ? "≈" : ""}{response.outputTokens.toLocaleString()} output tokens
-            {#if tokensPerSecond !== undefined} · {response.estimated || response.outputTokensPerSecond !== undefined ? "≈" : ""}{tokensPerSecond.toFixed(1)} tok/s{/if}
+            {#if tokensPerSecond !== undefined} · {response.estimated || response.outputTokensPerSecond !== undefined ? "≈" : ""}{tokensPerSecond.toFixed(1)} tok/s avg{/if}
           {:else}
             Receiving response · {(elapsedMs / 1000).toFixed(1)} s
           {/if}

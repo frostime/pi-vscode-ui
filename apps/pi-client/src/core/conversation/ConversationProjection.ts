@@ -75,7 +75,6 @@ interface AssistantPlacement {
 interface ResponseMeter {
   id: string;
   metrics: ResponseMetricsView;
-  sample?: { firstAt: number; firstTokens: number; latestTokens: number; estimated: boolean };
 }
 
 const CACHE_MISS_NOTICE_ID_PREFIX = "cache-miss-";
@@ -665,18 +664,11 @@ export class ConversationProjection {
       const cumulative = reported ?? (previous?.metrics.estimated ? undefined : previous?.metrics.outputTokens);
       const estimated = cumulative === undefined;
       const observedTokens = cumulative ?? estimateOutputTokens(message.parts);
-      let sample = previous?.sample;
-      let rate = previous?.metrics.outputTokensPerSecond;
-      if (observedTokens > 0) {
-        if (!sample || sample.estimated !== estimated) {
-          sample = { firstAt: performance.now(), firstTokens: observedTokens, latestTokens: observedTokens, estimated };
-        } else if (observedTokens > sample.latestTokens) {
-          const elapsed = performance.now() - sample.firstAt;
-          if (elapsed > 0) rate = (observedTokens - sample.firstTokens) * 1000 / elapsed;
-          sample = { ...sample, latestTokens: observedTokens };
-        }
-      }
-      this.#responseMetrics = { id, ...(sample ? { sample } : {}), metrics: {
+      // Pi timestamps the request before output, so buffered chunks still use
+      // the full elapsed time. Wait one second before showing a live average.
+      const elapsedMs = Date.now() - startedAt;
+      const rate = observedTokens > 0 && elapsedMs >= 1_000 ? observedTokens * 1000 / elapsedMs : undefined;
+      this.#responseMetrics = { id, metrics: {
         startedAt,
         ...(observedTokens > 0 ? { outputTokens: Math.ceil(observedTokens), ...(estimated ? { estimated: true } : {}) } : {}),
         ...(rate !== undefined ? { outputTokensPerSecond: rate } : {}),
@@ -688,11 +680,9 @@ export class ConversationProjection {
     const durationMs = typeof nativeDuration === "number" && Number.isFinite(nativeDuration) && nativeDuration > 0
       ? nativeDuration : previous && Math.max(0, Date.now() - previous.metrics.startedAt);
     const outputTokens = reported ?? Math.ceil(estimateOutputTokens(message.parts));
-    const rate = previous?.metrics.outputTokensPerSecond;
     this.#responseMetrics = outputTokens && startedAt !== undefined && durationMs ? { id, metrics: {
       startedAt, durationMs, outputTokens,
       ...(reported === undefined ? { estimated: true } : {}),
-      ...(rate !== undefined ? { outputTokensPerSecond: rate } : {}),
     } } : undefined;
   }
 
