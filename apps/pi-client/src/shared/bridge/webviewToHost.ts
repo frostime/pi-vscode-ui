@@ -110,6 +110,19 @@ const payloadSchema = z.discriminatedUnion("type", [
     streamingBehavior: z.enum(["steer", "followUp"]),
   }),
   z.object({
+    type: z.literal("updateQueuedPrompt"),
+    sessionId: z.string().min(1).max(128),
+    promptId: z.string().min(1).max(128),
+    action: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("startEdit") }),
+      z.object({ kind: z.literal("cancelEdit") }),
+      z.object({ kind: z.literal("edit"), text: z.string().max(100_000) }),
+      z.object({ kind: z.literal("move"), direction: z.enum(["up", "down"]) }),
+      z.object({ kind: z.literal("steer") }),
+      z.object({ kind: z.literal("remove") }),
+    ]),
+  }),
+  z.object({
     type: z.literal("restoreQueuedPrompts"),
     requestId: z.string().min(1).max(128),
     sessionId: z.string().min(1).max(128),
@@ -200,3 +213,4 @@ export const webviewToHostSchema = z.preprocess((raw, context) => {
 export type WebviewToHostMessage = z.infer<typeof webviewToHostSchema>;
 export type WebviewToHostPayload = z.infer<typeof payloadSchema>;
 export type WebviewImageInput = z.infer<typeof imageSchema>;
+export type QueuedPromptAction = Extract<WebviewToHostMessage, { type: "updateQueuedPrompt" }>["action"];

@@ -5,7 +5,7 @@ import type { PiRpcApi, RpcClearQueueResult, RpcImageContent, RpcRemoveQueuedMes
 import type { ComposerDraftImageView } from "../../shared/model/composerDraftModel.js";
 import type { QueuedPromptRecoveryOutcome, QueuedPromptRecoveryView, QueuedPromptRecoveryWarning } from "../../shared/model/queuedPromptRecoveryModel.js";
 import type { AttachmentLimitsView } from "../../shared/model/sessionViewModel.js";
-import { normalizeImageAttachments } from "../attachments/normalizeImageAttachment.js";
+import { normalizeImageAttachments, projectedImageInput } from "../attachments/normalizeImageAttachment.js";
 import type { RuntimeCompatibility } from "../configuration/runtimeCompatibility.js";
 import type { ConversationProjection } from "../conversation/ConversationProjection.js";
 
@@ -57,15 +57,25 @@ export class QueuedPromptRecovery {
       await Promise.allSettled([...this.#admissions]);
       this.#assertAvailable();
       const { queuedSteers, queuedFollowUps } = this.#options.conversation.read();
+      const editable = queuedFollowUps.filter((prompt) => prompt.editable);
       const candidates = [
         ...queuedSteers.map((prompt) => ({ prompt, queue: "steering" as const })),
-        ...queuedFollowUps.map((prompt) => ({ prompt, queue: "followUp" as const })),
+        ...queuedFollowUps.filter((prompt) => !prompt.editable).map((prompt) => ({ prompt, queue: "followUp" as const })),
       ];
       const outcome: QueuedPromptRecoveryOutcome = {
-        certainty: this.#options.runtime === "pi" ? "best-effort" : "confirmed",
+        certainty: this.#options.runtime === "pi" && candidates.length > 0 ? "best-effort" : "confirmed",
         content: { text: "", images: [] }, recoveredCount: 0, notRemovedCount: 0, warnings: [],
       };
-      if (candidates.length === 0) return outcome;
+      const recoverEditable = (nativeTexts: string[] = []) => {
+        outcome.content = {
+          text: [...nativeTexts, ...editable.map((prompt) => prompt.text)].filter(Boolean).join("\n\n"),
+          images: editable.flatMap((prompt) => prompt.images.map(projectedImageInput)),
+        };
+        outcome.recoveredCount = nativeTexts.length + editable.length;
+        if (editable.length > 0) this.#options.conversation.replaceEditableFollowUps([]);
+        return outcome;
+      };
+      if (candidates.length === 0) return recoverEditable();
       this.#options.conversation.beginQueueRecovery();
       if (this.#options.runtime === "pi") {
         let cleared: RpcClearQueueResult;
@@ -77,11 +87,8 @@ export class QueuedPromptRecovery {
         }
         this.#assertCurrent();
         for (const { prompt } of candidates) this.#options.conversation.removeQueuedPrompt(prompt.id);
-        const texts = [...cleared.steering, ...cleared.followUp];
-        outcome.content.text = texts.join("\n\n");
-        outcome.recoveredCount = texts.length;
         outcome.warnings.push("delivery-uncertain");
-        return outcome;
+        return recoverEditable([...cleared.steering, ...cleared.followUp]);
       }
 
       const texts: string[] = [];
@@ -138,7 +145,9 @@ export class QueuedPromptRecovery {
     if (availability === "compacting") return "compacting";
     const { queuedSteers, queuedFollowUps } = this.#options.conversation.read();
     const imageCount = [...queuedSteers, ...queuedFollowUps].reduce((count, prompt) => count + prompt.images.length, 0);
-    if (this.#options.runtime === "pi" && imageCount > 0) return "images-not-supported";
+    const nativeImages = [...queuedSteers, ...queuedFollowUps.filter((prompt) => !prompt.editable)]
+      .some((prompt) => prompt.images.length > 0);
+    if (this.#options.runtime === "pi" && nativeImages) return "images-not-supported";
     if (imageCount > this.#options.getAttachmentLimits().maxImages) return "image-limit";
     return undefined;
   }

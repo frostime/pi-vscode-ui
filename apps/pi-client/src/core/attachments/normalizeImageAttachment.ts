@@ -36,7 +36,7 @@ export function validateProjectedImageAttachments(
   return images.map((image) => ({ ...image }));
 }
 
-function projectedImageInput(image: ImageAttachmentView): WebviewImageInput {
+export function projectedImageInput(image: ImageAttachmentView): WebviewImageInput {
   if (!SUPPORTED_MIME_TYPES.has(image.mimeType)) throw new Error(`Unsupported image type: ${image.mimeType}`);
   const prefix = `data:${image.mimeType};base64,`;
   if (!image.dataUrl.startsWith(prefix)) throw new Error(`${image.name} has invalid image data.`);
