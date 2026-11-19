@@ -33,7 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The badge beside a temporary session's title reads **Temporary**, like the menus and messages. It was in Chinese (临时).
 - A finished turn no longer collapses into one **Worked** summary. Each run of tool calls and reasoning folds into its own row, and replies between runs stay visible. `frostpi.conversation.collapseTurnTrace` controls this for finished turns.
 - A reasoning row shows one line of the model's thinking beside its title, and an opened reasoning row stays open when the next step folds it into a group.
-- A long session opens on its part since the last compaction, or on its recent prompts when it has none, with **Load full history** to see everything. Sessions larger than 8 MiB used to open with no history at all.
 - Fork works while a reply is running. FrostPi forks in a separate Pi process, so the reply keeps going.
 - New setting `frostpi.session.closeWithEditorTab`: closing a session's editor tab also closes the session.
 - `frostpi.conversation.collapseTurnTrace` now applies as soon as it changes instead of at the next session start.

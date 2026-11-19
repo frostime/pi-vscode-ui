@@ -701,8 +701,11 @@ export class SessionRegistry {
     try {
       await this.#startRuntime(runtime, true);
       if (runtime.view.status !== "ready") throw new Error(runtime.view.error ?? "The Pi process for the Fork did not start.");
-      // The start queues the ordinary history load; a deferred one is then forced.
-      for (let attempt = 0; attempt < 2 && runtime.view.historyStatus !== "loaded"; attempt += 1) await this.#queueHistory(runtime, true);
+      // The start queues the ordinary history load. Wait for it rather than reuse it as the
+      // full load: for a large file it defers, and only then is the full history loaded.
+      await this.#historyJobs.get(runtime.id)?.catch(() => undefined);
+      if (runtime.view.historyStatus !== "loaded") await this.#queueHistory(runtime, true);
+      if (runtime.view.historyStatus !== "loaded") throw new Error("Unable to load the session history for the Fork.");
       const result = await runtime.executeFork(entryId);
       if (result.cancelled) return { cancelled: true };
       committed = true;

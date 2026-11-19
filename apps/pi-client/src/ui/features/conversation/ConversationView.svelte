@@ -2,7 +2,6 @@
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
   import { onDestroy, onMount } from "svelte";
 
-  import { postToHost } from "../../bridge/hostBridge";
   import NewUpdatesButton from "./scrolling/NewUpdatesButton.svelte";
   import { INITIAL_SCROLL_FOLLOW_STATE, reduceScrollFollow } from "./scrolling/scrollFollowState";
   import { composerDrafts } from "../composer/composerDraftStore.svelte";
@@ -106,15 +105,6 @@
           <p>Ask Pi to inspect code, make changes, run commands, or explain the current project.</p>
         </div>
       {:else}
-        {#if session.partialHistory}
-          <div class="partial-history" role="note">
-            <span class="codicon codicon-history" aria-hidden="true"></span>
-            <span>{session.partialHistory === "compaction"
-              ? "This long conversation is shown from its last compaction."
-              : "Only the recent part of this long conversation is shown."}</span>
-            <button type="button" onclick={() => postToHost({ type: "loadHistory", sessionId: session.id })}>Load full history</button>
-          </div>
-        {/if}
         {#each session.conversationItems as item (item.id)}
           {#if item.type === "turn"}
             <AgentTurn turn={item} {session} />
@@ -184,28 +174,6 @@
 </div>
 
 <style>
-.partial-history {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 12px;
-  padding: 6px 8px;
-  border: 1px dashed var(--frost-border);
-  border-radius: 6px;
-  color: var(--frost-muted);
-  font-size: calc(var(--font-size-ui) - 2px);
-}
-.partial-history button {
-  margin-left: auto;
-  padding: 2px 8px;
-  border: 1px solid var(--frost-border);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--frost-link);
-  cursor: pointer;
-}
-.partial-history button:hover { background: var(--frost-hover); }
 .conversation-inner { width: 100%; max-width: var(--content-max-width); min-height: 100%; margin: 0 auto; padding: 18px 14px 28px; }
 .conversation-tail { height: 8px; }
 .conversation-empty {

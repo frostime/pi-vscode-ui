@@ -285,32 +285,6 @@ describe("Host slash commands through the real Registry and child-process path",
     });
   });
 
-  describe("a long conversation", () => {
-    it("opens on its part since the last compaction, and loads in full on request", async () => {
-      const fixture = await host();
-      const { registry, view } = fixture;
-      const sessionId = await fixture.startSession();
-      const bulk = Array.from({ length: 13 }, (_, index) => `bulk ${index}`);
-      for (const text of bulk) await fixture.converse(sessionId, text);
-      await registry.sendPrompt(sessionId, "/compact", []);
-      await fixture.converse(sessionId, "after compaction");
-
-      await registry.retrySession(sessionId);
-      await fixture.waitFor(() => view(sessionId).status === "ready" && view(sessionId).historyStatus === "loaded" && userPrompts(view(sessionId)).length > 0);
-      expect(view(sessionId).partialHistory).toBe("compaction");
-      expect(userPrompts(view(sessionId))).toEqual(["after compaction"]);
-      expect(view(sessionId).conversationItems.some((item) => item.type === "compaction")).toBe(true);
-
-      // New turns keep arriving through the same window.
-      await fixture.converse(sessionId, "next");
-      expect(userPrompts(view(sessionId))).toEqual(["after compaction", "next"]);
-
-      await registry.loadHistory(sessionId);
-      expect(view(sessionId).partialHistory).toBeUndefined();
-      expect(userPrompts(view(sessionId))).toEqual([...bulk, "after compaction", "next"]);
-      expect(fixture.errors).toEqual([]);
-    }, 30_000);
-  });
 
   describe("Fork during a reply", () => {
     it("forks in a separate Pi process and leaves the running reply alone", async () => {
@@ -341,6 +315,31 @@ describe("Host slash commands through the real Registry and child-process path",
       await fixture.waitFor(() => !view(sessionId).isStreaming);
       expect(userPrompts(view(sessionId))).toEqual(["first", "second", "hold"]);
     });
+
+    it("loads a large session's full history in the second process before forking", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+      await fixture.converse(sessionId, "first");
+      await fixture.converse(sessionId, "second");
+      // Above 8 MiB the ordinary load defers; the Fork's own process must not stop there.
+      for (let index = 0; index < 12; index += 1) await fixture.converse(sessionId, `bulk ${index}`);
+      // Reopened, the source defers its history too, until the user loads it.
+      await registry.retrySession(sessionId);
+      await fixture.waitFor(() => view(sessionId).status === "ready" && view(sessionId).historyStatus === "deferred");
+      await registry.loadHistory(sessionId);
+      await registry.sendPrompt(sessionId, "hold", []);
+      await fixture.waitFor(() => view(sessionId).isStreaming);
+      const second = view(sessionId).conversationItems.flatMap((item) => item.type === "turn" && item.userMessage?.blocks.some((block) => block.type === "text" && block.text === "second") ? [item.userMessage.sourceEntryId] : [])[0]!;
+
+      const result = await registry.forkMessage(sessionId, second, "preserve-sidebar-selection");
+
+      expect(result).toEqual({ cancelled: false, forkSessionId: expect.any(String) as string });
+      expect(view(result.forkSessionId!)).toMatchObject({ status: "ready", historyStatus: "loaded", composerSeed: { text: "second" } });
+      expect(userPrompts(view(result.forkSessionId!))).toEqual(["first"]);
+      expect(view(sessionId).isStreaming).toBe(true);
+      await registry.abort(sessionId);
+    }, 30_000);
 
     it("leaves nothing behind when the Fork fails", async () => {
       const fixture = await host();

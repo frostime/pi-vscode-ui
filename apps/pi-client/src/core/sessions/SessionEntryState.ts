@@ -64,13 +64,9 @@ export class SessionEntryState {
     return this.#index;
   }
 
-  /**
-   * `partial` marks entries that are only the recent part of the session: the active path
-   * then starts at its oldest loaded entry instead of requiring the chain to the root.
-   */
-  replace(entries: readonly RpcSessionEntry[], leafId: string | null, { partial = false } = {}): ReplacedSessionEntries {
+  replace(entries: readonly RpcSessionEntry[], leafId: string | null): ReplacedSessionEntries {
     const entriesById = uniqueEntries(entries);
-    const activePath = buildActivePath(entriesById, leafId, partial);
+    const activePath = buildActivePath(entriesById, leafId);
 
     this.#initialized = true;
     this.#cursor = entries.at(-1)?.id ?? null;
@@ -107,7 +103,6 @@ export class SessionEntryState {
 function buildActivePath(
   entriesById: ReadonlyMap<string, RpcSessionEntry>,
   leafId: string | null,
-  partial: boolean,
 ): RpcSessionEntry[] {
   if (leafId === null) return [];
 
@@ -119,7 +114,6 @@ function buildActivePath(
     seen.add(currentId);
 
     const entry = entriesById.get(currentId);
-    if (!entry && partial && reversedPath.length > 0) break;
     if (!entry) throw new SessionEntryPathError(`Session entry parent chain is missing ${currentId}`);
     reversedPath.push(entry);
     currentId = entry.parentId;
