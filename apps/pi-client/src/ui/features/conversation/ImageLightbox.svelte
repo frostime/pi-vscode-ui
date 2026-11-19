@@ -53,7 +53,6 @@
     inset: 0;
     display: grid;
     place-items: center;
-    padding: 24px;
     background: rgba(0,0,0,.72);
     backdrop-filter: blur(4px);
   }
