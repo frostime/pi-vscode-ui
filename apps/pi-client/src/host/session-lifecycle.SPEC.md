@@ -22,6 +22,8 @@ An existing Runtime's cwd and configuration scope must not follow later editor, 
 
 VS Code's default anchor is the active editor's workspace folder, otherwise the first root; New/Resume does not aggregate unrelated repositories. Desktop Project ownership and selection policy are in `apps/desktop/SPEC.md`. Neither policy creates a second lifecycle or changes an already-running Pi's context.
 
+A regular or temporary new chat starts with the active Pi chat's provider and model when available. Selection runs before the new chat accepts prompts. If Pi rejects the model, the chat uses Pi's startup choice. Custom launches, explicit provider/model/key arguments and resumed chats follow Pi's own startup selection.
+
 ## Readiness and turn completion
 
 Registry serializes starts and complete-history loads in separate queues. A long history load must not hold up another process's startup, and neither queue serializes agent execution. Concurrent Pi turns remain independent; FrostPi adds no global execution lock or file-write interception.

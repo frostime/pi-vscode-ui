@@ -50,6 +50,8 @@ import { SessionViewState } from "./SessionViewState.js";
 import { OmpPromptCompatibility } from "./OmpPromptCompatibility.js";
 import { QueuedPromptRecovery } from "./QueuedPromptRecovery.js";
 
+export type SessionModelReference = Pick<RpcModel, "provider" | "id">;
+
 export interface SessionRuntimeHost {
   readonly clientVersion: string;
   /** Read current host proxy settings for both restart-required state and process launch. */
@@ -157,7 +159,7 @@ export class SessionRuntime {
     this.#notifyChange();
   }
 
-  async start(sessionFile?: string): Promise<void> {
+  async start(sessionFile?: string, inheritedModel?: SessionModelReference): Promise<void> {
     if (this.#disposed) throw new Error("Session runtime is disposed");
     if (this.#starting) return this.#starting;
     if (this.#connection?.started) return;
@@ -166,7 +168,7 @@ export class SessionRuntime {
     this.#viewState.setHistoryStatus(sessionFile ? "queued" : "loaded");
     if (sessionFile) this.#entries.reset();
     else this.#entries.replace([], null);
-    this.#starting = this.#startInternal(sessionFile, lifecycleVersion).finally(() => {
+    this.#starting = this.#startInternal(sessionFile, lifecycleVersion, inheritedModel).finally(() => {
       this.#starting = null;
     });
     return this.#starting;
@@ -614,7 +616,11 @@ export class SessionRuntime {
     ].join("\n");
   }
 
-  async #startInternal(sessionFile: string | undefined, lifecycleVersion: number): Promise<void> {
+  async #startInternal(
+    sessionFile: string | undefined,
+    lifecycleVersion: number,
+    inheritedModel?: SessionModelReference,
+  ): Promise<void> {
     this.#viewState.setStatus("starting");
     this.#notifyChange();
 
@@ -709,10 +715,23 @@ export class SessionRuntime {
     });
 
     try {
-      const state = await connection.start();
+      let state = await connection.start();
       if (this.#disposed || lifecycleVersion !== this.#lifecycleVersion) {
         await connection.stop();
         return;
+      }
+      const hasExplicitModel = args.some((arg) => /^--(?:model|provider|api-key)(?:=|$)/.test(arg));
+      if (inheritedModel && compatibilityProfile.id === "pi" && !hasExplicitModel
+        && (state.model?.provider !== inheritedModel.provider || state.model.id !== inheritedModel.id)) {
+        try {
+          await api.setModel(inheritedModel.provider, inheritedModel.id);
+        } catch (error) {
+          // Keep the chat usable if Pi cannot select an unavailable model.
+          if (!(error instanceof PiRpcCommandError)) throw error;
+        }
+        if (this.#disposed || lifecycleVersion !== this.#lifecycleVersion) return;
+        state = await api.getState();
+        if (this.#disposed || lifecycleVersion !== this.#lifecycleVersion) return;
       }
       this.#appliedProxyFingerprint = proxyFingerprint(configuration.proxy, vscodeProxy);
       this.#proxyRestartForced = false;
