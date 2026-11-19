@@ -48,16 +48,42 @@ export function createToolView(id: string, name: string, args: Record<string, un
   };
 }
 
-export function extractText(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (isRecord(value) && Array.isArray(value.content)) return extractText(value.content);
-  if (Array.isArray(value)) {
-    return value
-      .map((part) => isRecord(part) && part.type === "text" && typeof part.text === "string" ? part.text : "")
-      .filter(Boolean)
-      .join("\n");
+const TOOL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+
+export function extractToolOutput(
+  result: unknown,
+  toolCallId: string,
+  maxTextChars: number,
+  maxImages: number,
+  maxImageBytes: number,
+): { output: string; images: ImageAttachmentView[] } {
+  const content = isRecord(result) ? result.content : result;
+  const images: ImageAttachmentView[] = [];
+  const text: string[] = [];
+  if (typeof content === "string") text.push(content);
+  let imageCount = 0;
+  for (const part of arrayValue(content)) {
+    if (!isRecord(part)) continue;
+    if (part.type === "text" && typeof part.text === "string" && part.text) text.push(part.text);
+    if (part.type !== "image") continue;
+    imageCount++;
+    const { data, mimeType } = part;
+    if (images.length >= maxImages || typeof data !== "string" || typeof mimeType !== "string"
+        || !TOOL_IMAGE_TYPES.has(mimeType) || data.length > 4 * Math.ceil(maxImageBytes / 3)
+        || data.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) continue;
+    const size = Buffer.byteLength(data, "base64");
+    if (size > maxImageBytes) continue;
+    images.push({
+      id: `${toolCallId}-image-${imageCount}`,
+      name: stringValue(part.fileName, `Image ${imageCount}`),
+      mimeType,
+      dataUrl: `data:${mimeType};base64,${data}`,
+      size,
+    });
   }
-  return "";
+  const omitted = imageCount - images.length;
+  if (omitted > 0) text.push(omitted === 1 ? "1 image could not be displayed." : `${omitted} images could not be displayed.`);
+  return { output: text.join("\n").slice(-maxTextChars), images };
 }
 
 export function extractToolDiff(value: unknown): string | undefined {

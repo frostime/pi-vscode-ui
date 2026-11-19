@@ -6,6 +6,7 @@
   import { clientCapabilities } from "../../state/clientCapabilities.svelte";
   import { presentDiff } from "./diffPresentation";
   import { isToolSectionId, planToolSections, sectionToShow, type ToolSectionId } from "./toolSectionPlan";
+  import ImageGallery from "./ImageGallery.svelte";
   import ToolElapsedTimer from "./ToolElapsedTimer.svelte";
   import { formatDurationMs, formatTurnDuration, isElapsedTimerTool } from "./toolElapsedTimers";
 
@@ -99,6 +100,9 @@
     {/if}
     <span class={`codicon codicon-chevron-${open ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
   </Collapsible.Trigger>
+  {#if tool.state === "bound" && tool.images?.length}
+    <ImageGallery images={tool.images} />
+  {/if}
   <Collapsible.Content class="activity-content tool-activity-content">
     <div class="tool-body">
       {#if plan.sections.length > 1}
