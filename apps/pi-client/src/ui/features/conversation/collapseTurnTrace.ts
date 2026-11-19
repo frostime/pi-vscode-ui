@@ -1,6 +1,32 @@
-import type { AgentTurnView, ReasoningActivityView, ToolActivityView } from "$shared/model/conversationModel";
+import type {
+  AgentActivityView,
+  AgentTurnItemView,
+  AgentTurnStatus,
+  AgentTurnView,
+  ReasoningActivityView,
+  SessionNoticeView,
+  ToolActivityView,
+} from "$shared/model/conversationModel";
 
-/** One folded run of consecutive tool calls and reasoning in the focus view. */
+export interface TurnTraceSummary {
+  steps: number;
+  errors: number;
+  durationLabel: string | null;
+}
+
+export type TurnTraceStateLabel = "Worked" | "Stopped" | "Failed";
+
+/** A finished turn's work before its final reply, folded into one summary. */
+export interface TurnTrace {
+  stateLabel: TurnTraceStateLabel;
+  collapsedItemIds: ReadonlySet<string>;
+  firstCollapsedItemId: string;
+  anchorItemId: string;
+  anchorLabel: "Reply" | "Last step";
+  summary: TurnTraceSummary;
+}
+
+/** One folded run of consecutive tool calls and reasoning. */
 export interface TurnStepGroup {
   /** The first step's id: stable while the run grows, so an opened group stays open. */
   id: string;
@@ -12,15 +38,19 @@ export interface TurnStepGroup {
   detail: string;
 }
 
-export type TurnItemPlan =
-  | { mode: "flat" }
-  | {
-      mode: "grouped";
-      /** Group shown in front of the item with this id. */
-      groupsByFirstItemId: ReadonlyMap<string, TurnStepGroup>;
-      /** Group id of every folded item. */
-      groupIdByItemId: ReadonlyMap<string, string>;
-    };
+export interface TurnStepGroups {
+  /** Group shown in front of the item with this id. */
+  groupsByFirstItemId: ReadonlyMap<string, TurnStepGroup>;
+  /** Group id of every folded item. */
+  groupIdByItemId: ReadonlyMap<string, string>;
+}
+
+export interface TurnItemPlan {
+  /** Set for a finished turn whose work folds into one summary above its final reply. */
+  trace: TurnTrace | null;
+  /** Runs of steps that fold into one row each: across a running turn, or inside an opened trace. */
+  groups: TurnStepGroups | null;
+}
 
 /** A lone step is already a single collapsed row; folding it would only hide its name. */
 const MIN_GROUP_STEPS = 2;
@@ -28,21 +58,96 @@ const MAX_GROUP_DETAIL_KINDS = 4;
 const MAX_STEP_LABEL_LENGTH = 72;
 
 /**
- * Folding is per run, never per turn: each run of consecutive tool calls and reasoning
- * becomes one row, and every reply, including those between runs, stays visible. A
- * running turn folds in the focus view; a finished one also when `collapseTurnTrace`
- * is on, which is the default.
+ * The two settings are orthogonal, one per phase of a turn.
+ *
+ * - While a turn runs, `collapseRunningTurnTrace` folds each run of consecutive tool
+ *   calls and reasoning into one row; replies stay visible in order.
+ * - Once it has finished, `collapseTurnTrace` folds everything before the final reply
+ *   (tools, reasoning, interim replies and notices) into one summary, as only the last
+ *   reply is the model's answer to the user. Inside an opened summary each run of steps
+ *   stays folded, unless the summary holds nothing but one run: then the summary is
+ *   that run, and a second row inside it would only repeat it.
  */
 export function planTurnItems(
-  turn: Pick<AgentTurnView, "status" | "items">,
+  turn: Pick<AgentTurnView, "status" | "items" | "startedAt" | "endedAt">,
   collapseTurnTrace: boolean,
-  focusView = false,
+  collapseRunningTurnTrace = false,
 ): TurnItemPlan {
-  const fold = turn.status === "running" ? focusView : collapseTurnTrace || focusView;
-  return fold ? planStepGroups(turn) : { mode: "flat" };
+  if (turn.status === "running") {
+    return { trace: null, groups: collapseRunningTurnTrace ? planStepGroups(turn.items, true) : null };
+  }
+  const trace = collapseTurnTrace ? planTurnTrace(turn) : null;
+  if (!trace) return { trace: null, groups: null };
+  const traced = turn.items.filter((item) => trace.collapsedItemIds.has(item.id));
+  const onlySteps = traced.every((item) => item.type === "reasoning" || item.type === "tool");
+  return { trace, groups: onlySteps ? null : planStepGroups(traced, false) };
 }
 
-function planStepGroups(turn: Pick<AgentTurnView, "status" | "items">): TurnItemPlan {
+function planTurnTrace(turn: Pick<AgentTurnView, "status" | "items" | "startedAt" | "endedAt">): TurnTrace | null {
+  if (turn.items.length === 0) return null;
+  const activityLocations = turn.items.flatMap((item, itemIndex) => isAgentActivity(item) ? [{ item, itemIndex }] : []);
+  if (activityLocations.length === 0) return null;
+
+  let lastResponseIndex: number | undefined;
+  for (let index = activityLocations.length - 1; index >= 0; index -= 1) {
+    const location = activityLocations[index];
+    if (location?.item.type === "response") {
+      lastResponseIndex = location.itemIndex;
+      break;
+    }
+  }
+  const anchorIndex = traceAnchorIndex(turn.status, activityLocations, lastResponseIndex);
+  if (anchorIndex === undefined) return null;
+
+  const collapsed = turn.items.slice(0, anchorIndex).filter(isTraceItem);
+  const anchor = turn.items[anchorIndex];
+  if (collapsed.length === 0 || !anchor || !isAgentActivity(anchor)) return null;
+
+  return {
+    stateLabel: turnStateLabel(turn.status),
+    collapsedItemIds: new Set(collapsed.map((item) => item.id)),
+    firstCollapsedItemId: collapsed[0]!.id,
+    anchorItemId: anchor.id,
+    anchorLabel: anchor.type === "response" ? "Reply" : "Last step",
+    summary: {
+      steps: collapsed.length,
+      errors: countTraceErrors(collapsed),
+      durationLabel: formatTurnDuration(turn.startedAt, turn.endedAt),
+    },
+  };
+}
+
+function traceAnchorIndex(
+  status: AgentTurnStatus,
+  activities: readonly { item: AgentActivityView; itemIndex: number }[],
+  lastResponseIndex: number | undefined,
+): number | undefined {
+  if (status === "completed") return lastResponseIndex;
+  if (lastResponseIndex !== undefined) return lastResponseIndex;
+  return activities.length > 1 ? activities.at(-1)?.itemIndex : undefined;
+}
+
+export function turnStateLabel(status: AgentTurnStatus): TurnTraceStateLabel {
+  switch (status) {
+    case "completed":
+      return "Worked";
+    case "aborted":
+      return "Stopped";
+    case "error":
+      return "Failed";
+    case "running":
+      return "Worked";
+  }
+}
+
+export function formatTraceSummaryLabel(summary: TurnTraceSummary): string {
+  const parts = [summary.steps === 1 ? "1 step" : `${summary.steps} steps`];
+  if (summary.errors > 0) parts.push(summary.errors === 1 ? "1 error" : `${summary.errors} errors`);
+  if (summary.durationLabel) parts.push(summary.durationLabel);
+  return parts.join(" · ");
+}
+
+function planStepGroups(items: readonly AgentTurnItemView[], running: boolean): TurnStepGroups | null {
   const groupsByFirstItemId = new Map<string, TurnStepGroup>();
   const groupIdByItemId = new Map<string, string>();
   let run: Array<ReasoningActivityView | ToolActivityView> = [];
@@ -52,7 +157,7 @@ function planStepGroups(turn: Pick<AgentTurnView, "status" | "items">): TurnItem
     run = [];
     const first = steps[0];
     if (!first || steps.length < MIN_GROUP_STEPS) return;
-    const active = turn.status === "running" && steps.some(isStepInProgress);
+    const active = running && steps.some(isStepInProgress);
     groupsByFirstItemId.set(first.id, {
       id: first.id,
       steps: steps.length,
@@ -63,13 +168,13 @@ function planStepGroups(turn: Pick<AgentTurnView, "status" | "items">): TurnItem
     for (const step of steps) groupIdByItemId.set(step.id, first.id);
   };
 
-  for (const item of turn.items) {
+  for (const item of items) {
     // Replies, notices and structural markers stay visible and end the run before them.
     if (item.type === "reasoning" || item.type === "tool") run.push(item);
     else closeRun();
   }
   closeRun();
-  return groupsByFirstItemId.size === 0 ? { mode: "flat" } : { mode: "grouped", groupsByFirstItemId, groupIdByItemId };
+  return groupsByFirstItemId.size === 0 ? null : { groupsByFirstItemId, groupIdByItemId };
 }
 
 function isStepInProgress(step: ReasoningActivityView | ToolActivityView): boolean {
@@ -130,6 +235,18 @@ export function formatTurnDuration(startedAt: number, endedAt?: number): string 
   return formatDurationMs(endedAt - startedAt);
 }
 
-function countTraceErrors(steps: readonly (ReasoningActivityView | ToolActivityView)[]): number {
-  return steps.filter((step) => step.type === "tool" ? step.tool.isError || step.tool.status === "error" : step.status === "error").length;
+function isAgentActivity(item: AgentTurnView["items"][number]): item is AgentActivityView {
+  return item.type === "reasoning" || item.type === "response" || item.type === "tool";
+}
+
+function isTraceItem(item: AgentTurnItemView): item is AgentActivityView | SessionNoticeView {
+  return isAgentActivity(item) || item.type === "notice";
+}
+
+function countTraceErrors(items: readonly (AgentActivityView | SessionNoticeView)[]): number {
+  return items.filter((item) => {
+    if (item.type === "notice") return item.level === "error";
+    if (item.type === "tool") return item.tool.isError || item.tool.status === "error";
+    return item.status === "error";
+  }).length;
 }

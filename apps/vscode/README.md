@@ -167,11 +167,11 @@ FrostPi answers a few slash commands itself. They never become a prompt, and the
 
 `/new` and `/reload` need Pi. With the `oh-my-pi` compatibility profile FrostPi does not offer them and passes such text to the runtime unchanged.
 
-### Focus view
+### Folding long turns
 
-The focus view keeps long turns readable. Each run of tool calls and reasoning folds into one row that says what it did, or what it is doing right now, and replies stay visible in order. Click a row to see its steps. A reasoning row shows a line of what the model is thinking, as a tool row shows its target. A finished turn keeps the same shape: each run of steps stays folded and every reply, including those between runs, stays visible.
+A finished turn folds its tools, reasoning and interim replies into one **Worked** summary above the final reply, because the last reply is the model's answer. Click the summary, or the **Reply** line just above the final reply, to open or fold it again. Inside an opened summary each run of tool calls and reasoning stays folded into one row. `frostpi.conversation.collapseTurnTrace` controls this and is on by default.
 
-The focus view is on by default. Run **FrostPi: Toggle Focus View** or set `frostpi.conversation.focusView` to switch it for running turns; `frostpi.conversation.collapseTurnTrace` folds finished turns the same way and is also on by default.
+While a turn is running, the Focus View folds each run of tool calls and reasoning into one row that says what it did, or what it is doing right now, and replies stay visible in order. Click a row to see its steps. A reasoning row shows a line of what the model is thinking, as a tool row shows its target. It is on by default; run **FrostPi: Toggle Running-Turn Collapse (Focus View)** or set `frostpi.conversation.collapseRunningTurnTrace` to switch it. The two settings are independent: one covers running turns, the other finished ones.
 
 ### Pi Session Tree and Fork
 
@@ -242,8 +242,8 @@ FrostPi also provides context metrics, diagnostics export, strict LF-delimited J
 - `frostpi.session.startOnOpen`
 - `frostpi.session.closeWithEditorTab` — closing a session's editor tab also closes the session, as **Close session** in the list does. Off by default, so the session keeps running in the sidebar.
 - `frostpi.composer.streamingBehavior`
-- `frostpi.conversation.focusView`
 - `frostpi.conversation.collapseTurnTrace`
+- `frostpi.conversation.collapseRunningTurnTrace`
 - `frostpi.composer.fileMentions.respectSearchExclude`
 - `frostpi.composer.fileMentions.respectIgnoreFiles`
 - `frostpi.composer.fileMentions.followSymlinks`

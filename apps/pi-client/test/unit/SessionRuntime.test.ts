@@ -1161,7 +1161,7 @@ function runtimeConfiguration(piExecutable: string, runtimeCompatibility: Runtim
     piArguments: [],
     startSessionOnOpen: true,
     streamingBehavior: "followUp" as const,
-    collapseTurnTrace: true, focusView: true,
+    collapseTurnTrace: true, collapseRunningTurnTrace: true,
     questionToolEnabled: false,
     maxImageBytes: 10 * 1024 * 1024,
     diagnosticsLevel: "info" as const,

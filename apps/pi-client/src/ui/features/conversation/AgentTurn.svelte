@@ -2,7 +2,7 @@
   import type { AgentTurnItemView, AgentTurnView } from "$shared/model/conversationModel";
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
-  import { formatStepGroupLabel, planTurnItems } from "./collapseTurnTrace";
+  import { formatStepGroupLabel, formatTraceSummaryLabel, planTurnItems } from "./collapseTurnTrace";
   import BranchPointControl from "./BranchPointControl.svelte";
   import BranchSummaryBlock from "./BranchSummaryBlock.svelte";
   import CompactionBlock from "./CompactionBlock.svelte";
@@ -15,6 +15,8 @@
   import UserMessage from "./UserMessage.svelte";
 
   let { turn, session }: { turn: AgentTurnView; session: SessionViewModel } = $props();
+  /** A finished turn's folded work, opened by the reader. */
+  let traceOpen = $state(false);
   /** Folded runs the reader opened, by group id. */
   let openGroupIds = $state<string[]>([]);
   /**
@@ -29,7 +31,12 @@
     else if (!open && isOpen) openReasoningIds = openReasoningIds.filter((openId) => openId !== id);
   }
 
-  const plan = $derived(planTurnItems(turn, session.collapseTurnTrace, session.focusView));
+  const plan = $derived(planTurnItems(turn, session.collapseTurnTrace, session.collapseRunningTurnTrace));
+  const summaryLabel = $derived(plan.trace ? formatTraceSummaryLabel(plan.trace.summary) : "");
+
+  $effect(() => {
+    if (!plan.trace) traceOpen = false;
+  });
 
   function toggleGroup(groupId: string): void {
     openGroupIds = openGroupIds.includes(groupId)
@@ -37,12 +44,15 @@
       : [...openGroupIds, groupId];
   }
 
+  /** Hidden inside a folded trace; a step group's own row still shows when this is its first item. */
+  function isInsideClosedTrace(itemId: string): boolean {
+    return plan.trace !== null && !traceOpen && plan.trace.collapsedItemIds.has(itemId);
+  }
+
   function isItemShown(itemId: string): boolean {
-    if (plan.mode === "grouped") {
-      const groupId = plan.groupIdByItemId.get(itemId);
-      return groupId === undefined || openGroupIds.includes(groupId);
-    }
-    return true;
+    if (isInsideClosedTrace(itemId)) return false;
+    const groupId = plan.groups?.groupIdByItemId.get(itemId);
+    return groupId === undefined || openGroupIds.includes(groupId);
   }
 </script>
 
@@ -51,33 +61,61 @@
   {#if turn.status === "running"}<TurnTiming startedAt={turn.startedAt} />{/if}
   <div class="turn-activities">
     {#each turn.items as item (item.id)}
-      {#if plan.mode === "grouped"}
-        {@const group = plan.groupsByFirstItemId.get(item.id)}
-        {#if group}
-          {@const groupOpen = openGroupIds.includes(group.id)}
-          <div class="turn-trace-header turn-step-group">
-            <button
-              type="button"
-              class="activity-trigger"
-              aria-expanded={groupOpen}
-              aria-label={`${groupOpen ? "Collapse" : "Expand"} ${formatStepGroupLabel(group)}: ${group.detail}`}
-              onclick={() => toggleGroup(group.id)}
-            >
-              <span class="codicon codicon-list-tree activity-leading" aria-hidden="true"></span>
-              <span class="activity-title">{group.steps} steps</span>
-              {#if group.errors > 0}
-                <span class="turn-step-group-errors">{group.errors === 1 ? "1 error" : `${group.errors} errors`}</span>
-              {/if}
-              <span class="turn-trace-meta" title={group.detail}>{group.detail}</span>
-              {#if group.active}<span class="thinking-pulse" role="status" aria-label="In progress"></span>{/if}
-              <span class={`codicon codicon-chevron-${groupOpen ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
-            </button>
-          </div>
-        {/if}
+      {@const group = plan.groups?.groupsByFirstItemId.get(item.id)}
+      {#if plan.trace && item.id === plan.trace.firstCollapsedItemId}
+        <div class="turn-trace-header">
+          <button
+            type="button"
+            class="activity-trigger"
+            aria-expanded={traceOpen}
+            aria-label={`${traceOpen ? "Collapse" : "Expand"} work trace: ${summaryLabel}`}
+            onclick={() => traceOpen = !traceOpen}
+          >
+            <span class="codicon codicon-list-tree activity-leading" aria-hidden="true"></span>
+            <span class="activity-title">{plan.trace.stateLabel}</span>
+            <span class="turn-trace-meta">{summaryLabel}</span>
+            <span class={`codicon codicon-chevron-${traceOpen ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
+          </button>
+        </div>
+      {/if}
+
+      {#if plan.trace && item.id === plan.trace.anchorItemId}
+        <button
+          type="button"
+          class="turn-trace-break"
+          aria-label={`${traceOpen ? "Collapse" : "Expand"} work trace`}
+          onclick={() => traceOpen = !traceOpen}
+        >
+          <span class="turn-trace-break-line" aria-hidden="true"></span>
+          <span class="turn-trace-break-label">{plan.trace.anchorLabel}</span>
+          <span class="turn-trace-break-line" aria-hidden="true"></span>
+        </button>
+      {/if}
+
+      {#if group && !isInsideClosedTrace(item.id)}
+        {@const groupOpen = openGroupIds.includes(group.id)}
+        <div class="turn-trace-header turn-step-group">
+          <button
+            type="button"
+            class="activity-trigger"
+            aria-expanded={groupOpen}
+            aria-label={`${groupOpen ? "Collapse" : "Expand"} ${formatStepGroupLabel(group)}: ${group.detail}`}
+            onclick={() => toggleGroup(group.id)}
+          >
+            <span class="codicon codicon-list-tree activity-leading" aria-hidden="true"></span>
+            <span class="activity-title">{group.steps} steps</span>
+            {#if group.errors > 0}
+              <span class="turn-step-group-errors">{group.errors === 1 ? "1 error" : `${group.errors} errors`}</span>
+            {/if}
+            <span class="turn-trace-meta" title={group.detail}>{group.detail}</span>
+            {#if group.active}<span class="thinking-pulse" role="status" aria-label="In progress"></span>{/if}
+            <span class={`codicon codicon-chevron-${groupOpen ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
+          </button>
+        </div>
       {/if}
 
       {#if isItemShown(item.id)}
-        {#if plan.mode === "grouped" && plan.groupIdByItemId.has(item.id)}
+        {#if plan.groups?.groupIdByItemId.has(item.id)}
           <div class="turn-step-group-item">{@render turnItemRow(item)}</div>
         {:else}
           {@render turnItemRow(item)}
@@ -129,6 +167,48 @@
     white-space: nowrap;
     color: var(--frost-muted);
     font-size: calc(var(--font-size-ui) - 2.5px);
+  }
+
+  .turn-trace-break {
+    display: grid;
+    grid-template-columns: minmax(12px, 1fr) auto minmax(12px, 1fr);
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin: 7px 2px 5px;
+    padding: 3px 2px;
+    min-width: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    transition: background var(--motion-fast) ease;
+  }
+
+  .turn-trace-break:hover {
+    background: color-mix(in srgb, var(--frost-surface) 48%, transparent);
+  }
+
+  .turn-trace-break:hover .turn-trace-break-line {
+    background: var(--frost-border);
+  }
+
+  .turn-trace-break:hover .turn-trace-break-label {
+    color: var(--frost-muted);
+  }
+
+  .turn-trace-break-line {
+    height: 1px;
+    background: var(--frost-border-soft);
+  }
+
+  .turn-trace-break-label {
+    color: var(--frost-faint);
+    font-size: calc(var(--font-size-ui) - 3.5px);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    user-select: none;
   }
 
   .turn-step-group-errors { flex: none; color: var(--frost-error); font-size: calc(var(--font-size-ui) - 2.5px); }
