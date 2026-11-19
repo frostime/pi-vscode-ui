@@ -905,6 +905,11 @@ export class SessionRegistry {
     return this.#requireRuntime(sessionId).inspectSubagent(target);
   }
 
+  async openWorkerStopPicker(sessionId: string): Promise<void> {
+    this.#assertSessionOutsideFork(sessionId);
+    await this.#requireRuntime(sessionId).openWorkerStopPicker();
+  }
+
   async respondExtensionUi(sessionId: string, requestId: string, response: RpcExtensionUiResponse): Promise<void> {
     await this.#requireRuntime(sessionId).respondExtensionUi(requestId, response);
   }

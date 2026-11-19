@@ -47,6 +47,11 @@ from the current session’s status widget and correlates each reply. Transcript
 text is displayed literally. The viewer refreshes while the worker runs and
 leaves approval requests in the parent chat.
 
+**Stop workers…** opens Pi’s stop picker for the current session when the
+subagent package exposes it. Pi confirms the selected worker or group before
+stopping it. **Stop turn** interrupts the parent’s current turn and leaves
+detached background workers available in the list.
+
 ## Unsupported UI
 
 Arbitrary custom TUI components, custom headers/footers/editors, raw terminal input listeners, and theme APIs are not emulated. Unknown structured methods are ignored rather than rendered from arbitrary JSON. This boundary prevents FrostPi from becoming a terminal UI runtime or executing extension-provided presentation code in the Webview.

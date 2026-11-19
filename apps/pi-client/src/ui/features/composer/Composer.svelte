@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { hasActiveBackgroundWorkers, subagentStopPickerCommand } from "$shared/model/extensionUiModel";
   import type { RpcModel, StreamingBehavior } from "@frostime/pi-rpc";
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
@@ -41,7 +42,10 @@
   let expandedSessionId: string | null = null;
 
   const draft = $derived($composerDrafts[session.id] ?? { revision: 0, text: "", images: [] });
-  const commands = $derived(localCommands.completions(session.commands));
+  const commands = $derived(localCommands.completions(session.commands.filter(command => command.name !== subagentStopPickerCommand)));
+  const stopTitle = $derived(hasActiveBackgroundWorkers(session.extensionWidgets)
+    ? "Stop this response. Background workers keep running."
+    : "Stop this response");
   const streamingBehavior = $derived($composerStreamingBehaviors[session.id] ?? session.composerStreamingBehavior);
   const unavailable = $derived(
     session.status === "queued" || session.status === "starting" || session.status === "stopping" || session.status === "failed"
@@ -248,7 +252,7 @@
               onsubmit={submit}
             />
           {/if}
-          <button class="send-button stop-button" type="button" aria-label="Stop response" title="Stop the current response" onclick={() => postToHost({ type: "abort", sessionId: session.id })}>
+          <button class="send-button stop-button" type="button" aria-label="Stop response" title={stopTitle} onclick={() => postToHost({ type: "abort", sessionId: session.id })}>
             <span class="codicon codicon-debug-stop"></span>
           </button>
         {:else}

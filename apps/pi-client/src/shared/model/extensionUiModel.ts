@@ -41,6 +41,12 @@ export interface SubagentTarget {
   childId?: string;
 }
 
+export const subagentStopPickerCommand = "subagents-stop-picker-rpc";
+
+export function hasActiveBackgroundWorkers(widgets: readonly ExtensionWidgetView[]): boolean {
+  return widgets.some(widget => widget.subagents?.some(row => row.state === "queued" || row.state === "running"));
+}
+
 export interface SubagentRowView {
   name: string;
   state: string;

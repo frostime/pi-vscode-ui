@@ -30,7 +30,7 @@ import { ConversationProjection } from "../conversation/ConversationProjection.j
 import { diagnosticErrorText } from "../diagnostics/diagnosticRedaction.js";
 import type { RuntimeLogger } from "../diagnostics/RuntimeLogger.js";
 import { ExtensionUiCoordinator } from "../extension-ui/ExtensionUiCoordinator.js";
-import type { SubagentTarget, SubagentTranscriptView } from "../../shared/model/extensionUiModel.js";
+import { subagentStopPickerCommand, type SubagentTarget, type SubagentTranscriptView } from "../../shared/model/extensionUiModel.js";
 import { QuestionToolExtensionBridge } from "../question-tool/QuestionToolExtensionBridge.js";
 import { answersHostCommand, withHostCommands, type HostCommand, type HostCommandSupport } from "./hostCommands.js";
 import { commandName, normalizePiSlashPrompt } from "./normalizePiSlashPrompt.js";
@@ -323,6 +323,24 @@ export class SessionRuntime {
       return { error: "This worker’s transcript is unavailable in the current Pi session." };
     }
     return this.#extensionUi.inspectSubagent(target);
+  }
+
+  #workerStopPicker: PiRpcApi | undefined;
+
+  async openWorkerStopPicker(): Promise<void> {
+    const api = this.#requireApi();
+    if (this.#workerStopPicker === api) return;
+    this.#workerStopPicker = api;
+    try {
+      const commands = await api.getCommands();
+      if (this.#api !== api || this.#disposed) return;
+      if (!commands.some(command => command.source === "extension" && command.name === subagentStopPickerCommand)) {
+        throw new Error("This Pi session does not have a worker stop picker.");
+      }
+      await api.executeExtensionCommand(subagentStopPickerCommand, "");
+    } finally {
+      if (this.#workerStopPicker === api) this.#workerStopPicker = undefined;
+    }
   }
 
   async abort(): Promise<void> {

@@ -2,12 +2,13 @@
   import type { SubagentRowView, SubagentTarget } from "$shared/model/extensionUiModel";
   import { formatDurationMs } from "../conversation/collapseTurnTrace";
 
-  let { rows, omitted, inspectable, selected, onselect }: {
+  let { rows, omitted, inspectable, selected, onselect, onstop }: {
     rows: SubagentRowView[];
     omitted: boolean;
     inspectable: boolean;
     selected: SubagentTarget | undefined;
     onselect(name: string, target: SubagentTarget, opener: HTMLElement): void;
+    onstop?: (() => void) | undefined;
   } = $props();
   let now = $state(Date.now());
   const running = $derived(rows.some(row => row.state === "running" && row.startedAt));
@@ -35,7 +36,13 @@
 
 {#if rows.length}
   <section class="workers" aria-label="Subagents">
-    <h3>Subagents</h3>
+    <header>
+      <h3>Subagents</h3>
+      {#if onstop}
+        <button class="stop-workers" type="button" title="Choose which background workers to stop in this chat"
+          onclick={onstop}>Stop workers…</button>
+      {/if}
+    </header>
     <ul aria-label="Worker status">
       {#each rows as row, index (`${row.target?.runId ?? row.name}:${row.target?.childId ?? ""}:${index}`)}
         {@const end = row.endedAt ?? (row.state === "running" ? now : undefined)}
@@ -67,7 +74,10 @@
 
 <style>
   .workers { width: 100%; max-width: var(--content-max-width); margin: 0 auto 7px; padding: 5px 7px; display: grid; gap: 4px; min-width: 0; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
   h3 { font-size: inherit; margin: 0; padding-inline: 5px; }
+  .stop-workers { width: auto; padding: 2px 6px; color: var(--frost-muted); }
+  .stop-workers:hover { color: inherit; }
   ul { list-style: none; margin: 0; padding: 0; max-height: 14vh; overflow: auto; }
   li + li { margin-top: 2px; }
   button, .summary { display: flex; width: 100%; min-width: 0; align-items: center; gap: 8px; padding: 4px 5px; color: inherit; text-align: start; }

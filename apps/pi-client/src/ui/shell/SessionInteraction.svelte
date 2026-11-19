@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
-  import type { SubagentTarget } from "$shared/model/extensionUiModel";
+  import { hasActiveBackgroundWorkers, subagentStopPickerCommand, type SubagentTarget } from "$shared/model/extensionUiModel";
   import { tick } from "svelte";
+  import { postToHost } from "../bridge/hostBridge";
 
   import ResponseAnnotationWorkspace from "../features/annotation-review/ResponseAnnotationWorkspace.svelte";
   import { annotationReviewDrafts, discardAnnotationReview } from "../features/annotation-review/annotationReviewStore.svelte";
@@ -42,6 +43,9 @@
   const inspectable = $derived((session.status === "ready" || session.status === "running") &&
     session.commands.some(command => command.source === "extension" && command.name === "subagents-inspect-rpc"));
   const currentWorker = $derived(inspectable && worker?.sessionId === session.id ? worker : undefined);
+  const canStopWorkers = $derived((session.status === "ready" || session.status === "running") &&
+    !session.isForking && !session.isNavigatingTree && hasActiveBackgroundWorkers(session.extensionWidgets) &&
+    session.commands.some(command => command.source === "extension" && command.name === subagentStopPickerCommand));
 
   $effect(() => {
     if (!inspectable || worker?.sessionId !== session.id) worker = undefined;
@@ -109,9 +113,10 @@
   <div class="composer-region" class:worker-inspection={Boolean(currentWorker)}>
     <SessionMetrics {session} {providerUsageSource} />
     <ExtensionWidgets widgets={aboveWidgets} />
-      <SubagentActivity rows={workers?.subagents ?? []} {inspectable} selected={currentWorker?.target} onselect={inspectWorker}
-        omitted={workers?.lines.at(-1) === "Additional activity omitted by Pi"}
-      />
+    <SubagentActivity rows={workers?.subagents ?? []} {inspectable} selected={currentWorker?.target} onselect={inspectWorker}
+      omitted={workers?.lines.at(-1) === "Additional activity omitted by Pi"}
+      onstop={canStopWorkers ? () => postToHost({ type: "stopBackgroundWorkers", sessionId: session.id }) : undefined}
+    />
     <ExtensionUiHost sessionId={session.id} requests={session.pendingExtensionUi} />
     <Composer bind:this={composer} {session} {localCommands} {restoreFailedSubmissionLocally} {draftAuthority} onpendingsubmissionchange={trackPendingSubmission} />
     <ExtensionWidgets widgets={belowWidgets} />

@@ -321,6 +321,9 @@ export class WebviewActionDispatcher {
       case "respondExtensionUi":
         await this.#registry.respondExtensionUi(message.sessionId, message.requestId, message.response);
         return;
+      case "stopBackgroundWorkers":
+        await this.#registry.openWorkerStopPicker(message.sessionId);
+        return;
       case "respondQuestion":
         await this.#registry.respondQuestion(message.sessionId, message.requestId, message.response);
         return;
