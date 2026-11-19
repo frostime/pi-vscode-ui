@@ -239,7 +239,7 @@ describe("explicit client UI capabilities", () => {
       expect(postMessage).not.toHaveBeenCalled();
     }
     await fireEvent.click(markdown.getByRole("link", { name: "website" }));
-    expect(postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: "openExternal", url: "https://example.com" }));
+    expect(postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: "openTranscriptLink", url: "https://example.com/" }));
     await fireEvent.click(markdown.getByTitle("Copy code"));
     expect(postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: "copyText", text: "const answer = 42;\n" }));
   });

@@ -1,9 +1,8 @@
 <script lang="ts">
-  import type { MarkdownImageFailureReason } from "$shared/bridge/hostToWebview";
+  import { transcriptUrl } from "$shared/files/transcriptUrl";
   import { onDestroy, onMount } from "svelte";
 
   import ImageLightbox from "../ImageLightbox.svelte";
-  import { loadLocalMarkdownImage, loadRemoteMarkdownImage } from "./markdownImageClient";
   import { markdownImageCaption } from "./markdownImageCaption";
   import { sanitizeMarkdownSvg } from "./sanitizeMarkdownSvg";
 
@@ -26,21 +25,21 @@
   let ownedObjectUrl: string | null = null;
   let disposed = false;
 
-  const remote = $derived(remoteHttpsUrl(source));
+  const remote = $derived(transcriptUrl(source, URL));
   const label = $derived(title || alt || "Markdown image");
   const caption = $derived(markdownImageCaption(title, alt));
-  const sourceLabel = $derived(remote?.hostname ?? "Local image");
+  const sourceLabel = $derived(remote ? `Remote image blocked · ${new URL(remote).hostname}` : "Ask Pi to read this image to preview it.");
 
   onMount(() => {
-    if (remote) return;
+    if (!/^data:/i.test(source)) return;
     if (typeof IntersectionObserver === "undefined") {
-      void loadLocalOrDataImage();
+      void loadInlineImage();
       return;
     }
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return;
       observer.disconnect();
-      void loadLocalOrDataImage();
+      void loadInlineImage();
     }, { rootMargin: "320px" });
     observer.observe(root);
     return () => observer.disconnect();
@@ -51,48 +50,18 @@
     if (ownedObjectUrl) URL.revokeObjectURL(ownedObjectUrl);
   });
 
-  async function loadLocalOrDataImage(): Promise<void> {
+  async function loadInlineImage(): Promise<void> {
     if (phase !== "waiting") return;
     phase = "loading";
     try {
-      const dataImage = decodeDataImage(source);
-      if (dataImage) {
-        await displayBytes(dataImage.mimeType, dataImage.bytes);
-        return;
-      }
-      if (/^data:/i.test(source)) {
+      const image = decodeDataImage(source);
+      if (!image) {
         fail("Unsupported data image");
         return;
       }
-      const result = await loadLocalMarkdownImage(source);
-      if (disposed) return;
-      if (!result.ok) {
-        fail(failureMessage(result.reason));
-        return;
-      }
-      await displayBytes(result.mimeType, decodeBase64(result.data));
+      await displayBytes(image.mimeType, image.bytes);
     } catch {
       if (!disposed) fail("Unable to load image");
-    }
-  }
-
-  /**
-   * Runs only from the explicit `Load image` action. The Host fetches the bytes; the
-   * Webview never contacts the remote origin and its CSP would refuse the attempt.
-   */
-  async function loadRemoteImage(): Promise<void> {
-    if (!remote || phase !== "waiting") return;
-    phase = "loading";
-    try {
-      const result = await loadRemoteMarkdownImage(remote.href);
-      if (disposed) return;
-      if (!result.ok) {
-        fail(remoteFailureMessage(result.reason));
-        return;
-      }
-      await displayBytes(result.mimeType, decodeBase64(result.data));
-    } catch {
-      if (!disposed) fail("Unable to load remote image");
     }
   }
 
@@ -139,39 +108,6 @@
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     openPreview();
-  }
-
-  function failureMessage(reason: MarkdownImageFailureReason): string {
-    const messages: Record<MarkdownImageFailureReason, string> = {
-      invalidSource: "Unsupported local image path",
-      notFound: "Local image not found",
-      notAFile: "Image source is not a file",
-      tooLarge: "Image exceeds the configured size limit",
-      unsupportedType: UNSUPPORTED_IMAGE_TYPE,
-      readFailed: "Unable to read local image",
-    };
-    return messages[reason];
-  }
-
-  function remoteFailureMessage(reason: MarkdownImageFailureReason): string {
-    const messages: Record<MarkdownImageFailureReason, string> = {
-      invalidSource: "Unsupported image URL",
-      notFound: "Remote image not found",
-      notAFile: "Unable to load remote image",
-      tooLarge: "Image exceeds the configured size limit",
-      unsupportedType: UNSUPPORTED_IMAGE_TYPE,
-      readFailed: "Unable to load remote image",
-    };
-    return messages[reason];
-  }
-
-  function remoteHttpsUrl(value: string): URL | null {
-    try {
-      const url = new URL(value);
-      return url.protocol === "https:" ? url : null;
-    } catch {
-      return null;
-    }
   }
 
   function decodeDataImage(value: string): { mimeType: string; bytes: Uint8Array } | null {
@@ -240,23 +176,15 @@
     {#if svgWarning}
       <span class="svg-warning" role="status"><span aria-hidden="true">⚠</span> Removed SVG scripts</span>
     {/if}
-  {:else if remote && phase === "waiting"}
-    <span class="image-placeholder remote-placeholder">
+  {:else if phase === "waiting" && !/^data:/i.test(source)}
+    <span class="image-placeholder">
       <span class="placeholder-icon codicon codicon-file-media" aria-hidden="true"></span>
-      <span class="placeholder-copy"><strong>{label}</strong><small>{sourceLabel}</small></span>
-      <button
-        type="button"
-        onclick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          void loadRemoteImage();
-        }}
-      >Load image</button>
+      <span class="placeholder-copy"><strong>{label}</strong><small title={sourceLabel}>{sourceLabel}</small></span>
     </span>
   {:else if phase === "loading"}
     <span class="image-placeholder" role="status">
       <span class="placeholder-icon codicon codicon-loading codicon-modifier-spin" aria-hidden="true"></span>
-      <span class="placeholder-copy"><strong>{label}</strong><small>{remote ? "Loading image…" : "Loading local image…"}</small></span>
+      <span class="placeholder-copy"><strong>{label}</strong><small>Loading image…</small></span>
     </span>
   {:else if phase === "failed"}
     <span class="image-placeholder image-failed" role="status">
@@ -283,18 +211,11 @@
   .image-caption { align-self: stretch; padding: 5px 4px 0; color: var(--frost-faint); font-size: calc(var(--font-size-ui) - 1.5px); text-align: center; }
   .svg-warning { display: flex; gap: 6px; align-items: flex-start; margin-top: 5px; padding: 5px 8px; border-radius: 5px; background: color-mix(in srgb, var(--frost-warning) 7%, transparent); color: color-mix(in srgb, var(--frost-warning) 82%, var(--frost-text)); font-size: calc(var(--font-size-ui) - 2.5px); }
   .image-placeholder { width: min(390px, 100%); min-height: 76px; display: grid; grid-template-columns: 32px minmax(0,1fr); align-items: center; gap: 9px; padding: 10px; border: 1px dashed var(--frost-border); border-radius: 7px; background: color-mix(in srgb, var(--frost-surface) 45%, var(--frost-bg)); }
-  .remote-placeholder { grid-template-columns: 32px minmax(0,1fr) auto; }
   .placeholder-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; background: var(--frost-surface); color: var(--frost-muted); font-size: 17px; }
   .placeholder-copy { min-width: 0; display: flex; flex-direction: column; }
-  .placeholder-copy strong, .placeholder-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .placeholder-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .placeholder-copy strong { color: var(--frost-text); font-size: calc(var(--font-size-ui) - 1.5px); }
-  .placeholder-copy small { color: var(--frost-faint); font-size: calc(var(--font-size-ui) - 2.5px); }
-  .image-placeholder button { padding: 4px 8px; white-space: nowrap; border: 1px solid var(--frost-border); border-radius: 5px; background: var(--frost-surface-raised); color: var(--frost-text); cursor: pointer; }
-  .image-placeholder button:hover { background: var(--frost-hover); }
+  .placeholder-copy small { color: var(--frost-faint); font-size: calc(var(--font-size-ui) - 2.5px); overflow-wrap: anywhere; }
   .image-failed { border-style: solid; border-color: color-mix(in srgb, var(--frost-error) 34%, var(--frost-border)); }
   .image-failed .placeholder-icon { color: var(--frost-error); }
-  @media (max-width: 380px) {
-    .remote-placeholder { grid-template-columns: 30px minmax(0,1fr); }
-    .remote-placeholder button { grid-column: 2; justify-self: start; }
-  }
 </style>

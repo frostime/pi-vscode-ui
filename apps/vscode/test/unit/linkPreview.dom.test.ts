@@ -40,7 +40,7 @@ describe("MarkdownHtml link preview", () => {
     expect(preview()?.dataset["visible"]).toBe("true");
 
     await fireEvent.pointerOut(fileLink!, { relatedTarget: document.body });
-    const siteLink = view.container.querySelector<HTMLAnchorElement>("a[href^='https://']");
+    const siteLink = view.container.querySelector<HTMLAnchorElement>("a[data-transcript-url]");
     await fireEvent.pointerOver(siteLink!);
     vi.advanceTimersByTime(1_000);
     expect(preview()?.textContent).toBe("https://example.com/docs");
