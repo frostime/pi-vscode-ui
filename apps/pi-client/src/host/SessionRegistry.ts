@@ -9,7 +9,7 @@ import type { QuestionDraftSubmission } from "../shared/question-tool/questionTo
 import type { SessionRuntimeStatus, SessionSummaryView, SessionViewModel, WorkspaceViewModel } from "../shared/model/sessionViewModel.js";
 import { sameCanonicalPath } from "../core/_shared/canonicalPath.js";
 import { normalizePiSlashPrompt } from "../core/sessions/normalizePiSlashPrompt.js";
-import { SessionRuntime } from "../core/index.js";
+import { SessionRuntime, type SessionModelReference } from "../core/sessions/SessionRuntime.js";
 import type { RuntimeLogger } from "../core/diagnostics/RuntimeLogger.js";
 import { readConfiguration, readHostProxy } from "./readConfiguration.js";
 import type { ClientHost, HostEventEmitter, HostQuickPickItem } from "./clientHost.js";
@@ -187,12 +187,14 @@ export class SessionRegistry {
 
   async createSession(ephemeral = false): Promise<string | undefined> {
     return this.#withSessionCreation(async () => {
+      const active = this.#activeSessionId ? this.#runtimes.get(this.#activeSessionId) : undefined;
+      const inheritedModel = active?.view.model ?? undefined;
       const cwd = this.#sourceWorkspaceCwd("creating a Pi session");
       const discovery = await this.#discoverWorkingDirectories(cwd);
       this.#assertOpen();
       const directory = await this.#pickSessionWorkingDirectory(discovery.directories);
       if (!directory) return undefined;
-      return this.#createSessionInDirectory(directory, ephemeral);
+      return this.#createSessionInDirectory(directory, ephemeral, undefined, inheritedModel);
     });
   }
 
@@ -278,6 +280,7 @@ export class SessionRegistry {
     directory: SessionWorkingDirectory,
     ephemeral: boolean,
     customArguments?: readonly string[],
+    inheritedModel?: SessionModelReference,
   ): Promise<string> {
     this.#assertOpen();
     await this.#discardActiveTemporarySession();
@@ -299,7 +302,7 @@ export class SessionRegistry {
     this.#onSessionOpened?.(id);
     await this.#persist();
     this.#emitChange();
-    await this.#startRuntime(runtime, true);
+    await this.#startRuntime(runtime, true, inheritedModel);
     return id;
   }
 
@@ -728,7 +731,11 @@ export class SessionRegistry {
     );
   }
 
-  async #startRuntime(runtime: SessionRuntime, workingDirectoryValidated = false): Promise<void> {
+  async #startRuntime(
+    runtime: SessionRuntime,
+    workingDirectoryValidated = false,
+    inheritedModel?: SessionModelReference,
+  ): Promise<void> {
     this.#assertOpen();
     const pending = this.#startJobs.get(runtime.id);
     if (pending) return pending;
@@ -740,7 +747,7 @@ export class SessionRegistry {
     const job = this.#startQueue.catch(() => undefined).then(async () => {
       if (this.#disposed || this.#runtimes.get(runtime.id) !== runtime) return;
       try {
-        await runtime.start(sessionFile);
+        await runtime.start(sessionFile, inheritedModel);
         if (sessionFile) void this.#queueHistory(runtime, false).catch(() => undefined);
       } catch (error) {
         if (this.#runtimes.get(runtime.id) !== runtime) return;
