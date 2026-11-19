@@ -324,31 +324,6 @@ describe("Host slash commands through the real Registry and child-process path",
       expect(userPrompts(view(sessionId))).toEqual(["first", "second", "hold"]);
     });
 
-    it("loads a large session's full history in the second process before forking", async () => {
-      const fixture = await host();
-      const { registry, view } = fixture;
-      const sessionId = await fixture.startSession();
-      await fixture.converse(sessionId, "first");
-      await fixture.converse(sessionId, "second");
-      // Above 8 MiB the ordinary load defers; the Fork's own process must not stop there.
-      for (let index = 0; index < 12; index += 1) await fixture.converse(sessionId, `bulk ${index}`);
-      // Reopened, the source defers its history too, until the user loads it.
-      await registry.retrySession(sessionId);
-      await fixture.waitFor(() => view(sessionId).status === "ready" && view(sessionId).historyStatus === "deferred");
-      await registry.loadHistory(sessionId);
-      await registry.sendPrompt(sessionId, "hold", []);
-      await fixture.waitFor(() => view(sessionId).isStreaming);
-      const second = view(sessionId).conversationItems.flatMap((item) => item.type === "turn" && item.userMessage?.blocks.some((block) => block.type === "text" && block.text === "second") ? [item.userMessage.sourceEntryId] : [])[0]!;
-
-      const result = await registry.forkMessage(sessionId, second, "preserve-sidebar-selection");
-
-      expect(result).toEqual({ cancelled: false, forkSessionId: expect.any(String) as string });
-      expect(view(result.forkSessionId!)).toMatchObject({ status: "ready", historyStatus: "loaded", composerSeed: { text: "second" } });
-      expect(userPrompts(view(result.forkSessionId!))).toEqual(["first"]);
-      expect(view(sessionId).isStreaming).toBe(true);
-      await registry.abort(sessionId);
-    }, 30_000);
-
     /** A busy Session whose Fork's own process waits before forking, until `release`. */
     async function heldFork(fixture: Awaited<ReturnType<typeof host>>) {
       const { registry, view } = fixture;

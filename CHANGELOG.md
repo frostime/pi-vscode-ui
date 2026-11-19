@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A session file larger than 8 MiB opens on a recent preview: its current branch from the latest prompt on, with **Load full history** to see everything. Branch here, Switch branch and Fork load the full history first. When no prompt of the current branch lies within the last 8 MiB, history waits for **Load full history** as before, and the conversation says why.
+
 ## [0.17.0] - 2026-11-25
 
 ### Added

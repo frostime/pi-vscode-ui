@@ -12,9 +12,9 @@ updated: 2026-11-19
 
 ## Authority and order
 
-Pi `get_entries` plus `leafId` is the persisted conversation authority. FrostPi follows `parentId` from the leaf to the root, reverses that chain, and projects the complete active path. Abandoned branches remain only in the content-free tree index. `get_messages` is LLM context and must not hydrate the Webview transcript.
+Pi `get_entries` plus `leafId` is the persisted conversation authority. FrostPi follows `parentId` from the leaf to the root, reverses that chain, and projects the complete active path. A large session's recent preview (see the [lifecycle contract](../../host/session-lifecycle.SPEC.md#large-sessions)) is the one exception: its chain ends at the preview's start, a user message on the active path, instead of the root, and must be complete from there to the leaf. Abandoned branches remain only in the content-free tree index. `get_messages` is LLM context and must not hydrate the Webview transcript.
 
-Parent-chain order is presentation order. Append order is only an incremental cursor; timestamps are display metadata. A missing or cyclic selected parent chain fails history loading instead of falling back to append order.
+Parent-chain order is presentation order. Append order is only an incremental cursor; timestamps are display metadata. A missing or cyclic selected parent chain, or a preview whose leaf no longer passes through its start, fails history loading instead of falling back to append order.
 
 The Host emits one ordered `conversationItems` collection. A visual turn has its own ordered `items`, allowing a branch edge or persisted boundary to occur between agent activities. The projection owns the monotonic content revision consumed by presentation behavior; unrelated session state does not advance it. The Webview renders this order directly and owns only disclosure and scrolling.
 
