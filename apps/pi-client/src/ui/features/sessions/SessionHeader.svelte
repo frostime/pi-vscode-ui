@@ -247,6 +247,12 @@
               <button type="button" onclick={() => openSessionPanel()}><span class="codicon codicon-layout"></span> Open in editor tab</button>
             {/if}
             <button type="button" onclick={beginRename}><span class="codicon codicon-edit"></span> Rename</button>
+            {#if active.sessionTreeAvailable}
+              <button type="button" disabled={active.status !== "ready" || active.isStreaming || active.isCompacting || active.isNavigatingTree || active.pendingExtensionUi.length > 0}
+                onclick={() => { closeMenus(); postToHost({ type: "showSystemPrompt", sessionId: active.id }); }}>
+                <span class="codicon codicon-file-text" aria-hidden="true"></span> View system prompt
+              </button>
+            {/if}
             {#if active.historyStatus === "deferred" || active.historyStatus === "failed"}
               <button type="button" onclick={() => { closeMenus(); postToHost({ type: "loadHistory", sessionId: active.id }); }}><span class="codicon codicon-history"></span> Load conversation history</button>
             {/if}

@@ -16,6 +16,10 @@ updated: 2026-10-11
 
 `select`, `confirm`, `input`, and `editor` create a pending card owned by the emitting session. A user action produces exactly one `extension_ui_response`. Cards cannot migrate between sessions and cannot be answered after removal.
 
+Long prompt text wraps in a keyboard-scrollable region. The first title line identifies the request, and any following title lines retain their line breaks in the details. Choice and confirmation controls sit below the scrollable details.
+
+When a select uniquely matches a running `ask_user_question` call, its choices use separate, start-aligned rows with a label and description. A recommendation written at the end of the first option's label appears as a tag. Selecting any row returns the original RPC value.
+
 When Pi supplies a timeout, Pi owns the default resolution. FrostPi removes the card at expiry and sends no late cancellation or value. Stopping/closing a session is different: FrostPi explicitly sends `{ cancelled: true }` for each still-pending request before terminating the process.
 
 FrostPi never auto-confirms a request. Multiple blocking requests may be pending in one session; the coordinator retains each by RPC request id and sends at most one response for each.
@@ -25,6 +29,8 @@ FrostPi never auto-confirms a request. Multiple blocking requests may be pending
 When `frostpi.questionTool.enabled` is applied at Pi process start, FrostPi injects its bundled `question` extension. The extension publishes a bounded JSON request in a per-runtime temporary directory, then calls `ctx.ui.input()` with a versioned marker containing a random per-runtime token and request id. The Extension Host handles an input as a Question request only after the marker, token, request-file identity, size, and schema all validate. Other `input` requests retain the standard card behavior.
 
 Question requests enter the same `ExtensionUiCoordinator` pending lifecycle as standard blocking methods. The Webview submits structured answers to the Host; the Host validates exactly one answer per question and serializes the result into the standard `extension_ui_response` value. Cancel, abort, stop, and close use the same cancellation path. No second pending-response owner, response file, watcher, or polling mechanism exists.
+
+**View system prompt** runs the bundled inspection command against the displayed idle Pi session. Pi supplies its current assembled prompt through `getSystemPrompt()` and sends it to the standard scrollable select card with a single Close option. The prompt is kept in the pending UI request until dismissal and is never added to conversation history by the viewer.
 
 A Webview remount restores Host-owned pending requests but not unsubmitted drafts. A Pi process restart cancels pending requests and creates a new token and temporary directory. Configuration changes never interrupt a running process; session state exposes when restart is required.
 

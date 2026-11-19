@@ -1,6 +1,6 @@
 import type { PiRpcApi, RpcExtensionUiRequest, RpcExtensionUiResponse } from "@frostime/pi-rpc";
 
-import type { ExtensionStatusView, ExtensionWidgetView, PendingExtensionUiView } from "../../shared/model/extensionUiModel.js";
+import type { ExtensionStatusView, ExtensionWidgetView, PendingExtensionUiView, QuestionSelectView } from "../../shared/model/extensionUiModel.js";
 import { sanitizeExtensionUiText } from "./sanitizeExtensionUiText.js";
 
 const DIALOG_METHODS = new Set(["select", "confirm", "input", "editor"]);
@@ -38,7 +38,7 @@ export class ExtensionUiCoordinator {
     };
   }
 
-  handle(request: RpcExtensionUiRequest): void {
+  handle(request: RpcExtensionUiRequest, questionSelect?: QuestionSelectView): void {
     if (DIALOG_METHODS.has(request.method)) {
       const method = request.method as "select" | "confirm" | "input" | "editor";
       this.addPending({
@@ -47,6 +47,7 @@ export class ExtensionUiCoordinator {
         title: request.title ? sanitizeExtensionUiText(request.title) : defaultTitle(method),
         ...(request.message ? { message: sanitizeExtensionUiText(request.message) } : {}),
         ...(request.options ? { options: request.options } : {}),
+        ...(questionSelect ? { questionSelect } : {}),
         ...(request.placeholder ? { placeholder: request.placeholder } : {}),
         ...(request.prefill ? { prefill: request.prefill } : {}),
         receivedAt: Date.now(),
