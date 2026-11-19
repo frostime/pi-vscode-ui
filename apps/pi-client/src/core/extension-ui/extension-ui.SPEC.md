@@ -16,6 +16,8 @@ updated: 2026-10-11
 
 `select`, `confirm`, `input`, and `editor` create a pending card owned by the emitting session. A user action produces exactly one `extension_ui_response`. Cards cannot migrate between sessions and cannot be answered after removal.
 
+Long prompt text wraps in a keyboard-scrollable region. The first title line identifies the request, and any following title lines retain their line breaks in the details. Choice and confirmation controls sit below the scrollable details.
+
 When Pi supplies a timeout, Pi owns the default resolution. FrostPi removes the card at expiry and sends no late cancellation or value. Stopping/closing a session is different: FrostPi explicitly sends `{ cancelled: true }` for each still-pending request before terminating the process.
 
 FrostPi never auto-confirms a request. Multiple blocking requests may be pending in one session; the coordinator retains each by RPC request id and sends at most one response for each.
