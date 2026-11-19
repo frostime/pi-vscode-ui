@@ -18,7 +18,7 @@
     {#if block.type === "images"}<ImageGallery images={block.images} />{/if}
     {#if block.type === "error"}<div class="inline-error">{block.text}</div>{/if}
   {/each}
-  {#if activity.status === "aborted"}<div class="message-footnote">Stopped by user</div>{/if}
+  {#if activity.status === "aborted"}<div class="message-footnote">Turn stopped</div>{/if}
   {#if copyText && activity.status !== "streaming"}
     <div class="message-actions response-actions">
       <button type="button" aria-label="Copy assistant response" title="Copy raw response text" onclick={() => copyMessageText(activity.blocks)}>
