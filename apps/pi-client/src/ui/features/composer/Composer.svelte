@@ -42,6 +42,7 @@
 
   const draft = $derived($composerDrafts[session.id] ?? { revision: 0, text: "", images: [] });
   const commands = $derived(localCommands.completions(session.commands));
+  const sendShortcut = $derived(session.composerSendOnEnter ? "Enter" : "Ctrl+Enter");
   const streamingBehavior = $derived($composerStreamingBehaviors[session.id] ?? session.composerStreamingBehavior);
   const unavailable = $derived(
     session.status === "queued" || session.status === "starting" || session.status === "stopping" || session.status === "failed"
@@ -219,6 +220,7 @@
       {commands}
       placeholder={session.isNavigatingTree ? "Switching conversation branch…" : session.isStreaming || session.queuedSteers.length > 0 || session.queuedFollowUps.length > 0 ? "Steer or queue a message…" : "Ask Pi about this workspace…"}
       onchange={setText}
+      sendOnEnter={session.composerSendOnEnter}
       currentStreamingBehavior={streamingBehavior}
       onsubmit={submit}
       onpasteimages={handlePastedImages}
@@ -235,7 +237,7 @@
         <ThinkingLevelPicker sessionId={session.id} model={session.model} level={session.thinkingLevel} disabled={unavailable} />
       </div>
       <div class="composer-toolbar-right">
-        <span class="send-hint">Ctrl ↵</span>
+        <span class="send-hint">{session.composerSendOnEnter ? "↵" : "Ctrl ↵"}</span>
         {#if session.isForking}
           <button class="send-button stop-button" type="button" aria-label="Cancel Fork" title="Cancel Fork and restore the original session" onclick={() => postToHost({ type: "cancelFork", sessionId: session.id })}>
             <span class="codicon codicon-debug-stop"></span>
@@ -244,6 +246,7 @@
           {#if canSend}
             <StreamingSendButton
               selected={streamingBehavior}
+              shortcut={sendShortcut}
               onselect={(behavior) => setComposerStreamingBehavior(session.id, behavior)}
               onsubmit={submit}
             />
@@ -252,7 +255,7 @@
             <span class="codicon codicon-debug-stop"></span>
           </button>
         {:else}
-          <button class="send-button" type="button" aria-label="Send to Pi" title="Send (Ctrl+Enter)" disabled={!canSend} onclick={() => submit()}>
+          <button class="send-button" type="button" aria-label="Send to Pi" title={`Send (${sendShortcut})`} disabled={!canSend} onclick={() => submit()}>
             <span class="codicon codicon-arrow-up"></span>
           </button>
         {/if}

@@ -241,6 +241,7 @@ FrostPi also provides context metrics, diagnostics export, strict LF-delimited J
 - `frostpi.pi.arguments`
 - `frostpi.session.startOnOpen`
 - `frostpi.session.closeWithEditorTab` — closing a session's editor tab also closes the session, as **Close session** in the list does. Off by default, so the session keeps running in the sidebar.
+- `frostpi.composer.sendOnEnter`
 - `frostpi.composer.streamingBehavior`
 - `frostpi.conversation.collapseTurnTrace`
 - `frostpi.conversation.collapseRunningTurnTrace`

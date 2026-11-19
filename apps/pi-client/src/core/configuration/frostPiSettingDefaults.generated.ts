@@ -6,6 +6,7 @@ export const frostPiSettingDefaults = {
   "pi.arguments": [],
   "session.startOnOpen": true,
   "session.closeWithEditorTab": false,
+  "composer.sendOnEnter": true,
   "composer.streamingBehavior": "followUp",
   "conversation.collapseTurnTrace": true,
   "conversation.collapseRunningTurnTrace": true,

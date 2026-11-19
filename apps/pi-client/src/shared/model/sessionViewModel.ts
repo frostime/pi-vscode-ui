@@ -73,6 +73,7 @@ export interface SessionViewModel {
   /** When true, a running turn folds each run of tool calls and reasoning into one expandable row (Focus View); replies stay visible. Finished turns follow `collapseTurnTrace`. */
   collapseRunningTurnTrace: boolean;
   /** Default streaming delivery selected for this session's Composer. */
+  composerSendOnEnter: boolean;
   composerStreamingBehavior: StreamingBehavior;
   networkProxy: NetworkProxyView;
   questionTool: QuestionToolStateView;
