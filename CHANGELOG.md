@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A reply in which a model ran tool calls fell apart into many separate turns once Pi saved it, each holding one or two steps. It showed when a session was reopened, or when a tab came back into view after the reply finished. It happened with models that report a normal stop together with their tool calls, as Gemini does behind an OpenAI-compatible endpoint: Pi runs those calls and continues the turn, and FrostPi now keeps them in the same turn.
+
 ## [0.16.7] - 2026-11-16
 
 ### Fixed

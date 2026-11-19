@@ -432,7 +432,7 @@ export class ConversationProjection {
       this.#analyzeAssistantMessage({ turnId: turn.id, viewMessageId: placement.viewMessageId, status, timestamp }, message);
       if (message.stopReason === "error") {
         this.#persistedTurn = { turnId: turn.id, phase: "error-awaiting-continuation" };
-      } else if (message.stopReason !== "toolUse") {
+      } else if (!continuesWithTools(message.stopReason, assistantPartsFromMessage(message))) {
         this.#setTurnStatus(turn.id, statusToTurnStatus(status), timestamp);
         this.#persistedTurn = null;
       }
@@ -630,7 +630,7 @@ export class ConversationProjection {
     } else if (status === "aborted") {
       this.#pendingLiveErrorTurnId = null;
       this.#setTurnStatus(turn.id, "aborted", Date.now());
-    } else if (message.stopReason !== "toolUse") {
+    } else if (!continuesWithTools(message.stopReason, message.parts)) {
       this.#pendingLiveErrorTurnId = null;
       this.#setTurnStatus(turn.id, "completed", Date.now());
     }
@@ -1293,6 +1293,16 @@ function persistedCompactionSource(
       : `persisted-entry:${entry.id}`,
     fallbackViewId: entry.id,
   };
+}
+
+/**
+ * Pi runs an assistant's tool calls and continues the turn whatever stop reason the provider
+ * gave, unless the request failed or was aborted. Gemini behind an OpenAI-compatible endpoint
+ * reports "stop" with tool calls, and Pi's openai-completions path keeps that reason.
+ */
+function continuesWithTools(stopReason: unknown, parts: readonly AdaptedAssistantPart[]): boolean {
+  if (stopReason === "toolUse") return true;
+  return stopReason !== "error" && stopReason !== "aborted" && parts.some((part) => part.type === "tool");
 }
 
 function assistantMessageStatus(stopReason: unknown): MessageStatus {
