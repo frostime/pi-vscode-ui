@@ -20,7 +20,7 @@ export { ComposerDraftCache } from "./bridge/ComposerDraftCache.js";
 export { WebviewActionDispatcher, type WebviewActionDispatcherDependencies, type DispatchConnection } from "./bridge/WebviewActionDispatcher.js";
 export { WebviewConnection, type ConnectionHostInputs } from "./bridge/WebviewConnection.js";
 export type { WebviewEndpoint, ConnectionContext } from "./bridge/webviewTypes.js";
-export { collectionDelta } from "./bridge/collectionDelta.js";
+export { collectionDelta, conversationDelta } from "./bridge/collectionDelta.js";
 export { resolveLocalMarkdownImage } from "./bridge/markdown-images/MarkdownImageResolver.js";
 export { readConfiguration, readHostProxy } from "./readConfiguration.js";
 export { readChatTypography } from "./readChatTypography.js";

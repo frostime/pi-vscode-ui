@@ -1,7 +1,8 @@
 import { get } from "svelte/store";
 
 import { BRIDGE_VERSION } from "$shared/bridge/bridgeVersion";
-import type { CollectionDelta, HostToWebviewMessage } from "$shared/bridge/hostToWebview";
+import type { CollectionDelta, ConversationDelta, HostToWebviewMessage } from "$shared/bridge/hostToWebview";
+import type { ConversationItemView } from "$shared/model/conversationModel";
 import type { ChatTypographyView } from "$shared/model/chatTypography";
 import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
@@ -38,7 +39,7 @@ export function applyHostMessage(message: HostToWebviewMessage): void {
         const existing = current.displayedSession?.id === incoming?.base.id ? current.displayedSession : null;
         displayedSession = incoming ? {
           ...incoming.base,
-          conversationItems: mergeCollection(existing?.conversationItems ?? [], incoming.conversationItems),
+          conversationItems: mergeConversation(existing?.conversationItems ?? [], incoming.conversationItems),
         } : null;
         return { ...message.presentation, displayedSession };
       });
@@ -105,6 +106,17 @@ function applyChatTypography(typography: ChatTypographyView): void {
 function setOptionalCssProperty(style: CSSStyleDeclaration, name: string, value: string | undefined): void {
   if (value) style.setProperty(name, value);
   else style.removeProperty(name);
+}
+
+/** Unchanged turns and steps keep their objects, so the conversation renders only what changed. */
+export function mergeConversation(current: readonly ConversationItemView[], delta: ConversationDelta): ConversationItemView[] {
+  const merged = mergeCollection(current, delta);
+  if (!delta.turnPatches?.length) return merged;
+  const patches = new Map(delta.turnPatches.map((patch) => [patch.turn.id, patch]));
+  return merged.map((item) => {
+    const patch = patches.get(item.id);
+    return patch && item.type === "turn" ? { ...patch.turn, items: mergeCollection(item.items, patch.items) } : item;
+  });
 }
 
 export function mergeCollection<T extends { id: string }>(current: readonly T[], delta: CollectionDelta<T>): T[] {
