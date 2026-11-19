@@ -29,6 +29,48 @@ describe("Pi extension UI coordination", () => {
     expect(coordinator.snapshot().statuses[0]?.text).toBe("preset:research");
   });
 
+  it("projects async workers into text and clears a completed widget on the next empty snapshot", () => {
+    const coordinator = new ExtensionUiCoordinator(
+      { sendExtensionUiResponse: vi.fn() } as never,
+      { onChange: vi.fn(), onNotify: vi.fn(), onTitle: vi.fn(), onEditorText: vi.fn() },
+    );
+    const send = (runs: unknown[]) => coordinator.handle({
+      type: "extension_ui_request", id: "w1", method: "setWidget", widgetKey: "subagent-async", widgetPlacement: "belowEditor",
+      widgetLines: ["PI_SUBAGENT_ASYNC_JSON:" + JSON.stringify({ kind: "pi-subagents.async-status-snapshot", version: 1, runs })],
+    });
+    const first = { id: "12345678-abcd-4000-8000-0123456789ab", label: "assistant", state: "queued" };
+    const second = { id: "98765432-abcd-4000-8000-0123456789ab", label: "assistant", state: "running",
+      children: [{ label: "\u001b[31mreader\u001b[0m\nchild", state: "running", hostStep: { target: "/private" } }] };
+    send([first, second]);
+    expect(coordinator.snapshot().widgets).toEqual([{ key: "subagent-async", placement: "below",
+      lines: ["Subagents", "assistant (12345678) · queued", "assistant (98765432) · running", "  reader child · running"] }]);
+    send([{ ...first, state: "complete" }, { ...second, state: "failed", children: [] }]);
+    expect(coordinator.snapshot().widgets[0]?.lines).toEqual([
+      "Subagents", "assistant (12345678) · complete", "assistant (98765432) · failed",
+    ]);
+    send([]);
+    expect(coordinator.snapshot().widgets).toEqual([]);
+  });
+
+  it("keeps unknown snapshots out of the subagent widget and preserves ordinary text widgets", () => {
+    const coordinator = new ExtensionUiCoordinator(
+      { sendExtensionUiResponse: vi.fn() } as never,
+      { onChange: vi.fn(), onNotify: vi.fn(), onTitle: vi.fn(), onEditorText: vi.fn() },
+    );
+    const send = (key: string, line: string) => coordinator.handle({
+      type: "extension_ui_request", id: "w2", method: "setWidget", widgetKey: key, widgetLines: [line],
+    });
+    for (const payload of ["{", '{"kind":"pi-subagents.async-status-snapshot","version":2,"runs":[]}', "x".repeat(32769)]) {
+      send("subagent-async", "PI_SUBAGENT_ASYNC_JSON:" + payload);
+      expect(coordinator.snapshot().widgets[0]?.lines).toEqual(["Subagent status unavailable"]);
+    }
+    send("subagent-async", "Legacy worker status");
+    send("other", "PI_SUBAGENT_ASYNC_JSON:example");
+    expect(coordinator.snapshot().widgets.map(widget => widget.lines)).toEqual([
+      ["Legacy worker status"], ["PI_SUBAGENT_ASYNC_JSON:example"],
+    ]);
+  });
+
   it("preserves notify severity and multiline text while stripping terminal escapes", () => {
     const onNotify = vi.fn();
     const coordinator = new ExtensionUiCoordinator(

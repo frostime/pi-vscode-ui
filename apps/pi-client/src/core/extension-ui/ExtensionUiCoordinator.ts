@@ -1,6 +1,7 @@
 import type { PiRpcApi, RpcExtensionUiRequest, RpcExtensionUiResponse } from "@frostime/pi-rpc";
 
 import type { ExtensionStatusView, ExtensionWidgetView, PendingExtensionUiView } from "../../shared/model/extensionUiModel.js";
+import { extensionWidgetLines } from "./extensionWidgetLines.js";
 import { sanitizeExtensionUiText } from "./sanitizeExtensionUiText.js";
 
 const DIALOG_METHODS = new Set(["select", "confirm", "input", "editor"]);
@@ -66,10 +67,11 @@ export class ExtensionUiCoordinator {
         break;
       case "setWidget": {
         if (!request.widgetKey) break;
-        if (request.widgetLines) {
+        const lines = request.widgetLines && extensionWidgetLines(request.widgetKey, request.widgetLines);
+        if (lines) {
           this.#widgets.set(request.widgetKey, {
             key: request.widgetKey,
-            lines: request.widgetLines.map(sanitizeExtensionUiText),
+            lines,
             placement: request.widgetPlacement === "belowEditor" ? "below" : "above",
           });
         } else this.#widgets.delete(request.widgetKey);

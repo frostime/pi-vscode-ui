@@ -6,7 +6,7 @@
 {#if widgets.length}
   <div class="extension-widgets">
     {#each widgets as widget (widget.key)}
-      <div class="extension-widget">
+      <div class="extension-widget" class:subagents={widget.key === "subagent-async"}>
         <span class="codicon codicon-extensions"></span>
         <pre>{widget.lines.join("\n")}</pre>
       </div>
@@ -25,4 +25,5 @@
   color: var(--frost-muted);
 }
 .extension-widget :global(pre) { white-space: pre-wrap; font: calc(var(--font-size-ui) - 2.5px)/1.45 var(--font-mono); }
+.subagents pre { min-width: 0; max-height: 20vh; overflow: auto; overflow-wrap: anywhere; }
 </style>
