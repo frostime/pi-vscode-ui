@@ -433,7 +433,7 @@ export class SessionRuntime {
       // Pi has committed: from here the old transcript must not stay on screen.
       onCommitted?.();
       this.#setHistoryWindow(null);
-        this.#conversation.clearQueuedPrompts();
+      this.#conversation.clearQueuedPrompts();
       this.#viewState.resetForNewConversation(NEW_SESSION_TITLE);
       return await this.#loadNewConversation(api, previousModel, previousThinkingLevel, hadConversation);
     } finally {
