@@ -2,7 +2,7 @@ import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
 /** One short phrase for what the displayed Session is doing, most urgent state first. */
 export function sessionStatusLabel(session: SessionViewModel): string {
-  if (session.pendingExtensionUi.length > 0) return "action required";
+  if (session.pendingExtensionUi.some(request => request.method === "question" || !request.deferredQuestionId)) return "action required";
   if (session.isForking) return "forking session";
   if (session.isNavigatingTree) return session.isSummarizingTree ? "summarizing branch" : "switching branch";
   if (session.isCompacting) return "compacting context";

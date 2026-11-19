@@ -7,6 +7,29 @@ import { sanitizeExtensionUiText } from "./sanitizeExtensionUiText.js";
 
 const recommendation = " (Recommended)";
 
+/** Deferred questions can be restored before their original tool entry is loaded. */
+export function projectDeferredQuestionSelect(title?: string, options?: readonly string[]): QuestionSelectView | undefined {
+  if (!title || !options || options.length < 3) return;
+  const [heading, ...preview] = title.split("\n\n--- ");
+  const match = /^\[([^\]\n]+)\] (.+)$/s.exec(heading ?? "");
+  const custom = options.at(-1);
+  const customPrefix = `${options.length}. `;
+  if (!custom?.startsWith(customPrefix)) return;
+  const choices: QuestionSelectView["choices"] = [];
+  for (const [index, option] of options.slice(0, -1).entries()) {
+    const prefix = `${index + 1}. `;
+    const divider = option.indexOf(" — ", prefix.length);
+    if (!option.startsWith(prefix) || divider < 0) return;
+    const label = option.slice(prefix.length, divider);
+    const recommended = index === 0 && label.endsWith(recommendation);
+    choices.push({ label: sanitizeExtensionUiText(recommended ? label.slice(0, -recommendation.length) : label),
+      description: sanitizeExtensionUiText(option.slice(divider + 3)), recommended });
+  }
+  return { question: sanitizeExtensionUiText(match?.[2] ?? heading ?? title), header: sanitizeExtensionUiText(match?.[1] ?? ""),
+    details: sanitizeExtensionUiText(preview.map(block => `--- ${block}`).join("\n\n")), choices,
+    customLabel: sanitizeExtensionUiText(custom.slice(customPrefix.length)) };
+}
+
 // RPIV offers string choices in RPC mode. Use the running tool's structured
 // arguments for presentation only when its title and answer values match.
 export function matchQuestionSelect(request: RpcExtensionUiRequest, turns: readonly AgentTurnView[]): QuestionSelectView | undefined {

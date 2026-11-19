@@ -327,7 +327,7 @@ export class SessionRuntime {
   }
 
   async abort(): Promise<void> {
-    await this.#extensionUi?.cancelAll();
+    await this.#extensionUi?.cancelAll(true);
     this.#abortRequested = true;
     try {
       await this.#requireApi().abort();

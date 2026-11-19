@@ -45,3 +45,7 @@ A Webview remount restores Host-owned pending requests but not unsubmitted draft
 ## Unsupported UI
 
 Arbitrary custom TUI components, custom headers/footers/editors, raw terminal input listeners, and theme APIs are not emulated. Unknown structured methods are ignored rather than rendered from arbitrary JSON. This boundary prevents FrostPi from becoming a terminal UI runtime or executing extension-provided presentation code in the Webview.
+RPIV questionnaires marked **Answer when ready** stay available after a turn is
+stopped. The Pi extension saves them in the active session and reopens them on
+restart. The client replaces the old dialog with the fresh RPC request. A
+normal blocking question still closes when its turn is stopped.

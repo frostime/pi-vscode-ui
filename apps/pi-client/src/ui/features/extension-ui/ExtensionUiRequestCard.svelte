@@ -44,6 +44,7 @@
         <IconButton icon="close" label="Cancel" onclick={cancel} />
       {/if}
     </header>
+    {#if request.deferredQuestionId}<p class="extension-ui-message">Answer when ready.</p>{/if}
     {#if detail}<p class="extension-ui-message">{detail}</p>{/if}
     {#if request.message}<p class="extension-ui-message">{request.message}</p>{/if}
     {#if request.method === "editor"}

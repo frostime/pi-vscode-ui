@@ -17,6 +17,7 @@ export interface PendingStandardExtensionUiView {
   message?: string;
   options?: string[];
   questionSelect?: QuestionSelectView;
+  deferredQuestionId?: string;
   placeholder?: string;
   prefill?: string;
   receivedAt: number;
