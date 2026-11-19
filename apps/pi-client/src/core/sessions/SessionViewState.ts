@@ -12,7 +12,7 @@ import type {
 
 type SessionScalarView = Omit<
   SessionViewModel,
-  "conversationItems" | "queuedSteers" | "queuedFollowUps" | "conversationContentRevision" | "queuedPromptRecovery"
+  "conversationItems" | "queuedSteers" | "queuedFollowUps" | "conversationContentRevision" | "queuedPromptRecovery" | "responseMetrics"
 >;
 
 export class SessionViewState {
@@ -72,6 +72,7 @@ export class SessionViewState {
       queuedSteers: [...conversation.queuedSteers],
       queuedFollowUps: [...conversation.queuedFollowUps],
       conversationContentRevision: conversation.contentRevision,
+      ...(conversation.responseMetrics ? { responseMetrics: conversation.responseMetrics } : {}),
     };
   }
 

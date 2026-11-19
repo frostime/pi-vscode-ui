@@ -49,6 +49,7 @@ FrostPi keeps Pi's functional workflows available from the GUI:
 - Display PNG, JPEG, WebP, GIF, AVIF, BMP, and SVG images in conversations; remote HTTPS images load only when clicked.
 - Review command output and tool details; open files and Git-base diffs in native VS Code editors.
 - Inspect context, token categories, tool/message counts, and estimated session cost.
+- See the running output token count and estimated tokens per second. The footer uses `≈` for estimated counts until Pi has a reported count.
 
 <table>
   <tr>
