@@ -115,6 +115,8 @@ export type ConversationItemView = AgentTurnView | ConversationAnnotationView | 
 /** Local prompt accepted into one of Pi's streaming queues. It is not yet part of persisted conversation order. */
 export interface QueuedPromptView {
   id: string;
+  editable?: true;
+  editing?: boolean;
   text: string;
   images: ImageAttachmentView[];
   timestamp: number;

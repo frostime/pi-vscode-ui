@@ -605,9 +605,6 @@ process.stdin.on("data", chunk => {
       if (!streaming) {
         streaming = true;
         process.stdout.write(JSON.stringify({ type: "agent_start" }) + "\n");
-      } else if (command.message === "queued later") {
-        streaming = false;
-        process.stdout.write(JSON.stringify({ type: "agent_settled" }) + "\n");
       }
       continue;
     } else if (command.type === "abort") {
@@ -638,11 +635,11 @@ process.on("SIGTERM", () => process.exit(0));
 
     await runtime.sendPrompt("redirect now", [], "steer");
     await runtime.sendPrompt("queued later", [], "followUp");
-    await waitFor(() => runtime.view.status === "ready");
+    expect(runtime.view.status).toBe("running");
     expect(conversationTurns(runtime.view)).toHaveLength(1);
     expect(runtime.view.queuedSteers.map((item) => item.text)).toEqual(["redirect now"]);
     expect(runtime.view.queuedFollowUps.map((item) => item.text)).toEqual(["queued later"]);
-    await expect(runtime.executeFork("any-entry")).rejects.toThrow("Wait for queued prompts to settle");
+    await expect(runtime.executeFork("any-entry")).rejects.toThrow("Wait for the current Pi operation");
 
     await runtime.abort();
     expect(runtime.view.queuedSteers).toEqual([]);

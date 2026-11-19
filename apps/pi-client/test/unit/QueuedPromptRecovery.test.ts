@@ -52,6 +52,25 @@ function setup(runtime: "pi" | "oh-my-pi", backend = new QueueBackend(), availab
 }
 
 describe("QueuedPromptRecovery", () => {
+  it("restores editable Pi follow-ups and their attachments in queue order without touching Pi", async () => {
+    const { recovery, conversation, backend } = setup("pi");
+    const first = conversation.enqueueFollowUp("first", [], 2, true);
+    const second = conversation.enqueueFollowUp("second", [inputImage], 3, true);
+    const [a, b] = conversation.read().queuedFollowUps;
+    expect(a?.id).toBe(first);
+    expect(b?.id).toBe(second);
+    conversation.replaceEditableFollowUps([b!, a!]);
+    backend.followUp.push({ text: "Pi-owned work" });
+
+    expect(recovery.view.state).toBe("ready");
+    expect(await recovery.recoverAll()).toMatchObject({
+      certainty: "confirmed", recoveredCount: 2, warnings: [],
+      content: { text: "second\n\nfirst", images: [{ id: inputImage.id, data: inputImage.data }] },
+    });
+    expect(backend.followUp).toEqual([{ text: "Pi-owned work" }]);
+    expect(conversation.read().queuedFollowUps).toEqual([]);
+  });
+
   it("waits for admission, recovers both queues without ending the active turn, and rejects duplicate operations", async () => {
     const { recovery, conversation, backend } = setup("pi");
     backend.steering.push({ text: "first" });

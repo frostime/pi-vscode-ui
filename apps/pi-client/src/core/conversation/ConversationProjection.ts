@@ -201,11 +201,18 @@ export class ConversationProjection {
     return id;
   }
 
-  enqueueFollowUp(text: string, images: WebviewImageInput[], timestamp = Date.now()): string {
+  enqueueFollowUp(text: string, images: WebviewImageInput[], timestamp = Date.now(), editable = false): string {
     const id = `queued-follow-up-${timestamp}-${++this.#sequence}`;
-    this.#queuedFollowUps = [...this.#queuedFollowUps, queuedPrompt(id, text, images, timestamp)];
+    const prompt = queuedPrompt(id, text, images, timestamp);
+    if (editable) prompt.editable = true;
+    this.#queuedFollowUps = [...this.#queuedFollowUps, prompt];
     this.#markContentChanged();
     return id;
+  }
+
+  replaceEditableFollowUps(prompts: QueuedPromptView[]): void {
+    this.#queuedFollowUps = [...this.#queuedFollowUps.filter((prompt) => !prompt.editable), ...prompts];
+    this.#markContentChanged();
   }
 
   /** Keep content authoritative after recovery invalidates optimistic queue correspondence. */
@@ -839,13 +846,13 @@ export class ConversationProjection {
       this.#queuedSteers = this.#queuedSteers.slice(1);
       return steer;
     }
-    const followUp = this.#queuedFollowUps[0];
-    if (followUp) this.#queuedFollowUps = this.#queuedFollowUps.slice(1);
+    const followUp = this.#queuedFollowUps.find((prompt) => !prompt.editable);
+    if (followUp) this.#queuedFollowUps = this.#queuedFollowUps.filter((prompt) => prompt.id !== followUp.id);
     return followUp;
   }
 
   #hasQueuedPrompts(): boolean {
-    return this.#queuedSteers.length > 0 || this.#queuedFollowUps.length > 0;
+    return this.#queuedSteers.length > 0 || this.#queuedFollowUps.some((prompt) => !prompt.editable);
   }
 
   #refreshBranchControls(branchEdges: readonly ActiveBranchEdge[]): void {
