@@ -7,6 +7,8 @@
   let value = $state("");
   let initializedRequestId = $state("");
   const canCancel = $derived(request.method !== "confirm");
+  const title = $derived(request.title.split(/\r?\n/, 1)[0] ?? request.title);
+  const detail = $derived(request.title.slice(title.length).replace(/^\r?\n/, ""));
 
   $effect(() => {
     if (initializedRequestId === request.id) return;
@@ -24,29 +26,18 @@
 </script>
 
 <section class="extension-ui-card" aria-labelledby={`extension-ui-${request.id}`}>
-  <header class="extension-ui-heading">
-    <span class="codicon codicon-question" aria-hidden="true"></span>
-    <strong class="extension-ui-title" id={`extension-ui-${request.id}`}>{request.title}</strong>
-    {#if canCancel}
-      <IconButton icon="close" label="Cancel" onclick={cancel} />
-    {/if}
-  </header>
-
-  <div
-    class="extension-ui-body"
-    role={request.method === "confirm" && request.message ? "region" : undefined}
-    aria-label={request.method === "confirm" && request.message ? "Confirmation message" : undefined}
-    tabindex={request.method === "confirm" && request.message ? 0 : undefined}
-  >
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard users need to scroll the complete prompt) -->
+  <div class="extension-ui-body" role="region" aria-label="Prompt details" tabindex="0">
+    <header class="extension-ui-heading">
+      <span class="codicon codicon-question" aria-hidden="true"></span>
+      <strong class="extension-ui-title" id={`extension-ui-${request.id}`}>{title}</strong>
+      {#if canCancel}
+        <IconButton icon="close" label="Cancel" onclick={cancel} />
+      {/if}
+    </header>
+    {#if detail}<p class="extension-ui-message">{detail}</p>{/if}
     {#if request.message}<p class="extension-ui-message">{request.message}</p>{/if}
-
-    {#if request.method === "select"}
-      <div class="extension-select-options">
-        {#each request.options ?? [] as option (option)}
-          <button type="button" onclick={() => postToHost({ type: "respondExtensionUi", sessionId, requestId: request.id, response: { value: option } })}>{option}</button>
-        {/each}
-      </div>
-    {:else if request.method === "editor"}
+    {#if request.method === "editor"}
       <textarea class="extension-editor" bind:value rows="7" aria-label={request.title}></textarea>
     {:else if request.method === "input"}
       <input
@@ -59,12 +50,18 @@
     {/if}
   </div>
 
-  {#if request.method === "confirm"}
+  {#if request.method === "select"}
+    <div class="extension-select-options" role="group" aria-label="Choices">
+      {#each request.options ?? [] as option (option)}
+        <button type="button" onclick={() => postToHost({ type: "respondExtensionUi", sessionId, requestId: request.id, response: { value: option } })}>{option}</button>
+      {/each}
+    </div>
+  {:else if request.method === "confirm"}
     <div class="extension-ui-actions">
       <button class="secondary" type="button" onclick={() => postToHost({ type: "respondExtensionUi", sessionId, requestId: request.id, response: { confirmed: false } })}>No</button>
       <button class="primary" type="button" onclick={() => postToHost({ type: "respondExtensionUi", sessionId, requestId: request.id, response: { confirmed: true } })}>Yes</button>
     </div>
-  {:else if request.method !== "select"}
+  {:else}
     <div class="extension-ui-actions">
       <button class="primary" type="button" onclick={submitValue}>Submit</button>
     </div>
@@ -86,9 +83,10 @@
 }
 .extension-ui-heading { flex: 0 0 auto; display: flex; gap: 8px; align-items: flex-start; }
 .extension-ui-heading > :global(.codicon) { margin-top: 2px; color: var(--frost-link); }
-.extension-ui-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-detail); }
-.extension-ui-heading :global(.icon-button) { flex-shrink: 0; margin: -4px -4px 0 0; }
+.extension-ui-title { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--font-size-detail); }
+.extension-ui-heading :global(.icon-button) { flex-shrink: 0; margin: 0; }
 .extension-ui-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.extension-ui-body:focus-visible { outline: 1px solid var(--frost-focus); outline-offset: -1px; }
 .extension-ui-message { margin: 6px 0 0; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 2.5px); white-space: pre-wrap; overflow-wrap: anywhere; }
 .extension-ui-actions { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 6px; margin-top: 9px; }
 .extension-ui-actions :global(button) {
@@ -112,7 +110,7 @@
 .extension-select-options :global(button:hover) { background: var(--frost-secondary-hover); }
 .extension-ui-actions :global(.primary) { background: var(--frost-accent); color: var(--frost-accent-text); }
 .extension-ui-actions :global(.primary:hover) { background: var(--frost-accent-hover); }
-.extension-select-options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.extension-select-options { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 6px; max-height: min(17vh, 150px); overflow-y: auto; margin-top: 9px; }
 .extension-input {
   width: 100%;
   margin-top: 9px;
