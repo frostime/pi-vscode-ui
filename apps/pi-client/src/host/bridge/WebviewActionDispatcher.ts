@@ -194,6 +194,9 @@ export class WebviewActionDispatcher {
       case "renameSession":
         await this.#registry.rename(message.sessionId, message.name);
         return;
+      case "showSystemPrompt":
+        await this.#registry.showSystemPrompt(message.sessionId);
+        return;
       case "copyText": {
         if (!this.#host.editor.writeClipboard) throw unsupportedHostAction("copyText");
         await this.#host.editor.writeClipboard(message.text);

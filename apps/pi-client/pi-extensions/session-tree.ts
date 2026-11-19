@@ -2,6 +2,7 @@ import { rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export const SESSION_TREE_COMMAND = "frostpi.session-tree";
+export const SYSTEM_PROMPT_COMMAND = "frostpi.system-prompt";
 export const SESSION_TREE_TOKEN_ENV = "FROSTPI_SESSION_TREE_TOKEN";
 export const SESSION_TREE_RESULT_DIR_ENV = "FROSTPI_SESSION_TREE_RESULT_DIR";
 
@@ -33,6 +34,8 @@ type CommandContext = {
   waitForIdle(): Promise<void>;
   navigateTree(targetId: string, options?: NavigateOptions): Promise<{ cancelled: boolean }>;
   sessionManager: { getLeafId(): string | null };
+  getSystemPrompt(): string;
+  ui: { select(title: string, options: string[]): Promise<string | undefined> };
 };
 
 type ExtensionApi = {
@@ -43,6 +46,15 @@ type ExtensionApi = {
 };
 
 export default function sessionTreeExtension(pi: ExtensionApi): void {
+  pi.registerCommand(SYSTEM_PROMPT_COMMAND, {
+    description: "FrostPi private system prompt viewer",
+    handler: async (token, context) => {
+      if (token !== requiredEnvironment(SESSION_TREE_TOKEN_ENV)) throw new Error("Invalid FrostPi system prompt token");
+      if (typeof context.getSystemPrompt !== "function") throw new Error("This Pi version does not expose its system prompt.");
+      const prompt = context.getSystemPrompt();
+      await context.ui.select(`System prompt\n${prompt || "Pi has no system prompt for this session."}`, ["Close"]);
+    },
+  });
   pi.registerCommand(SESSION_TREE_COMMAND, {
     description: "FrostPi private session-tree adapter",
     handler: async (args, context) => {

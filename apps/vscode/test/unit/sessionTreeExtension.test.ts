@@ -8,6 +8,7 @@ import sessionTreeExtension, {
   SESSION_TREE_COMMAND,
   SESSION_TREE_RESULT_DIR_ENV,
   SESSION_TREE_TOKEN_ENV,
+  SYSTEM_PROMPT_COMMAND,
 } from "../../../pi-client/pi-extensions/session-tree.js";
 
 type Handler = (args: string, context: CommandContext) => Promise<void>;
@@ -16,6 +17,8 @@ type CommandContext = {
   waitForIdle: Mock<() => Promise<void>>;
   navigateTree: Mock<(targetId: string, options?: NavigateOptions) => Promise<{ cancelled: boolean }>>;
   sessionManager: { getLeafId: () => string | null };
+  getSystemPrompt: Mock<() => string>;
+  ui: { select: Mock<(title: string, options: string[]) => Promise<string | undefined>> };
 };
 
 const directories: string[] = [];
@@ -32,7 +35,7 @@ afterEach(async () => {
 });
 
 describe("session-tree Pi extension", () => {
-  it("registers one private command and commits a no-summary navigation", async () => {
+  it("commits a no-summary navigation through the private tree command", async () => {
     const { handler, commandName, description } = registeredHandler();
     const context = createContext(["old-leaf", "target-entry"]);
 
@@ -48,6 +51,16 @@ describe("session-tree Pi extension", () => {
       status: "committed",
       leafId: "target-entry",
     });
+  });
+
+  it("presents the assembled prompt only after authenticating the viewer request", async () => {
+    const { handler } = registeredHandler(SYSTEM_PROMPT_COMMAND);
+    const context = createContext([]);
+    await expect(handler("wrong", context)).rejects.toThrow("token");
+    expect(context.getSystemPrompt).not.toHaveBeenCalled();
+    await handler("runtime-token", context);
+    expect(context.ui.select).toHaveBeenCalledExactlyOnceWith("System prompt\nSynthetic prompt\nsecond line", ["Close"]);
+    expect(context.navigateTree).not.toHaveBeenCalled();
   });
 
   it("passes custom summary options without writing summary content", async () => {
@@ -128,12 +141,13 @@ describe("session-tree Pi extension", () => {
   });
 });
 
-function registeredHandler(): { handler: Handler; commandName: string; description: string } {
+function registeredHandler(expectedName: string = SESSION_TREE_COMMAND): { handler: Handler; commandName: string; description: string } {
   let handler: Handler | undefined;
   let commandName: string | undefined;
   let description: string | undefined;
   sessionTreeExtension({
     registerCommand: (name, options) => {
+      if (name !== expectedName) return;
       commandName = name;
       description = options.description;
       handler = (args, context) => options.handler(args, context);
@@ -157,6 +171,8 @@ function createContext(
     sessionManager: {
       getLeafId: () => leafIds[Math.min(leafIndex++, leafIds.length - 1)] ?? null,
     },
+    getSystemPrompt: vi.fn(() => "Synthetic prompt\nsecond line"),
+    ui: { select: vi.fn().mockResolvedValue("Close") },
   };
 }
 

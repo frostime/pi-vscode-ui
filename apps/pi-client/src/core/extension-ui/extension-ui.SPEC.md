@@ -28,6 +28,8 @@ When `frostpi.questionTool.enabled` is applied at Pi process start, FrostPi inje
 
 Question requests enter the same `ExtensionUiCoordinator` pending lifecycle as standard blocking methods. The Webview submits structured answers to the Host; the Host validates exactly one answer per question and serializes the result into the standard `extension_ui_response` value. Cancel, abort, stop, and close use the same cancellation path. No second pending-response owner, response file, watcher, or polling mechanism exists.
 
+**View system prompt** runs the bundled inspection command against the displayed idle Pi session. Pi supplies its current assembled prompt through `getSystemPrompt()` and sends it to the standard scrollable select card with a single Close option. The prompt is kept in the pending UI request until dismissal and is never added to conversation history by the viewer.
+
 A Webview remount restores Host-owned pending requests but not unsubmitted drafts. A Pi process restart cancels pending requests and creates a new token and temporary directory. Configuration changes never interrupt a running process; session state exposes when restart is required.
 
 ## Fire-and-forget methods

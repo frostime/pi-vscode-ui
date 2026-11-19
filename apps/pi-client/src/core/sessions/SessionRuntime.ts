@@ -304,6 +304,16 @@ export class SessionRuntime {
     await this.#requireApi().compact(customInstructions);
   }
 
+  async showSystemPrompt(): Promise<void> {
+    const view = this.view;
+    if (view.status !== "ready" || view.isStreaming || view.isCompacting || view.isNavigatingTree
+      || view.pendingExtensionUi.length > 0 || view.queuedSteers.length > 0 || view.queuedFollowUps.length > 0) {
+      throw new Error("Finish the current Pi interaction before viewing the system prompt.");
+    }
+    if (!this.#sessionTreeBridge) throw new Error("System prompt viewing is unavailable in this Pi process.");
+    await this.#sessionTreeBridge.showSystemPrompt(this.#requireApi());
+  }
+
   async abort(): Promise<void> {
     await this.#extensionUi?.cancelAll();
     this.#abortRequested = true;
