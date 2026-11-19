@@ -5,7 +5,7 @@
     completionKeymap,
     startCompletion,
   } from "@codemirror/autocomplete";
-  import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+  import { defaultKeymap, history, historyKeymap, insertNewlineAndIndent } from "@codemirror/commands";
   import { Compartment, EditorState } from "@codemirror/state";
   import { EditorView, keymap, placeholder as editorPlaceholder, tooltips } from "@codemirror/view";
   import type { RpcCommandDescriptor, StreamingBehavior } from "@frostime/pi-rpc";
@@ -23,6 +23,7 @@
     commands,
     placeholder,
     onchange,
+    sendOnEnter,
     currentStreamingBehavior,
     onsubmit,
     onpasteimages,
@@ -33,6 +34,7 @@
     commands: RpcCommandDescriptor[];
     placeholder: string;
     onchange: (value: string) => void;
+    sendOnEnter: boolean;
     currentStreamingBehavior: StreamingBehavior;
     onsubmit: (streamingBehavior: StreamingBehavior) => void;
     onpasteimages: (files: File[]) => void | Promise<void>;
@@ -123,7 +125,16 @@
           { key: "Tab", run: acceptCompletion },
           { key: "Tab", run: indentPromptWithTab, shift: outdentPromptWithShiftTab },
           { key: "Alt-Enter", run: () => { onsubmit("followUp"); return true; } },
-          { key: "Enter", run: insertPromptNewline },
+          {
+            key: "Enter",
+            run: (editor) => {
+              if (!sendOnEnter) return insertPromptNewline(editor);
+              if (editor.compositionStarted) return false;
+              onsubmit(currentStreamingBehavior);
+              return true;
+            },
+            shift: (editor) => insertPromptNewline(editor) || insertNewlineAndIndent(editor),
+          },
           ...historyKeymap,
           { key: "Mod-Enter", run: () => { onsubmit(currentStreamingBehavior); return true; } },
           ...defaultKeymap,

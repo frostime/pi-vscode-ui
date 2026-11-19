@@ -18,6 +18,7 @@ export function readConfiguration(host: ClientHost, scope?: string): FrostPiConf
     runtimeCompatibility: isRuntimeCompatibility(runtimeCompatibility) ? runtimeCompatibility : defaults["pi.runtimeCompatibility"],
     piArguments: config.get<string[]>("pi.arguments", [...defaults["pi.arguments"]]),
     startSessionOnOpen: config.get<boolean>("session.startOnOpen", defaults["session.startOnOpen"]),
+    sendOnEnter: config.get<boolean>("composer.sendOnEnter", defaults["composer.sendOnEnter"]),
     streamingBehavior: config.get<"steer" | "followUp">("composer.streamingBehavior", defaults["composer.streamingBehavior"]),
     collapseTurnTrace: config.get<boolean>("conversation.collapseTurnTrace", defaults["conversation.collapseTurnTrace"]),
     questionToolEnabled: config.get<boolean>("questionTool.enabled", defaults["questionTool.enabled"]),

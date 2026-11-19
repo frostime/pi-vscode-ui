@@ -8,6 +8,7 @@ export interface FrostPiConfiguration {
   runtimeCompatibility: RuntimeCompatibility;
   piArguments: string[];
   startSessionOnOpen: boolean;
+  sendOnEnter: boolean;
   streamingBehavior: StreamingBehavior;
   collapseTurnTrace: boolean;
   questionToolEnabled: boolean;
