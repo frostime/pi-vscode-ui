@@ -36,6 +36,7 @@ import { commandName, normalizePiSlashPrompt } from "./normalizePiSlashPrompt.js
 import { configuredPiInvocation } from "../configuration/configuredPiInvocation.js";
 import { runtimeCompatibilityProfile, type RuntimeCompatibility } from "../configuration/runtimeCompatibility.js";
 import { configuredLaunchArguments } from "../configuration/resumeLaunchArguments.js";
+import { FULL_HISTORY_LOAD_BYTES, findPreviewCursor, findPreviewStart } from "./historyWindow.js";
 import { buildPiProcessEnvironment, proxyFingerprint, proxyModeLabel } from "../network/buildPiProcessEnvironment.js";
 import type { ProxyCredentialsProvider } from "../network/proxyCredentials.js";
 import { SessionTreeExtensionBridge, type SessionTreeSummaryOptions } from "./tree/SessionTreeExtensionBridge.js";
@@ -101,6 +102,12 @@ export class SessionRuntime {
   readonly #questionToolBridge: QuestionToolExtensionBridge | null;
   /** False until a command list from this process has shown which bundled adapters it loaded. */
   #adaptersDiscovered = false;
+  /**
+   * Set while a large session shows only a recent preview: entries are read after
+   * `since`, and the active path starts at `startId`, the latest prompt on the current
+   * branch. Cleared by a full load and whenever the process holds another conversation.
+   */
+  #historyWindow: { since: string; startId: string } | null = null;
   /** True from the `/new` request until its new conversation is loaded or the request fails. */
   #startingNewConversation = false;
 
@@ -198,6 +205,7 @@ export class SessionRuntime {
     this.#extensionUi = null;
     this.#historyEventBuffer = null;
     this.#entries.reset();
+    this.#setHistoryWindow(null);
     this.#appliedProxyFingerprint = null;
     this.#proxyRestartForced = false;
     this.#appliedQuestionToolEnabled = null;
@@ -330,7 +338,7 @@ export class SessionRuntime {
   async listBranchEnds(branchPointId: string | null): Promise<BranchEndChoiceProjection[]> {
     if (!this.#runtimeCapabilities().sessionTree) throw new Error("Session tree navigation is not supported by the selected runtime.");
     if (!this.#sessionTreeBridge?.available) throw new Error("Session tree navigation is unavailable in this Pi process. Update Pi, restart the session, and check FrostPi diagnostics.");
-    if (this.view.historyStatus !== "loaded") throw new Error("Load conversation history before switching branches.");
+    if (this.view.historyStatus !== "loaded" || this.#historyWindow) throw new Error("Load the full conversation history before switching branches.");
     const entryData = await this.#requireApi().getEntries();
     return projectBranchEndChoices(buildSessionTreeIndex(entryData.entries, entryData.leafId), branchPointId);
   }
@@ -424,6 +432,7 @@ export class SessionRuntime {
       }
       // Pi has committed: from here the old transcript must not stay on screen.
       onCommitted?.();
+      this.#setHistoryWindow(null);
         this.#conversation.clearQueuedPrompts();
       this.#viewState.resetForNewConversation(NEW_SESSION_TITLE);
       return await this.#loadNewConversation(api, previousModel, previousThinkingLevel, hadConversation);
@@ -487,7 +496,7 @@ export class SessionRuntime {
     if (this.view.status !== "ready" || this.view.isStreaming || this.view.isCompacting) {
       throw new Error("Wait for the current Pi operation to finish before forking.");
     }
-    if (this.view.historyStatus !== "loaded") throw new Error("Load conversation history before forking a message.");
+    if (this.view.historyStatus !== "loaded" || this.#historyWindow) throw new Error("Load the full conversation history before forking a message.");
     if (this.view.pendingExtensionUi.length > 0) throw new Error("Answer the pending Pi request before forking.");
     if (this.view.queuedSteers.length > 0 || this.view.queuedFollowUps.length > 0) throw new Error("Wait for queued prompts to settle before forking.");
     const selectedMessage = this.#conversation.userMessage(entryId);
@@ -522,6 +531,7 @@ export class SessionRuntime {
 
   async reconcileFork(name: string, composerSeed: ComposerSeedView): Promise<void> {
     const api = this.#requireApi();
+    this.#setHistoryWindow(null);
     await api.setSessionName(name);
     const state = await api.getState();
     const [entryData, stats, commands] = await Promise.all([
@@ -665,7 +675,8 @@ export class SessionRuntime {
       } catch (error) {
         if (!force) throw error;
       }
-      if (!force || this.view.historyStatus === "loaded") return;
+      // A recent preview is loaded too, but it is not what a forced load asks for.
+      if (!force || (this.view.historyStatus === "loaded" && !this.#historyWindow)) return;
       return this.loadHistory(true);
     }
     const api = this.#requireApi();
@@ -919,27 +930,50 @@ export class SessionRuntime {
       throw new Error("Stop the running session before loading its conversation history.");
     }
 
+    // A forced load over a recent preview keeps the preview if it fails.
+    const previewShown = this.#historyWindow !== null;
     try {
-      if (!force && (await stat(sessionFile)).size > MAX_AUTO_HISTORY_LOAD_BYTES) {
-        this.#viewState.setHistoryStatus("deferred");
-        this.#conversation.appendNotice("Conversation history is large and was not loaded automatically.", "info");
-        this.#notifyChange();
-        return;
+      // Above the budget, a session opens on a recent preview when one can be verified;
+      // otherwise it waits for the user. Loading everything is always the user's choice.
+      let since: string | undefined;
+      if (!force && (await stat(sessionFile)).size > FULL_HISTORY_LOAD_BYTES) {
+        const cursor = await findPreviewCursor(sessionFile, FULL_HISTORY_LOAD_BYTES).catch((error: unknown) => {
+          this.#logger.error("Failed to read the end of a large session file", error);
+          return null;
+        });
+        if (!cursor) return this.#deferLargeHistory("FrostPi could not read the end of its session file.");
+        since = cursor;
       }
       this.#viewState.setHistoryStatus("loading");
       this.#historyEventBuffer = [];
       this.#notifyChange();
-      let entryData = await api.getEntries();
+      const read = (): ReturnType<PiRpcApi["getEntries"]> => api.getEntries(since);
+      let entryData: Awaited<ReturnType<PiRpcApi["getEntries"]>>;
+      try {
+        entryData = await read();
+      } catch (error) {
+        if (since === undefined) throw error;
+        // A cursor Pi does not know means its file and the one read here disagree.
+        this.#logger.error("Failed to read the recent part of a large session", error);
+        return this.#deferLargeHistory("Pi could not return its recent part.");
+      }
       let snapshotEventCount = 0;
       // Custom events have no shared persisted ID. If any arrived during the
       // snapshot, capture again after their delivery instead of guessing which
       // were already included. A quiet capture covers all buffered customs.
       while (this.#historyEventBuffer?.slice(snapshotEventCount).some(isCustomMessageEnd)) {
         snapshotEventCount = this.#historyEventBuffer.length;
-        entryData = await api.getEntries();
+        entryData = await read();
+      }
+      let window: { since: string; startId: string } | null = null;
+      if (since !== undefined) {
+        const startId = findPreviewStart(entryData.entries, entryData.leafId);
+        if (!startId) return this.#deferLargeHistory(`No prompt of its current branch lies within the last ${FULL_HISTORY_LOAD_BYTES / 1024 / 1024} MiB of its session file.`);
+        window = { since, startId };
       }
       const bufferedEvents = this.#takeHistoryEvents();
       if (this.#disposed || api !== this.#api) return;
+      this.#setHistoryWindow(window);
       this.#replacePersistedEntries(entryData.entries, entryData.leafId);
       // The quiet capture covers these custom deliveries; replay would duplicate them.
       // Other buffered events still need their normal lifecycle/projection handling.
@@ -952,11 +986,25 @@ export class SessionRuntime {
       if (this.#disposed || api !== this.#api) return;
       for (const event of bufferedEvents) this.#applyConnectionEvent(event);
       this.#logger.error("Failed to load Pi session entries", error);
-      this.#viewState.setHistoryStatus("failed");
-      this.#conversation.appendNotice(`Unable to load conversation history: ${errorMessage(error)}`, "error");
+      if (previewShown && this.#historyWindow) {
+        // Nothing replaced the preview: it stays usable, and the full load can be retried.
+        this.#viewState.setHistoryStatus("loaded");
+        this.#conversation.appendNotice(`Unable to load the full conversation history: ${errorMessage(error)}`, "error");
+      } else {
+        this.#viewState.setHistoryStatus("failed");
+        this.#conversation.appendNotice(`Unable to load conversation history: ${errorMessage(error)}`, "error");
+      }
       this.#notifyChange();
       throw error;
     }
+  }
+
+  /** A large session waits for the user, who is told why no recent preview is shown. */
+  #deferLargeHistory(reason: string): void {
+    for (const event of this.#takeHistoryEvents()) this.#applyConnectionEvent(event);
+    this.#viewState.setHistoryStatus("deferred", reason);
+    this.#conversation.appendNotice("Conversation history is large and was not loaded automatically.", "info");
+    this.#notifyChange();
   }
 
   #takeHistoryEvents(): RpcEvent[] {
@@ -1098,16 +1146,21 @@ export class SessionRuntime {
       }
     }
 
-    const complete = await api.getEntries();
+    const complete = await api.getEntries(this.#historyWindow?.since);
     if (this.#disposed || api !== this.#api) return;
     this.#replacePersistedEntries(complete.entries, complete.leafId);
+  }
+
+  #setHistoryWindow(window: { since: string; startId: string } | null): void {
+    this.#historyWindow = window;
+    this.#viewState.setPartialHistory(window !== null);
   }
 
   #replacePersistedEntries(
     entries: Awaited<ReturnType<PiRpcApi["getEntries"]>>["entries"],
     leafId: string | null,
   ): void {
-    const replacement = this.#entries.replace(entries, leafId);
+    const replacement = this.#entries.replace(entries, leafId, this.#historyWindow ? { startId: this.#historyWindow.startId } : {});
     this.#conversation.replaceEntries(this.#ompPrompts?.projectEntries(replacement.activePath) ?? replacement.activePath, projectActiveBranchEdges(replacement.index));
     this.#viewState.setCacheHitPercent(latestAssistantCacheHit(replacement.activePath).percent);
     this.#viewState.setHistoryStatus("loaded");
@@ -1247,7 +1300,7 @@ export class SessionRuntime {
     const bridge = this.#sessionTreeBridge;
     if (!bridge?.available) throw new Error("Session tree navigation is unavailable in this Pi process. Update Pi, restart the session, and check FrostPi diagnostics.");
     if (this.view.status !== "ready" || this.view.isStreaming || this.view.isCompacting) throw new Error("Wait for the current Pi operation to finish before switching branches.");
-    if (this.view.historyStatus !== "loaded") throw new Error("Load conversation history before switching branches.");
+    if (this.view.historyStatus !== "loaded" || this.#historyWindow) throw new Error("Load the full conversation history before switching branches.");
     if (this.view.pendingExtensionUi.length > 0 || this.view.queuedSteers.length > 0 || this.view.queuedFollowUps.length > 0) throw new Error("Wait for the current Pi interaction to finish before switching branches.");
     return bridge;
   }
@@ -1280,7 +1333,6 @@ export class SessionRuntime {
   }
 }
 
-const MAX_AUTO_HISTORY_LOAD_BYTES = 8 * 1024 * 1024;
 const NEW_SESSION_TITLE = "New session";
 const LIVE_STATS_REFRESH_INTERVAL_MS = 3_000;
 /** Short multi-delay idle checks after extension commands (aligned with pi-acp). */

@@ -615,6 +615,7 @@ export class SessionRegistry {
     if (forkNeedsOwnProcess(runtime)) {
       return this.#withSessionCreation(() => this.#forkInNewProcess(runtime, original, original.sessionFile!, entryId, resultSelection));
     }
+    if (runtime.view.partialHistory) await this.#loadFullHistory(runtime);
     const operation: ForkOperation = {
       phase: "waiting-for-pi",
       sourceId: sessionId,
@@ -701,11 +702,9 @@ export class SessionRegistry {
     try {
       await this.#startRuntime(runtime, true);
       if (runtime.view.status !== "ready") throw new Error(runtime.view.error ?? "The Pi process for the Fork did not start.");
-      // The start queues the ordinary history load. Wait for it rather than reuse it as the
-      // full load: for a large file it defers, and only then is the full history loaded.
-      await this.#historyJobs.get(runtime.id)?.catch(() => undefined);
-      if (runtime.view.historyStatus !== "loaded") await this.#queueHistory(runtime, true);
-      if (runtime.view.historyStatus !== "loaded") throw new Error("Unable to load the session history for the Fork.");
+      // The start queues the ordinary history load, which for a large file is only a
+      // recent preview or nothing. The Fork's target may lie anywhere: load everything.
+      await this.#loadFullHistory(runtime);
       const result = await runtime.executeFork(entryId);
       if (result.cancelled) return { cancelled: true };
       committed = true;
@@ -736,6 +735,7 @@ export class SessionRegistry {
       this.#assertNoForkOperation();
       const runtime = this.#requireRuntime(sessionId);
       await this.#ensureRunning(runtime);
+      if (runtime.view.partialHistory) await this.#loadFullHistory(runtime);
       if (hasDraft && !await confirmDraftReplacement(this.#host)) return { cancelled: true };
       const summary = await pickBranchSummary(this.#host);
       if (!summary) return { cancelled: true };
@@ -754,6 +754,8 @@ export class SessionRegistry {
       this.#assertNoForkOperation();
       const runtime = this.#requireRuntime(sessionId);
       await this.#ensureRunning(runtime);
+      // The candidates are listed from the full tree, never from a recent preview.
+      if (runtime.view.partialHistory) await this.#loadFullHistory(runtime);
       const selected = await pickBranchEnd(this.#host, await runtime.listBranchEnds(branchPointId));
       if (!selected || selected.isCurrent) return { cancelled: true };
       if (selected.isEditable && hasDraft && !await confirmDraftReplacement(this.#host)) return { cancelled: true };
@@ -839,6 +841,8 @@ export class SessionRegistry {
     this.#assertSessionOutsideFork(sessionId);
     const runtime = this.#requireRuntime(sessionId);
     await this.#ensureRunning(runtime);
+    // A pending ordinary load may end in a recent preview; it is not the load asked for.
+    await this.#historyJobs.get(runtime.id)?.catch(() => undefined);
     await this.#queueHistory(runtime, true);
   }
 
@@ -1131,6 +1135,23 @@ export class SessionRegistry {
       await this.#historyJobs.get(runtime.id)?.catch(() => undefined);
     }
     if (!this.#runtimes.has(runtime.id)) throw new Error("The session's worktree is no longer available.");
+  }
+
+  /**
+   * Tree operations (Branch here, Switch branch, Fork) need every entry. A recent preview,
+   * or a pending ordinary load that may produce one, is never taken for the full history.
+   * When the full load fails the operation stops before anything is committed.
+   */
+  async #loadFullHistory(runtime: SessionRuntime): Promise<void> {
+    await this.#historyJobs.get(runtime.id)?.catch(() => undefined);
+    const complete = (): boolean => runtime.view.historyStatus === "loaded" && !runtime.view.partialHistory;
+    if (complete()) return;
+    try {
+      await this.#queueHistory(runtime, true);
+    } catch (error) {
+      throw new Error(`Unable to load the full conversation history, so nothing was changed. Try again. ${error instanceof Error ? error.message : String(error)}`.trim());
+    }
+    if (!complete()) throw new Error("Unable to load the full conversation history, so nothing was changed. Try again.");
   }
 
   async #queueHistory(runtime: SessionRuntime, force: boolean): Promise<void> {
