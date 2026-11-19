@@ -44,6 +44,7 @@ FrostPi keeps Pi's functional workflows available from the GUI:
 - Use `/` completion for Pi extension commands, prompt templates, skills, and FrostPi-local actions.
 - Use `@Selection`, `@CurrentFile`, and workspace paths as explicit prompt references.
 - Switch provider/model and select only thinking levels supported by the active model's Pi metadata.
+- Read Pi's assembled system prompt from **Session actions → View system prompt**.
 - Resume sessions and use Pi's native `/compact` and session-summary behavior.
 - Render rich Markdown including Mermaid, compaction records, branch summaries, and Pi extension custom messages.
 - Display PNG, JPEG, WebP, GIF, AVIF, BMP, and SVG images in conversations; remote HTTPS images load only when clicked.

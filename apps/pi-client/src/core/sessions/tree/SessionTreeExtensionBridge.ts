@@ -6,6 +6,7 @@ import { basename, dirname, join, normalize, resolve } from "node:path";
 import type { PiRpcApi, RpcCommandDescriptor } from "@frostime/pi-rpc";
 
 const SESSION_TREE_COMMAND = "frostpi.session-tree";
+const SYSTEM_PROMPT_COMMAND = "frostpi.system-prompt";
 const SESSION_TREE_TOKEN_ENV = "FROSTPI_SESSION_TREE_TOKEN";
 const SESSION_TREE_RESULT_DIR_ENV = "FROSTPI_SESSION_TREE_RESULT_DIR";
 
@@ -23,6 +24,8 @@ export class SessionTreeExtensionBridge {
   readonly #token = randomBytes(32).toString("base64url");
   #resultDirectory: string | null = null;
   #commandName: string | null = null;
+  #systemPromptCommandName: string | undefined;
+  #showingSystemPrompt = false;
 
   constructor(artifactPath: string) {
     this.#artifactPath = resolve(artifactPath);
@@ -54,10 +57,24 @@ export class SessionTreeExtensionBridge {
 
   discover(commands: readonly RpcCommandDescriptor[]): RpcCommandDescriptor[] {
     const bundledCommands = commands.filter((command) => this.#matchesSource(command.sourceInfo?.path));
-    this.#commandName = bundledCommands.find((command) => command.name === SESSION_TREE_COMMAND)?.name
-      ?? bundledCommands[0]?.name
+    this.#systemPromptCommandName = bundledCommands.find(({ name }) => name === SYSTEM_PROMPT_COMMAND
+      || name.startsWith(`${SYSTEM_PROMPT_COMMAND}:`))?.name;
+    const treeCommands = bundledCommands.filter(({ name }) => name !== this.#systemPromptCommandName);
+    this.#commandName = treeCommands.find((command) => command.name === SESSION_TREE_COMMAND)?.name
+      ?? treeCommands[0]?.name
       ?? null;
     return commands.filter((command) => !bundledCommands.includes(command));
+  }
+
+  async showSystemPrompt(api: PiRpcApi): Promise<void> {
+    if (!this.#systemPromptCommandName) throw new Error("System prompt viewing is unavailable in this Pi process.");
+    if (this.#showingSystemPrompt) return;
+    this.#showingSystemPrompt = true;
+    try {
+      await api.executeExtensionCommand(this.#systemPromptCommandName, this.#token);
+    } finally {
+      this.#showingSystemPrompt = false;
+    }
   }
 
   async navigate(
@@ -97,6 +114,7 @@ export class SessionTreeExtensionBridge {
     const directory = this.#resultDirectory;
     this.#resultDirectory = null;
     this.#commandName = null;
+    this.#systemPromptCommandName = undefined;
     if (directory) await rm(directory, { recursive: true, force: true });
   }
 
