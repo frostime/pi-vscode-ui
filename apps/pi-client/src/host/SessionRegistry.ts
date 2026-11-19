@@ -1379,10 +1379,10 @@ async function confirmStop(host: ClientHost, runtime: SessionRuntime): Promise<b
   const view = runtime.view;
   if (!view.isStreaming && view.pendingExtensionUi.length === 0) return true;
   const choice = await host.window.showWarningDialog(
-    "Stopping this FrostPi session will stop its active response, tools, and pending extension UI requests. Persisted Pi history is retained.",
-    ["Stop session"],
+    "Stopping this session's Pi process will stop its active response, tools, and pending extension UI requests. The session and its saved Pi history are kept.",
+    ["Stop Pi process"],
   );
-  return choice === "Stop session";
+  return choice === "Stop Pi process";
 }
 
 async function confirmRestart(host: ClientHost, runtimes: readonly SessionRuntime[]): Promise<boolean> {

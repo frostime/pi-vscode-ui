@@ -135,7 +135,7 @@
       },
       {
         "command": "frostpi.stopSession",
-        "title": "FrostPi: Stop Session",
+        "title": "FrostPi: Stop Pi Process",
         "icon": "$(debug-stop)"
       },
       {

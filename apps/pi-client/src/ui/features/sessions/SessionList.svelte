@@ -7,7 +7,7 @@
     onselect,
     onclose,
     onstop,
-    ondelete,
+    onrestart,
     onexternalize,
     oncreate,
     onresume,
@@ -16,10 +16,10 @@
     activeId: string;
     onselect: (sessionId: string) => void;
     onclose: (sessionId: string) => void;
-    /** Stops the Pi process and keeps the Session listed. */
+    /** Stops the Session's Pi process and keeps the Session listed. */
     onstop: (sessionId: string) => void;
-    /** Deletes the Session together with Pi's session file. */
-    ondelete: (sessionId: string) => void;
+    /** Starts the Session's Pi process again, or restarts it. */
+    onrestart: (sessionId: string) => void;
     /** Editor-tab detaching is a host capability; absent capability hides the affordance. */
     onexternalize: ((sessionId: string) => void) | undefined;
     oncreate: () => void;
@@ -45,12 +45,29 @@
     if (session.status === "failed") return "Failed";
     return "Stopped";
   }
+
+  /** One button per row: Stop while the process runs, Restart once it has stopped. */
+  function processAction(session: SessionSummaryView): { kind: "stop" | "restart"; disabled: boolean; title: string } {
+    if (session.isEphemeral) {
+      return { kind: "stop", disabled: true, title: "A temporary session cannot start again once its Pi process stops. Close the session instead." };
+    }
+    if (session.status === "stopped" || session.status === "failed") {
+      return { kind: "restart", disabled: false, title: "Restart this session's Pi process from its saved history." };
+    }
+    const changing = session.status === "queued" || session.status === "starting" || session.status === "stopping";
+    return { kind: "stop", disabled: changing, title: STOP_PI_PROCESS_TITLE };
+  }
+</script>
+
+<script lang="ts" module>
+  export const STOP_PI_PROCESS_TITLE = "Stop this session's Pi process. Keep the session and its saved history. Sending another message starts Pi again.";
 </script>
 
 <div class="session-list-panel" role="dialog" aria-label="FrostPi sessions">
   <div class="session-list-heading">Sessions</div>
   <div class="session-list-items" role="listbox" aria-label="Open sessions">
     {#each sessions as session (session.id)}
+      {@const action = processAction(session)}
       <div class="session-list-item" class:active={session.id === activeId}>
         <button
           class="session-list-select"
@@ -82,21 +99,16 @@
             <span class="codicon codicon-layout" aria-hidden="true"></span>
           </button>
         {/if}
-        {#if !session.isEphemeral && session.status !== "stopped" && session.status !== "stopping"}
-          <button class="session-list-action" type="button" aria-label={`Stop ${session.title}`} title="Stop session · keeps it in the list" onclick={() => onstop(session.id)}>
-            <span class="codicon codicon-debug-stop" aria-hidden="true"></span>
-          </button>
-        {:else}
-          <!-- Holds the column so every row's actions line up. -->
-          <span aria-hidden="true"></span>
-        {/if}
-        {#if !session.isEphemeral}
-          <button class="session-list-action session-list-delete" type="button" aria-label={`Delete ${session.title}`} title="Delete session and its Pi file" onclick={() => ondelete(session.id)}>
-            <span class="codicon codicon-trash" aria-hidden="true"></span>
-          </button>
-        {:else}
-          <span aria-hidden="true"></span>
-        {/if}
+        <button
+          class="session-list-action"
+          type="button"
+          aria-label={`${action.kind === "stop" ? "Stop Pi process" : "Restart Pi process"}: ${session.title}`}
+          title={action.title}
+          disabled={action.disabled}
+          onclick={() => (action.kind === "stop" ? onstop : onrestart)(session.id)}
+        >
+          <span class={`codicon ${action.kind === "stop" ? "codicon-debug-stop" : "codicon-debug-restart"}`} aria-hidden="true"></span>
+        </button>
         <button class="session-list-close" type="button" aria-label={`Close ${session.title}`} title="Close session" onclick={() => onclose(session.id)}>
           <span class="codicon codicon-close" aria-hidden="true"></span>
         </button>

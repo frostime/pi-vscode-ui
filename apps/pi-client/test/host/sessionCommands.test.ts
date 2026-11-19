@@ -387,7 +387,7 @@ describe("Host slash commands through the real Registry and child-process path",
 
       fixture.answerWarningDialogs(undefined);
       await registry.stopSession(sessionId);
-      expect(fixture.warningDialogs.at(-1)).toContain("Stopping this FrostPi session will stop its active response");
+      expect(fixture.warningDialogs.at(-1)).toContain("Stopping this session's Pi process will stop its active response");
       expect(view(sessionId).isStreaming).toBe(true);
 
       fixture.answerWarningDialogs("first-button");
