@@ -18,7 +18,7 @@ updated: 2026-10-11
 
 Long prompt text wraps in a keyboard-scrollable region. The first title line identifies the request, and any following title lines retain their line breaks in the details. Choice and confirmation controls sit below the scrollable details.
 
-Select choices use separate, start-aligned rows. When a select uniquely matches a running `ask_user_question` call, its question, option labels and descriptions are rendered separately. A recommendation written at the end of the first option's label appears as a tag. Selecting any row returns the original RPC value.
+When a select uniquely matches a running `ask_user_question` call, its choices use separate, start-aligned rows with a label and description. A recommendation written at the end of the first option's label appears as a tag. Selecting any row returns the original RPC value.
 
 When Pi supplies a timeout, Pi owns the default resolution. FrostPi removes the card at expiry and sends no late cancellation or value. Stopping/closing a session is different: FrostPi explicitly sends `{ cancelled: true }` for each still-pending request before terminating the process.
 

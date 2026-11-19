@@ -22,6 +22,7 @@ it("keeps multiline prompt details keyboard-accessible above the choices", () =>
   expect(region.querySelector("p")?.textContent).toBe(details);
   const choices = view.getByRole("group", { name: "Choices" });
   expect(region.contains(choices)).toBe(false);
+  expect(choices.classList.contains("choice-list")).toBe(false);
   expect(within(choices).getByRole("button", { name: "Deny" })).toBeTruthy();
 });
 
@@ -46,6 +47,7 @@ it("shows the recommendation and description separately while returning the exac
   const region = view.getByRole("region", { name: "Prompt details" });
   expect(within(region).getByText("Where should I deploy the preview?")).toBeTruthy();
   const choice = view.getByRole("button", { name: "Preview — internal Recommended" });
+  expect(view.getByRole("group", { name: "Choices" }).classList.contains("choice-list")).toBe(true);
   expect(within(choice).getByText("Recommended")).toBeTruthy();
   expect(choice.getAttribute("aria-describedby")).toBe(within(choice).getByText("Share with the team.").id);
   expect(view.getByRole("group", { name: "Choices" }).contains(view.getByRole("button", { name: "Type something." }))).toBe(false);

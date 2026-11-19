@@ -14,7 +14,7 @@
   const options = $derived(request.options ?? []);
   const listedOptions = $derived(question ? options.slice(0, -1) : options);
   const custom = $derived(question ? options.at(-1) : undefined);
-  const hasChoices = $derived(request.method === "select" && options.length > 1);
+  const hasChoices = $derived(Boolean(question));
 
   $effect(() => {
     if (initializedRequestId === request.id) return;
@@ -126,8 +126,10 @@
 .extension-ui-body:focus-visible { outline: 1px solid var(--frost-focus); outline-offset: -1px; }
 .extension-ui-message { margin: 6px 0 0; color: var(--frost-muted); font-size: calc(var(--font-size-ui) - 2.5px); white-space: pre-wrap; overflow-wrap: anywhere; }
 .extension-ui-actions { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 6px; margin-top: 9px; }
-.extension-ui-actions :global(button) {
-  padding: 5px 10px;
+.extension-ui-actions :global(button),
+.extension-select-options :global(button) {
+  padding: 4px 9px;
+  border: 1px solid var(--frost-border);
   border-radius: 5px;
   background: var(--frost-secondary-bg);
   cursor: pointer;
@@ -136,15 +138,12 @@
 .extension-select-options :global(button) {
   max-width: 100%;
   min-width: 0;
-  padding: 5px 10px;
   overflow-wrap: anywhere;
-  border-radius: 5px;
-  background: var(--frost-secondary-bg);
-  cursor: pointer;
-  font-size: var(--font-size-detail);
 }
-.extension-ui-actions :global(button:hover) { background: var(--frost-secondary-hover); }
+.extension-ui-actions :global(button:hover),
 .extension-select-options :global(button:hover) { background: var(--frost-secondary-hover); }
+.extension-ui-actions :global(button:focus-visible),
+.extension-select-options :global(button:focus-visible) { outline: 1px solid var(--frost-focus); outline-offset: -2px; }
 .extension-ui-actions :global(.primary) { background: var(--frost-accent); color: var(--frost-accent-text); }
 .extension-ui-actions :global(.primary:hover) { background: var(--frost-accent-hover); }
 .extension-select-options { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 6px; max-height: min(17vh, 150px); overflow-y: auto; margin-top: 9px; }
@@ -166,13 +165,11 @@
   gap: 8px;
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid var(--frost-border);
   text-align: start;
   color: var(--frost-text);
   font-size: var(--font-size-ui);
   line-height: 1.4;
 }
-.choice-list > button:focus-visible { outline: 1px solid var(--frost-focus); outline-offset: -2px; }
 .choice-list.custom-answer { flex: 0 0 auto; min-height: 0; margin-top: 6px; }
 .custom-answer > button { background: transparent; color: var(--frost-muted); }
 .custom-answer > button:hover { background: var(--frost-secondary-hover); }
