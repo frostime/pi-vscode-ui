@@ -60,6 +60,17 @@ beforeEach(() => {
 });
 afterEach(() => cleanup());
 
+it("labels the live average and uses the final count and duration on completion", async () => {
+  const startedAt = Date.now() - 2_000;
+  const view = render(SessionMetrics, { session: { ...session(), responseMetrics: { startedAt } } });
+  expect(view.getByText(/Receiving response · 2/)).toBeTruthy();
+  expect(view.queryByText(/tok\/s/)).toBeNull();
+  await view.rerender({ session: { ...session(), responseMetrics: { startedAt, outputTokens: 30, estimated: true, outputTokensPerSecond: 20 } } });
+  expect(view.getByText(/≈30 output tokens · ≈20\.0 tok\/s avg/)).toBeTruthy();
+  await view.rerender({ session: { ...session(), responseMetrics: { startedAt, outputTokens: 60, durationMs: 4_000 } } });
+  expect(view.getByText(/60 output tokens · 15\.0 tok\/s avg/)).toBeTruthy();
+});
+
 describe("explicit Composer host inputs", () => {
   it("applies a supplied local command result before its action without guessing the command name", async () => {
     setDraft("session", "webview", { text: "/custom", images: [image] });

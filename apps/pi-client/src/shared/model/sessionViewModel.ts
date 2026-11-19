@@ -48,6 +48,16 @@ export interface ComposerSeedView {
   images: ImageAttachmentView[];
 }
 
+export interface ResponseMetricsView {
+  startedAt: number;
+  outputTokens?: number;
+  estimated?: true;
+  /** Live output rate averaged from the start of the Pi request. */
+  outputTokensPerSecond?: number;
+  /** Present when the response has finished. */
+  durationMs?: number;
+}
+
 export interface SessionViewModel {
   id: string;
   title: string;
@@ -88,6 +98,7 @@ export interface SessionViewModel {
   isNavigatingTree: boolean;
   isSummarizingTree: boolean;
   stats?: RpcSessionStats;
+  responseMetrics?: ResponseMetricsView;
   /** Prompt-cache hit percentage for the latest assistant message on the active session path. */
   cacheHitPercent?: number;
   error?: string;
