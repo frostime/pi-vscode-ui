@@ -30,13 +30,26 @@ describe("MarkdownHtml link clicks", () => {
 
   it("opens a web link once, without VS Code's frame also seeing the click", () => {
     const view = render(MarkdownHtml, { props: { content: "[site](https://example.com/docs)" } });
+    expect(view.container.querySelector("a")?.hasAttribute("href")).toBe(false);
     const click = new MouseEvent("click", { bubbles: true, cancelable: true });
     view.container.querySelector("a")!.dispatchEvent(click);
 
     expect(bridge.post).toHaveBeenCalledTimes(1);
-    expect(bridge.post).toHaveBeenCalledWith({ type: "openExternal", url: "https://example.com/docs" });
+    expect(bridge.post).toHaveBeenCalledWith({ type: "openTranscriptLink", url: "https://example.com/docs" });
     expect(click.defaultPrevented).toBe(true);
     expect(windowClicks).not.toHaveBeenCalled();
+  });
+
+  it("opens an autolink from the keyboard and keeps auxiliary clicks inert", () => {
+    const { container, getByRole } = render(MarkdownHtml, { props: { content: "https://example.com/guide?view=1" } });
+    const link = getByRole("link");
+    expect(link.getAttribute("tabindex")).toBe("0");
+    expect(container.querySelector("a[href]")).toBeNull();
+    link.dispatchEvent(new MouseEvent("auxclick", { bubbles: true, button: 1 }));
+    link.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, button: 2 }));
+    expect(bridge.post).not.toHaveBeenCalled();
+    link.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }));
+    expect(bridge.post).toHaveBeenCalledExactlyOnceWith({ type: "openTranscriptLink", url: "https://example.com/guide?view=1" });
   });
 
   it("opens a file link without VS Code's frame also seeing the click", () => {
@@ -48,11 +61,11 @@ describe("MarkdownHtml link clicks", () => {
     expect(windowClicks).not.toHaveBeenCalled();
   });
 
-  it("leaves links FrostPi does not open to the webview", () => {
+  it("leaves an unsupported link with no browser target", () => {
     const view = render(MarkdownHtml, { props: { content: "[mail](mailto:someone@example.com)" } });
     view.container.querySelector("a")!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
 
     expect(bridge.post).not.toHaveBeenCalled();
-    expect(windowClicks).toHaveBeenCalledTimes(1);
+    expect(view.container.querySelector("a")?.hasAttribute("href")).toBe(false);
   });
 });

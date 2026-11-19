@@ -66,8 +66,7 @@
       const cwd = get(presentationStore).displayedSession?.cwd;
       return `${absoluteFileReferencePath(path, cwd)}${fileLocationSuffix(anchor)}`;
     }
-    const href = anchor.getAttribute("href");
-    return href && /^https?:\/\//i.test(href) ? href : undefined;
+    return anchor.getAttribute("data-transcript-url") ?? undefined;
   }
 
   function fileLocationSuffix(anchor: Element): string {
@@ -103,6 +102,7 @@
   import { clientCapabilities } from "../../../state/clientCapabilities.svelte";
   import { ensureKatex, isKatexReady, renderMarkdownHtml } from "./renderMarkdown";
   import { mountMarkdownImages } from "./mountMarkdownImages";
+  import { activateTranscriptLink } from "./activateTranscriptLink";
 
   let { content }: { content: string } = $props();
 
@@ -263,10 +263,7 @@
       return;
     }
 
-    const href = anchor?.getAttribute("href");
-    if (!href || !/^https?:\/\//i.test(href)) return;
-    claimLinkClick(event);
-    postToHost({ type: "openExternal", url: href });
+    activateTranscriptLink(event);
   }
 
   // VS Code's webview frame routes every anchor click it sees on the window to
@@ -309,6 +306,7 @@
   function linkActions(node: HTMLElement): { destroy(): void } {
     const hide = (): void => cancelLinkPreview();
     node.addEventListener("click", handleClick);
+    node.addEventListener("keydown", activateTranscriptLink);
     node.addEventListener("pointerover", handlePointerOver);
     node.addEventListener("pointerout", handlePointerOut);
     node.addEventListener("focusin", handleFocusIn);
@@ -321,6 +319,7 @@
     return {
       destroy: () => {
         node.removeEventListener("click", handleClick);
+        node.removeEventListener("keydown", activateTranscriptLink);
         node.removeEventListener("pointerover", handlePointerOver);
         node.removeEventListener("pointerout", handlePointerOut);
         node.removeEventListener("focusin", handleFocusIn);
@@ -340,6 +339,7 @@
 <div class="markdown-body" use:linkActions bind:this={container}>{@html html}</div>
 
 <style>
+  .markdown-body :global(a[data-transcript-url]) { cursor: pointer; }
   .markdown-body :global(a[data-file-path][aria-disabled="true"]) {
     color: inherit;
     text-decoration: none;

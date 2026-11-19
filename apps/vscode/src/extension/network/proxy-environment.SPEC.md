@@ -29,11 +29,4 @@ HTTP(S) proxies are supported; SOCKS remains an explicit package error, never a
 fallback to inherited HTTP proxy or direct traffic. No global environment/dispatcher
 is changed, and no proxy URL or credential crosses the bridge.
 
-## Remote Markdown image requests
-
-A remote Markdown image that the user explicitly loads is fetched by the Host under the
-same rules as a usage request: current workspace-scoped settings and SecretStorage
-credentials for that request, a local environment copy, and no change to a running Pi
-process. An empty, invalid or SOCKS proxy fails the image load; it never falls back to
-an inherited proxy or direct traffic. The request contract belongs to the
-[Markdown rendering SPEC](../../../../pi-client/src/ui/features/conversation/markdown/markdown.SPEC.md).
+Markdown image links do not make Host requests. See the [Markdown rendering contract](../../../../pi-client/src/ui/features/conversation/markdown/markdown.SPEC.md).

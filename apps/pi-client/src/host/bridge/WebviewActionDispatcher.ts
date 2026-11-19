@@ -2,21 +2,20 @@ import { homedir } from "node:os";
 import { listProviders, queryUsage } from "@frostime/provider-usage";
 import { resolvePiAgentDirectory } from "../../core/_shared/pi-settings/loadPiSettings.js";
 
-import type { HostToWebviewPayload, MarkdownImageLoadResult } from "../../shared/bridge/hostToWebview.js";
+import type { HostToWebviewPayload } from "../../shared/bridge/hostToWebview.js";
 import type { WebviewToHostMessage } from "../../shared/bridge/webviewToHost.js";
 import type { ComposerDraftView } from "../../shared/model/composerDraftModel.js";
 import type { QueuedPromptRecoveryOutcome } from "../../shared/model/queuedPromptRecoveryModel.js";
 import { buildProviderUsageEnvironment } from "../../core/network/buildPiProcessEnvironment.js";
 import type { ProxyCredentials } from "../../core/network/proxyCredentials.js";
 import type { RuntimeLogger } from "../../core/diagnostics/RuntimeLogger.js";
+import { transcriptUrl } from "../../shared/files/transcriptUrl.js";
 import type { WorkspaceFileSearch } from "../file-search/WorkspaceFileSearch.js";
 import { workspaceFileBoosts, workspaceFileExcludeRules } from "../file-search/mentionSearchContext.js";
 import { readConfiguration, readHostProxy } from "../readConfiguration.js";
 import type { ClientHost } from "../clientHost.js";
 import type { SessionRegistry } from "../SessionRegistry.js";
 import type { ComposerDraftCache } from "./ComposerDraftCache.js";
-import { resolveLocalMarkdownImage } from "./markdown-images/MarkdownImageResolver.js";
-import { loadRemoteMarkdownImage } from "./markdown-images/RemoteMarkdownImageLoader.js";
 import type { ConnectionContext } from "./webviewTypes.js";
 
 export interface DispatchConnection extends ConnectionContext {
@@ -97,6 +96,7 @@ export class WebviewActionDispatcher {
   readonly #revealPanel: (sessionId: string) => void | Promise<void>;
   readonly #openComposerEditor: (sessionId: string, text: string) => Promise<"opened" | "already-open">;
   readonly #createSessionPanel: ((sourceSessionId: string | null, ephemeral: boolean) => Promise<unknown>) | undefined;
+  #confirmingTranscriptLink = false;
 
   constructor(dependencies: WebviewActionDispatcherDependencies) {
     this.#host = dependencies.host;
@@ -125,7 +125,13 @@ export class WebviewActionDispatcher {
       return;
     }
     if (message.type === "loadMarkdownImage") {
-      await this.#loadMarkdownImage(message, connection);
+      // Reject older webviews without ever treating a message as authority to read or fetch.
+      connection.post({
+        type: "markdownImageResult",
+        requestId: message.requestId,
+        sessionId: message.sessionId,
+        result: { ok: false, reason: "invalidSource" },
+      });
       return;
     }
     this.#authorizeSessionTarget(message, connection);
@@ -343,6 +349,24 @@ export class WebviewActionDispatcher {
         await this.#host.editor.openExternalUrl(message.url);
         return;
       }
+      case "openTranscriptLink": {
+        const url = transcriptUrl(message.url, URL);
+        if (!url) throw new Error("Only HTTP(S) links without credentials can be opened from the chat.");
+        if (!this.#host.editor.openExternalUrl) throw unsupportedHostAction("openTranscriptLink");
+        if (this.#confirmingTranscriptLink) return;
+        this.#confirmingTranscriptLink = true;
+        try {
+          const action = "Open in browser";
+          const choice = await this.#host.window.showWarningDialog(
+            `Open this link in your browser? The URL may contain information from this chat. If you run Pi in a sandbox, opening the link may bypass its network restrictions.\n\n${url}`,
+            [action],
+          );
+          if (choice === action) await this.#host.editor.openExternalUrl(url);
+        } finally {
+          this.#confirmingTranscriptLink = false;
+        }
+        return;
+      }
       case "refreshCommands":
         await this.#registry.refreshCommands(message.sessionId);
         return;
@@ -412,52 +436,6 @@ export class WebviewActionDispatcher {
       });
     } finally {
       release?.();
-    }
-  }
-
-  async #loadMarkdownImage(
-    message: Extract<WebviewToHostMessage, { type: "loadMarkdownImage" }>,
-    connection: DispatchConnection,
-  ): Promise<void> {
-    try {
-      this.#authorizeSessionTarget(message, connection);
-    } catch {
-      connection.post({
-        type: "markdownImageResult",
-        requestId: message.requestId,
-        sessionId: message.sessionId,
-        result: { ok: false, reason: "invalidSource" },
-      });
-      return;
-    }
-
-    const session = this.#displayedSession(connection);
-    const maxBytes = session?.attachmentLimits.maxImageBytes ?? 0;
-    const result: MarkdownImageLoadResult = !session
-      ? { ok: false, reason: "invalidSource" }
-      : message.remote
-        ? await this.#loadRemoteMarkdownImage(message.source, maxBytes)
-        : await resolveLocalMarkdownImage(message.source, session.cwd, maxBytes);
-    connection.post({
-      type: "markdownImageResult",
-      requestId: message.requestId,
-      sessionId: message.sessionId,
-      result,
-    });
-  }
-
-  /**
-   * Only an explicit `remote` request reaches the network: the Webview sends it after
-   * the user's `Load image` action, never while rendering. Failures stay content-free.
-   */
-  async #loadRemoteMarkdownImage(source: string, maxBytes: number): Promise<MarkdownImageLoadResult> {
-    try {
-      const cwd = this.#registry.snapshot().workspacePath || homedir();
-      const environment = await this.#hostRequestEnvironment({ ...process.env }, cwd);
-      return await loadRemoteMarkdownImage(source, { maxBytes, environment });
-    } catch {
-      // An unconfigured or unusable proxy fails closed instead of connecting directly.
-      return { ok: false, reason: "readFailed" };
     }
   }
 

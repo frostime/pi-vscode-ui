@@ -8,6 +8,7 @@ import imageRule from "markdown-it/lib/rules_inline/image.mjs";
 import type StateInline from "markdown-it/lib/rules_inline/state_inline.mjs";
 
 import { parseFileHref, parseFileReference, type FileReference } from "../../../../shared/files/fileReferences.js";
+import { transcriptUrl } from "../../../../shared/files/transcriptUrl.js";
 import { renderDiffHtml } from "../diffPresentation.js";
 
 const katexCache = new Map<string, string>();
@@ -277,6 +278,14 @@ function applyFileLinkPlugin(md: MarkdownIt): void {
       if (reference.line !== undefined) token.attrSet("data-file-line", String(reference.line));
       if (reference.column !== undefined) token.attrSet("data-file-column", String(reference.column));
       if (reference.endLine !== undefined) token.attrSet("data-file-end-line", String(reference.endLine));
+    } else if (href && !href.startsWith("#")) {
+      token.attrs = token.attrs?.filter(([name]) => name !== "href") ?? null;
+      const url = transcriptUrl(href, URL);
+      if (url) {
+        token.attrSet("data-transcript-url", url);
+        token.attrSet("role", "link");
+        token.attrSet("tabindex", "0");
+      }
     }
     return renderer.renderToken(tokens, idx, options);
   };
@@ -331,6 +340,7 @@ export function renderMarkdownHtml(content: string): string {
       "data-file-line",
       "data-file-column",
       "data-file-end-line",
+      "data-transcript-url",
       "data-markdown-image",
       "data-image-source",
       "data-image-alt",
@@ -482,7 +492,15 @@ export function sanitizeMermaidSvg(svg: string): string | null {
         element.removeAttribute(attribute.name);
       } else if (RESOURCE_ATTRIBUTES.includes(attributeName)) {
         const navigation = name === "a" && (attributeName === "href" || attributeName === "xlink:href");
-        if (!navigation && value && !value.startsWith("#") && !value.startsWith("data:")) {
+        if (navigation && !value.startsWith("#")) {
+          element.removeAttribute(attribute.name);
+          const url = transcriptUrl(value, URL);
+          if (url && !element.hasAttribute("data-transcript-url")) {
+            element.setAttribute("data-transcript-url", url);
+            element.setAttribute("role", "link");
+            element.setAttribute("tabindex", "0");
+          }
+        } else if (!navigation && value && !value.startsWith("#") && !value.startsWith("data:")) {
           element.removeAttribute(attribute.name);
         }
       } else if (CSS_RESOURCE_HINT.test(value)) {

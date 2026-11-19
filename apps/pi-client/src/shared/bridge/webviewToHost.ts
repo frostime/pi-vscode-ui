@@ -102,7 +102,7 @@ const payloadSchema = z.discriminatedUnion("type", [
     requestId: z.string().min(1).max(128),
     sessionId: z.string().min(1).max(128),
     source: z.string().min(1).max(32_768),
-    // Present only for the user's explicit `Load image` action on an HTTPS source.
+    // Retained to reject requests from an older webview.
     remote: z.literal(true).optional(),
   }),
   z.object({
@@ -172,6 +172,7 @@ const payloadSchema = z.discriminatedUnion("type", [
   openFileSchema,
   z.object({ type: z.literal("openDiff"), path: z.string().min(1).max(32_768) }),
   z.object({ type: z.literal("openExternal"), url: z.string().url().max(2_048) }),
+  z.object({ type: z.literal("openTranscriptLink"), url: z.string().url().max(2_048) }),
   z.object({ type: z.literal("refreshCommands"), sessionId: z.string().min(1).max(128) }),
   z.object({ type: z.literal("checkPiIntegration"), sessionId: z.string().min(1).max(128) }),
   z.object({ type: z.literal("refreshModels"), sessionId: z.string().min(1).max(128) }),
