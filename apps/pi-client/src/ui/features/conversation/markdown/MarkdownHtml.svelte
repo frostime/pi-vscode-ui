@@ -248,7 +248,7 @@
     const anchor = target?.closest("a");
     const path = anchor?.getAttribute("data-file-path");
     if (path) {
-      event.preventDefault();
+      claimLinkClick(event);
       if (!$clientCapabilities.openReferencedLocation) return;
       const line = positiveInteger(anchor?.getAttribute("data-file-line"));
       const column = positiveInteger(anchor?.getAttribute("data-file-column"));
@@ -265,8 +265,16 @@
 
     const href = anchor?.getAttribute("href");
     if (!href || !/^https?:\/\//i.test(href)) return;
-    event.preventDefault();
+    claimLinkClick(event);
     postToHost({ type: "openExternal", url: href });
+  }
+
+  // VS Code's webview frame routes every anchor click it sees on the window to
+  // its own opener, ignoring defaultPrevented. Stop clicks that FrostPi routes
+  // so only the host opens the link. VS Code presents its usual confirmation.
+  function claimLinkClick(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   function positiveInteger(value: string | null | undefined): number | undefined {
