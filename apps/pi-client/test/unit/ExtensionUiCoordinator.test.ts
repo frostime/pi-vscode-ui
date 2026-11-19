@@ -98,6 +98,31 @@ describe("Pi extension UI coordination", () => {
     ]);
   });
 
+  it("keeps a deferred question when stopping a turn and deduplicates a restored dialog", async () => {
+    const sendExtensionUiResponse = vi.fn();
+    const coordinator = new ExtensionUiCoordinator(
+      { sendExtensionUiResponse } as never,
+      { onChange: vi.fn(), onNotify: vi.fn(), onTitle: vi.fn(), onEditorText: vi.fn() },
+    );
+    const statusKey = "rpiv-deferred-question-dialog";
+    const questionId = "19962a6a-c400-4745-b67d-ea994b8fbdd1";
+    const title = `Answer when ready [${questionId}]\n[Scope] Pick the scope`;
+    const options = ["1. Small — One file", "2. Large — Three files", "3. Type something."];
+    coordinator.handle({ type: "extension_ui_request", id: "unmarked", method: "select", title, options });
+    coordinator.handle({ type: "extension_ui_request", id: "flag", method: "setStatus", statusKey, statusText: questionId });
+    coordinator.handle({ type: "extension_ui_request", id: "initial", method: "select", title, options });
+    expect(coordinator.snapshot().statuses).toEqual([]);
+    await coordinator.cancelAll(true);
+    expect(sendExtensionUiResponse.mock.calls).toEqual([["unmarked", { cancelled: true }]]);
+    expect(coordinator.snapshot().pending).toMatchObject([{ id: "initial", deferredQuestionId: questionId }]);
+    coordinator.handle({ type: "extension_ui_request", id: "flag", method: "setStatus", statusKey, statusText: questionId });
+    coordinator.handle({ type: "extension_ui_request", id: "restored", method: "select", title, options });
+    expect(coordinator.snapshot().pending).toMatchObject([{ id: "restored", questionSelect: { header: "Scope" } }]);
+    await coordinator.cancelAll();
+    expect(coordinator.snapshot().pending).toEqual([]);
+    expect(sendExtensionUiResponse).toHaveBeenCalledTimes(1);
+  });
+
   it("routes set_editor_text to the host composer effect", () => {
     const onEditorText = vi.fn();
     const coordinator = new ExtensionUiCoordinator(

@@ -20,7 +20,7 @@ Long prompt text wraps in a keyboard-scrollable region. The first title line ide
 
 When a select uniquely matches a running `ask_user_question` call, its choices use separate, start-aligned rows with a label and description. A recommendation written at the end of the first option's label appears as a tag. Selecting any row returns the original RPC value.
 
-When Pi supplies a timeout, Pi owns the default resolution. FrostPi removes the card at expiry and sends no late cancellation or value. Stopping/closing a session is different: FrostPi explicitly sends `{ cancelled: true }` for each still-pending request before terminating the process.
+When Pi supplies a timeout, Pi owns the default resolution. FrostPi removes the card at expiry and sends no late cancellation or value. On turn stop or session close, FrostPi explicitly sends `{ cancelled: true }` for pending blocking requests.
 
 FrostPi never auto-confirms a request. Multiple blocking requests may be pending in one session; the coordinator retains each by RPC request id and sends at most one response for each.
 
@@ -34,6 +34,13 @@ Question requests enter the same `ExtensionUiCoordinator` pending lifecycle as s
 
 A Webview remount restores Host-owned pending requests but not unsubmitted drafts. A Pi process restart cancels pending requests and creates a new token and temporary directory. Configuration changes never interrupt a running process; session state exposes when restart is required.
 
+## Deferred RPIV questionnaires
+
+**Answer when ready** remains available after stopping a turn. RPIV saves the
+question in the active Pi session and reopens it on restart. The host accepts
+the deferred marker only with the matching extension status event and replaces
+the old dialog with the fresh RPC request.
+
 ## Fire-and-forget methods
 
 - `notify` appends a sanitized notice, including its severity, to the emitting session's conversation timeline. During an active turn it appears where first observed among turn activities; while idle it remains a session-level timeline item. Notices remain in the live projection but are not persisted across session rehydration or process restart.
@@ -45,7 +52,3 @@ A Webview remount restores Host-owned pending requests but not unsubmitted draft
 ## Unsupported UI
 
 Arbitrary custom TUI components, custom headers/footers/editors, raw terminal input listeners, and theme APIs are not emulated. Unknown structured methods are ignored rather than rendered from arbitrary JSON. This boundary prevents FrostPi from becoming a terminal UI runtime or executing extension-provided presentation code in the Webview.
-RPIV questionnaires marked **Answer when ready** stay available after a turn is
-stopped. The Pi extension saves them in the active session and reopens them on
-restart. The client replaces the old dialog with the fresh RPC request. A
-normal blocking question still closes when its turn is stopped.

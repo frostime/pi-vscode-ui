@@ -6,6 +6,7 @@ import { sanitizeExtensionUiText } from "./sanitizeExtensionUiText.js";
 
 const DIALOG_METHODS = new Set(["select", "confirm", "input", "editor"]);
 const deferredQuestionHeading = /^Answer when ready \[([0-9a-f-]{36})\]\n/;
+const deferredQuestionStatus = "rpiv-deferred-question-dialog";
 
 export interface ExtensionUiEffects {
   onChange(): void;
@@ -19,6 +20,7 @@ export class ExtensionUiCoordinator {
   readonly #statuses = new Map<string, ExtensionStatusView>();
   readonly #widgets = new Map<string, ExtensionWidgetView>();
   readonly #timeouts = new Map<string, ReturnType<typeof setTimeout>>();
+  #deferredQuestionTicket: string | undefined;
 
   readonly #api: PiRpcApi;
   readonly #effects: ExtensionUiEffects;
@@ -43,7 +45,9 @@ export class ExtensionUiCoordinator {
   handle(request: RpcExtensionUiRequest, questionSelect?: QuestionSelectView): void {
     if (DIALOG_METHODS.has(request.method)) {
       const method = request.method as "select" | "confirm" | "input" | "editor";
-      const deferred = method === "select" || method === "input" ? deferredQuestionHeading.exec(request.title ?? "") : null;
+      const heading = method === "select" || method === "input" ? deferredQuestionHeading.exec(request.title ?? "") : null;
+      const deferred = heading?.[1] === this.#deferredQuestionTicket ? heading : null;
+      this.#deferredQuestionTicket = undefined;
       const deferredQuestionId = deferred?.[1];
       const title = deferred ? request.title?.slice(deferred[0].length) : request.title;
       const question = deferred && method === "select" ? projectDeferredQuestionSelect(title, request.options) : questionSelect;
@@ -74,6 +78,10 @@ export class ExtensionUiCoordinator {
         break;
       case "setStatus":
         if (!request.statusKey) break;
+        if (request.statusKey === deferredQuestionStatus) {
+          this.#deferredQuestionTicket = request.statusText;
+          return;
+        }
         if (request.statusText) this.#statuses.set(request.statusKey, { key: request.statusKey, text: sanitizeExtensionUiText(request.statusText) });
         else this.#statuses.delete(request.statusKey);
         this.#effects.onChange();
@@ -119,6 +127,7 @@ export class ExtensionUiCoordinator {
   }
 
   clearSessionDecorations(): void {
+    this.#deferredQuestionTicket = undefined;
     this.#statuses.clear();
     this.#widgets.clear();
     this.#effects.onChange();
