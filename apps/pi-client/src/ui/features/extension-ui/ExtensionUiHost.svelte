@@ -12,7 +12,7 @@
 <QuestionToolHost {sessionId} requests={questionRequests} />
 
 {#if standardRequests.length}
-  <div class="extension-ui-host">
+  <div class="extension-ui-host" class:has-choices={standardRequests.some((request) => request.method === "select" && (request.options?.length ?? 0) > 1)}>
     {#each standardRequests as request (request.id)}
       <ExtensionUiRequestCard {sessionId} {request} />
     {/each}
@@ -21,4 +21,5 @@
 
 <style>
 .extension-ui-host { width: 100%; max-width: var(--content-max-width); max-height: min(40vh, 360px); min-height: 0; margin: 0 auto 7px; display: grid; gap: 6px; overflow-y: auto; }
+.extension-ui-host.has-choices { max-height: min(52vh, 460px); }
 </style>
