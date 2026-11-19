@@ -68,20 +68,20 @@ export function registerCommands(
       if (!sessionId) return void vscode.window.showInformationMessage("Open a FrostPi session first.");
       await registry.deleteSession(sessionId);
     })),
-    vscode.commands.registerCommand("frostpi.toggleFocusView", () => reportFailure(async () => {
+    vscode.commands.registerCommand("frostpi.toggleRunningTurnCollapse", () => reportFailure(async () => {
       // Read and write in the scope of the Session the command means, at the level its
       // effective value comes from, so the toggle changes what that Session shows.
       const sessionId = coordinator.commandTargetSessionId();
       const sessionScope = sessionId ? registry.configurationScope(sessionId) : undefined;
       const scope = sessionScope ? workspaceUriForPath(sessionScope) : vscode.workspace.workspaceFolders?.[0]?.uri;
       const configuration = vscode.workspace.getConfiguration("frostpi", scope);
-      const inspected = configuration.inspect<boolean>("conversation.focusView");
+      const inspected = configuration.inspect<boolean>("conversation.collapseRunningTurnTrace");
       const target = inspected?.workspaceFolderValue !== undefined
         ? vscode.ConfigurationTarget.WorkspaceFolder
         : inspected?.workspaceValue !== undefined
           ? vscode.ConfigurationTarget.Workspace
           : vscode.ConfigurationTarget.Global;
-      await configuration.update("conversation.focusView", !configuration.get<boolean>("conversation.focusView", true), target);
+      await configuration.update("conversation.collapseRunningTurnTrace", !configuration.get<boolean>("conversation.collapseRunningTurnTrace", true), target);
     })),
     vscode.commands.registerCommand("frostpi.resumeSession", async () => {
       const sessionId = await registry.resumeSession();

@@ -9,7 +9,7 @@
   import { isQueuedPromptRecoveryPending } from "../composer/queuedPromptRecoveryStore.svelte";
   import IconButton from "../../primitives/IconButton.svelte";
   import StatusDot from "./StatusDot.svelte";
-  import SessionList from "./SessionList.svelte";
+  import SessionList, { STOP_PI_PROCESS_TITLE } from "./SessionList.svelte";
   import { sessionStatusLabel } from "./sessionStatusLabel";
 
   let { sessions, active }: { sessions: SessionSummaryView[]; active: SessionViewModel } = $props();
@@ -26,6 +26,7 @@
   const needsAttention = $derived(sessions.some((session) => session.requiresUserInput));
   const backgroundRuns = $derived(sessions.filter((session) => session.id !== active.id && session.status === "running").length);
   const editorTabs = $derived($clientCapabilities.sessionEditorTabs);
+  const processChanging = $derived(active.status === "queued" || active.status === "starting" || active.status === "stopping");
 
   $effect(() => {
     if (editing) requestAnimationFrame(() => titleInput?.focus());
@@ -103,6 +104,11 @@
   function stopSession(sessionId: string): void {
     closeMenus();
     postToHost({ type: "stopSession", sessionId });
+  }
+
+  function restartSession(sessionId: string): void {
+    closeMenus();
+    postToHost({ type: "restartSession", sessionId });
   }
 
   function deleteSession(sessionId: string): void {
@@ -191,7 +197,7 @@
           onselect={selectSession}
           onclose={closeSession}
           onstop={stopSession}
-          ondelete={deleteSession}
+          onrestart={restartSession}
           onexternalize={editorTabs ? openSessionPanel : undefined}
           oncreate={createSession}
           onresume={resumeSession}
@@ -246,11 +252,9 @@
             {#if active.historyStatus === "deferred" || active.historyStatus === "failed"}
               <button type="button" onclick={() => { closeMenus(); postToHost({ type: "loadHistory", sessionId: active.id }); }}><span class="codicon codicon-history"></span> Load conversation history</button>
             {/if}
-            {#if active.status === "stopped" && !active.isEphemeral}
-              <button type="button" onclick={() => { closeMenus(); postToHost({ type: "restartSession", sessionId: active.id }); }}><span class="codicon codicon-debug-start"></span> Start session</button>
-            {:else}
-              <button type="button" disabled={active.isEphemeral} title={active.isEphemeral ? "Temporary sessions cannot be restarted" : undefined} onclick={() => { closeMenus(); postToHost({ type: "restartSession", sessionId: active.id }); }}><span class="codicon codicon-debug-restart"></span> Restart session</button>
-              <button type="button" disabled={active.isEphemeral || active.status === "stopping"} title={active.isEphemeral ? "A temporary session cannot start again once stopped" : "Stop Pi and keep the session in the list"} onclick={() => stopSession(active.id)}><span class="codicon codicon-debug-stop"></span> Stop session</button>
+            <button type="button" disabled={active.isEphemeral} title={active.isEphemeral ? "Temporary sessions cannot be restarted" : "Restart this session's Pi process from its saved history."} onclick={() => restartSession(active.id)}><span class="codicon codicon-debug-restart"></span> Restart Pi process</button>
+            {#if active.status !== "stopped" && active.status !== "failed"}
+              <button type="button" disabled={active.isEphemeral || processChanging} title={active.isEphemeral ? "A temporary session cannot start again once its Pi process stops" : STOP_PI_PROCESS_TITLE} onclick={() => stopSession(active.id)}><span class="codicon codicon-debug-stop"></span> Stop Pi process</button>
             {/if}
             {#if active.sessionFile}
               <button

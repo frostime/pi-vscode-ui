@@ -17,7 +17,7 @@ import { readPiSessionMetadata, type PiSessionCatalogEntry } from "./catalog/Ses
 import { pickPiSession } from "./catalog/SessionCatalogPicker.js";
 import { parseLaunchArguments } from "./sessions/parseLaunchArguments.js";
 import { SessionPersistence } from "./sessions/SessionPersistence.js";
-import { confirmDraftReplacement, pickBranchEnd, pickBranchSummary, pickRewindTarget } from "./pickers/SessionTreePicker.js";
+import { confirmDraftReplacement, pickBranchEnd, pickBranchSummary } from "./pickers/SessionTreePicker.js";
 import {
   discoverSessionWorkingDirectories,
   findSessionWorkingDirectory,
@@ -524,10 +524,6 @@ export class SessionRegistry {
         case "new":
           await this.startNewConversation(sessionId);
           return;
-        case "rewind":
-          // The chosen prompt returns as a Composer seed, which must outlive this submission.
-          await this.rewind(sessionId);
-          return;
         case "reload":
           await this.#withTreeInteraction(sessionId, () => runtime.reloadResources());
           return;
@@ -582,24 +578,6 @@ export class SessionRegistry {
           this.#emitChange();
         }
       }
-    });
-  }
-
-  /** `/rewind`: Branch here, with the prompt chosen from a list instead of the transcript. */
-  async rewind(sessionId: string): Promise<{ cancelled: boolean }> {
-    return this.#withTreeInteraction(sessionId, async () => {
-      this.#assertNoForkOperation();
-      const runtime = this.#requireRuntime(sessionId);
-      await this.#ensureRunning(runtime);
-      const targets = await runtime.listRewindTargets();
-      if (targets.length === 0) throw new Error("This conversation has no earlier prompt to rewind to.");
-      const target = await pickRewindTarget(this.#host, targets);
-      if (!target) return { cancelled: true };
-      const summary = await pickBranchSummary(this.#host);
-      if (!summary) return { cancelled: true };
-      const result = await runtime.navigateTree(target.targetId, summary);
-      if (result.seed) runtime.setComposerSeed(result.seed);
-      return { cancelled: result.cancelled };
     });
   }
 
@@ -734,8 +712,11 @@ export class SessionRegistry {
     try {
       await this.#startRuntime(runtime, true);
       if (runtime.view.status !== "ready") throw new Error(runtime.view.error ?? "The Pi process for the Fork did not start.");
-      // The start queues the ordinary history load; a deferred one is then forced.
-      for (let attempt = 0; attempt < 2 && runtime.view.historyStatus !== "loaded"; attempt += 1) await this.#queueHistory(runtime, true);
+      // The start queues the ordinary history load. Wait for it rather than reuse it as the
+      // full load: for a large file it defers, and only then is the full history loaded.
+      await this.#historyJobs.get(runtime.id)?.catch(() => undefined);
+      if (runtime.view.historyStatus !== "loaded") await this.#queueHistory(runtime, true);
+      if (runtime.view.historyStatus !== "loaded") throw new Error("Unable to load the session history for the Fork.");
       const result = await runtime.executeFork(entryId);
       if (result.cancelled) return { cancelled: true };
       committed = true;
@@ -1410,10 +1391,10 @@ async function confirmStop(host: ClientHost, runtime: SessionRuntime): Promise<b
   const view = runtime.view;
   if (!view.isStreaming && view.pendingExtensionUi.length === 0) return true;
   const choice = await host.window.showWarningDialog(
-    "Stopping this FrostPi session will stop its active response, tools, and pending extension UI requests. Persisted Pi history is retained.",
-    ["Stop session"],
+    "Stopping this session's Pi process will stop its active response, tools, and pending extension UI requests. The session and its saved Pi history are kept.",
+    ["Stop Pi process"],
   );
-  return choice === "Stop session";
+  return choice === "Stop Pi process";
 }
 
 async function confirmRestart(host: ClientHost, runtimes: readonly SessionRuntime[]): Promise<boolean> {

@@ -14,13 +14,13 @@ function turn(items: AgentTurnItemView[], status: AgentTurnView["status"] = "run
   return { id: "turn-focus", type: "turn", status, startedAt: 0, ...(status === "running" ? {} : { endedAt: 5_000 }), items };
 }
 
-function session(focusView: boolean, collapseTurnTrace = true) {
-  return { id: "session", collapseTurnTrace, focusView } as never;
+function session(collapseRunningTurnTrace: boolean, collapseTurnTrace = true) {
+  return { id: "session", collapseTurnTrace, collapseRunningTurnTrace } as never;
 }
 
 const reply: AgentTurnItemView = { id: "r1", type: "response", blocks: [{ type: "text", text: "Visible reply" }], status: "streaming", timestamp: 0 };
 
-describe("focus view", () => {
+describe("turn folding", () => {
   it("folds a running turn's tool run into one row and keeps the reply readable", async () => {
     const view = render(AgentTurn, {
       turn: turn([tool("t1", "read", "a.ts"), tool("t2", "bash", "npm test", "running"), reply]),
@@ -48,7 +48,7 @@ describe("focus view", () => {
     expect(view.container.querySelectorAll(".tool-activity-name")).toHaveLength(3);
   });
 
-  it("shows every step as its own row when focus view is off", () => {
+  it("shows every step of a running turn as its own row when collapseRunningTurnTrace is off", () => {
     const view = render(AgentTurn, {
       turn: turn([tool("t1", "read", "a.ts"), tool("t2", "bash", "npm test", "running"), reply]),
       session: session(false),
@@ -57,17 +57,47 @@ describe("focus view", () => {
     expect(view.container.querySelectorAll(".tool-activity-name")).toHaveLength(2);
   });
 
-  it("folds a finished turn per run, with its replies visible, even when focus view is off", () => {
+  it("collapses a finished turn above its final reply, with a toggle at both ends", async () => {
     const interim: AgentTurnItemView = { id: "r0", type: "response", blocks: [{ type: "text", text: "Interim note" }], status: "complete", timestamp: 0 };
     const done: AgentTurnItemView = { id: "r1", type: "response", blocks: [{ type: "text", text: "Visible reply" }], status: "complete", timestamp: 0 };
     const view = render(AgentTurn, {
       turn: turn([tool("t1", "read", "a.ts"), tool("t2", "bash", "ls"), interim, tool("t3", "read", "c.ts"), tool("t4", "edit", "c.ts"), done], "completed"),
       session: session(false),
     });
-    expect(view.getAllByRole("button", { name: /^Expand 2 steps/ })).toHaveLength(2);
-    expect(view.container.textContent).toContain("Interim note");
+    const summary = view.getByRole("button", { name: /^Expand work trace: 5 steps/ });
+    expect(view.container.textContent).toContain("Worked");
+    expect(view.container.textContent).not.toContain("Interim note");
     expect(view.container.textContent).toContain("Visible reply");
+    expect(view.container.querySelector(".turn-step-group")).toBeNull();
+
+    // The reply line before the final answer toggles the same trace, without scrolling up.
+    const replyLine = view.getByRole("button", { name: "Expand work trace" });
+    expect(replyLine.textContent).toContain("Reply");
+    await fireEvent.click(replyLine);
+    expect(summary.getAttribute("aria-expanded")).toBe("true");
+    // Opened, the interim reply shows between runs that stay folded.
+    expect(view.container.textContent).toContain("Interim note");
+    expect(view.getAllByRole("button", { name: /^Expand 2 steps/ })).toHaveLength(2);
     expect(view.container.querySelectorAll(".tool-activity-name")).toHaveLength(0);
+
+    await fireEvent.click(view.getByRole("button", { name: /^Collapse work trace: 5 steps/ }));
+    expect(view.container.textContent).not.toContain("Interim note");
+  });
+
+  it("shows one summary, not a group inside it, for a finished turn with a single run", async () => {
+    const done: AgentTurnItemView = { id: "r1", type: "response", blocks: [{ type: "text", text: "Visible reply" }], status: "complete", timestamp: 0 };
+    const view = render(AgentTurn, { turn: turn([tool("t1", "read", "a.ts"), tool("t2", "bash", "ls"), done], "completed"), session: session(true) });
+    await fireEvent.click(view.getByRole("button", { name: /^Expand work trace: 2 steps/ }));
+    expect(view.container.querySelector(".turn-step-group")).toBeNull();
+    expect(view.container.querySelectorAll(".tool-activity-name")).toHaveLength(2);
+  });
+
+  it("leaves a finished turn flat when collapseTurnTrace is off, whatever the running-turn setting", () => {
+    const done: AgentTurnItemView = { id: "r1", type: "response", blocks: [{ type: "text", text: "Visible reply" }], status: "complete", timestamp: 0 };
+    const view = render(AgentTurn, { turn: turn([tool("t1", "read", "a.ts"), tool("t2", "bash", "ls"), done], "completed"), session: session(true, false) });
+    expect(view.queryByRole("button", { name: /work trace/ })).toBeNull();
+    expect(view.container.querySelector(".turn-step-group")).toBeNull();
+    expect(view.container.querySelectorAll(".tool-activity-name")).toHaveLength(2);
   });
 
   it("keeps an opened reasoning row open when its run folds into a group", async () => {

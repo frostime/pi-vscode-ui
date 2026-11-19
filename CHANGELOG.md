@@ -14,13 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/name <name>` and `/alias <name>` rename the session from the Composer, also while Pi is running a turn. Without a name they ask for one.
 - `/reload` reloads Pi's extensions, skills, prompt templates, themes and context files in the running session, like `/reload` in Pi's terminal UI. In RPC mode Pi used to receive it as an ordinary prompt.
 - `/new` starts a new conversation in the same session view and keeps the model, thinking level and Pi process. The earlier conversation stays in Pi's session history for **Resume session**.
-- `/rewind` lists earlier prompts and returns the conversation to just before the one you pick, with that prompt back in the Composer. It uses Pi's session tree, so the path you left remains available; files on disk are not restored.
 - `/btw <question>` asks a side question about the current conversation without adding it to the conversation, also while Pi is running a turn. The answer appears in a dismissible card and is never saved. It follows Pi's `images.blockImages` setting; other Pi extensions' request hooks do not run for it.
-- Focus view, on by default: each run of tool calls and reasoning folds into one expandable row while a turn is running, and replies stay visible. Switch with **FrostPi: Toggle Focus View** or `frostpi.conversation.focusView`.
+- Focus View, on by default: while a turn is running, each run of tool calls and reasoning folds into one expandable row, and replies stay visible. Switch it with **FrostPi: Toggle Running-Turn Collapse (Focus View)** or `frostpi.conversation.collapseRunningTurnTrace`. Finished turns still collapse into one **Worked** summary under `frostpi.conversation.collapseTurnTrace`; the two settings are independent.
 - The page shown when no session is open offers **Temporary session**, a conversation that is never saved, next to **New session** and **Resume session**.
 - A temporary session can start directly in an editor tab: from the crossed-eye button beside **New session in editor tab** in the sidebar's `+` menu, from the crossed-eye button in a session tab, by holding Alt while clicking the `+` in the editor title bar, from that title bar's `…` menu, or with **FrostPi: New Temporary Session in Editor Tab**. **FrostPi: New Temporary Session** starts one in the sidebar.
-- Stop a session without closing it: its Pi process ends and it stays in the list, ready to start again when you select it, send a prompt or choose **Start session**. Use the stop button on its row in the session list, **Stop session** in the `…` menu, or **FrostPi: Stop Session**, which is also in a session tab's title bar menu.
-- Delete a session: **Delete session** stops it and removes its Pi session file, to the trash where possible, after confirmation. It is in the same places, with a trash icon in the session list, and as **FrostPi: Delete Session**. Forks of the session keep their own files.
+- **Stop Pi process** ends a session's Pi process and keeps the session and its saved history in the list. Selecting it, sending a message or **Restart Pi process** starts Pi again. It is the stop button on the session's row in the session list, which turns into **Restart Pi process** once stopped, an entry in the `…` menu, and **FrostPi: Stop Pi Process**, also in a session tab's title bar menu.
+- Delete a session: **Delete session** stops it and removes its Pi session file, to the trash where possible, after confirmation. It is in the `…` menu, in a session tab's title bar menu and as **FrostPi: Delete Session**. Forks of the session keep their own files.
 
 ### Fixed
 
@@ -30,12 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **FrostPi: Stop Active Session** is now called **FrostPi: Stop Response**. It stops the running reply, as before; **FrostPi: Stop Session** is the new command that ends the Pi process.
+- **FrostPi: Stop Active Session** is now called **FrostPi: Stop Response**, and the Composer's stop button is labelled **Stop response**. It stops the running reply, as before; **FrostPi: Stop Pi Process** is the new command that ends the Pi process.
+- The `…` menu's **Restart session** is now **Restart Pi process**, the name the session list uses.
 - The sidebar's `+` menu is one flat list: **New session**, **New session in editor tab**, **New session with arguments…** and **Resume session**. The two new-session entries each end in a crossed-eye button that starts the temporary variant. The arrow that expanded more ways to start is gone.
 - The badge beside a temporary session's title reads **Temporary**, like the menus and messages. It was in Chinese (临时).
-- A finished turn no longer collapses into one **Worked** summary. Each run of tool calls and reasoning folds into its own row, and replies between runs stay visible. `frostpi.conversation.collapseTurnTrace` controls this for finished turns.
+- Inside an opened **Worked** summary, each run of tool calls and reasoning stays folded into one row, so interim replies are easy to find. A summary that holds a single run shows its steps directly.
 - A reasoning row shows one line of the model's thinking beside its title, and an opened reasoning row stays open when the next step folds it into a group.
-- A long session opens on its part since the last compaction, or on its recent prompts when it has none, with **Load full history** to see everything. Sessions larger than 8 MiB used to open with no history at all.
 - Fork works while a reply is running. FrostPi forks in a separate Pi process, so the reply keeps going.
 - New setting `frostpi.session.closeWithEditorTab`: closing a session's editor tab also closes the session.
 - `frostpi.conversation.collapseTurnTrace` now applies as soon as it changes instead of at the next session start.

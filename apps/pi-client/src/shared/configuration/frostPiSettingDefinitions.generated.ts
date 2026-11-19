@@ -60,13 +60,13 @@ export const frostPiSettingDefinitions = {
     "type": "boolean",
     "default": true,
     "scope": "resource",
-    "description": "After a turn completes, fold each run of tool calls and reasoning into one expandable row. Replies, including those between runs, stay visible."
+    "description": "After a turn completes, fold its tool calls, reasoning and interim replies into one summary above the final reply. Inside an opened summary, each run of tool calls and reasoning stays folded into one row. How a turn folds while it is still running is controlled by frostpi.conversation.collapseRunningTurnTrace."
   },
-  "frostpi.conversation.focusView": {
+  "frostpi.conversation.collapseRunningTurnTrace": {
     "type": "boolean",
     "default": true,
     "scope": "resource",
-    "description": "Fold each run of tool calls and reasoning into one expandable row, including while a turn is running. Replies stay visible. Use \"FrostPi: Toggle Focus View\" to switch."
+    "description": "While a turn is still running, fold each run of consecutive tool calls and reasoning into one expandable row. Replies stay visible. How finished turns fold is controlled by frostpi.conversation.collapseTurnTrace. \"FrostPi: Toggle Running-Turn Collapse (Focus View)\" switches it."
   },
   "frostpi.questionTool.enabled": {
     "type": "boolean",

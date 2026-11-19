@@ -25,7 +25,7 @@ export class SessionViewState {
     attachmentLimits: AttachmentLimitsView = { maxImageBytes: 10 * 1024 * 1024, maxImages: 12 },
     collapseTurnTrace = true,
     isEphemeral = false,
-    focusView = true,
+    collapseRunningTurnTrace = true,
   ) {
     this.#view = {
       id,
@@ -44,7 +44,7 @@ export class SessionViewState {
       commands: [],
       attachmentLimits,
       collapseTurnTrace,
-      focusView,
+      collapseRunningTurnTrace,
       composerStreamingBehavior: "followUp",
       networkProxy: { mode: "inherit", label: "Inherited", restartRequired: false },
       questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
@@ -186,13 +186,8 @@ export class SessionViewState {
     this.#view.collapseTurnTrace = collapseTurnTrace;
   }
 
-  setPartialHistory(partial: SessionViewModel["partialHistory"]): void {
-    if (partial) this.#view.partialHistory = partial;
-    else delete this.#view.partialHistory;
-  }
-
-  setFocusView(focusView: boolean): void {
-    this.#view.focusView = focusView;
+  setCollapseRunningTurnTrace(collapseRunningTurnTrace: boolean): void {
+    this.#view.collapseRunningTurnTrace = collapseRunningTurnTrace;
   }
 
   setSideQuestion(sideQuestion: SessionViewModel["sideQuestion"]): void {

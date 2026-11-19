@@ -205,7 +205,7 @@ async function resumePicker() {
 async function verifyTrayBehavior() {
   assert.equal(nativeWindow("state").tray, true);
   await send("stream-084");
-  await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Stop Pi\"]'))"), "task active before hide");
+  await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Stop response\"]'))"), "task active before hide");
   await client.typeIntoComposer("tray-unsent-draft");
   await client.evaluate("window.__trayRoot=document.querySelector('.frostpi-root');window.__trayEditor=document.querySelector('.cm-editor')");
   await hideWindow();
@@ -216,25 +216,25 @@ async function verifyTrayBehavior() {
   await until(() => readFileSync(sessionFile, "utf8").split('"file body"').length > completedBefore, "Pi finishes and persists its result while the window is hidden");
   unlinkSync(release);
   nativeWindow("restore");
-  await until(() => nativeWindow("state").visible && client.evaluate("!document.querySelector('[aria-label=\"Stop Pi\"]')"), "tray click restores the completed task");
+  await until(() => nativeWindow("state").visible && client.evaluate("!document.querySelector('[aria-label=\"Stop response\"]')"), "tray click restores the completed task");
   assert.equal(await client.evaluate("window.__trayRoot===document.querySelector('.frostpi-root') && window.__trayEditor===document.querySelector('.cm-editor') && document.querySelector('.cm-content').textContent==='tray-unsent-draft'"), true);
   checks.push("X hides without stopping Pi; tray click restores the same client and draft after background completion");
   await client.evaluate("document.querySelector('[aria-label=\"Send to Pi\"]').click()");
-  await until(() => client.evaluate("Boolean(document.querySelector('.cm-placeholder')) && !document.querySelector('[aria-label=\"Stop Pi\"]')"), "retained draft sends normally after restore");
+  await until(() => client.evaluate("Boolean(document.querySelector('.cm-placeholder')) && !document.querySelector('[aria-label=\"Stop response\"]')"), "retained draft sends normally after restore");
 }
 async function verifyParallelAndResume() {
   await observeProjects();
   await client.evaluate("window.__clientRoot=document.querySelector('.frostpi-root')");
   await send("stream-084");
-  await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Stop Pi\"]'))"), "Project A streaming");
+  await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Stop response\"]'))"), "Project A streaming");
   await selectProject(1); await newSession(); await send("stream-084");
   await until(() => client.evaluate("Object.values(window.__projects.navigation.activity).filter(a=>a.running===1).length===2"), "two Projects stream concurrently");
-  await client.evaluate("document.querySelector('[aria-label=\"Stop Pi\"]').click()");
-  await until(() => client.evaluate("!document.querySelector('[aria-label=\"Stop Pi\"]') && Object.values(window.__projects.navigation.activity).filter(a=>a.running===1).length===1"), "Stop B leaves A running");
+  await client.evaluate("document.querySelector('[aria-label=\"Stop response\"]').click()");
+  await until(() => client.evaluate("!document.querySelector('[aria-label=\"Stop response\"]') && Object.values(window.__projects.navigation.activity).filter(a=>a.running===1).length===1"), "Stop B leaves A running");
   await selectProject(0);
-  await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Stop Pi\"]'))"), "switching back retains A turn");
-  await client.evaluate("document.querySelector('[aria-label=\"Stop Pi\"]').click()");
-  await until(() => client.evaluate("!document.querySelector('[aria-label=\"Stop Pi\"]') && Object.values(window.__projects.navigation.activity).every(a=>a.running===0)"), "Stop A settles both");
+  await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Stop response\"]'))"), "switching back retains A turn");
+  await client.evaluate("document.querySelector('[aria-label=\"Stop response\"]').click()");
+  await until(() => client.evaluate("!document.querySelector('[aria-label=\"Stop response\"]') && Object.values(window.__projects.navigation.activity).every(a=>a.running===0)"), "Stop A settles both");
   assert.equal(await client.evaluate("window.__clientRoot===document.querySelector('.frostpi-root')"), true);
   checks.push("two Projects run concurrently; Stop and selection preserve session ownership");
   // The shared fixture writes into cwd; seed the configured catalog directory
@@ -484,7 +484,7 @@ async function verifyMarkdownImages() {
   }
   lines.push("![Remote consent](https://images.example.invalid/consent.png)");
   await send(lines.join("\n\n"));
-  await until(() => client.evaluate("[...document.querySelectorAll('.remote-placeholder')].some(e=>e.textContent.includes('Remote consent')) && !document.querySelector('[aria-label=\"Stop Pi\"]')"), "image fixture turn completes");
+  await until(() => client.evaluate("[...document.querySelectorAll('.remote-placeholder')].some(e=>e.textContent.includes('Remote consent')) && !document.querySelector('[aria-label=\"Stop response\"]')"), "image fixture turn completes");
   await client.evaluate("[...document.querySelectorAll('.message-user')].at(-1).scrollIntoView({block:'end'})");
   for (const image of markdownRasterImages) {
     for (const source of ["local", "data"]) {
@@ -530,7 +530,7 @@ async function verifyOversizedPrompt() {
   await client.evaluate("[...document.querySelectorAll('.attachment-item button')].forEach(button=>button.click())");
   await until(() => client.evaluate("!document.querySelector('.attachment-item')"), "user removes oversized attachments");
   await client.evaluate("document.querySelector('[aria-label=\"Send to Pi\"]').click()");
-  await until(() => client.evaluate("document.querySelector('.conversation-frame').textContent.includes('desktop-limit-draft') && !document.querySelector('[aria-label=\"Stop Pi\"]')"), "the retained draft sends normally after reducing attachments");
+  await until(() => client.evaluate("document.querySelector('.conversation-frame').textContent.includes('desktop-limit-draft') && !document.querySelector('[aria-label=\"Stop response\"]')"), "the retained draft sends normally after reducing attachments");
   await client.evaluate("window.__limitSubscription()");
   checks.push("32 MiB rejection preserves draft and backend; smaller resend succeeds");
 }
@@ -550,7 +550,7 @@ try {
   await until(() => client.evaluate("Boolean(document.querySelector('.cm-content[aria-label=\"Message Pi\"]'))"), "composer ready");
   await send("desktop-smoke-prompt");
   await until(() => client.evaluate("document.querySelector('.conversation')?.textContent.includes('desktop-smoke-prompt') || document.querySelector('.conversation-frame')?.textContent.includes('desktop-smoke-prompt')"), "conversation round trip");
-  await until(() => client.evaluate("document.querySelector('.conversation-frame')?.textContent.includes('E2E response') && !document.querySelector('[aria-label=\"Stop Pi\"]')"), "assistant response completes");
+  await until(() => client.evaluate("document.querySelector('.conversation-frame')?.textContent.includes('E2E response') && !document.querySelector('[aria-label=\"Stop response\"]')"), "assistant response completes");
   checks.push("controlled Pi prompt crosses Rust/Node/shared UI");
   await verifySidebarSections();
   await send("mermaid");
@@ -570,9 +570,9 @@ try {
   await until(() => client.evaluate(`Math.abs(innerWidth * 1.2 - ${initialWidth * initialZoom}) <= 2`), "native WebView2 zoom scales viewport");
   checks.push("live settings/theme and measured native zoom");
   await client.evaluate("document.querySelector('[aria-label=\"Send to Pi\"]').click()");
-  await until(() => client.evaluate("Boolean(document.querySelector('.cm-placeholder')) && !document.querySelector('[aria-label=\"Stop Pi\"]')"), "composed draft sends before renderer failure");
+  await until(() => client.evaluate("Boolean(document.querySelector('.cm-placeholder')) && !document.querySelector('[aria-label=\"Stop response\"]')"), "composed draft sends before renderer failure");
   await send("stream-084");
-  await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Stop Pi\"]'))"), "active task before renderer failure");
+  await until(() => client.evaluate("Boolean(document.querySelector('[aria-label=\"Stop response\"]'))"), "active task before renderer failure");
   await hideWindow();
   await closeAfterRendererFailure();
   const state = JSON.parse(readFileSync(join(profile, "state.json"), "utf8"));
@@ -599,7 +599,7 @@ try {
   console.log(JSON.stringify({ ok: true, directory, checks, manualChecks }));
 } catch (error) {
   let startup;
-  try { startup = await client?.evaluate("({url:location.href,api:typeof window.frostpiDesktop,tauri:typeof window.__TAURI_INTERNALS__,shell:!!document.querySelector('.desktop-shell'),composerLength:document.querySelector('.cm-content')?.textContent.length,stopVisible:!!document.querySelector('[aria-label=\"Stop Pi\"]'),sendDisabled:document.querySelector('[aria-label=\"Send to Pi\"]')?.disabled,connectionError:document.getElementById('app')?.textContent.startsWith('FrostPi could not connect'),scripts:[...document.scripts].map(s=>s.src)})"); } catch { /* The child may already be gone. */ }
+  try { startup = await client?.evaluate("({url:location.href,api:typeof window.frostpiDesktop,tauri:typeof window.__TAURI_INTERNALS__,shell:!!document.querySelector('.desktop-shell'),composerLength:document.querySelector('.cm-content')?.textContent.length,stopVisible:!!document.querySelector('[aria-label=\"Stop response\"]'),sendDisabled:document.querySelector('[aria-label=\"Send to Pi\"]')?.disabled,connectionError:document.getElementById('app')?.textContent.startsWith('FrostPi could not connect'),scripts:[...document.scripts].map(s=>s.src)})"); } catch { /* The child may already be gone. */ }
   if (startup?.connectionError) {
     try { startup.rpcError = await client.evaluate("Promise.race([window.__TAURI_INTERNALS__.invoke('desktop_connect',{channel:'__CHANNEL__:'+window.__TAURI_INTERNALS__.transformCallback(()=>{})}).then(()=>null,error=>String(error).slice(0,256)),new Promise(resolve=>setTimeout(()=>resolve('Connection retry still pending'),3000))])"); } catch { /* Diagnostic only. */ }
   }

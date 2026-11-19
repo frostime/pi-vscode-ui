@@ -172,7 +172,7 @@ Session state remains visible while other sessions continue working in the backg
 
 A session can live in an editor tab instead of the sidebar. **FrostPi: New Session in Editor Tab** starts one there directly; the `+` button in a session tab, or in the editor title bar, opens another in the same tab group and working directory. The sidebar's `+` menu offers it too, directly below **New session**. A temporary session, which is never saved, can start in either place: the crossed-eye button at the end of **New session** and of **New session in editor tab** in that menu starts one. In the sidebar it can also start from the page shown when no session is open, or with **FrostPi: New Temporary Session**. In an editor tab: from the crossed-eye button in a session tab, by holding Alt while clicking the `+` in the editor title bar, or with **FrostPi: New Temporary Session in Editor Tab**. Click a session tab's title to rename it, also while Pi is working, or run **FrostPi: Rename Session**. In the sidebar, use the pencil button next to the session title or double-click the title. The sidebar keeps its own selection throughout.
 
-A session can be stopped without closing it: its Pi process ends and it stays in the session list. Use the stop button on its row in the session list, **Stop session** in the sidebar's `…` menu, or **FrostPi: Stop Session**, which also appears in a session tab's title bar menu. Selecting it again, sending a prompt or **Start session** in the `…` menu starts it from where it left off. **Delete session**, in the same places with a trash icon, stops the session and removes its Pi session file, to the trash where possible. Temporary sessions can only be closed.
+**Stop Pi process** ends a session's Pi process without closing the session: the session and its saved history stay in the session list. It is the stop button on the session's row in the session list, an entry in the sidebar's `…` menu, and **FrostPi: Stop Pi Process**, which also appears in a session tab's title bar menu. Once stopped, the row's button becomes **Restart Pi process**; selecting the session, sending a message or **Restart Pi process** in the `…` menu starts Pi again from where it left off. **Delete session**, in the `…` menu and as **FrostPi: Delete Session**, stops the session and removes its Pi session file, to the trash where possible. Temporary sessions can only be closed.
 
 ### Conversation commands
 
@@ -182,18 +182,17 @@ FrostPi answers a few slash commands itself. They never become a prompt, and the
 - `/new` starts a new conversation in the same session view. The model, thinking level and Pi process stay. The earlier conversation remains in Pi's session history, so **Resume session** can reopen it. Stop a running response first.
 - `/name <name>` or `/alias <name>` renames the session. Without a name, FrostPi asks for one.
 - `/reload` reloads Pi's extensions, skills, prompt templates, themes and context files without restarting the session. Stop a running response first.
-- `/rewind` lists your earlier prompts, returns the conversation to just before the one you pick, and puts that prompt back in the Composer for editing. It is **Branch here** with a picker: the path you left stays available through **Switch branch**. Files on disk are not restored; only the conversation changes.
 - `/btw <question>` asks a side question about the conversation without adding it to the conversation. The answer appears in a card above the Composer and is never saved. It works while Pi is running a turn, uses the current model and counts as one more model request, and cannot use tools.
   - The request is made inside Pi through its model API for extensions, with Pi's model, credentials and provider settings. It follows Pi's `images.blockImages` setting.
   - It is not an agent turn. Other Pi extensions' `context`, `before_provider_request` and `before_provider_headers` hooks do not run for it. If you rely on such an extension to redact context or to add gateway headers, do not use `/btw`.
 
-`/new`, `/rewind`, `/reload` and `/btw` need Pi. With the `oh-my-pi` compatibility profile FrostPi does not offer them and passes such text to the runtime unchanged.
+`/new`, `/reload` and `/btw` need Pi. With the `oh-my-pi` compatibility profile FrostPi does not offer them and passes such text to the runtime unchanged.
 
-### Focus view
+### Folding long turns
 
-The focus view keeps long turns readable. Each run of tool calls and reasoning folds into one row that says what it did, or what it is doing right now, and replies stay visible in order. Click a row to see its steps. A reasoning row shows a line of what the model is thinking, as a tool row shows its target. A finished turn keeps the same shape: each run of steps stays folded and every reply, including those between runs, stays visible.
+A finished turn folds its tools, reasoning and interim replies into one **Worked** summary above the final reply, because the last reply is the model's answer. Click the summary, or the **Reply** line just above the final reply, to open or fold it again. Inside an opened summary each run of tool calls and reasoning stays folded into one row. `frostpi.conversation.collapseTurnTrace` controls this and is on by default.
 
-The focus view is on by default. Run **FrostPi: Toggle Focus View** or set `frostpi.conversation.focusView` to switch it for running turns; `frostpi.conversation.collapseTurnTrace` folds finished turns the same way and is also on by default.
+While a turn is running, the Focus View folds each run of tool calls and reasoning into one row that says what it did, or what it is doing right now, and replies stay visible in order. Click a row to see its steps. A reasoning row shows a line of what the model is thinking, as a tool row shows its target. It is on by default; run **FrostPi: Toggle Running-Turn Collapse (Focus View)** or set `frostpi.conversation.collapseRunningTurnTrace` to switch it. The two settings are independent: one covers running turns, the other finished ones.
 
 ### Pi Session Tree and Fork
 
@@ -268,8 +267,8 @@ Common settings include:
 - `frostpi.session.startOnOpen`
 - `frostpi.session.closeWithEditorTab` — closing a session's editor tab also closes the session, as **Close session** in the list does. Off by default, so the session keeps running in the sidebar.
 - `frostpi.composer.streamingBehavior`
-- `frostpi.conversation.focusView`
 - `frostpi.conversation.collapseTurnTrace`
+- `frostpi.conversation.collapseRunningTurnTrace`
 - `frostpi.composer.fileMentions.respectSearchExclude`
 - `frostpi.composer.fileMentions.respectIgnoreFiles`
 - `frostpi.composer.fileMentions.followSymlinks`

@@ -58,8 +58,8 @@ export const settingsPages: readonly SettingsPage[] = [
     sections: [
       { title: "Reading & input", settings: [
         { key: "frostpi.composer.streamingBehavior", label: "Prompts sent while Pi is running", description: "The Composer can override this per session.", enumLabels: { followUp: "Queue for after the turn", steer: "Deliver during the turn" } },
-        { key: "frostpi.conversation.collapseTurnTrace", label: "Collapse completed turn details", description: "Fold each run of tool calls and reasoning in a finished turn. Replies stay visible." },
-        { key: "frostpi.conversation.focusView", label: "Focus view", description: "Fold each run of tool calls and reasoning into one row, also while a turn is running." },
+        { key: "frostpi.conversation.collapseTurnTrace", label: "Collapse completed turn details", description: "Group tools, reasoning and interim replies above the final answer once a turn completes." },
+        { key: "frostpi.conversation.collapseRunningTurnTrace", label: "Collapse running turn steps (Focus View)", description: "While a turn is running, fold each run of tool calls and reasoning into one row. Replies stay visible." },
         { key: "frostpi.attachments.maxImageBytes", label: "Image size limit", description: "Pasted images over this limit cannot be attached. Images loaded from local files or HTTPS links in the conversation are also rejected if they exceed the limit.", unit: "MiB", scale: 1024 * 1024 },
       ] },
       { title: "Runtime", settings: [

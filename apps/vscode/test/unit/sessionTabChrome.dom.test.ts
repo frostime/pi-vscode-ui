@@ -28,7 +28,7 @@ function session(overrides: Partial<SessionViewModel> = {}): SessionViewModel {
     id: "session", title: "Parser work", cwd: "/workspace", status: "running", isEphemeral: false,
     isStreaming: true, isCompacting: false, isForking: false, historyStatus: "loaded",
     model: null, thinkingLevel: "off", availableModels: [], scopedModelIds: [], commands: [],
-    attachmentLimits: { maxImageBytes: 1, maxImages: 1 }, collapseTurnTrace: true, focusView: true,
+    attachmentLimits: { maxImageBytes: 1, maxImages: 1 }, collapseTurnTrace: true, collapseRunningTurnTrace: true,
     composerStreamingBehavior: "steer", networkProxy: { mode: "inherit", label: "Inherited", restartRequired: false },
     questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
     conversationItems: [], queuedSteers: [], queuedFollowUps: [], queuedPromptRecovery: { state: "unavailable" } as never,
@@ -154,33 +154,45 @@ describe("stop and delete from the sidebar", () => {
     { id: "temp", title: "Scratch", cwd: "/workspace", status: "ready", isActive: false, isEphemeral: true, historyStatus: "loaded", requiresUserInput: false },
   ];
 
-  it("offers stop only for a running saved Session and delete for every saved one in the session list", async () => {
-    const view = render(SessionHeader, { sessions: summaries, active: session({ status: "ready", isStreaming: false }) });
+  it("toggles one Pi process button per session-list row and keeps Delete off the rows", async () => {
+    const withStarting: SessionSummaryView[] = [
+      ...summaries,
+      { id: "starting", title: "Booting", cwd: "/workspace", status: "starting", isActive: false, isEphemeral: false, historyStatus: "queued", requiresUserInput: false },
+    ];
+    const view = render(SessionHeader, { sessions: withStarting, active: session({ status: "ready", isStreaming: false }) });
     await fireEvent.click(view.getByRole("button", { name: /Parser work/ }));
 
-    expect(view.queryByRole("button", { name: "Stop Old work" })).toBeNull();
-    expect(view.queryByRole("button", { name: "Stop Scratch" })).toBeNull();
-    expect(view.queryByRole("button", { name: "Delete Scratch" })).toBeNull();
-    await fireEvent.click(view.getByRole("button", { name: "Stop Parser work" }));
-    await fireEvent.click(view.getByRole("button", { name: /Parser work/ }));
-    await fireEvent.click(view.getByRole("button", { name: "Delete Old work" }));
+    const stop = view.getByRole("button", { name: "Stop Pi process: Parser work" });
+    expect(stop.getAttribute("title")).toBe("Stop this session's Pi process. Keep the session and its saved history. Sending another message starts Pi again.");
+    // A stopped row shows Restart in the same place instead of leaving a gap.
+    expect(view.queryByRole("button", { name: "Stop Pi process: Old work" })).toBeNull();
+    expect(view.getByRole("button", { name: "Restart Pi process: Old work" })).toBeTruthy();
+    expect((view.getByRole("button", { name: "Stop Pi process: Booting" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((view.getByRole("button", { name: "Stop Pi process: Scratch" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(view.queryByRole("button", { name: /^Delete/ })).toBeNull();
+    for (const row of view.container.querySelectorAll(".session-list-item")) {
+      expect(row.querySelectorAll("button.session-list-action")).toHaveLength(1);
+    }
 
-    expect(posted()).toEqual([{ type: "stopSession", sessionId: "session" }, { type: "deleteSession", sessionId: "stopped" }]);
+    await fireEvent.click(stop);
+    await fireEvent.click(view.getByRole("button", { name: /Parser work/ }));
+    await fireEvent.click(view.getByRole("button", { name: "Restart Pi process: Old work" }));
+
+    expect(posted()).toEqual([{ type: "stopSession", sessionId: "session" }, { type: "restartSession", sessionId: "stopped" }]);
   });
 
-  it("stops, starts and deletes the shown Session from its actions menu", async () => {
+  it("stops, restarts and deletes the shown Session from its actions menu", async () => {
     const running = render(SessionHeader, { sessions: summaries, active: session({ status: "ready", isStreaming: false }) });
     await fireEvent.click(running.getByRole("button", { name: "Session actions" }));
-    expect(running.queryByRole("button", { name: /Start session/ })).toBeNull();
-    await fireEvent.click(running.getByRole("button", { name: /Stop session/ }));
+    await fireEvent.click(running.getByRole("button", { name: /Stop Pi process/ }));
     await fireEvent.click(running.getByRole("button", { name: "Session actions" }));
     await fireEvent.click(running.getByRole("button", { name: /Delete session/ }));
     cleanup();
 
     const stopped = render(SessionHeader, { sessions: summaries, active: session({ status: "stopped", isStreaming: false }) });
     await fireEvent.click(stopped.getByRole("button", { name: "Session actions" }));
-    expect(stopped.queryByRole("button", { name: /Stop session/ })).toBeNull();
-    await fireEvent.click(stopped.getByRole("button", { name: /Start session/ }));
+    expect(stopped.queryByRole("button", { name: /Stop Pi process/ })).toBeNull();
+    await fireEvent.click(stopped.getByRole("button", { name: /Restart Pi process/ }));
 
     expect(posted()).toEqual([
       { type: "stopSession", sessionId: "session" },
@@ -192,7 +204,7 @@ describe("stop and delete from the sidebar", () => {
   it("offers a temporary Session neither stop nor delete in its actions menu", async () => {
     const view = render(SessionHeader, { sessions: summaries, active: session({ isEphemeral: true, status: "ready", isStreaming: false }) });
     await fireEvent.click(view.getByRole("button", { name: "Session actions" }));
-    expect((view.getByRole("button", { name: /Stop session/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((view.getByRole("button", { name: /Stop Pi process/ }) as HTMLButtonElement).disabled).toBe(true);
     expect(view.queryByRole("button", { name: /Delete session/ })).toBeNull();
   });
 });

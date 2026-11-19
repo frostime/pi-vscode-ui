@@ -25,7 +25,7 @@ describe("Host slash commands through the real Registry and child-process path",
     const fixture = await host();
     const sessionId = await fixture.startSession();
     expect(fixture.view(sessionId).commands.map(({ name, source }) => `${name}:${source}`)).toEqual([
-      "new:frostpi", "rewind:frostpi", "reload:frostpi", "name:frostpi", "alias:frostpi", "btw:frostpi", "visible:extension",
+      "new:frostpi", "reload:frostpi", "name:frostpi", "alias:frostpi", "btw:frostpi", "visible:extension",
     ]);
   });
 
@@ -37,9 +37,9 @@ describe("Host slash commands through the real Registry and child-process path",
     expect(view(sessionId).commands.map((command) => command.name)).toEqual(["new", "name", "alias", "visible"]);
 
     await fixture.converse(sessionId, "/btw is this mine?");
-    await fixture.converse(sessionId, "/rewind");
+    await fixture.converse(sessionId, "/reload");
 
-    expect(userPrompts(view(sessionId))).toEqual(["/btw is this mine?", "/rewind"]);
+    expect(userPrompts(view(sessionId))).toEqual(["/btw is this mine?", "/reload"]);
     expect(view(sessionId).sideQuestion).toBeUndefined();
     expect(fixture.shownQuickPicks).toEqual([]);
   });
@@ -52,9 +52,9 @@ describe("Host slash commands through the real Registry and child-process path",
     expect(view(sessionId).commands.map((command) => command.name)).toEqual(["new", "name", "alias", "visible"]);
 
     await fixture.converse(sessionId, "/btw is this mine?");
-    await fixture.converse(sessionId, "/rewind");
+    await fixture.converse(sessionId, "/reload");
 
-    expect(userPrompts(view(sessionId))).toEqual(["/btw is this mine?", "/rewind"]);
+    expect(userPrompts(view(sessionId))).toEqual(["/btw is this mine?", "/reload"]);
     expect(view(sessionId).sideQuestion).toBeUndefined();
     expect(fixture.shownQuickPicks).toEqual([]);
   });
@@ -304,61 +304,6 @@ describe("Host slash commands through the real Registry and child-process path",
     });
   });
 
-  describe("/rewind", () => {
-    it("returns to before the chosen prompt and hands that prompt back to the Composer", async () => {
-      const fixture = await host();
-      const { registry, view } = fixture;
-      const sessionId = await fixture.startSession();
-      for (const text of ["first", "second", "third"]) await fixture.converse(sessionId, text);
-
-      fixture.quickPicks.push(
-        (items) => items.find((item) => item.label.includes("second")),
-        (items) => items[0],
-      );
-      await registry.sendPrompt(sessionId, "/rewind", []);
-
-      expect(fixture.shownQuickPicks).toEqual([
-        { title: "Rewind conversation", labels: ["$(history) third", "$(history) second", "$(history) first"] },
-        expect.objectContaining({ title: "Leave current branch" }),
-      ]);
-      expect(userPrompts(view(sessionId))).toEqual(["first"]);
-      // The seed survives the /rewind submission that produced it.
-      expect(view(sessionId).composerSeed).toMatchObject({ text: "second", images: [] });
-      expect(fixture.errors).toEqual([]);
-
-      await fixture.converse(sessionId, "second, revised");
-      expect(userPrompts(view(sessionId))).toEqual(["first", "second, revised"]);
-      expect(view(sessionId).composerSeed).toBeUndefined();
-    });
-
-    it("changes nothing when either picker is dismissed", async () => {
-      const fixture = await host();
-      const { registry, view } = fixture;
-      const sessionId = await fixture.startSession();
-      for (const text of ["first", "second"]) await fixture.converse(sessionId, text);
-
-      await expect(registry.rewind(sessionId)).resolves.toEqual({ cancelled: true });
-      fixture.quickPicks.push((items) => items[0]);
-      await expect(registry.rewind(sessionId)).resolves.toEqual({ cancelled: true });
-
-      expect(userPrompts(view(sessionId))).toEqual(["first", "second"]);
-      expect(view(sessionId).composerSeed).toBeUndefined();
-    });
-
-    it("explains why it cannot run instead of opening an empty or stale picker", async () => {
-      const fixture = await host();
-      const { registry, view } = fixture;
-      const sessionId = await fixture.startSession();
-      await expect(registry.sendPrompt(sessionId, "/rewind", [])).rejects.toThrow("This conversation has no earlier prompt to rewind to.");
-
-      await registry.sendPrompt(sessionId, "hold", []);
-      await fixture.waitFor(() => view(sessionId).isStreaming);
-      await expect(registry.sendPrompt(sessionId, "/rewind", [], "followUp")).rejects.toThrow("Wait for the current Pi operation to finish");
-      expect(fixture.shownQuickPicks).toEqual([]);
-      expect(view(sessionId).queuedFollowUps).toEqual([]);
-    });
-  });
-
   describe("/btw", () => {
     it("answers from the conversation without adding to it or promoting a new session", async () => {
       const fixture = await host();
@@ -471,32 +416,6 @@ describe("Host slash commands through the real Registry and child-process path",
     });
   });
 
-  describe("a long conversation", () => {
-    it("opens on its part since the last compaction, and loads in full on request", async () => {
-      const fixture = await host();
-      const { registry, view } = fixture;
-      const sessionId = await fixture.startSession();
-      const bulk = Array.from({ length: 13 }, (_, index) => `bulk ${index}`);
-      for (const text of bulk) await fixture.converse(sessionId, text);
-      await registry.sendPrompt(sessionId, "/compact", []);
-      await fixture.converse(sessionId, "after compaction");
-
-      await registry.retrySession(sessionId);
-      await fixture.waitFor(() => view(sessionId).status === "ready" && view(sessionId).historyStatus === "loaded" && userPrompts(view(sessionId)).length > 0);
-      expect(view(sessionId).partialHistory).toBe("compaction");
-      expect(userPrompts(view(sessionId))).toEqual(["after compaction"]);
-      expect(view(sessionId).conversationItems.some((item) => item.type === "compaction")).toBe(true);
-
-      // New turns keep arriving through the same window.
-      await fixture.converse(sessionId, "next");
-      expect(userPrompts(view(sessionId))).toEqual(["after compaction", "next"]);
-
-      await registry.loadHistory(sessionId);
-      expect(view(sessionId).partialHistory).toBeUndefined();
-      expect(userPrompts(view(sessionId))).toEqual([...bulk, "after compaction", "next"]);
-      expect(fixture.errors).toEqual([]);
-    }, 30_000);
-  });
 
   describe("Fork during a reply", () => {
     it("forks in a separate Pi process and leaves the running reply alone", async () => {
@@ -527,6 +446,31 @@ describe("Host slash commands through the real Registry and child-process path",
       await fixture.waitFor(() => !view(sessionId).isStreaming);
       expect(userPrompts(view(sessionId))).toEqual(["first", "second", "hold"]);
     });
+
+    it("loads a large session's full history in the second process before forking", async () => {
+      const fixture = await host();
+      const { registry, view } = fixture;
+      const sessionId = await fixture.startSession();
+      await fixture.converse(sessionId, "first");
+      await fixture.converse(sessionId, "second");
+      // Above 8 MiB the ordinary load defers; the Fork's own process must not stop there.
+      for (let index = 0; index < 12; index += 1) await fixture.converse(sessionId, `bulk ${index}`);
+      // Reopened, the source defers its history too, until the user loads it.
+      await registry.retrySession(sessionId);
+      await fixture.waitFor(() => view(sessionId).status === "ready" && view(sessionId).historyStatus === "deferred");
+      await registry.loadHistory(sessionId);
+      await registry.sendPrompt(sessionId, "hold", []);
+      await fixture.waitFor(() => view(sessionId).isStreaming);
+      const second = view(sessionId).conversationItems.flatMap((item) => item.type === "turn" && item.userMessage?.blocks.some((block) => block.type === "text" && block.text === "second") ? [item.userMessage.sourceEntryId] : [])[0]!;
+
+      const result = await registry.forkMessage(sessionId, second, "preserve-sidebar-selection");
+
+      expect(result).toEqual({ cancelled: false, forkSessionId: expect.any(String) as string });
+      expect(view(result.forkSessionId!)).toMatchObject({ status: "ready", historyStatus: "loaded", composerSeed: { text: "second" } });
+      expect(userPrompts(view(result.forkSessionId!))).toEqual(["first"]);
+      expect(view(sessionId).isStreaming).toBe(true);
+      await registry.abort(sessionId);
+    }, 30_000);
 
     it("leaves nothing behind when the Fork fails", async () => {
       const fixture = await host();
@@ -574,7 +518,7 @@ describe("Host slash commands through the real Registry and child-process path",
 
       fixture.answerWarningDialogs(undefined);
       await registry.stopSession(sessionId);
-      expect(fixture.warningDialogs.at(-1)).toContain("Stopping this FrostPi session will stop its active response");
+      expect(fixture.warningDialogs.at(-1)).toContain("Stopping this session's Pi process will stop its active response");
       expect(view(sessionId).isStreaming).toBe(true);
 
       fixture.answerWarningDialogs("first-button");
