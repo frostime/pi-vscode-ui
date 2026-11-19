@@ -22,7 +22,7 @@ describe("per-presentation Webview synchronization", () => {
     expect(last.aborted).toBe(true);
     expect(connection.finishProviderUsageRequest("last", last)).toBe(false);
   });
-  it("isolates pinned Session deltas and resynchronizes a hidden panel with a snapshot", async () => {
+  it("isolates pinned Session deltas and catches a shown panel up with a delta", async () => {
     const views = new Map([
       ["a", sessionView("a", ["a-1"])],
       ["b", sessionView("b", ["b-1"])],
@@ -53,39 +53,39 @@ describe("per-presentation Webview synchronization", () => {
     endpointA.messages.length = 0;
     endpointB.messages.length = 0;
 
-    views.set("a", sessionView("a", ["a-1", "a-2"]));
+    const a = views.get("a")!;
+    views.set("a", { ...a, conversationItems: [...a.conversationItems, { id: "a-2" }] });
     connectionA.refresh();
     connectionB.refresh();
-    await waitFor(() => endpointA.messages.length === 1 && endpointB.messages.length === 1);
+    await waitFor(() => endpointA.messages.length === 1);
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(endpointA.messages[0]).toMatchObject({
       type: "presentationDelta",
-      presentation: { displayedSession: { base: { id: "a" } } },
+      presentation: { displayedSession: { base: { id: "a" }, conversationItems: { mode: "upsert", items: [{ id: "a-2" }] } } },
     });
-    expect(JSON.stringify(endpointA.messages[0])).toContain("a-2");
     expect(JSON.stringify(endpointA.messages[0])).not.toContain("b-1");
-    expect(endpointB.messages[0]).toMatchObject({
-      type: "presentationDelta",
-      presentation: { displayedSession: { base: { id: "b" } } },
-    });
-    expect(JSON.stringify(endpointB.messages[0])).not.toContain("a-2");
+    // Session b did not change: its page gets nothing.
+    expect(endpointB.messages).toEqual([]);
 
     endpointB.messages.length = 0;
     endpointB.setVisible(false);
-    views.set("b", sessionView("b", ["b-1", "b-2"]));
+    const hiddenB = views.get("b")!;
+    views.set("b", { ...hiddenB, conversationItems: [...hiddenB.conversationItems, { id: "b-2" }] });
     connectionB.refresh();
     connectionB.focusComposer();
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(endpointB.messages).toEqual([]);
 
+    // The hidden page kept its state, so only what it missed is sent.
     endpointB.setVisible(true);
     await waitFor(() => endpointB.messages.length === 2);
     expect(endpointB.messages[0]).toMatchObject({
-      type: "snapshot",
+      type: "presentationDelta",
       presentation: {
         surface: { kind: "panel", sessionId: "b" },
         composerDraftAuthority: "host",
-        displayedSession: { id: "b", conversationItems: [{ id: "b-1" }, { id: "b-2" }] },
+        displayedSession: { base: { id: "b" }, conversationItems: { mode: "upsert", items: [{ id: "b-2" }] } },
       },
     });
     expect(endpointB.messages[1]).toMatchObject({ type: "focusComposer" });
@@ -189,13 +189,11 @@ describe("per-presentation Webview synchronization", () => {
       presentation: { displayedSession: { conversationItems: [{ id: "latest" }] } },
     });
 
+    // Nothing changed since the snapshot, so nothing is sent.
     endpoint.messages.length = 0;
     connection.refresh();
-    await waitFor(() => endpoint.messages.length === 1);
-    expect(endpoint.messages[0]).toMatchObject({
-      type: "presentationDelta",
-      presentation: { displayedSession: { conversationItems: { mode: "upsert", items: [] } } },
-    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(endpoint.messages).toEqual([]);
     connection.dispose();
   });
 

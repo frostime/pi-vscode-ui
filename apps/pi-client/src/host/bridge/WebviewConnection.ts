@@ -1,5 +1,7 @@
+import { isDeepStrictEqual } from "node:util";
+
 import { BRIDGE_VERSION } from "../../shared/bridge/bridgeVersion.js";
-import type { HostToWebviewPayload, PresentationDeltaView } from "../../shared/bridge/hostToWebview.js";
+import type { HostToWebviewPayload, PresentationDeltaView, SessionBaseView } from "../../shared/bridge/hostToWebview.js";
 import { webviewToHostSchema } from "../../shared/bridge/webviewToHost.js";
 import type { ChatTypographyView } from "../../shared/model/chatTypography.js";
 import type { ConversationItemView } from "../../shared/model/conversationModel.js";
@@ -9,13 +11,19 @@ import type { WebviewPresentationView } from "../../shared/model/webviewPresenta
 import type { WorkspaceFileSearch } from "../file-search/WorkspaceFileSearch.js";
 import type { RuntimeLogger } from "../../core/diagnostics/RuntimeLogger.js";
 import type { SessionRegistry } from "../SessionRegistry.js";
-import { collectionDelta } from "./collectionDelta.js";
+import { conversationDelta } from "./collectionDelta.js";
 import type { ComposerDraftCache } from "./ComposerDraftCache.js";
 import type { DispatchConnection, WebviewActionDispatcher } from "./WebviewActionDispatcher.js";
 import type { WebviewEndpoint } from "./webviewTypes.js";
 
 interface Identified {
   id: string;
+}
+
+/** What the page last received besides the conversation, to skip deltas that change nothing. */
+interface ShownPresentation {
+  presentation: Omit<WebviewPresentationView, "displayedSession">;
+  session: SessionBaseView | null;
 }
 
 export interface ConnectionHostInputs {
@@ -44,6 +52,7 @@ export class WebviewConnection {
   #cachedSessionId: string | null = null;
   #conversationItemOrder: string[] = [];
   #conversationItemRefs = new Map<string, ConversationItemView>();
+  #shown: ShownPresentation | undefined;
   #pendingComposerText = new Map<string, { text: string; delivered: () => void }>();
   #outbound: Promise<void> = Promise.resolve();
 
@@ -68,8 +77,10 @@ export class WebviewConnection {
     this.#readChatTypography = hostInputs.readChatTypography;
     this.#disposables.push(
       endpoint.onDidReceiveMessage((raw: unknown) => void this.#receive(raw)),
+      // A hidden page keeps its state (both products retain hidden Webviews), so on return
+      // it catches up with a delta from what it last received. A recreated page sends
+      // `ready` and gets a snapshot; a failed delivery marks the Connection dirty.
       endpoint.onDidChangeVisibility((visible) => {
-        this.#dirty = true;
         if (visible) this.refresh();
       }),
     );
@@ -84,11 +95,7 @@ export class WebviewConnection {
   }
 
   refresh(): void {
-    if (!this.#ready || this.#disposed) return;
-    if (!this.#endpoint.isVisible()) {
-      this.#dirty = true;
-      return;
-    }
+    if (!this.#ready || this.#disposed || !this.#endpoint.isVisible()) return;
     this.#enqueue(async () => {
       if (this.#dirty || this.sessionId !== this.#cachedSessionId) await this.#sendSnapshot();
       else await this.#sendDelta();
@@ -242,6 +249,7 @@ export class WebviewConnection {
     // and lock state were captured before that change and cannot unlock safely.
     this.#dirty = ownershipVersion !== this.#draftOwnershipVersion;
     this.#resetCache(presentation.displayedSession);
+    this.#shown = shownPresentation(presentation, presentation.displayedSession ? withoutConversation(presentation.displayedSession) : null);
   }
 
   async #sendDelta(): Promise<void> {
@@ -252,6 +260,12 @@ export class WebviewConnection {
       return;
     }
     const sessionDelta = displayed ? this.#sessionDelta(displayed) : null;
+    // Every registry change refreshes every shown page; one whose Session did not
+    // change gets nothing rather than a delta it would render for no effect.
+    const shown = shownPresentation(presentation, sessionDelta?.view.base ?? null);
+    const items = sessionDelta?.view.conversationItems;
+    const conversationUnchanged = !items || (items.mode === "upsert" && items.items.length === 0 && !items.turnPatches);
+    if (conversationUnchanged && this.#shown && isDeepStrictEqual(this.#shown, shown)) return;
     const delta: PresentationDeltaView = {
       ...presentation,
       displayedSession: sessionDelta?.view ?? null,
@@ -261,6 +275,7 @@ export class WebviewConnection {
       this.#dirty = true;
       return;
     }
+    this.#shown = shown;
     if (sessionDelta) {
       this.#conversationItemOrder = sessionDelta.order;
       this.#conversationItemRefs = sessionDelta.refs;
@@ -319,7 +334,7 @@ export class WebviewConnection {
     return {
       view: {
         base,
-        conversationItems: collectionDelta(this.#conversationItemOrder, this.#conversationItemRefs, conversationItems),
+        conversationItems: conversationDelta(this.#conversationItemOrder, this.#conversationItemRefs, conversationItems),
       },
       order: conversationItems.map((item) => item.id),
       refs: referenceMap(conversationItems),
@@ -347,4 +362,16 @@ export class WebviewConnection {
 
 function referenceMap<T extends Identified>(items: readonly T[]): Map<string, T> {
   return new Map(items.map((item) => [item.id, item]));
+}
+
+function withoutConversation(session: SessionViewModel): SessionBaseView {
+  const base: Partial<SessionViewModel> = { ...session };
+  delete base.conversationItems;
+  return base as SessionBaseView;
+}
+
+function shownPresentation(presentation: WebviewPresentationView, session: SessionBaseView | null): ShownPresentation {
+  const rest: Partial<WebviewPresentationView> = { ...presentation };
+  delete rest.displayedSession;
+  return { presentation: rest as ShownPresentation["presentation"], session };
 }
