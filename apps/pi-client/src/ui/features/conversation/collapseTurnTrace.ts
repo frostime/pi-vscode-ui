@@ -123,6 +123,7 @@ function isAgentActivity(item: AgentTurnView["items"][number]): item is AgentAct
 }
 
 function isTraceItem(item: AgentTurnItemView): item is AgentActivityView | SessionNoticeView {
+  if (item.type === "tool" && item.tool.state === "bound" && item.tool.images?.length) return false;
   return isAgentActivity(item) || item.type === "notice";
 }
 
