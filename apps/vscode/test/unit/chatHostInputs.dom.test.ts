@@ -25,7 +25,7 @@ function session(id = "session", provider = "example"): SessionViewModel {
     isStreaming: false, isCompacting: false, isForking: false, historyStatus: "loaded",
     model: { id: "model", provider, supportsImages: true }, thinkingLevel: "off",
     availableModels: [], scopedModelIds: [], commands: [], attachmentLimits: { maxImages: 4, maxImageBytes: 1_000 },
-    collapseTurnTrace: false, composerStreamingBehavior: "steer",
+    collapseTurnTrace: false, composerSendOnEnter: true, composerStreamingBehavior: "steer",
     networkProxy: { mode: "direct", label: "Direct", restartRequired: false },
     questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
     conversationItems: [], queuedSteers: [], queuedFollowUps: [], queuedPromptRecovery: { state: "ready" }, pendingExtensionUi: [], extensionStatuses: [], extensionWidgets: [],
@@ -61,6 +61,37 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("explicit Composer host inputs", () => {
+  it("sends with Enter and inserts a newline with Shift+Enter by default", async () => {
+    setDraft("session", "webview", { text: "First line", images: [] });
+    const view = composer();
+    const input = view.getByRole("textbox", { name: "Message Pi" });
+    const editor = EditorView.findFromDOM(view.container.querySelector(".cm-editor")!)!;
+    editor.dispatch({ selection: { anchor: editor.state.doc.length } });
+    await fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    expect(editor.state.doc.toString()).toBe("First line\n");
+    expect(bridge.post).not.toHaveBeenCalled();
+    await fireEvent.keyDown(input, { key: "Enter" });
+    expect(lastSubmission().text).toBe("First line\n");
+  });
+
+  it("keeps Enter for editing when Enter to send is off", async () => {
+    setDraft("session", "webview", { text: "First line", images: [] });
+    const view = render(Composer, {
+      session: { ...session(), composerSendOnEnter: false },
+      localCommands: createVsCodeComposerCommands(),
+      draftAuthority: "webview",
+      restoreFailedSubmissionLocally: true,
+    });
+    const input = view.getByRole("textbox", { name: "Message Pi" });
+    const editor = EditorView.findFromDOM(view.container.querySelector(".cm-editor")!)!;
+    editor.dispatch({ selection: { anchor: editor.state.doc.length } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+    expect(editor.state.doc.toString()).toBe("First line\n");
+    expect(bridge.post).not.toHaveBeenCalled();
+    await fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
+    expect(lastSubmission().text).toBe("First line\n");
+  });
+
   it("applies a supplied local command result before its action without guessing the command name", async () => {
     setDraft("session", "webview", { text: "/custom", images: [image] });
     const observed: string[] = [];

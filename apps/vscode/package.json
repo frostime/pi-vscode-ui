@@ -202,6 +202,12 @@
           "scope": "resource",
           "description": "When a previously selected session exists, start its Pi process when FrostPi activates. Does not create a new session if none exist."
         },
+        "frostpi.composer.sendOnEnter": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Send the prompt with Enter. Shift+Enter inserts a newline. Turn this off to insert a newline with Enter and send with Ctrl+Enter or Cmd+Enter."
+        },
         "frostpi.composer.streamingBehavior": {
           "type": "string",
           "enum": [

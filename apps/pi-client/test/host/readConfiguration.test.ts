@@ -28,7 +28,7 @@ describe("FrostPi configuration reading", () => {
       runtimeCompatibility: "pi",
       piArguments: [],
       startSessionOnOpen: true,
-      streamingBehavior: "followUp",
+      sendOnEnter: true, streamingBehavior: "followUp",
       collapseTurnTrace: true,
       questionToolEnabled: false,
       maxImageBytes: 10 * 1024 * 1024,

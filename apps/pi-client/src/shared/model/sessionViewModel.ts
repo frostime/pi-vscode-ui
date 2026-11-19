@@ -71,6 +71,7 @@ export interface SessionViewModel {
   /** When true, completed turns collapse tool/reasoning/interim replies into one summary above the final response. */
   collapseTurnTrace: boolean;
   /** Default streaming delivery selected for this session's Composer. */
+  composerSendOnEnter: boolean;
   composerStreamingBehavior: StreamingBehavior;
   networkProxy: NetworkProxyView;
   questionTool: QuestionToolStateView;

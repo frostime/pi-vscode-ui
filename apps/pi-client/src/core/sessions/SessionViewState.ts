@@ -43,6 +43,7 @@ export class SessionViewState {
       commands: [],
       attachmentLimits,
       collapseTurnTrace,
+      composerSendOnEnter: true,
       composerStreamingBehavior: "followUp",
       networkProxy: { mode: "inherit", label: "Inherited", restartRequired: false },
       questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
@@ -184,7 +185,8 @@ export class SessionViewState {
     this.#view.collapseTurnTrace = collapseTurnTrace;
   }
 
-  setComposerStreamingBehavior(streamingBehavior: SessionViewModel["composerStreamingBehavior"]): void {
+  setComposerPreferences(sendOnEnter: boolean, streamingBehavior: SessionViewModel["composerStreamingBehavior"]): void {
+    this.#view.composerSendOnEnter = sendOnEnter;
     this.#view.composerStreamingBehavior = streamingBehavior;
   }
 

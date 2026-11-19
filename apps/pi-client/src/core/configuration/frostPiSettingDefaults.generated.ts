@@ -5,6 +5,7 @@ export const frostPiSettingDefaults = {
   "pi.runtimeCompatibility": "pi",
   "pi.arguments": [],
   "session.startOnOpen": true,
+  "composer.sendOnEnter": true,
   "composer.streamingBehavior": "followUp",
   "conversation.collapseTurnTrace": true,
   "questionTool.enabled": false,
