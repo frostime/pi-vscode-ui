@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A turn that Pi started right after the previous one settled, such as a queued follow-up, could show as finished while it was still running: a state read before it started was applied after. FrostPi now drops such a stale state.
+
 ## [0.16.7] - 2026-11-16
 
 ### Fixed

@@ -95,6 +95,8 @@ export class SessionRuntime {
   #appliedQuestionToolEnabled: boolean | null = null;
   #appliedRuntimeCompatibility: RuntimeCompatibility = "pi";
   #abortRequested = false;
+  /** Counts `agent_start` events, so a state read before the latest one is known to be stale. */
+  #agentStarts = 0;
   readonly #sessionTreeBridge: SessionTreeExtensionBridge | null;
   readonly #questionToolBridge: QuestionToolExtensionBridge | null;
 
@@ -850,6 +852,7 @@ export class SessionRuntime {
       }
     }
     if (event.type === "agent_start") {
+      this.#agentStarts += 1;
       this.#abortRequested = false;
       this.#startLiveStatsRefresh();
     }
@@ -923,12 +926,16 @@ export class SessionRuntime {
   async #refreshAfterSettled(): Promise<void> {
     const api = this.#api;
     if (!api) return;
+    const startsBefore = this.#agentStarts;
     const [state, stats, commands] = await Promise.all([
       api.getState().catch(() => undefined),
       api.getSessionStats().catch(() => undefined),
       this.#runtimeCapabilities().slashCommands ? api.getCommands().catch(() => undefined) : Promise.resolve(undefined),
     ]);
-    if (state) this.#viewState.applyState(state);
+    // Pi may start the next turn (a queued follow-up, or a prompt sent at once) while
+    // these replies are in flight. Its state then predates that start, and applying it
+    // would mark the running turn idle; the next settle reads the state again.
+    if (state && startsBefore === this.#agentStarts) this.#viewState.applyState(state);
     if (stats) this.#viewState.updateStats(stats);
     if (commands) this.#viewState.setCommands(this.#sessionTreeBridge?.discover(commands) ?? commands);
     await this.#refreshPersistedEntries(api).catch((error) => {

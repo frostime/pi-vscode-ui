@@ -649,6 +649,59 @@ process.on("SIGTERM", () => process.exit(0));
     expect(runtime.view.queuedFollowUps).toEqual([]);
   });
 
+  it("keeps a turn that starts while the previous settle is being refreshed running", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-runtime-settle-race-"));
+    const fakePi = join(dir, "fake-pi.cjs");
+    // After the first turn settles, Pi answers get_state as idle and then, before the
+    // command list, starts the next turn: the state FrostPi holds is already stale.
+    await writeFile(fakePi, String.raw`#!/usr/bin/env node
+let input = "";
+let settled = false;
+let streaming = false;
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => {
+  input += chunk;
+  while (input.includes("\n")) {
+    const index = input.indexOf("\n");
+    const command = JSON.parse(input.slice(0, index));
+    input = input.slice(index + 1);
+    const base = { type: "response", id: command.id, success: true };
+    if (command.type === "get_state") {
+      base.data = { model: { provider: "fake", id: "fake-model", contextWindow: 10000 }, thinkingLevel: "off", isStreaming: streaming, isCompacting: false, pendingMessageCount: 0, sessionId: "settle-race" };
+    } else if (command.type === "get_commands") {
+      if (settled && !streaming) {
+        streaming = true;
+        process.stdout.write(JSON.stringify({ type: "agent_start" }) + "\n");
+      }
+      base.data = { commands: [] };
+    } else if (command.type === "get_available_models") base.data = { models: [] };
+    else if (command.type === "get_session_stats") base.data = undefined;
+    else if (command.type === "prompt") {
+      process.stdout.write(JSON.stringify(base) + "\n");
+      for (const type of ["agent_start", "agent_end", "agent_settled"]) process.stdout.write(JSON.stringify(type === "agent_end" ? { type, messages: [], willRetry: false } : { type }) + "\n");
+      settled = true;
+      continue;
+    }
+    process.stdout.write(JSON.stringify(base) + "\n");
+  }
+});
+process.on("SIGTERM", () => process.exit(0));
+`);
+
+    const runtime = new SessionRuntime("session", dir, "Settle race", () => runtimeConfiguration(fakePi), noProxyCredentials(), { error: vi.fn(), info: vi.fn() }, {
+      onChange: vi.fn(),
+      onEditorText: vi.fn(),
+    }, host);
+    runtimes.push(runtime);
+
+    await runtime.start();
+    await runtime.sendPrompt("first", []);
+    await waitFor(() => runtime.view.isStreaming);
+    // Let the settle refresh finish; the stale idle state must not end the new turn.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(runtime.view).toMatchObject({ isStreaming: true, status: "running" });
+  });
+
   it("refreshes session stats during a long running turn", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-runtime-live-stats-"));
     const fakePi = join(dir, "fake-pi.cjs");
