@@ -5,6 +5,7 @@ import type {
   AgentTurnView,
   ConversationItemView,
   CustomMessageView,
+  ImageAttachmentView,
 } from "../../shared/model/conversationModel.js";
 import type { ToolCallView } from "../../shared/model/toolCallModel.js";
 import { createToolView } from "./messageAssembler.js";
@@ -92,6 +93,7 @@ export interface ToolPlacementUpdate {
   args: Record<string, unknown>;
   status: ToolCallView["status"];
   output?: string;
+  images?: ImageAttachmentView[];
   diff?: string;
   isError: boolean;
   startedAt?: number;
@@ -302,6 +304,7 @@ export class ConversationItemStore {
       status: input.status,
       isError: input.isError,
       ...(input.output !== undefined ? { output: input.output } : currentTool?.output !== undefined ? { output: currentTool.output } : {}),
+      ...(input.images !== undefined ? { images: input.images } : {}),
       ...(Object.keys(recognized).length > 0 ? { recognized } : {}),
       ...(input.endedAt !== undefined ? { endedAt: input.endedAt } : currentTool?.endedAt !== undefined ? { endedAt: currentTool.endedAt } : {}),
       ...(input.durationMs !== undefined ? { durationMs: input.durationMs } : currentTool?.durationMs !== undefined ? { durationMs: currentTool.durationMs } : {}),
@@ -444,6 +447,7 @@ export class ConversationItemStore {
           isError: current.tool.isError,
           startedAt: current.tool.startedAt,
           ...(current.tool.output !== undefined ? { output: current.tool.output } : {}),
+          ...(current.tool.images !== undefined ? { images: current.tool.images } : {}),
           ...(current.tool.endedAt !== undefined ? { endedAt: current.tool.endedAt } : {}),
           ...(current.tool.durationMs !== undefined ? { durationMs: current.tool.durationMs } : {}),
         },
