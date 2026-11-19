@@ -13,6 +13,22 @@
   const usageSource = untrack(() => providerUsageSource ? cacheProviderUsage(providerUsageSource) : undefined);
   let usageOpen = $state(false);
   let usageTrigger = $state<HTMLButtonElement>();
+  let now = $state(Date.now());
+  const response = $derived(session.responseMetrics);
+  const awaitingOutput = $derived(response?.outputTokens === undefined ? response?.startedAt : undefined);
+  const elapsedMs = $derived(Math.max(0, now - (response?.startedAt ?? now)));
+  const tokensPerSecond = $derived(response?.outputTokensPerSecond ?? (response?.outputTokens && response.durationMs
+    ? response.outputTokens * 1000 / response.durationMs : undefined));
+  const rateHelp = $derived(response?.outputTokensPerSecond !== undefined
+    ? "Rate estimated from the arrivals of streamed output."
+    : "Average rate over the full response, including the wait for the first token.");
+
+  $effect(() => {
+    if (awaitingOutput === undefined) return;
+    now = Date.now();
+    const timer = setInterval(() => { now = Date.now(); }, 250);
+    return () => clearInterval(timer);
+  });
 
   async function closeUsage(restoreFocus = true): Promise<void> {
     usageOpen = false;
@@ -21,12 +37,24 @@
   }
 </script>
 
-{#if session.stats || session.extensionStatuses.length}
+{#if session.stats || session.extensionStatuses.length || response}
   <div class="session-metrics">
     <div class="extension-statuses">
       {#each session.extensionStatuses as status (status.key)}
         <span><span class="status-mini-dot"></span>{status.text}</span>
       {/each}
+      {#if response}
+        <span class="response-metrics" style:color="var(--frost-muted)" style:font-size="calc(var(--font-size-ui) - 2px)"
+          style:white-space="nowrap" style:font-variant-numeric="tabular-nums" style:flex-shrink="0"
+          title={response.estimated ? `Token count estimated from streamed content. ${rateHelp}` : rateHelp}>
+          {#if response.outputTokens !== undefined}
+            {response.estimated ? "≈" : ""}{response.outputTokens.toLocaleString()} output tokens
+            {#if tokensPerSecond !== undefined} · {response.estimated || response.outputTokensPerSecond !== undefined ? "≈" : ""}{tokensPerSecond.toFixed(1)} tok/s{/if}
+          {:else}
+            Receiving response · {(elapsedMs / 1000).toFixed(1)} s
+          {/if}
+        </span>
+      {/if}
     </div>
     {#if session.stats}
       <div class="metrics-right">
@@ -56,12 +84,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 2px 8px;
+  flex-wrap: wrap;
   color: var(--frost-faint);
   font-size: calc(var(--font-size-ui) - 4px);
 }
-.extension-statuses { display: flex; align-items: center; gap: 8px; }
-.metrics-right { position: relative; display: flex; align-items: center; gap: 4px; }
+.extension-statuses { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 8px; }
+.metrics-right { position: relative; display: flex; align-items: center; gap: 4px; margin-left: auto; }
 .usage-trigger {
   display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 4px;
   border: 0; border-radius: 4px; background: transparent; color: var(--frost-muted);
@@ -82,7 +111,7 @@
 
 @media (max-width: 430px) {
   .session-metrics { min-width: 0; }
-  .extension-statuses { flex: 1; }
+  .extension-statuses { flex: auto; }
   .metrics-right { flex: none; }
 }
 </style>
