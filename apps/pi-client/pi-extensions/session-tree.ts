@@ -16,11 +16,20 @@ type NavigateOptions = {
   replaceInstructions?: boolean;
 };
 
-type SessionTreeRequest = NavigateOptions & {
+type NavigateRequest = NavigateOptions & {
   token: string;
   requestId: string;
   targetId: string;
 };
+
+/** `/reload`: Pi's own reload flow, which RPC mode exposes only to extension commands. */
+type ReloadRequest = {
+  token: string;
+  requestId: string;
+  action: "reload";
+};
+
+type SessionTreeRequest = NavigateRequest | ReloadRequest;
 
 type SessionTreeResult = {
   version: 1;
@@ -31,6 +40,7 @@ type SessionTreeResult = {
 
 type CommandContext = {
   waitForIdle(): Promise<void>;
+  reload?(): Promise<void>;
   navigateTree(targetId: string, options?: NavigateOptions): Promise<{ cancelled: boolean }>;
   sessionManager: { getLeafId(): string | null };
 };
@@ -51,6 +61,10 @@ export default function sessionTreeExtension(pi: ExtensionApi): void {
       if (request.token !== token) throw new Error("Invalid FrostPi session-tree token");
 
       const resultDirectory = requiredEnvironment(SESSION_TREE_RESULT_DIR_ENV);
+      if ("action" in request) {
+        await reload(context, request, resultDirectory);
+        return;
+      }
       const beforeLeafId = context.sessionManager.getLeafId();
       let result: SessionTreeResult;
 
@@ -80,6 +94,23 @@ export default function sessionTreeExtension(pi: ExtensionApi): void {
   });
 }
 
+async function reload(context: CommandContext, request: ReloadRequest, resultDirectory: string): Promise<void> {
+  if (typeof context.reload !== "function") {
+    await writeResult(resultDirectory, { version: 1, requestId: request.requestId, status: "failed", leafId: null });
+    throw new Error("This Pi version cannot reload from an extension command. Update Pi, or restart the session.");
+  }
+  const leafId = context.sessionManager.getLeafId();
+  try {
+    await context.waitForIdle();
+    // Reload replaces this extension's runtime: nothing below may touch `context` again.
+    await context.reload();
+  } catch (error) {
+    await writeResult(resultDirectory, { version: 1, requestId: request.requestId, status: "failed", leafId });
+    throw error;
+  }
+  await writeResult(resultDirectory, { version: 1, requestId: request.requestId, status: "committed", leafId });
+}
+
 function decodeRequest(encoded: string): SessionTreeRequest {
   if (!encoded || encoded.length > MAX_ENCODED_REQUEST_LENGTH || !/^[A-Za-z0-9_-]+$/.test(encoded)) {
     throw new Error("Invalid FrostPi session-tree request encoding");
@@ -92,6 +123,18 @@ function decodeRequest(encoded: string): SessionTreeRequest {
     throw new Error("Invalid FrostPi session-tree request payload");
   }
   if (!isRecord(value)) throw new Error("Invalid FrostPi session-tree request payload");
+
+  if ("action" in value) {
+    if (
+      Object.keys(value).some((key) => !["token", "requestId", "action"].includes(key))
+      || value.action !== "reload"
+      || typeof value.token !== "string"
+      || !IDENTIFIER_PATTERN.test(value.requestId as string)
+    ) {
+      throw new Error("Invalid FrostPi session-tree request fields");
+    }
+    return value as ReloadRequest;
+  }
 
   const allowedKeys = new Set([
     "token",
@@ -120,10 +163,10 @@ function decodeRequest(encoded: string): SessionTreeRequest {
     throw new Error("Custom summary instructions require summarization");
   }
 
-  return value as SessionTreeRequest;
+  return value as NavigateRequest;
 }
 
-function navigationOptions(request: SessionTreeRequest): NavigateOptions | undefined {
+function navigationOptions(request: NavigateRequest): NavigateOptions | undefined {
   if (request.summarize === undefined) return undefined;
   return {
     summarize: request.summarize,

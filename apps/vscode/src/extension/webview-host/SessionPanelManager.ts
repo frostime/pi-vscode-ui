@@ -12,7 +12,13 @@ export interface SessionPanelHandle {
 }
 
 export type PanelConnectionFactory = (endpoint: WebviewEndpoint) => WebviewConnection;
-export type WebviewPanelFactory = (sessionId: string, title: string) => vscode.WebviewPanel;
+/** The Webview type of a Session Tab, which VS Code restores through a panel serializer. */
+export const SESSION_TAB_VIEW_TYPE = "frostpi.session";
+
+export type WebviewPanelFactory = (sessionId: string, title: string, viewColumn?: vscode.ViewColumn) => vscode.WebviewPanel;
+
+/** A closed tab and its panel's disposal arrive as separate events, in either order. */
+const CLOSE_MATCH_WINDOW_MS = 2_000;
 
 export class SessionPanelManager implements vscode.Disposable {
   readonly #registry: SessionRegistry;
@@ -21,9 +27,20 @@ export class SessionPanelManager implements vscode.Disposable {
   readonly #createPanel: WebviewPanelFactory;
   readonly #panels = new Map<string, SessionPanelHandle>();
   readonly #changeEmitter = new vscode.EventEmitter<void>();
+  readonly #closeEmitter = new vscode.EventEmitter<string>();
+  readonly #subscriptions: vscode.Disposable[] = [];
+  /** Session Tab titles whose tab was closed, and disposed panels, waiting for their pair. */
+  #closedTabs: Array<{ label: string; at: number }> = [];
+  #disposedPanels: Array<{ sessionId: string; title: string; at: number }> = [];
   #disposed = false;
 
   readonly onDidChange = this.#changeEmitter.event;
+  /**
+   * The user closed a Session Tab. A panel is also disposed when the window closes or
+   * reloads; only a tab closed in the tab model counts here, so shutting VS Code down
+   * never looks like closing every tab.
+   */
+  readonly onDidCloseTab = this.#closeEmitter.event;
 
   constructor(
     registry: SessionRegistry,
@@ -34,17 +51,25 @@ export class SessionPanelManager implements vscode.Disposable {
     this.#registry = registry;
     this.#extensionUri = extensionUri;
     this.#createConnection = createConnection;
-    this.#createPanel = createPanel ?? ((sessionId, title) => vscode.window.createWebviewPanel(
-      "frostpi.session",
+    this.#createPanel = createPanel ?? ((_sessionId, title, viewColumn) => vscode.window.createWebviewPanel(
+      SESSION_TAB_VIEW_TYPE,
       title,
-      { viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
+      { viewColumn: viewColumn ?? vscode.ViewColumn.Active, preserveFocus: false },
       {
-        enableScripts: true,
+        ...this.#webviewOptions(),
         // Keep a hidden Session Tab mounted so returning to it does not show the bootstrap UI.
         retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(this.#extensionUri, "dist", "webview")],
       },
     ));
+    this.#subscriptions.push(vscode.window.tabGroups.onDidChangeTabs((event) => {
+      const now = Date.now();
+      for (const tab of event.closed) {
+        if (tab.input instanceof vscode.TabInputWebview && tab.input.viewType.endsWith("frostpi.session")) {
+          this.#closedTabs.push({ label: tab.label, at: now });
+        }
+      }
+      this.#matchClosedTabs();
+    }));
   }
 
   has(sessionId: string): boolean {
@@ -55,7 +80,21 @@ export class SessionPanelManager implements vscode.Disposable {
     return [...this.#panels.keys()];
   }
 
-  open(sessionId: string): void {
+  /** The Session whose tab is the active editor, if a Session Tab has it. */
+  activeSessionId(): string | undefined {
+    for (const handle of this.#panels.values()) {
+      if (handle.panel.active) return handle.sessionId;
+    }
+    return undefined;
+  }
+
+  /** The tab group a Session Tab currently sits in. */
+  viewColumn(sessionId: string): vscode.ViewColumn | undefined {
+    return this.#panels.get(sessionId)?.panel.viewColumn;
+  }
+
+  /** `viewColumn` places a new tab in a chosen group; without it the active group is used. */
+  open(sessionId: string, viewColumn?: vscode.ViewColumn): void {
     const existing = this.#panels.get(sessionId);
     if (existing) {
       existing.panel.reveal(existing.panel.viewColumn, false);
@@ -63,11 +102,38 @@ export class SessionPanelManager implements vscode.Disposable {
     }
     const session = this.#registry.sessionView(sessionId);
     if (!session) throw new Error("This FrostPi Session no longer exists.");
+    this.#attach(this.#createPanel(sessionId, panelTitle(session.title), viewColumn), sessionId);
+  }
 
-    const panel = this.#createPanel(sessionId, panelTitle(session.title));
+  /**
+   * Takes over a Session Tab VS Code restored after a restart, in the group and position
+   * it had. A tab whose Session is gone, such as a Temporary Session, or that is already
+   * open elsewhere, is closed instead. Returns whether the tab was kept.
+   */
+  restore(panel: vscode.WebviewPanel, sessionId: string | undefined): boolean {
+    const session = sessionId ? this.#registry.sessionView(sessionId) : null;
+    if (!sessionId || !session || this.#panels.has(sessionId)) {
+      panel.dispose();
+      return false;
+    }
+    panel.webview.options = this.#webviewOptions();
+    panel.title = panelTitle(session.title);
+    try {
+      this.#attach(panel, sessionId);
+    } catch {
+      return false;
+    }
+    return true;
+  }
+
+  #webviewOptions(): vscode.WebviewOptions {
+    return { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.#extensionUri, "dist", "webview")] };
+  }
+
+  #attach(panel: vscode.WebviewPanel, sessionId: string): void {
     let connection: WebviewConnection | undefined;
     try {
-      panel.webview.html = createWebviewHtml(panel.webview, this.#extensionUri);
+      panel.webview.html = createWebviewHtml(panel.webview, this.#extensionUri, sessionId);
       const endpoint = panelEndpoint(panel, sessionId);
       connection = this.#createConnection(endpoint);
       if (!this.#registry.hasSession(sessionId)) throw new Error("The Session was removed while its editor tab was opening.");
@@ -115,6 +181,9 @@ export class SessionPanelManager implements vscode.Disposable {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    for (const subscription of this.#subscriptions.splice(0)) subscription.dispose();
+    this.#closedTabs = [];
+    this.#disposedPanels = [];
     const handles = [...this.#panels.values()];
     this.#panels.clear();
     for (const handle of handles) {
@@ -122,6 +191,7 @@ export class SessionPanelManager implements vscode.Disposable {
       handle.panel.dispose();
     }
     this.#changeEmitter.dispose();
+    this.#closeEmitter.dispose();
   }
 
   #forgetDisposedPanel(handle: SessionPanelHandle): void {
@@ -129,6 +199,22 @@ export class SessionPanelManager implements vscode.Disposable {
     this.#panels.delete(handle.sessionId);
     handle.connection.dispose();
     this.#changeEmitter.fire();
+    if (this.#disposed) return;
+    this.#disposedPanels.push({ sessionId: handle.sessionId, title: handle.panel.title, at: Date.now() });
+    this.#matchClosedTabs();
+  }
+
+  #matchClosedTabs(): void {
+    const cutoff = Date.now() - CLOSE_MATCH_WINDOW_MS;
+    this.#closedTabs = this.#closedTabs.filter((tab) => tab.at >= cutoff);
+    this.#disposedPanels = this.#disposedPanels.filter((panel) => panel.at >= cutoff);
+    for (const panel of [...this.#disposedPanels]) {
+      const tabIndex = this.#closedTabs.findIndex((tab) => tab.label === panel.title);
+      if (tabIndex < 0) continue;
+      this.#closedTabs.splice(tabIndex, 1);
+      this.#disposedPanels.splice(this.#disposedPanels.indexOf(panel), 1);
+      this.#closeEmitter.fire(panel.sessionId);
+    }
   }
 }
 

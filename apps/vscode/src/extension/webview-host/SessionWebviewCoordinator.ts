@@ -9,6 +9,7 @@ import type { WebviewEndpoint } from "@frostime/pi-client/host/bridge/webviewTyp
 import { WorkspaceFileSearch } from "@frostime/pi-client/host/file-search/WorkspaceFileSearch";
 import type { SessionRegistry } from "@frostime/pi-client/host/SessionRegistry";
 import { ComposerExternalEditor } from "../composer/ComposerExternalEditor.js";
+import { workspaceUriForPath } from "../configuration/workspaceScope.js";
 import { readChatTypography } from "@frostime/pi-client/host/readChatTypography";
 import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { SessionPanelManager } from "./SessionPanelManager.js";
@@ -52,6 +53,7 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
       openPanel: (sessionId, draft) => this.openPanel(sessionId, draft),
       revealPanel: (sessionId) => this.revealPanel(sessionId),
       openComposerEditor: (sessionId, text) => this.#externalEditor.open(sessionId, text),
+      createSessionPanel: (sourceSessionId, ephemeral) => this.createSessionInPanel(sourceSessionId, ephemeral),
     });
     this.#panels = new SessionPanelManager(
       registry,
@@ -65,6 +67,7 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
       this.#drafts.onDidChange(({ sessionId, draft }) => this.#draftChanged(sessionId, draft)),
       this.#drafts.onDidOwnershipChange((sessionId) => this.#forEachConnection((connection) => connection.refreshDraftOwnership(sessionId))),
       this.#panels.onDidChange(() => this.#panelsChanged()),
+      this.#panels.onDidCloseTab((sessionId) => void this.#closeSessionWithTab(sessionId)),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (!chatTypographyChanged(event)) return;
         // A full refresh is unnecessary; each ready Webview can accept typography independently.
@@ -112,8 +115,72 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
     }
   }
 
+  /**
+   * With `frostpi.session.closeWithEditorTab`, closing a Session Tab closes the Session
+   * as the session list does: same confirmations, and Pi's files stay. Declining a
+   * confirmation leaves the Session running in the sidebar.
+   */
+  async #closeSessionWithTab(sessionId: string): Promise<void> {
+    if (!this.#registry.hasSession(sessionId)) return;
+    const scope = this.#registry.configurationScope(sessionId);
+    const configuration = vscode.workspace.getConfiguration("frostpi", scope ? workspaceUriForPath(scope) : undefined);
+    if (!configuration.get<boolean>("session.closeWithEditorTab", false)) return;
+    try {
+      await this.#registry.closeSession(sessionId);
+    } catch (error) {
+      void vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  /** Reopens a Session Tab VS Code restored after a restart, from the state its page saved. */
+  restorePanel(panel: vscode.WebviewPanel, state: unknown): void {
+    const sessionId = isRecord(state) && typeof state.sessionId === "string" ? state.sessionId : undefined;
+    if (!this.#panels.restore(panel, sessionId) || !sessionId) {
+      if (sessionId) this.#logger.info("Closed a restored FrostPi editor tab whose session is no longer open");
+      return;
+    }
+    // Its Pi process starts when the tab is first shown, as selecting a Session does,
+    // so restoring many background tabs does not start them all at once.
+    const start = (): void => void this.#registry.startIfStopped(sessionId).catch(() => undefined);
+    if (panel.visible) {
+      start();
+      return;
+    }
+    const shown = panel.onDidChangeViewState((event) => {
+      if (!event.webviewPanel.visible) return;
+      shown.dispose();
+      start();
+    });
+    panel.onDidDispose(() => {
+      shown.dispose();
+    });
+  }
+
   revealPanel(sessionId: string): void {
     this.#panels.reveal(sessionId);
+  }
+
+  /**
+   * Starts a Session directly in an editor tab. Asked from a Session Tab, or by a
+   * window command while one is active, the new tab joins that tab's group and working
+   * directory. Asked from the sidebar it opens in the active group with the ordinary
+   * directory choice. The sidebar keeps its own selection either way. `ephemeral` makes
+   * it a Temporary Session, which changes what Pi saves, not where the tab opens.
+   */
+  async createSessionInPanel(sourceSessionId?: string | null, ephemeral = false): Promise<string | undefined> {
+    // `null` is the sidebar asking: it has no source tab, whatever editor is active.
+    const source = sourceSessionId === undefined ? this.#panels.activeSessionId() : sourceSessionId;
+    const viewColumn = source ? this.#panels.viewColumn(source) : undefined;
+    return this.#registry.createSession(ephemeral, {
+      selection: "preserve-sidebar-selection",
+      ...(source ? { workingDirectoryOf: source } : {}),
+      onRegistered: (sessionId) => this.#panels.open(sessionId, viewColumn),
+    });
+  }
+
+  /** The Session a window-level command means: the active Session Tab's, else the sidebar's. */
+  commandTargetSessionId(): string | null {
+    return this.#panels.activeSessionId() ?? this.#registry.activeSessionId;
   }
 
   focusSidebarComposer(): void {
@@ -299,4 +366,8 @@ function chatTypographyChanged(event: vscode.ConfigurationChangeEvent): boolean 
     || event.affectsConfiguration("chat.fontSize")
     || event.affectsConfiguration("chat.editor.fontFamily")
     || event.affectsConfiguration("chat.editor.fontSize");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

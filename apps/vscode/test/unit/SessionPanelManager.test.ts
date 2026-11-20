@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import * as vscode from "vscode";
 
+const tabEvents = vi.hoisted(() => ({ listeners: new Set<(event: { closed: unknown[] }) => void>() }));
+
 vi.mock("vscode", () => ({
+  TabInputWebview: class { constructor(readonly viewType: string) {} },
   EventEmitter: class<T> {
     listeners = new Set<(value: T) => void>();
     event = (listener: (value: T) => void) => {
@@ -14,12 +17,53 @@ vi.mock("vscode", () => ({
   },
   Uri: { joinPath: (...parts: unknown[]) => ({ parts }) },
   ViewColumn: { Active: 1 },
-  window: { createWebviewPanel: vi.fn() },
+  window: {
+    createWebviewPanel: vi.fn(),
+    tabGroups: {
+      onDidChangeTabs: (listener: (event: { closed: unknown[] }) => void) => {
+        tabEvents.listeners.add(listener);
+        return { dispose: () => tabEvents.listeners.delete(listener) };
+      },
+    },
+  },
 }));
+
+function closeTabs(...tabs: Array<{ label: string; viewType?: string }>): void {
+  const closed = tabs.map(({ label, viewType = "mainThreadWebview-frostpi.session" }) => ({ label, input: new vscode.TabInputWebview(viewType) }));
+  for (const listener of tabEvents.listeners) listener({ closed });
+}
 
 const { SessionPanelManager } = await import("../../src/extension/webview-host/SessionPanelManager.js");
 
 describe("Session panel lifecycle", () => {
+  it("reports a Session Tab the user closed, in either event order, but not a panel the window disposed", () => {
+    const sessions = new Map([["a", { id: "a", title: "Alpha" }], ["b", { id: "b", title: "Beta" }], ["c", { id: "c", title: "Gamma" }]]);
+    const registry = { sessionView: (id: string) => sessions.get(id) ?? null, hasSession: (id: string) => sessions.has(id), retainProvisionalSession: vi.fn() };
+    const panels = new Map<string, ReturnType<typeof fakePanel>>();
+    const manager = new SessionPanelManager(registry as never, {} as never, () => ({ dispose: vi.fn() }) as never, (sessionId, title) => {
+      const panel = fakePanel();
+      panel.value.title = title;
+      panels.set(sessionId, panel);
+      return panel.value as never;
+    });
+    const closed: string[] = [];
+    manager.onDidCloseTab((sessionId) => closed.push(sessionId));
+    for (const id of ["a", "b", "c"]) manager.open(id);
+
+    // Tab event first, then the disposal.
+    closeTabs({ label: "FrostPi · Alpha" }, { label: "FrostPi · Alpha", viewType: "other.view" });
+    panels.get("a")!.closeFromUser();
+    // Disposal first, then the tab event.
+    panels.get("b")!.closeFromUser();
+    closeTabs({ label: "FrostPi · Beta" });
+    // A panel disposed without a closed tab, as on window close or reload.
+    panels.get("c")!.closeFromUser();
+
+    expect(closed).toEqual(["a", "b"]);
+    manager.dispose();
+    expect(tabEvents.listeners.size).toBe(0);
+  });
+
   it("creates one panel per Session and tab disposal leaves the Session intact", () => {
     const sessions = new Map([["session", { id: "session", title: "Session" }]]);
     const registry = {
@@ -75,6 +119,73 @@ describe("Session panel lifecycle", () => {
     );
     const options = createWebviewPanel.mock.calls[0]?.[3];
     expect(options).toHaveProperty("retainContextWhenHidden", true);
+    manager.dispose();
+  });
+
+  it("opens a new tab in a requested group and reports which Session Tab is active", () => {
+    const sessions = new Map([["first", { id: "first", title: "First" }], ["second", { id: "second", title: "Second" }]]);
+    const registry = {
+      sessionView: (id: string) => sessions.get(id) ?? null,
+      hasSession: (id: string) => sessions.has(id),
+      retainProvisionalSession: vi.fn(),
+    };
+    const first = fakePanel();
+    const second = fakePanel();
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel);
+    createWebviewPanel.mockReset();
+    createWebviewPanel.mockReturnValueOnce(first.value as never).mockReturnValueOnce(second.value as never);
+    const manager = new SessionPanelManager(
+      registry as never,
+      {} as never,
+      () => ({ dispose: vi.fn(), focusComposer: vi.fn() }) as never,
+    );
+
+    manager.open("first");
+    first.value.viewColumn = 3;
+    expect(manager.viewColumn("first")).toBe(3);
+    expect(manager.viewColumn("missing")).toBeUndefined();
+    expect(manager.activeSessionId()).toBeUndefined();
+
+    manager.open("second", manager.viewColumn("first"));
+    expect(createWebviewPanel.mock.calls.map((call) => call[2])).toEqual([
+      { viewColumn: 1, preserveFocus: false },
+      { viewColumn: 3, preserveFocus: false },
+    ]);
+
+    (second.value as { active?: boolean }).active = true;
+    expect(manager.activeSessionId()).toBe("second");
+    manager.dispose();
+  });
+
+  it("takes over a Session Tab VS Code restored, and closes one whose Session is gone or already open", () => {
+    const sessions = new Map([["kept", { id: "kept", title: "Kept" }]]);
+    const registry = {
+      sessionView: (id: string) => sessions.get(id) ?? null,
+      hasSession: (id: string) => sessions.has(id),
+      retainProvisionalSession: vi.fn(),
+    };
+    const connection = { dispose: vi.fn(), focusComposer: vi.fn() };
+    const manager = new SessionPanelManager(registry as never, {} as never, () => connection as never, () => {
+      throw new Error("a restored tab must not create a panel");
+    });
+
+    const restored = fakePanel();
+    restored.value.title = "FrostPi · Old title";
+    restored.value.viewColumn = 2;
+    expect(manager.restore(restored.value as never, "kept")).toBe(true);
+    expect(manager.has("kept")).toBe(true);
+    expect(manager.viewColumn("kept")).toBe(2);
+    expect(restored.value.title).toBe("FrostPi · Kept");
+    expect(restored.value.webview.html).toContain('<meta name="frostpi-session-tab" content="kept" />');
+    expect(restored.value.webview).toHaveProperty("options", expect.objectContaining({ enableScripts: true }));
+    expect(registry.retainProvisionalSession).toHaveBeenCalledWith("kept");
+    expect(restored.value.dispose).not.toHaveBeenCalled();
+
+    for (const sessionId of ["kept", "temporary", undefined]) {
+      const stale = fakePanel();
+      expect(manager.restore(stale.value as never, sessionId)).toBe(false);
+      expect(stale.value.dispose).toHaveBeenCalledOnce();
+    }
     manager.dispose();
   });
 
