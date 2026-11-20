@@ -5,7 +5,7 @@ scope:
   - /apps/pi-client/src/core/sessions/**
   - /apps/pi-client/src/host/**
   - /apps/vscode/src/extension/webview-host/**
-updated: 2026-11-14
+updated: 2026-11-20
 ---
 
 # Pi Session Lifecycle
@@ -44,11 +44,11 @@ Blocking extension input belongs to its Runtime/request, never whichever Session
 
 ## Committed mutations and recovery
 
-Tree mutation requires an idle, fully loaded Session without pending extension input or queued prompts. Fork from an idle Session follows the same rule; Fork from a busy Session, one that is running a reply, waiting for extension input or holding queued prompts, runs in a second Pi process opened on the same session file, so the source process and its reply are never touched. That entry stays unsaved until Pi has written the Fork's own file, and nothing of it remains if the Fork fails or is cancelled (`SessionRegistry.#forkInNewProcess`). Targets use stable Pi entry ids and authoritative entries, never message text or browser-supplied history. Capability/preflight failure or cancellation before Pi commits preserves logical identity, history and drafts.
+Tree mutation requires an idle, fully loaded Session without pending extension input or queued prompts. Fork does not: every Fork runs in a second Pi process opened on the same session file, so the source process is never touched. A reply in progress, extension input or queued prompts in the source go on, and an idle source stays running and usable while the Fork is made. The Fork's entry is listed while it starts and is not selected for the user; it can be shown, where Pi's extension input for the Fork itself appears, and cancelled, but not closed, stopped or deleted. That entry stays unsaved until Pi has written the Fork's own file, and nothing of it remains if the Fork fails or is cancelled (`SessionRegistry.#forkInNewProcess`). Targets use stable Pi entry ids and authoritative entries, never message text or browser-supplied history. Capability/preflight failure or cancellation before Pi commits preserves logical identity, history and drafts.
 
-**Fork creates a new application identity.** Pi's successful Fork response is the commit boundary: the live Runtime follows the fork under a new Provisional FrostPi id, while the original id receives a stopped Runtime for its original history. The selected user message is excluded from the copied path; its validated text/images become an editable, one-shot seed, not a new persisted prompt. Presentation placement and draft handling follow the [bridge](../shared/bridge/webview-bridge.SPEC.md#authorization-and-validation) and Composer contracts.
+**Fork creates a new application identity.** Pi's successful Fork response is the commit boundary: the second process's Runtime becomes the fork under a new FrostPi id, saved once Pi has written its file, and the original keeps its own Runtime and process. The selected user message is excluded from the copied path; its validated text/images become an editable, one-shot seed, not a new persisted prompt. Presentation placement and draft handling follow the [bridge](../shared/bridge/webview-bridge.SPEC.md#authorization-and-validation) and Composer contracts.
 
-Cancel Fork stops that child and restarts the original so a late response cannot replace recovery. If naming/state/history reconciliation fails after commit, remove the unfinished fork entry and recover the original; leave Pi-created files on disk. Rekeying Registry maps and Runtime identity must not publish a mismatched intermediate view. `SessionRegistry.forkMessage`, `#replaceRuntimeWithFork` and `#restoreOriginalAfterFork` implement this boundary.
+Cancel Fork, from the source or the Fork's entry, stops the second process and removes its entry. If naming/state/history reconciliation fails after commit, remove the unfinished fork entry; the original was never touched. Leave Pi-created files on disk. `SessionRegistry.forkMessage` and `#forkInNewProcess` implement this boundary.
 
 **Tree navigation mutates the existing Pi path, not application identity.** After Pi confirms commit, its path is authoritative. Rebuild entries/state under the same Runtime and JSONL; a later load/projection failure is retryable history failure, not permission to reverse-navigate automatically. Composer replacement and non-empty-draft confirmation follow the Composer seed contract.
 

@@ -565,7 +565,7 @@ process.on("SIGTERM", () => process.exit(0));
     await expect(registry.sendPrompt(sessionId, "Too early", [])).rejects.toThrow("Wait for conversation history");
   });
 
-  it("keeps the original identity across cancellation, recovery, and a successful temporary Fork", async () => {
+  it("forks in its own Pi process and keeps the source running", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-registry-fork-"));
     const sessionFile = join(dir, "source.jsonl");
     await writeFile(sessionFile, `${JSON.stringify({ type: "session", version: 3, id: "source", cwd: dir })}\n`);
@@ -578,6 +578,8 @@ const sourceFile = sessionIndex >= 0 ? process.argv[sessionIndex + 1] : undefine
 let sessionFile = sourceFile;
 let sessionId = "source";
 let sessionName = "Source";
+let model = null;
+let thinkingLevel = "off";
 let failReconcile = false;
 let pendingForkRequestId;
 let pendingForkEntryId;
@@ -604,7 +606,9 @@ process.stdin.on("data", chunk => {
     const command = JSON.parse(input.slice(0, index));
     input = input.slice(index + 1);
     const response = { type: "response", id: command.id, success: true };
-    if (command.type === "get_state") response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionFile, sessionId, sessionName };
+    if (command.type === "get_state") response.data = { model, thinkingLevel, isStreaming: false, isCompacting: false, sessionFile, sessionId, sessionName };
+    else if (command.type === "set_model") response.data = model = { provider: command.provider, id: command.modelId, name: command.modelId };
+    else if (command.type === "set_thinking_level") thinkingLevel = command.level;
     else if (command.type === "get_messages") response.data = { messages };
     else if (command.type === "get_entries") response.data = { entries, leafId: entries.at(-1)?.id ?? null };
     else if (command.type === "get_available_models") response.data = { models: [] };
@@ -671,34 +675,41 @@ process.on("SIGTERM", () => process.exit(0));
     const activeId = await registry.openSession({ path: sessionFile, cwd: dir, title: "Source", updatedAt: Date.now() });
     expect(created).toContainEqual({ id: activeId, sourceId: undefined });
     await waitForForkableHistory(registry, "preserve-entry");
+    // A Pi process started again would come back on the fake's null model: this shows the source was never restarted.
+    await registry.setModel(activeId, "provider", "chosen");
+    await registry.setThinkingLevel(activeId, "high");
+    const sourceIsUntouched = () => expect(registry.sessionView(activeId)).toMatchObject({
+      status: "ready", isForking: false, model: { provider: "provider", id: "chosen" }, thinkingLevel: "high",
+    });
+    const forkEntry = () => registry.snapshot().sessions.find((session) => session.id !== activeId && session.id !== unrelatedSidebarId)?.id;
 
     const unrelatedSidebarId = (await registry.createSession())!;
     await waitFor(() => registry.activeSessionId === unrelatedSidebarId && registry.sessionView(unrelatedSidebarId)?.status === "ready");
     const preservedFork = registry.forkMessage(activeId, "preserve-entry", "preserve-sidebar-selection");
-    await waitFor(() => registry.sessionView(activeId)?.isForking === true && registry.sessionView(activeId)?.pendingExtensionUi.length === 1);
+    // Pi asks on the Fork's own process; the source answers nothing and stays usable.
+    await waitFor(() => registry.sessionView(forkEntry() ?? "")?.pendingExtensionUi.length === 1, 5_000);
+    const preservedId = forkEntry()!;
+    expect(registry.sessionView(preservedId)?.isForking).toBe(true);
+    sourceIsUntouched();
     await registry.closeSession(unrelatedSidebarId);
     expect(registry.activeSessionId).toBe(activeId);
-    await registry.respondExtensionUi(activeId, "fork-confirm", { confirmed: true });
-    const preservedResult = await preservedFork;
-    expect(preservedResult.cancelled).toBe(false);
-    expect(typeof preservedResult.forkSessionId).toBe("string");
+    await registry.respondExtensionUi(preservedId, "fork-confirm", { confirmed: true });
+    await expect(preservedFork).resolves.toEqual({ cancelled: false, forkSessionId: preservedId });
     expect(registry.activeSessionId).toBe(activeId);
-    expect(registry.snapshot().sessions.some((session) => session.id === preservedResult.forkSessionId)).toBe(true);
-    expect(created).toContainEqual({ id: preservedResult.forkSessionId, sourceId: activeId });
-    await registry.closeSession(preservedResult.forkSessionId!);
-    await registry.activateSession(activeId);
-    await waitForForkableHistory(registry, "preserve-entry");
+    expect(created).toContainEqual({ id: preservedId, sourceId: activeId });
+    sourceIsUntouched();
+    await registry.closeSession(preservedId);
 
     await expect(registry.forkMessage(activeId, "fail-entry")).rejects.toThrow("set_session_name failed after Fork");
-    await waitForForkableHistory(registry, "preserve-entry");
     expect(registry.snapshot().sessions).toEqual([expect.objectContaining({ id: activeId, status: "ready" })]);
+    sourceIsUntouched();
 
     const pendingFork = registry.forkMessage(activeId, "wait-entry");
-    await waitFor(() => registry.snapshot().activeSession?.isForking === true && registry.snapshot().activeSession?.pendingExtensionUi.length === 1);
-    await expect(registry.createSession()).rejects.toThrow("cancel it first");
+    await waitFor(() => registry.sessionView(forkEntry() ?? "")?.pendingExtensionUi.length === 1, 5_000);
+    await expect(registry.createSession()).rejects.toThrow("Wait for the current session creation to finish.");
     await registry.cancelFork(activeId);
     await expect(pendingFork).resolves.toEqual({ cancelled: true });
-    await waitForForkableHistory(registry, "preserve-entry");
+    expect(registry.snapshot().sessions).toEqual([expect.objectContaining({ id: activeId, status: "ready" })]);
 
     await expect(registry.forkMessage(activeId, "cancel-entry")).resolves.toEqual({ cancelled: true });
     expect(registry.snapshot().sessions).toHaveLength(1);
@@ -721,10 +732,10 @@ process.on("SIGTERM", () => process.exit(0));
         images: [{ id: "image", name: "shot.png", mimeType: "image/png", dataUrl: "data:image/png;base64,AA==", size: 1 }],
       },
     });
-    const original = registry.snapshot().sessions.find((session) => session.id === activeId);
-    expect(original).toMatchObject({ title: "Source", status: "stopped" });
+    sourceIsUntouched();
     expect(persisted?.sessions).toEqual([
       expect.objectContaining({ id: activeId, sessionFile }),
+      expect.objectContaining({ id: result.forkSessionId, sessionFile: join(dir, "fork.jsonl") }),
     ]);
   });
 
