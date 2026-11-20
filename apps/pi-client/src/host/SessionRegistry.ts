@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { access } from "node:fs/promises";
+import { access, unlink } from "node:fs/promises";
 import { basename, normalize, resolve } from "node:path";
 
 import type { RpcExtensionUiResponse, StreamingBehavior, ThinkingLevel } from "@frostime/pi-rpc";
@@ -8,7 +8,7 @@ import type { WebviewImageInput } from "../shared/bridge/webviewToHost.js";
 import type { QuestionDraftSubmission } from "../shared/question-tool/questionToolProtocol.js";
 import type { SessionRuntimeStatus, SessionSummaryView, SessionViewModel, WorkspaceViewModel } from "../shared/model/sessionViewModel.js";
 import { sameCanonicalPath } from "../core/_shared/canonicalPath.js";
-import { normalizePiSlashPrompt } from "../core/sessions/normalizePiSlashPrompt.js";
+import { parseHostCommand } from "../core/sessions/hostCommands.js";
 import { SessionRuntime } from "../core/index.js";
 import type { RuntimeLogger } from "../core/diagnostics/RuntimeLogger.js";
 import { readConfiguration, readHostProxy } from "./readConfiguration.js";
@@ -35,14 +35,27 @@ type DiscoverSessionWorkingDirectories = typeof discoverSessionWorkingDirectorie
 
 export type ForkResultSelection = "select-result" | "preserve-sidebar-selection";
 
-interface ForkOperation {
-  phase: "waiting-for-pi" | "reconciling";
+export interface CreateSessionOptions {
+  /**
+   * `preserve-sidebar-selection` is for a Session that opens in its own presentation:
+   * the sidebar keeps its Session, including an unretained Provisional one.
+   */
+  selection?: ForkResultSelection;
+  /** Start in this Session's working directory without asking, while it is still an allowed directory. */
+  workingDirectoryOf?: string;
+  /** Runs once the entry exists and before its Pi process starts, so a presentation can show the startup. */
+  onRegistered?: (sessionId: string) => void | Promise<void>;
+}
+
+/**
+ * A Fork being made in its own Pi process. The source Session and its process are never
+ * touched, so the source stays usable while the Fork starts, forks and loads.
+ */
+interface PendingFork {
   sourceId: string;
   forkId: string;
   runtime: SessionRuntime;
-  resultSelection: ForkResultSelection;
-  cancelRequested: boolean;
-  stopPromise?: Promise<void>;
+  cancelled: boolean;
 }
 
 export interface SessionRegistryOptions {
@@ -82,7 +95,7 @@ export class SessionRegistry {
   readonly #onSessionOpened: SessionRegistryOptions["onSessionOpened"];
 
   #activeSessionId: string | null = null;
-  #forkOperation: ForkOperation | null = null;
+  #pendingFork: PendingFork | null = null;
   #sessionCreationInProgress = 0;
   #startQueue: Promise<void> = Promise.resolve();
   #historyQueue: Promise<void> = Promise.resolve();
@@ -147,6 +160,12 @@ export class SessionRegistry {
     return runtime ? this.#withWorkingDirectoryLabel(runtime.view) : null;
   }
 
+  /** The directory whose settings apply to this Session: its workspace folder, also for a worktree outside it. */
+  configurationScope(sessionId: string): string | undefined {
+    const runtime = this.#runtimes.get(sessionId);
+    return runtime ? this.#configurationScopeCwd(runtime.view.cwd) : undefined;
+  }
+
   retainProvisionalSession(sessionId: string): void {
     this.#requireRuntime(sessionId);
     if (this.#temporarySessionIds.has(sessionId)) this.#retainedProvisionalSessionIds.add(sessionId);
@@ -185,14 +204,21 @@ export class SessionRegistry {
     };
   }
 
-  async createSession(ephemeral = false): Promise<string | undefined> {
+  async createSession(ephemeral = false, options: CreateSessionOptions = {}): Promise<string | undefined> {
     return this.#withSessionCreation(async () => {
-      const cwd = this.#sourceWorkspaceCwd("creating a Pi session");
-      const discovery = await this.#discoverWorkingDirectories(cwd);
+      const inherited = options.workingDirectoryOf
+        ? await this.#workingDirectoryOfSession(options.workingDirectoryOf)
+        : undefined;
       this.#assertOpen();
-      const directory = await this.#pickSessionWorkingDirectory(discovery.directories);
+      let directory = inherited;
+      if (!directory) {
+        const cwd = this.#sourceWorkspaceCwd("creating a Pi session");
+        const discovery = await this.#discoverWorkingDirectories(cwd);
+        this.#assertOpen();
+        directory = await this.#pickSessionWorkingDirectory(discovery.directories);
+      }
       if (!directory) return undefined;
-      return this.#createSessionInDirectory(directory, ephemeral);
+      return this.#createSessionInDirectory(directory, ephemeral, undefined, options);
     });
   }
 
@@ -221,7 +247,6 @@ export class SessionRegistry {
 
   async resumeSession(): Promise<string | undefined> {
     this.#assertOpen();
-    this.#assertNoForkOperation();
     const cwd = this.#sourceWorkspaceCwd("resuming a Pi session");
     const discovery = await this.#discoverWorkingDirectories(cwd);
     this.#assertOpen();
@@ -242,7 +267,6 @@ export class SessionRegistry {
     workingDirectory?: SessionWorkingDirectory,
   ): Promise<string> {
     this.#assertOpen();
-    this.#assertNoForkOperation();
     const existing = [...this.#records.values()].find((record) => record.sessionFile && samePath(record.sessionFile, entry.path));
     if (existing) {
       this.#onSessionOpened?.(existing.id);
@@ -274,13 +298,23 @@ export class SessionRegistry {
     return id;
   }
 
+  /** The source Session's directory, only while workspace discovery still allows it. */
+  async #workingDirectoryOfSession(sessionId: string): Promise<SessionWorkingDirectory | undefined> {
+    const source = this.#runtimes.get(sessionId);
+    if (!source) return undefined;
+    const discoveries = await this.#discoverOpenWorkspaceDirectories();
+    return findSessionWorkingDirectory(discoveries.flatMap((discovery) => discovery.directories), source.cwd);
+  }
+
   async #createSessionInDirectory(
     directory: SessionWorkingDirectory,
     ephemeral: boolean,
     customArguments?: readonly string[],
+    options: CreateSessionOptions = {},
   ): Promise<string> {
     this.#assertOpen();
-    await this.#discardActiveTemporarySession();
+    const preserveSidebar = options.selection === "preserve-sidebar-selection";
+    if (!preserveSidebar) await this.#discardActiveTemporarySession();
     this.#assertOpen();
     const id = randomUUID();
     const record: PersistedSessionRecord = {
@@ -295,16 +329,24 @@ export class SessionRegistry {
     if (!ephemeral) this.#temporarySessionIds.add(id);
     const runtime = this.#createRuntime(record, customArguments);
     this.#runtimes.set(id, runtime);
-    this.#activeSessionId = id;
+    if (preserveSidebar) this.#ensureValidActiveSelection();
+    else this.#activeSessionId = id;
     this.#onSessionOpened?.(id);
     await this.#persist();
     this.#emitChange();
+    // A presentation that cannot open must not leave an entry that never starts.
+    let presentationError: unknown;
+    try {
+      await options.onRegistered?.(id);
+    } catch (error) {
+      presentationError = error;
+    }
     await this.#startRuntime(runtime, true);
+    if (presentationError) throw presentationError instanceof Error ? presentationError : new Error("The new session could not be presented.", { cause: presentationError });
     return id;
   }
 
   async activateSession(sessionId: string): Promise<void> {
-    this.#assertNoForkOperation();
     const runtime = this.#requireRuntime(sessionId);
     if (sessionId !== this.#activeSessionId) await this.#discardActiveTemporarySession();
     this.#assertOpen();
@@ -314,10 +356,19 @@ export class SessionRegistry {
     if (runtime.view.status === "stopped" && !runtime.isEphemeral) await this.#startRuntime(runtime);
   }
 
+  /**
+   * Starts a restored Session that a presentation is about to show, as selecting it in
+   * the sidebar does, so its history loads without a prompt first. Failures are
+   * reported by the start itself.
+   */
+  async startIfStopped(sessionId: string): Promise<void> {
+    const runtime = this.#requireRuntime(sessionId);
+    if (runtime.view.status === "stopped" && !runtime.isEphemeral) await this.#startRuntime(runtime);
+  }
+
   /** Clear the foreground without closing, discarding or starting any Runtime. */
   async clearActiveSession(): Promise<void> {
     this.#assertOpen();
-    this.#assertNoForkOperation();
     if (this.#activeSessionId === null) return;
     this.#activeSessionId = null;
     await this.#persist();
@@ -332,10 +383,85 @@ export class SessionRegistry {
     this.#removeSession(sessionId);
     if (this.#activeSessionId === sessionId) {
       // Stable open order: prefer the most recently opened remaining session.
-      this.#activeSessionId = [...this.#runtimes.keys()].at(-1) ?? null;
+      // A Fork still being made is not a Session to show yet.
+    this.#activeSessionId = [...this.#runtimes.keys()].filter((id) => id !== this.#pendingFork?.forkId).at(-1) ?? null;
     }
     await this.#persist();
     this.#emitChange();
+  }
+
+  /**
+   * Stops the Session's Pi process and keeps the Session listed. Selecting it, opening it
+   * in a tab or sending a prompt starts it again from its file. A Temporary Session has no
+   * file to start from, so it can only be closed.
+   */
+  async stopSession(sessionId: string): Promise<void> {
+    this.#assertSessionOutsideFork(sessionId);
+    const runtime = this.#requireRuntime(sessionId);
+    if (runtime.isEphemeral) throw new Error("A temporary session cannot start again once stopped. Close it instead.");
+    // A start already under way finishes first, so it cannot bring the process back afterwards.
+    await this.#startJobs.get(sessionId)?.catch(() => undefined);
+    const status = runtime.view.status;
+    if (status === "stopped" || status === "stopping") return;
+    if (!await confirmStop(this.#host, runtime)) return;
+    await runtime.stop();
+    this.#emitChange();
+  }
+
+  /**
+   * Deletes the Session: stops its Pi process, removes Pi's session file (to the trash
+   * where the host has one, as Pi's own session picker does) and closes it. Other files
+   * of the same session tree, such as forks, stay. If the file cannot be removed, the
+   * Session stays listed, stopped.
+   */
+  async deleteSession(sessionId: string): Promise<void> {
+    this.#assertSessionOutsideFork(sessionId);
+    const runtime = this.#requireRuntime(sessionId);
+    if (runtime.isEphemeral) throw new Error("A temporary session is never saved, so there is nothing to delete. Close it instead.");
+    const sessionFile = runtime.view.sessionFile ?? this.#records.get(sessionId)?.sessionFile;
+    if (sessionFile && !sessionFile.endsWith(".jsonl")) throw new Error(`Refusing to delete a file that is not a Pi session: ${sessionFile}`);
+    const canTrash = this.#host.moveToTrash !== undefined;
+    const choice = await this.#host.window.showWarningDialog(
+      sessionFile
+        ? `Delete the session "${runtime.view.title}"? Its Pi session file will be ${canTrash ? "moved to the trash" : "permanently deleted"}: ${sessionFile}`
+        : `Delete the session "${runtime.view.title}"? Pi has not saved it yet, so it is only closed.`,
+      ["Delete session"],
+    );
+    if (choice !== "Delete session") return;
+    await this.#startJobs.get(sessionId)?.catch(() => undefined);
+    await runtime.stop();
+    this.#emitChange();
+    if (sessionFile) await this.#removeSessionFile(sessionFile);
+    await runtime.dispose();
+    this.#removeSession(sessionId);
+    if (this.#activeSessionId === sessionId) this.#activeSessionId = [...this.#runtimes.keys()].at(-1) ?? null;
+    await this.#persist();
+    this.#emitChange();
+  }
+
+  async #removeSessionFile(sessionFile: string): Promise<void> {
+    const exists = async (): Promise<boolean> => access(sessionFile).then(() => true, () => false);
+    if (this.#host.moveToTrash) {
+      try {
+        await this.#host.moveToTrash(sessionFile);
+        return;
+      } catch (error) {
+        if (!await exists()) return;
+        const reason = error instanceof Error ? error.message : String(error);
+        const choice = await this.#host.window.showWarningDialog(
+          `The session file could not be moved to the trash (${reason}). Delete it permanently instead? ${sessionFile}`,
+          ["Delete permanently"],
+        );
+        if (choice !== "Delete permanently") throw new Error("The session was stopped but not deleted.");
+      }
+    }
+    try {
+      await unlink(sessionFile);
+    } catch (error) {
+      // Pi writes the file only once there is something to save.
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
   }
 
   async retrySession(sessionId?: string): Promise<void> {
@@ -348,7 +474,6 @@ export class SessionRegistry {
   }
 
   async restartAllSessions(): Promise<void> {
-    this.#assertNoForkOperation();
     const runtimes = [...this.#runtimes.values()];
     const restartable = runtimes.filter((runtime) => !runtime.isEphemeral);
     const skipped = runtimes.length - restartable.length;
@@ -379,15 +504,71 @@ export class SessionRegistry {
       throw new Error("Wait for conversation history to finish loading before sending a prompt.");
     }
     if (runtime.view.isCompacting) throw new Error("Wait for context compaction to finish before sending a prompt.");
-    const compactInstructions = compactCommandInstructions(text);
-    if (compactInstructions !== null && images.length > 0) throw new Error("/compact does not support image attachments.");
-    if (compactInstructions !== null) await runtime.compact(compactInstructions || undefined);
-    else await runtime.sendPrompt(text, images, streamingBehavior);
+    const hostCommand = parseHostCommand(text);
+    // A command this runtime cannot be answered for stays the runtime's own text.
+    if (hostCommand && runtime.answersHostCommand(hostCommand.name)) {
+      if (images.length > 0) throw new Error(`/${hostCommand.name} does not support image attachments.`);
+      // Host commands never become a user prompt and never promote a Provisional Session.
+      switch (hostCommand.name) {
+        case "compact":
+          await runtime.compact(hostCommand.argument || undefined);
+          runtime.clearComposerSeed();
+          return;
+        case "new":
+          await this.startNewConversation(sessionId);
+          return;
+        case "reload":
+          await this.#withTreeInteraction(sessionId, () => runtime.reloadResources());
+          return;
+        case "name":
+        case "alias":
+          await this.#renameFromCommand(sessionId, hostCommand.argument);
+          return;
+      }
+    }
+    await runtime.sendPrompt(text, images, streamingBehavior);
     runtime.clearComposerSeed();
-    if (compactInstructions === null && this.#temporarySessionIds.delete(sessionId)) {
+    if (this.#temporarySessionIds.delete(sessionId)) {
       this.#retainedProvisionalSessionIds.delete(sessionId);
       await this.#persist();
     }
+  }
+
+  /**
+   * `/new` keeps the application identity and its presentation; only Pi's conversation
+   * is replaced. Nothing here changes until Pi commits. From that point the entry is
+   * Provisional again, because the new conversation has no file to restore until its
+   * first prompt, and retained, because the user chose to continue in it. That holds
+   * even when loading the new conversation then fails: the old file is no longer this
+   * entry's conversation and must not be what a restart reopens.
+   */
+  async startNewConversation(sessionId: string): Promise<{ cancelled: boolean }> {
+    this.#assertSessionOutsideFork(sessionId);
+    // /new is a session-tree interaction too: a branch switch or a second /new must not interleave.
+    return this.#withTreeInteraction(sessionId, async () => {
+      const runtime = this.#requireRuntime(sessionId);
+      await this.#ensureRunning(runtime);
+      if (!await confirmNewConversation(this.#host, runtime)) return { cancelled: true };
+
+      let committed = false;
+      const onCommitted = (): void => {
+        committed = true;
+        if (runtime.isEphemeral) return;
+        this.#temporarySessionIds.add(sessionId);
+        this.#retainedProvisionalSessionIds.add(sessionId);
+        // The earlier conversation's file stops being this entry's restart target.
+        const record = this.#records.get(sessionId);
+        if (record) this.#records.set(sessionId, { id: record.id, title: record.title, cwd: record.cwd, updatedAt: Date.now() });
+      };
+      try {
+        return await runtime.startNewConversation(onCommitted);
+      } finally {
+        if (committed && !this.#disposed) {
+          await Promise.resolve(this.#persist()).catch(() => undefined);
+          this.#emitChange();
+        }
+      }
+    });
   }
 
   async restoreQueuedPrompts(sessionId: string) {
@@ -402,13 +583,12 @@ export class SessionRegistry {
   }
 
   async cancelFork(sessionId: string): Promise<void> {
-    const operation = this.#forkOperation;
-    if (!operation || (sessionId !== operation.sourceId && sessionId !== operation.forkId)) {
+    const pending = this.#pendingFork;
+    if (!pending || (sessionId !== pending.sourceId && sessionId !== pending.forkId)) {
       throw new Error("No Fork operation is active for this session.");
     }
-    operation.cancelRequested = true;
-    operation.stopPromise ??= operation.runtime.stop();
-    await operation.stopPromise;
+    pending.cancelled = true;
+    await pending.runtime.stop();
   }
 
   async forkMessage(
@@ -416,7 +596,6 @@ export class SessionRegistry {
     entryId: string,
     resultSelection: ForkResultSelection = "select-result",
   ): Promise<{ cancelled: boolean; forkSessionId?: string }> {
-    this.#assertNoForkOperation();
     this.#assertNoSessionCreation();
     if (resultSelection === "select-result" && sessionId !== this.#activeSessionId) {
       throw new Error("Activate the session before forking one of its messages.");
@@ -428,70 +607,75 @@ export class SessionRegistry {
     await access(original.sessionFile).catch(() => {
       throw new Error("Wait for Pi to finish saving this session before forking.");
     });
-    const operation: ForkOperation = {
-      phase: "waiting-for-pi",
-      sourceId: sessionId,
-      forkId: randomUUID(),
-      runtime,
-      resultSelection,
-      cancelRequested: false,
-    };
-    this.#assertNoSessionCreation();
-    this.#forkOperation = operation;
-    const forkName = forkSessionName(runtime.view.title);
+    return this.#withSessionCreation(() => this.#forkInNewProcess(runtime, original, original.sessionFile!, entryId, resultSelection));
+  }
 
-    let result: Awaited<ReturnType<SessionRuntime["executeFork"]>>;
+  /**
+   * Pi's fork replaces the conversation of the process that runs it, so a second Pi
+   * process opens the same session file and forks there. The source Session and its
+   * process are never touched: a reply in progress continues, and an idle source stays
+   * running. The new entry stays unsaved until Pi has written the Fork's own file, so an
+   * interrupted Fork never leaves a second entry pointing at the source's file.
+   */
+  async #forkInNewProcess(
+    source: SessionRuntime,
+    original: PersistedSessionRecord,
+    sourceFile: string,
+    entryId: string,
+    resultSelection: ForkResultSelection,
+  ): Promise<{ cancelled: boolean; forkSessionId?: string }> {
+    const forkId = randomUUID();
+    const forkName = forkSessionName(source.view.title);
+    const record: PersistedSessionRecord = { id: forkId, title: forkName, cwd: original.cwd, sessionFile: sourceFile, updatedAt: Date.now() };
+    this.#records.set(forkId, record);
+    this.#temporarySessionIds.add(forkId);
+    const runtime = this.#createRuntime(record);
+    this.#runtimes.set(forkId, runtime);
+    const pending: PendingFork = { sourceId: source.id, forkId, runtime, cancelled: false };
+    this.#pendingFork = pending;
+    let committed = false;
     try {
-      result = await runtime.executeFork(entryId);
-    } catch (error) {
-      await this.#restoreOriginalAfterFork(operation);
-      if (operation.cancelRequested) return { cancelled: true };
-      throw error;
-    }
-    if (operation.cancelRequested) {
-      await this.#restoreOriginalAfterFork(operation);
-      return { cancelled: true };
-    }
-    if (result.cancelled) {
-      this.#finishForkOperation(operation);
+      await this.#startRuntime(runtime, true);
+      if (pending.cancelled) return { cancelled: true };
+      if (runtime.view.status !== "ready") throw new Error(runtime.view.error ?? "The Pi process for the Fork did not start.");
+      // The start queues the ordinary history load. Wait for it rather than reuse it as the
+      // full load: for a large file it defers, and only then is the full history loaded.
+      await this.#historyJobs.get(runtime.id)?.catch(() => undefined);
+      if (runtime.view.historyStatus !== "loaded") await this.#queueHistory(runtime, true);
+      if (runtime.view.historyStatus !== "loaded") throw new Error("Unable to load the session history for the Fork.");
+      if (pending.cancelled) return { cancelled: true };
+      const result = await runtime.executeFork(entryId);
+      if (result.cancelled || pending.cancelled) return { cancelled: true };
+      committed = true;
+      await runtime.reconcileFork(forkName, { id: forkId, text: result.text, images: result.images });
+      const forkFile = runtime.view.sessionFile;
+      if (!forkFile || samePath(forkFile, sourceFile)) throw new Error("Pi did not create a separate file for the Fork.");
+      this.#records.set(forkId, { ...record, sessionFile: forkFile, updatedAt: Date.now() });
+      this.#temporarySessionIds.delete(forkId);
+      if (resultSelection === "select-result") this.#activeSessionId = forkId;
+      this.#onSessionOpened?.(forkId, source.id);
+      await Promise.resolve(this.#persist()).catch((error: unknown) => this.#logger.error("Failed to persist session collection after Fork", error));
       this.#emitChange();
-      return { cancelled: true };
-    }
-
-    try {
-      if (this.#startJobs.has(operation.sourceId) || this.#historyJobs.has(operation.sourceId)) {
-        throw new Error("Session lifecycle work was still pending when Pi committed the Fork.");
-      }
-      operation.phase = "reconciling";
-      this.#replaceRuntimeWithFork(operation, original, forkName);
-      await runtime.reconcileFork(forkName, {
-        id: operation.forkId,
-        text: result.text,
-        images: result.images,
-      });
+      return { cancelled: false, forkSessionId: forkId };
     } catch (error) {
-      await this.#restoreOriginalAfterFork(operation);
-      if (operation.cancelRequested) return { cancelled: true };
+      if (pending.cancelled && !committed) return { cancelled: true };
       throw error;
+    } finally {
+      if (this.#pendingFork === pending) this.#pendingFork = null;
+      // Nothing of a failed or cancelled Fork stays, and a committed Fork that could not
+      // be reconciled is reported rather than shown half-loaded.
+      if (this.#records.get(forkId)?.sessionFile === sourceFile || !committed) {
+        if (this.#runtimes.get(forkId) === runtime) {
+          await runtime.dispose().catch(() => undefined);
+          this.#removeSession(forkId);
+          this.#emitChange();
+        }
+      }
     }
-
-    const forkFile = runtime.view.sessionFile;
-    this.#records.set(operation.forkId, {
-      id: operation.forkId,
-      title: forkName,
-      cwd: runtime.cwd,
-      ...(forkFile ? { sessionFile: forkFile } : {}),
-      updatedAt: Date.now(),
-    });
-    this.#finishForkOperation(operation);
-    await Promise.resolve(this.#persist()).catch((error: unknown) => this.#logger.error("Failed to persist session collection after Fork", error));
-    this.#emitChange();
-    return { cancelled: false, forkSessionId: operation.forkId };
   }
 
   async branchHere(sessionId: string, entryId: string, hasDraft: boolean): Promise<{ cancelled: boolean }> {
     return this.#withTreeInteraction(sessionId, async () => {
-      this.#assertNoForkOperation();
       const runtime = this.#requireRuntime(sessionId);
       await this.#ensureRunning(runtime);
       if (hasDraft && !await confirmDraftReplacement(this.#host)) return { cancelled: true };
@@ -509,7 +693,6 @@ export class SessionRegistry {
     hasDraft: boolean,
   ): Promise<{ cancelled: boolean }> {
     return this.#withTreeInteraction(sessionId, async () => {
-      this.#assertNoForkOperation();
       const runtime = this.#requireRuntime(sessionId);
       await this.#ensureRunning(runtime);
       const selected = await pickBranchEnd(this.#host, await runtime.listBranchEnds(branchPointId));
@@ -521,6 +704,21 @@ export class SessionRegistry {
       if (result.seed) runtime.setComposerSeed(result.seed);
       return { cancelled: result.cancelled };
     });
+  }
+
+  /** `/name` and `/alias`: with a name, rename at once; without one, ask for it. */
+  async #renameFromCommand(sessionId: string, argument: string): Promise<void> {
+    const current = this.#requireRuntime(sessionId).view.title;
+    const name = argument || await this.#host.window.showInputBox({
+      title: "Rename FrostPi session",
+      value: current,
+      prompt: "The name is shown in the session list and the editor tab.",
+      validateInput: (value) => value.trim().length > MAX_SESSION_NAME_LENGTH ? `A session name can have at most ${MAX_SESSION_NAME_LENGTH} characters.` : undefined,
+    });
+    const normalized = name?.trim();
+    if (!normalized || normalized === current) return;
+    if (normalized.length > MAX_SESSION_NAME_LENGTH) throw new Error(`A session name can have at most ${MAX_SESSION_NAME_LENGTH} characters.`);
+    await this.rename(sessionId, normalized);
   }
 
   async rename(sessionId: string, name: string): Promise<void> {
@@ -595,11 +793,11 @@ export class SessionRegistry {
 
   diagnosticsSummary(): string {
     const sessions = [...this.#runtimes.values()];
-    const operation = this.#forkOperation;
+    const pending = this.#pendingFork;
     return [
       `Registry active session: ${this.#activeSessionId ?? "<none>"}`,
       `Registry session count: ${sessions.length}`,
-      `Fork operation: ${operation ? `${operation.phase} source=${operation.sourceId} target=${operation.forkId}` : "<none>"}`,
+      `Fork operation: ${pending ? `source=${pending.sourceId} target=${pending.forkId}` : "<none>"}`,
       "",
       ...sessions.flatMap((runtime) => [runtime.diagnosticsSummary(), ""]),
     ].join("\n");
@@ -758,67 +956,6 @@ export class SessionRegistry {
     }
   }
 
-  #replaceRuntimeWithFork(
-    operation: ForkOperation,
-    original: PersistedSessionRecord,
-    forkName: string,
-  ): void {
-    const originalRuntime = this.#createRuntime(original);
-    const previousStatus = this.#lastStatuses.get(operation.sourceId) ?? operation.runtime.view.status;
-    const pendingUiCount = operation.runtime.view.pendingExtensionUi.length;
-    operation.runtime.rebindSessionId(operation.forkId);
-
-    this.#runtimes.delete(operation.sourceId);
-    this.#lastStatuses.delete(operation.sourceId);
-    this.#lastPendingUiCounts.delete(operation.sourceId);
-
-    this.#runtimes.set(operation.forkId, operation.runtime);
-    this.#lastStatuses.set(operation.forkId, previousStatus);
-    this.#lastPendingUiCounts.set(operation.forkId, pendingUiCount);
-    this.#records.set(operation.forkId, {
-      id: operation.forkId,
-      title: forkName,
-      cwd: original.cwd,
-      updatedAt: Date.now(),
-    });
-    this.#temporarySessionIds.add(operation.forkId);
-
-    this.#runtimes.set(operation.sourceId, originalRuntime);
-    this.#lastStatuses.set(operation.sourceId, "stopped");
-    this.#lastPendingUiCounts.set(operation.sourceId, 0);
-    if (operation.resultSelection === "select-result") this.#activeSessionId = operation.forkId;
-    else this.#ensureValidActiveSelection();
-    this.#onSessionOpened?.(operation.forkId, operation.sourceId);
-  }
-
-  async #restoreOriginalAfterFork(operation: ForkOperation): Promise<void> {
-    operation.stopPromise ??= operation.runtime.stop();
-    await operation.stopPromise.catch(() => undefined);
-
-    if (operation.phase === "reconciling") {
-      await operation.runtime.dispose().catch(() => undefined);
-      this.#removeSession(operation.forkId);
-    }
-    if (operation.resultSelection === "select-result") this.#activeSessionId = operation.sourceId;
-    else this.#ensureValidActiveSelection();
-
-    const originalRuntime = this.#requireRuntime(operation.sourceId);
-    let restartError: unknown;
-    try {
-      await this.#startRuntime(originalRuntime);
-    } catch (error) {
-      restartError = error;
-    }
-    await Promise.resolve(this.#persist()).catch((error: unknown) => this.#logger.error("Failed to persist session collection after Fork recovery", error));
-    this.#finishForkOperation(operation);
-    this.#emitChange();
-    if (restartError) throw restartError instanceof Error ? restartError : new Error("Unable to restart the original session after Fork recovery.", { cause: restartError });
-  }
-
-  #finishForkOperation(operation: ForkOperation): void {
-    if (this.#forkOperation === operation) this.#forkOperation = null;
-  }
-
   async #withTreeInteraction<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
     if (this.#treeInteractionSessions.has(sessionId)) throw new Error("Finish the current session-tree interaction first.");
     this.#treeInteractionSessions.add(sessionId);
@@ -829,17 +966,12 @@ export class SessionRegistry {
     }
   }
 
-  #assertNoForkOperation(): void {
-    if (this.#forkOperation) throw new Error("Wait for the current session Fork to finish or cancel it first.");
-  }
-
   #assertNoSessionCreation(): void {
     if (this.#sessionCreationInProgress > 0) throw new Error("Wait for the current session creation to finish.");
   }
 
   async #withSessionCreation<T>(operation: () => Promise<T>): Promise<T> {
     this.#assertOpen();
-    this.#assertNoForkOperation();
     this.#assertNoSessionCreation();
     this.#sessionCreationInProgress += 1;
     try {
@@ -849,9 +981,9 @@ export class SessionRegistry {
     }
   }
 
+  /** A Fork's own entry is not usable until it has forked; its source stays usable throughout. */
   #assertSessionOutsideFork(sessionId: string): void {
-    const operation = this.#forkOperation;
-    if (operation && (sessionId === operation.sourceId || sessionId === operation.forkId)) {
+    if (sessionId === this.#pendingFork?.forkId) {
       throw new Error("Wait for the current session Fork to finish or cancel it first.");
     }
   }
@@ -868,7 +1000,11 @@ export class SessionRegistry {
     if (runtime.isEphemeral && (status === "stopped" || status === "failed")) {
       throw new Error("This temporary session has stopped and cannot be restarted. Close it and create a new session.");
     }
-    if (status === "queued" || status === "stopped" || status === "failed") await this.#startRuntime(runtime);
+    if (status === "queued" || status === "stopped" || status === "failed") {
+      await this.#startRuntime(runtime);
+      // The prompt waits for the history the start reloads, as one typed after it would.
+      await this.#historyJobs.get(runtime.id)?.catch(() => undefined);
+    }
     if (!this.#runtimes.has(runtime.id)) throw new Error("The session's worktree is no longer available.");
   }
 
@@ -1071,15 +1207,25 @@ export class SessionRegistry {
   }
 }
 
+/** The bridge's bound on a session name; Pi itself accepts longer ones. */
+const MAX_SESSION_NAME_LENGTH = 160;
+
+/** The source cannot hand its own process to the Fork while it is busy. */
 function forkSessionName(title: string): string {
   const source = title.trim();
   return (source ? `Fork: ${source}` : "Fork session").slice(0, 160);
 }
 
-function compactCommandInstructions(text: string): string | null {
-  const normalized = normalizePiSlashPrompt(text);
-  if (normalized === "/compact") return "";
-  return normalized.startsWith("/compact ") ? normalized.slice("/compact ".length).trim() : null;
+async function confirmNewConversation(host: ClientHost, runtime: SessionRuntime): Promise<boolean> {
+  const view = runtime.view;
+  const losesConversation = view.isEphemeral
+    && view.conversationItems.some((item) => item.type === "turn" && item.userMessage?.role === "user");
+  if (!losesConversation) return true;
+  const choice = await host.window.showWarningDialog(
+    "Starting a new conversation in this temporary session will permanently discard the current one. This cannot be undone.",
+    ["Start new conversation"],
+  );
+  return choice === "Start new conversation";
 }
 
 async function confirmClose(host: ClientHost, runtime: SessionRuntime): Promise<boolean> {
@@ -1096,6 +1242,16 @@ async function confirmClose(host: ClientHost, runtime: SessionRuntime): Promise<
     ["Close session"],
   );
   return choice === "Close session";
+}
+
+async function confirmStop(host: ClientHost, runtime: SessionRuntime): Promise<boolean> {
+  const view = runtime.view;
+  if (!view.isStreaming && view.pendingExtensionUi.length === 0) return true;
+  const choice = await host.window.showWarningDialog(
+    "Stopping this session's Pi process will stop its active response, tools, and pending extension UI requests. The session and its saved Pi history are kept.",
+    ["Stop Pi process"],
+  );
+  return choice === "Stop Pi process";
 }
 
 async function confirmRestart(host: ClientHost, runtimes: readonly SessionRuntime[]): Promise<boolean> {

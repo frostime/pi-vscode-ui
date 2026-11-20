@@ -23,6 +23,14 @@ describe("FrostPi composer commands", () => {
     expect(withFrostPiCommands([]).map((command) => command.name)).toEqual(["compact", "resume"]);
   });
 
+  it("keeps the Host commands a Session lists for its own runtime", () => {
+    const hostListed = [
+      { name: "new", description: "Start a new conversation", source: "frostpi" },
+      { name: "reload", description: "Reload Pi resources", source: "frostpi" },
+    ];
+    expect(withFrostPiCommands(hostListed).map((command) => command.name)).toEqual(["compact", "resume", "new", "reload"]);
+  });
+
   it("replaces only names occupied by the supplied local command set", () => {
     const local = { name: "inspect", description: "Local inspect", source: "frostpi" };
     const compact = { name: "compact", description: "Pi compact", source: "extension" };
