@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- Long sessions keep VS Code responsive while Pi works. Each update of a running reply sent the whole turn to the session's view again, every step and its output included, and the view rendered every step again; in a turn of 150 steps that was about 400 KB some 40 times a second. Now only the steps that changed are sent and rendered, about 2 KB per update. Measured on a 150-step turn with its steps shown, an update went from about 32 ms to 6 ms of the view's time.
+- Switching back to a session tab no longer resends and rebuilds its whole conversation: a hidden tab is still not updated, and when shown it receives only what changed meanwhile. A view whose session did not change no longer receives an update every time another session does.
+
 ## [0.16.7] - 2026-11-16
 
 ### Fixed
