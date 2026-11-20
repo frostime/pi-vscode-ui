@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { BRIDGE_VERSION } from "../../src/shared/bridge/bridgeVersion.js";
+
 const { WebviewActionDispatcher } = await import("../../src/host/bridge/WebviewActionDispatcher.js");
 
 function fakeHost(editor: Record<string, unknown> = {}) {
@@ -7,19 +9,25 @@ function fakeHost(editor: Record<string, unknown> = {}) {
 }
 
 describe("Session Tab Host authorization", () => {
-  function setup() {
+  function setup(editorTabs = true) {
     const registry = {
       hasSession: vi.fn(() => true),
       sessionView: vi.fn(() => ({ cwd: "C:/workspace", attachmentLimits: { maxImageBytes: 1024 } })),
       createSession: vi.fn(),
       activateSession: vi.fn(),
       closeSession: vi.fn(),
+      stopSession: vi.fn(),
+      deleteSession: vi.fn(),
+      startIfStopped: vi.fn().mockResolvedValue(undefined),
+      rename: vi.fn().mockResolvedValue(undefined),
       abort: vi.fn(),
       sendPrompt: vi.fn().mockResolvedValue(undefined),
       forkMessage: vi.fn().mockResolvedValue({ cancelled: false, forkSessionId: "fork" }),
+      userMessageEntryId: vi.fn().mockResolvedValue("saved-entry"),
     };
     const logger = { error: vi.fn(), info: vi.fn() };
     const openPanel = vi.fn().mockResolvedValue(undefined);
+    const createSessionPanel = vi.fn().mockResolvedValue("created");
     const openComposerEditor = vi.fn().mockResolvedValue("opened");
     const drafts = {
       applyMutation: vi.fn(),
@@ -36,6 +44,7 @@ describe("Session Tab Host authorization", () => {
       openPanel,
       revealPanel: vi.fn(),
       openComposerEditor,
+      ...(editorTabs ? { createSessionPanel } : {}),
       host: fakeHost(),
     });
     const posted: unknown[] = [];
@@ -55,8 +64,48 @@ describe("Session Tab Host authorization", () => {
       surface: { kind: "sidebar" as const },
       sessionId: "source",
     };
-    return { dispatcher, registry, drafts, logger, openPanel, openComposerEditor, posted, connection, sidebarConnection };
+    return { dispatcher, registry, drafts, logger, openPanel, createSessionPanel, openComposerEditor, posted, connection, sidebarConnection };
   }
+
+  it("lets a Session Tab rename only the Session it is pinned to", async () => {
+    const { dispatcher, registry, connection, sidebarConnection } = setup();
+
+    await dispatcher.dispatch({ type: "renameSession", bridgeVersion: BRIDGE_VERSION, sessionId: "source", name: "Parser work" } as never, connection);
+    expect(registry.rename).toHaveBeenCalledWith("source", "Parser work");
+
+    await expect(dispatcher.dispatch({ type: "renameSession", bridgeVersion: BRIDGE_VERSION, sessionId: "other", name: "Hijack" } as never, connection))
+      .rejects.toThrow("does not target the Session displayed by this surface");
+    expect(registry.rename).toHaveBeenCalledOnce();
+
+    // The sidebar still manages every listed Session.
+    await dispatcher.dispatch({ type: "renameSession", bridgeVersion: BRIDGE_VERSION, sessionId: "other", name: "Listed" } as never, sidebarConnection);
+    expect(registry.rename).toHaveBeenLastCalledWith("other", "Listed");
+  });
+
+  it("creates a Session Tab beside the asking tab, or in the active group for the sidebar", async () => {
+    const { dispatcher, registry, createSessionPanel, connection, sidebarConnection } = setup();
+
+    await dispatcher.dispatch({ type: "createSessionPanel", bridgeVersion: BRIDGE_VERSION } as never, connection);
+    expect(createSessionPanel).toHaveBeenLastCalledWith("source", false);
+
+    await dispatcher.dispatch({ type: "createSessionPanel", bridgeVersion: BRIDGE_VERSION } as never, sidebarConnection);
+    expect(createSessionPanel).toHaveBeenLastCalledWith(null, false);
+
+    // A Temporary Session takes the same placement; only its persistence differs.
+    await dispatcher.dispatch({ type: "createSessionPanel", bridgeVersion: BRIDGE_VERSION, ephemeral: true } as never, connection);
+    expect(createSessionPanel).toHaveBeenLastCalledWith("source", true);
+    await dispatcher.dispatch({ type: "createSessionPanel", bridgeVersion: BRIDGE_VERSION, ephemeral: true } as never, sidebarConnection);
+    expect(createSessionPanel).toHaveBeenLastCalledWith(null, true);
+    // Placement and creation belong to the product; the shared path creates nothing itself.
+    expect(registry.createSession).not.toHaveBeenCalled();
+  });
+
+  it("refuses Session Tab creation on a host without editor tabs before creating anything", async () => {
+    const { dispatcher, registry, sidebarConnection } = setup(false);
+    await expect(dispatcher.dispatch({ type: "createSessionPanel", bridgeVersion: BRIDGE_VERSION } as never, sidebarConnection))
+      .rejects.toThrow('"createSessionPanel" is not supported in this host.');
+    expect(registry.createSession).not.toHaveBeenCalled();
+  });
 
   it("rejects sidebar management actions from a pinned panel", async () => {
     const { dispatcher, registry, connection } = setup();
@@ -70,9 +119,13 @@ describe("Session Tab Host authorization", () => {
     const { dispatcher, registry, sidebarConnection } = setup();
     await dispatcher.dispatch({ type: "activateSession", bridgeVersion: "3.0", sessionId: "other" } as never, sidebarConnection);
     await dispatcher.dispatch({ type: "closeSession", bridgeVersion: "3.0", sessionId: "other" } as never, sidebarConnection);
+    await dispatcher.dispatch({ type: "stopSession", bridgeVersion: "3.0", sessionId: "other" } as never, sidebarConnection);
+    await dispatcher.dispatch({ type: "deleteSession", bridgeVersion: "3.0", sessionId: "other" } as never, sidebarConnection);
 
     expect(registry.activateSession).toHaveBeenCalledWith("other");
     expect(registry.closeSession).toHaveBeenCalledWith("other");
+    expect(registry.stopSession).toHaveBeenCalledWith("other");
+    expect(registry.deleteSession).toHaveBeenCalledWith("other");
   });
 
   it("returns local Markdown image failures inline to the originating connection", async () => {
@@ -125,6 +178,17 @@ describe("Session Tab Host authorization", () => {
     expect(openPanel).toHaveBeenCalledWith("source", draft);
   });
 
+  it("opens any listed Session in a tab from the sidebar, also one it does not display", async () => {
+    const { dispatcher, openPanel, registry, sidebarConnection } = setup();
+    await dispatcher.dispatch({ type: "openSessionPanel", bridgeVersion: "3.0", sessionId: "other" } as never, sidebarConnection);
+    expect(openPanel).toHaveBeenCalledWith("other");
+    expect(registry.startIfStopped).toHaveBeenCalledWith("other");
+
+    vi.mocked(registry.hasSession).mockReturnValueOnce(false);
+    await expect(dispatcher.dispatch({ type: "openSessionPanel", bridgeVersion: "3.0", sessionId: "gone" } as never, sidebarConnection))
+      .rejects.toThrow("no longer exists");
+  });
+
   it("keeps ordinary Sidebar drafts out of the Host cache", async () => {
     const { dispatcher, registry, drafts, posted, sidebarConnection } = setup();
     await expect(dispatcher.dispatch({
@@ -174,8 +238,15 @@ describe("Session Tab Host authorization", () => {
       bridgeVersion: "3.0",
       sessionId: "other",
     } as never, connection)).rejects.toThrow("available only from the FrostPi sidebar");
+    // A Session Tab stops or deletes its Session through the native commands, which confirm natively.
+    for (const type of ["stopSession", "deleteSession"]) {
+      await expect(dispatcher.dispatch({ type, bridgeVersion: "3.0", sessionId: "source" } as never, connection))
+        .rejects.toThrow("available only from the FrostPi sidebar");
+    }
     expect(registry.abort).not.toHaveBeenCalled();
     expect(registry.closeSession).not.toHaveBeenCalled();
+    expect(registry.stopSession).not.toHaveBeenCalled();
+    expect(registry.deleteSession).not.toHaveBeenCalled();
   });
 
   it("returns Composer editor contention to the originating panel", async () => {
@@ -205,6 +276,32 @@ describe("Session Tab Host authorization", () => {
     expect(registry.forkMessage).toHaveBeenCalledWith("source", "entry", "preserve-sidebar-selection");
     expect(openPanel).toHaveBeenCalledWith("fork");
     expect(posted).toContainEqual(expect.objectContaining({ type: "forkResult", ok: true, forkSessionId: "fork" }));
+  });
+
+  it("forks a running turn's message at the entry Pi saved for it", async () => {
+    const { dispatcher, registry, posted, connection } = setup();
+    await dispatcher.dispatch({
+      type: "forkMessage",
+      bridgeVersion: "3.0",
+      requestId: "request",
+      sessionId: "source",
+      messageId: "local-user-1",
+    } as never, connection);
+
+    expect(registry.userMessageEntryId).toHaveBeenCalledWith("source", "local-user-1");
+    expect(registry.forkMessage).toHaveBeenCalledWith("source", "saved-entry", "preserve-sidebar-selection");
+    expect(posted).toContainEqual(expect.objectContaining({ type: "forkResult", ok: true }));
+
+    registry.userMessageEntryId.mockRejectedValueOnce(new Error("Wait for Pi to save this message before forking it."));
+    await dispatcher.dispatch({
+      type: "forkMessage",
+      bridgeVersion: "3.0",
+      requestId: "unsaved",
+      sessionId: "source",
+      messageId: "local-user-2",
+    } as never, connection);
+    expect(registry.forkMessage).toHaveBeenCalledOnce();
+    expect(posted).toContainEqual(expect.objectContaining({ type: "forkResult", requestId: "unsaved", ok: false, error: "Wait for Pi to save this message before forking it." }));
   });
 
   it("reports logical Fork success when opening the result panel fails", async () => {

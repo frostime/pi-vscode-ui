@@ -248,7 +248,7 @@
               onsubmit={submit}
             />
           {/if}
-          <button class="send-button stop-button" type="button" aria-label="Stop Pi" title="Stop current run" onclick={() => postToHost({ type: "abort", sessionId: session.id })}>
+          <button class="send-button stop-button" type="button" aria-label="Stop response" title="Stop the current response" onclick={() => postToHost({ type: "abort", sessionId: session.id })}>
             <span class="codicon codicon-debug-stop"></span>
           </button>
         {:else}

@@ -56,6 +56,22 @@ const usageActionSchemas = [
   z.object({ type: z.literal("cancelProviderUsage"), requestId: z.string().min(1).max(128) }),
 ] as const;
 
+/**
+ * A Fork names its user message by Pi entry id, or by view message id when the message
+ * belongs to a running turn and the conversation has no entry id for it yet.
+ */
+const forkMessageSchema = z.object({
+  type: z.literal("forkMessage"),
+  requestId: z.string().min(1).max(128),
+  sessionId: z.string().min(1).max(128),
+  entryId: z.string().min(1).max(128).optional(),
+  messageId: z.string().min(1).max(128).optional(),
+}).superRefine((message, context) => {
+  if ((message.entryId === undefined) === (message.messageId === undefined)) {
+    context.addIssue({ code: "custom", message: "Fork needs exactly one of entryId and messageId", path: ["entryId"] });
+  }
+});
+
 const payloadSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ready") }),
   ...usageActionSchemas,
@@ -63,6 +79,8 @@ const payloadSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("createSession"), ephemeral: z.boolean().optional() }),
   z.object({ type: z.literal("createSessionWithArguments") }),
   z.object({ type: z.literal("resumeSession") }),
+  // A new Session that opens in its own editor tab; from a Session Tab it joins that tab's group.
+  z.object({ type: z.literal("createSessionPanel"), ephemeral: z.boolean().optional() }),
   z.object({
     type: z.literal("openSessionPanel"),
     sessionId: z.string().min(1).max(128),
@@ -90,6 +108,9 @@ const payloadSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("activateSession"), sessionId: z.string().min(1).max(128) }),
   z.object({ type: z.literal("closeSession"), sessionId: z.string().min(1).max(128) }),
+  // Stop keeps the Session listed; delete also removes Pi's session file.
+  z.object({ type: z.literal("stopSession"), sessionId: z.string().min(1).max(128) }),
+  z.object({ type: z.literal("deleteSession"), sessionId: z.string().min(1).max(128) }),
   z.object({ type: z.literal("renameSession"), sessionId: z.string().min(1).max(128), name: z.string().max(160) }),
   z.object({ type: z.literal("copyText"), text: z.string().min(1).max(2_000_000) }),
   z.object({
@@ -129,12 +150,7 @@ const payloadSchema = z.discriminatedUnion("type", [
     branchPointId: z.string().min(1).max(128).nullable(),
     hasDraft: z.boolean(),
   }),
-  z.object({
-    type: z.literal("forkMessage"),
-    requestId: z.string().min(1).max(128),
-    sessionId: z.string().min(1).max(128),
-    entryId: z.string().min(1).max(128),
-  }),
+  forkMessageSchema,
   z.object({
     type: z.literal("setModel"),
     sessionId: z.string().min(1).max(128),

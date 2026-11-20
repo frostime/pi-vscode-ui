@@ -38,6 +38,12 @@ export interface WebviewActionDispatcherDependencies {
   openPanel(sessionId: string, draft?: ComposerDraftView): void | Promise<void>;
   revealPanel(sessionId: string): void | Promise<void>;
   openComposerEditor(sessionId: string, text: string): Promise<"opened" | "already-open">;
+  /**
+   * Creates a Session directly in an editor tab. `sourceSessionId` is the Session Tab
+   * that asked, whose tab group and working directory the new one shares. `ephemeral`
+   * asks for a Temporary Session. Hosts without editor tabs leave it out.
+   */
+  createSessionPanel?(sourceSessionId: string | null, ephemeral: boolean): Promise<unknown>;
 }
 
 const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
@@ -47,7 +53,8 @@ const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
   "resumeSession",
   "activateSession",
   "closeSession",
-  "renameSession",
+  "stopSession",
+  "deleteSession",
   "openSessionPanel",
   "revealSessionPanel",
   "openSettings",
@@ -63,7 +70,11 @@ const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
 const SIDEBAR_COLLECTION_TARGET_ACTIONS = new Set<WebviewToHostMessage["type"]>([
   "activateSession",
   "closeSession",
+  "stopSession",
+  "deleteSession",
   "renameSession",
+  // The session list opens any listed Session in a tab, also before one is displayed.
+  "openSessionPanel",
   "revealSessionPanel",
   "restartSession",
   "retryStart",
@@ -85,6 +96,7 @@ export class WebviewActionDispatcher {
   readonly #openPanel: (sessionId: string, draft?: ComposerDraftView) => void | Promise<void>;
   readonly #revealPanel: (sessionId: string) => void | Promise<void>;
   readonly #openComposerEditor: (sessionId: string, text: string) => Promise<"opened" | "already-open">;
+  readonly #createSessionPanel: ((sourceSessionId: string | null, ephemeral: boolean) => Promise<unknown>) | undefined;
 
   constructor(dependencies: WebviewActionDispatcherDependencies) {
     this.#host = dependencies.host;
@@ -97,6 +109,9 @@ export class WebviewActionDispatcher {
       : dependencies.openPanel(sessionId);
     this.#revealPanel = (sessionId) => dependencies.revealPanel(sessionId);
     this.#openComposerEditor = (sessionId, text) => dependencies.openComposerEditor(sessionId, text);
+    this.#createSessionPanel = dependencies.createSessionPanel
+      ? (sourceSessionId, ephemeral) => dependencies.createSessionPanel!(sourceSessionId, ephemeral)
+      : undefined;
   }
 
   async dispatch(message: WebviewToHostMessage, connection: DispatchConnection): Promise<void> {
@@ -167,8 +182,14 @@ export class WebviewActionDispatcher {
       case "resumeSession":
         await this.#registry.resumeSession();
         return;
+      case "createSessionPanel":
+        if (!this.#createSessionPanel) throw unsupportedHostAction("createSessionPanel");
+        await this.#createSessionPanel(connection.surface.kind === "panel" ? connection.sessionId : null, message.ephemeral ?? false);
+        return;
       case "openSessionPanel":
         await this.#openPanel(message.sessionId, message.draft);
+        // A restored Session opened straight into a tab has not started yet.
+        await this.#registry.startIfStopped(message.sessionId).catch(() => undefined);
         return;
       case "revealSessionPanel":
         await this.#revealPanel(message.sessionId);
@@ -190,6 +211,12 @@ export class WebviewActionDispatcher {
         return;
       case "closeSession":
         await this.#registry.closeSession(message.sessionId);
+        return;
+      case "stopSession":
+        await this.#registry.stopSession(message.sessionId);
+        return;
+      case "deleteSession":
+        await this.#registry.deleteSession(message.sessionId);
         return;
       case "renameSession":
         await this.#registry.rename(message.sessionId, message.name);
@@ -246,7 +273,8 @@ export class WebviewActionDispatcher {
         let result: Awaited<ReturnType<SessionRegistry["forkMessage"]>>;
         try {
           const selection = connection.surface.kind === "sidebar" ? "select-result" : "preserve-sidebar-selection";
-          result = await this.#registry.forkMessage(message.sessionId, message.entryId, selection);
+          const entryId = message.entryId ?? await this.#registry.userMessageEntryId(message.sessionId, message.messageId!);
+          result = await this.#registry.forkMessage(message.sessionId, entryId, selection);
         } catch (error) {
           connection.post({
             type: "forkResult",

@@ -56,6 +56,14 @@ describe("Webview bridge validation", () => {
     }).success).toBe(true);
   });
 
+  it("names a forked message by exactly one of its Pi entry id and its view id", () => {
+    const fork = { bridgeVersion: BRIDGE_VERSION, type: "forkMessage", requestId: "fork-1", sessionId: "session-1" };
+    expect(webviewToHostSchema.safeParse({ ...fork, messageId: "local-user-1" }).success).toBe(true);
+    expect(webviewToHostSchema.safeParse(fork).success).toBe(false);
+    expect(webviewToHostSchema.safeParse({ ...fork, entryId: "entry-1", messageId: "local-user-1" }).success).toBe(false);
+    expect(webviewToHostSchema.safeParse({ ...fork, messageId: "x".repeat(129) }).success).toBe(false);
+  });
+
   it("accepts bounded Markdown image requests", () => {
     expect(webviewToHostSchema.safeParse({
       bridgeVersion: BRIDGE_VERSION,
@@ -84,6 +92,16 @@ describe("Webview bridge validation", () => {
     expect(webviewToHostSchema.safeParse({ ...request, remote: true }).success).toBe(true);
     for (const remote of [false, "true", 1, null]) {
       expect(webviewToHostSchema.safeParse({ ...request, remote }).success).toBe(false);
+    }
+  });
+
+  it("accepts the Session Tab creation action", () => {
+    expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "createSessionPanel" }).success).toBe(true);
+    expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "createSessionPanel", ephemeral: true }).success).toBe(true);
+    expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type: "createSessionPanel", ephemeral: "true" }).success).toBe(false);
+    for (const type of ["stopSession", "deleteSession"]) {
+      expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type, sessionId: "session-1" }).success).toBe(true);
+      expect(webviewToHostSchema.safeParse({ bridgeVersion: BRIDGE_VERSION, type }).success).toBe(false);
     }
   });
 
