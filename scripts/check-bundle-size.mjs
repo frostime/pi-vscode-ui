@@ -5,8 +5,9 @@ import { root } from "./lib.mjs";
 
 const budgets = new Map([
   ["apps/vscode/dist/extension/extension.cjs", 1_200_000],
-  ["apps/vscode/dist/webview/webview.js", 870_000], // CodeMirror, session tabs and worker transcripts
-  ["apps/vscode/dist/webview/webview.css", 166_000], // Question rows, worker status and transcript panel
+  // CodeMirror composer and completion runtime; Session Tab header and focus view.
+  ["apps/vscode/dist/webview/webview.js", 870_000],
+  ["apps/vscode/dist/webview/webview.css", 165_000],
 ]);
 let failed = false;
 for (const [relative, budget] of budgets) {

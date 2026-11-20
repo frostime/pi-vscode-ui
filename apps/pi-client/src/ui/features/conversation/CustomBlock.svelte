@@ -8,6 +8,12 @@
   let expanded = $state(false);
 </script>
 
+{#if message.scheduledTaskName !== undefined}
+  <div class="scheduled-delivery">
+    <span class="codicon codicon-clock" aria-hidden="true"></span>
+    Scheduled prompt delivered{message.scheduledTaskName ? `: ${message.scheduledTaskName}` : ""}
+  </div>
+{:else}
 <section class="custom-message-block">
   <button
     class="custom-message-trigger"
@@ -31,8 +37,10 @@
     </div>
   {/if}
 </section>
+{/if}
 
 <style>
+.scheduled-delivery { margin: 5px 0 10px; color: var(--frost-muted); overflow-wrap: anywhere; }
 .custom-message-block {
   margin: 5px 0 16px;
   overflow: hidden;

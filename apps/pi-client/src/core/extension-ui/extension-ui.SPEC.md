@@ -55,3 +55,5 @@ detached background workers available in the list.
 ## Unsupported UI
 
 Arbitrary custom TUI components, custom headers/footers/editors, raw terminal input listeners, and theme APIs are not emulated. Unknown structured methods are ignored rather than rendered from arbitrary JSON. This boundary prevents FrostPi from becoming a terminal UI runtime or executing extension-provided presentation code in the Webview.
+
+The `psf-scheduled-tasks` widget projects a version 1 JSON snapshot of the emitting session into an expandable, read-only task list. Names, IDs, timing and state are text. Pi owns scheduling and mutations.

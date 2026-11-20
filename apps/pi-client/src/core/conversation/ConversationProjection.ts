@@ -586,6 +586,7 @@ export class ConversationProjection {
           id: viewId,
           type: "customMessage",
           customType,
+          ...scheduledTaskLabel(customType, message.details),
           blocks: this.#validatedBlocks(message.content, undefined, viewId),
           timestamp,
         }),
@@ -1191,11 +1192,17 @@ function branchSummaryView(entry: RpcSessionEntry): BranchSummaryView {
   };
 }
 
+function scheduledTaskLabel(customType: unknown, details: unknown): { scheduledTaskName?: string } {
+  if (customType !== "scheduled_prompt") return {};
+  return { scheduledTaskName: isRecord(details) && typeof details.jobName === "string" ? details.jobName : "" };
+}
+
 function customMessageView(entry: RpcSessionEntry, blocks: MessageBlockView[], viewId = entry.id): CustomMessageView {
   return {
     id: viewId,
     type: "customMessage",
     customType: stringValue(entry.customType, "custom"),
+    ...scheduledTaskLabel(entry.customType, entry.details),
     blocks,
     timestamp: entryTimestamp(entry),
   };

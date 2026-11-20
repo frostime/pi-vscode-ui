@@ -34,6 +34,15 @@ export interface ExtensionWidgetView {
   lines: string[];
   placement: "above" | "below";
   subagents?: SubagentRowView[];
+  scheduledTasks?: ScheduledTaskView[];
+}
+
+export interface ScheduledTaskView {
+  id: string;
+  name: string;
+  state: string;
+  timing: string;
+  nextRun?: string;
 }
 
 export interface SubagentTarget {

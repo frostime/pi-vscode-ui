@@ -1,5 +1,5 @@
 import { sanitizeExtensionUiText } from "./sanitizeExtensionUiText.js";
-import type { SubagentRowView, SubagentTarget } from "../../shared/model/extensionUiModel.js";
+import type { ExtensionWidgetView, ScheduledTaskView, SubagentRowView, SubagentTarget } from "../../shared/model/extensionUiModel.js";
 
 const snapshotPrefix = "PI_SUBAGENT_ASYNC_JSON:";
 const runStates = new Set(["queued", "running", "complete", "failed", "partial", "paused", "stopped", "rejected"]);
@@ -55,7 +55,29 @@ function runRows(nodes: unknown[], depth: number, parentRunId?: string): Subagen
   });
 }
 
-export function projectExtensionWidget(key: string, lines: string[]): { lines: string[]; subagents?: SubagentRowView[] } | undefined {
+function scheduleWidget(line: string | undefined): Pick<ExtensionWidgetView, "lines" | "scheduledTasks"> {
+  const unavailable = { lines: ["Scheduled tasks unavailable"] };
+  try {
+    const payload: unknown = JSON.parse(line ?? "");
+    if (!isRecord(payload) || payload.version !== 1 || !Array.isArray(payload.tasks)) return unavailable;
+    const scheduledTasks: ScheduledTaskView[] = [];
+    for (const task of payload.tasks) {
+      if (!isRecord(task) || typeof task.id !== "string" || typeof task.name !== "string" ||
+          typeof task.timing !== "string" || typeof task.state !== "string" ||
+          !["Pending", "Paused", "Delivered", "Missed or failed"].includes(task.state)) return unavailable;
+      scheduledTasks.push({
+        id: labelText(task.id), name: labelText(task.name), state: task.state, timing: labelText(task.timing),
+        ...(typeof task.nextRun === "string" ? { nextRun: labelText(task.nextRun) } : {}),
+      });
+    }
+    return { lines: [], scheduledTasks };
+  } catch {
+    return unavailable;
+  }
+}
+
+export function projectExtensionWidget(key: string, lines: string[]): Omit<ExtensionWidgetView, "key" | "placement"> | undefined {
+  if (key === "psf-scheduled-tasks") return scheduleWidget(lines[0]);
   if (key !== "subagent-async" || !lines[0]?.startsWith(snapshotPrefix)) return { lines: lines.map(sanitizeExtensionUiText) };
   const unavailable = { lines: ["Subagent status unavailable"] };
   const json = lines[0].slice(snapshotPrefix.length);
