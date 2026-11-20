@@ -614,8 +614,10 @@ export class SessionRegistry {
    * Pi's fork replaces the conversation of the process that runs it, so a second Pi
    * process opens the same session file and forks there. The source Session and its
    * process are never touched: a reply in progress continues, and an idle source stays
-   * running. The new entry stays unsaved until Pi has written the Fork's own file, so an
-   * interrupted Fork never leaves a second entry pointing at the source's file.
+   * running. The Fork keeps the source's model and thinking level, which Pi would
+   * otherwise take from the fork point. The new entry stays unsaved until Pi has written
+   * the Fork's own file, so an interrupted Fork never leaves a second entry pointing at
+   * the source's file.
    */
   async #forkInNewProcess(
     source: SessionRuntime,
@@ -626,6 +628,7 @@ export class SessionRegistry {
   ): Promise<{ cancelled: boolean; forkSessionId?: string }> {
     const forkId = randomUUID();
     const forkName = forkSessionName(source.view.title);
+    const modelChoice = { model: source.view.model, thinkingLevel: source.view.thinkingLevel };
     const record: PersistedSessionRecord = { id: forkId, title: forkName, cwd: original.cwd, sessionFile: sourceFile, updatedAt: Date.now() };
     this.#records.set(forkId, record);
     this.#temporarySessionIds.add(forkId);
@@ -647,7 +650,7 @@ export class SessionRegistry {
       const result = await runtime.executeFork(entryId);
       if (result.cancelled || pending.cancelled) return { cancelled: true };
       committed = true;
-      await runtime.reconcileFork(forkName, { id: forkId, text: result.text, images: result.images });
+      await runtime.reconcileFork(forkName, { id: forkId, text: result.text, images: result.images }, modelChoice);
       const forkFile = runtime.view.sessionFile;
       if (!forkFile || samePath(forkFile, sourceFile)) throw new Error("Pi did not create a separate file for the Fork.");
       this.#records.set(forkId, { ...record, sessionFile: forkFile, updatedAt: Date.now() });

@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A fork keeps the model and thinking level of the session it came from. Pi started it on those saved at the message you forked from, or on its defaults.
 - Fork no longer stops the session you fork from. When that session was idle, the fork took over its Pi process and left it stopped, to restart when next used. Every fork now runs in a Pi process of its own, as a fork during a reply already did, and the session you forked from stays running and usable while the fork starts. The fork's entry shows in the session list while it starts; a question an extension asks about the fork appears there.
 - **FrostPi: Stop Active Session** is now called **FrostPi: Stop Response**, and the Composer's stop button is labelled **Stop response**. It stops the running reply, as before; **FrostPi: Stop Pi Process** is the new command that ends the Pi process.
 - The `…` menu's **Restart session** is now **Restart Pi process**, the name the session list uses.

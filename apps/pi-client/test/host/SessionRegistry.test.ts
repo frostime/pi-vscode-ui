@@ -565,7 +565,7 @@ process.on("SIGTERM", () => process.exit(0));
     await expect(registry.sendPrompt(sessionId, "Too early", [])).rejects.toThrow("Wait for conversation history");
   });
 
-  it("forks in its own Pi process and keeps the source running", async () => {
+  it("forks in its own Pi process, keeping the source running and its model choice", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-registry-fork-"));
     const sessionFile = join(dir, "source.jsonl");
     await writeFile(sessionFile, `${JSON.stringify({ type: "session", version: 3, id: "source", cwd: dir })}\n`);
@@ -697,6 +697,7 @@ process.on("SIGTERM", () => process.exit(0));
     await expect(preservedFork).resolves.toEqual({ cancelled: false, forkSessionId: preservedId });
     expect(registry.activeSessionId).toBe(activeId);
     expect(created).toContainEqual({ id: preservedId, sourceId: activeId });
+    expect(registry.sessionView(preservedId)).toMatchObject({ model: { provider: "provider", id: "chosen" }, thinkingLevel: "high" });
     sourceIsUntouched();
     await registry.closeSession(preservedId);
 
@@ -725,6 +726,8 @@ process.on("SIGTERM", () => process.exit(0));
       id: result.forkSessionId,
       title: "Fork: Source",
       sessionId: "fork",
+      model: { provider: "provider", id: "chosen" },
+      thinkingLevel: "high",
       conversationItems: [],
       composerSeed: {
         id: result.forkSessionId,
