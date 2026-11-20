@@ -5,7 +5,7 @@ scope:
   - /apps/pi-client/src/core/conversation/**
   - /apps/pi-client/src/core/sessions/SessionEntryState.ts
   - /apps/pi-client/src/shared/model/conversationModel.ts
-updated: 2026-11-14
+updated: 2026-11-19
 ---
 
 # Conversation Projection
@@ -70,7 +70,7 @@ A failed agent attempt (`agent_end`), a complete history replacement, `agent_set
 
 A partial incremental history refresh keeps the persisted turn cursor while the current live turn is running, including between an assistant `toolUse` and its continuation. It is not a turn-completion boundary; this also applies when startup metadata discovery finishes during the first run.
 
-A persisted user message closes the preceding visual turn and opens a user-anchored turn. Assistant `toolUse` keeps it active; an assistant error keeps an `error-awaiting-continuation` anchor so provider retry or context-overflow compaction continuation remains in that turn. A later success or abort closes it. A replacement, a new user entry, or the refresh after `agent_settled` finalizes an error that received no continuation.
+A persisted user message closes the preceding visual turn and opens a user-anchored turn. Assistant `toolUse` keeps it active, and so does any other stop reason except `error` and `aborted` on a message with tool calls, because Pi runs those calls and continues the turn (Gemini behind an OpenAI-compatible endpoint reports `stop` with tool calls). The live projection applies the same rule when it settles a turn's status at `message_end`; an assistant error keeps an `error-awaiting-continuation` anchor so provider retry or context-overflow compaction continuation remains in that turn. A later success or abort closes it. A replacement, a new user entry, or the refresh after `agent_settled` finalizes an error that received no continuation.
 
 Live `message_end(error)` displays the error activity but leaves the turn running until `agent_end` decides whether Pi will retry. `agent_end(willRetry: true)` keeps the running turn and `auto_retry_start` adds a notice; `willRetry: false` commits the pending error. This uses the existing turn statuses and does not persist retry notices.
 
