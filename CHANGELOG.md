@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A fork made from a session tab opens in that tab's editor group, also if you moved to another group while it started. It opened in whichever group was active when the fork finished.
 - **FrostPi: Stop Active Session** is now called **FrostPi: Stop Response**, and the Composer's stop button is labelled **Stop response**. It stops the running reply, as before; **FrostPi: Stop Pi Process** is the new command that ends the Pi process.
 - The `…` menu's **Restart session** is now **Restart Pi process**, the name the session list uses.
 - The sidebar's `+` menu is one flat list: **New session**, **New session in editor tab**, **New session with arguments…** and **Resume session**. The two new-session entries each end in a crossed-eye button that starts the temporary variant. The arrow that expanded more ways to start is gone.
