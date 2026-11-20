@@ -55,7 +55,7 @@ function runRows(nodes: unknown[], depth: number, parentRunId?: string): Subagen
   });
 }
 
-function scheduleWidget(line: string | undefined): Pick<ExtensionWidgetView, "lines" | "scheduledTasks"> {
+function scheduleWidget(line: string | undefined): Pick<ExtensionWidgetView, "lines" | "scheduledTasks"> | undefined {
   const unavailable = { lines: ["Scheduled tasks unavailable"] };
   try {
     const payload: unknown = JSON.parse(line ?? "");
@@ -70,7 +70,7 @@ function scheduleWidget(line: string | undefined): Pick<ExtensionWidgetView, "li
         ...(typeof task.nextRun === "string" ? { nextRun: labelText(task.nextRun) } : {}),
       });
     }
-    return { lines: [], scheduledTasks };
+    return scheduledTasks.length ? { lines: [], scheduledTasks } : undefined;
   } catch {
     return unavailable;
   }

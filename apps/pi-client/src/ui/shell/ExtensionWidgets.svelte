@@ -9,19 +9,15 @@
       {#if widget.scheduledTasks}
         <details class="schedule-widget">
           <summary>Scheduled tasks ({widget.scheduledTasks.length})</summary>
-          {#if widget.scheduledTasks.length}
-            <ul>
-              {#each widget.scheduledTasks as task (task.id)}
-                <li>
-                  <strong>{task.name}</strong> · {task.state}
-                  <div>{task.timing}{task.nextRun ? ` · Next: ${task.nextRun}` : ""}</div>
-                  <code>{task.id}</code>
-                </li>
-              {/each}
-            </ul>
-          {:else}
-            <p>No tasks scheduled in this chat.</p>
-          {/if}
+          <ul>
+            {#each widget.scheduledTasks as task (task.id)}
+              <li>
+                <strong>{task.name}</strong> · {task.state}
+                <div>{task.timing}{task.nextRun ? ` · Next: ${task.nextRun}` : ""}</div>
+                <code>{task.id}</code>
+              </li>
+            {/each}
+          </ul>
         </details>
       {:else}
       <div class="extension-widget" class:subagents={widget.key === "subagent-async"}>
@@ -49,5 +45,5 @@
 .schedule-widget summary { cursor: pointer; font-weight: 600; }
 .schedule-widget ul { list-style: none; margin: 6px 0 0; padding: 0; max-height: 22vh; overflow: auto; }
 .schedule-widget li { padding: 4px 0; overflow-wrap: anywhere; }
-.schedule-widget li div, .schedule-widget code, .schedule-widget p { color: var(--frost-muted); }
+.schedule-widget li div, .schedule-widget code { color: var(--frost-muted); }
 </style>
