@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `@` file mentions no longer follow symbolic links by default. A link to a large directory outside the workspace, or a link loop, could make the search slow or fill it with duplicates. Turn `frostpi.composer.fileMentions.followSymlinks` on to follow them again.
+
 ## [0.16.7] - 2026-11-16
 
 ### Fixed
