@@ -170,13 +170,34 @@ Run multiple independent Pi sessions, switch providers and models, resume existi
 
 Session state remains visible while other sessions continue working in the background.
 
+A session can live in an editor tab instead of the sidebar. **FrostPi: New Session in Editor Tab** starts one there directly; the `+` button in a session tab, or in the editor title bar, opens another in the same tab group and working directory. The sidebar's `+` menu offers it too, directly below **New session**. A temporary session, which is never saved, can start in either place: the crossed-eye button at the end of **New session** and of **New session in editor tab** in that menu starts one. In the sidebar it can also start from the page shown when no session is open, or with **FrostPi: New Temporary Session**. In an editor tab: from the crossed-eye button in a session tab, by holding Alt while clicking the `+` in the editor title bar, or with **FrostPi: New Temporary Session in Editor Tab**. Click a session tab's title to rename it, also while Pi is working, or run **FrostPi: Rename Session**. In the sidebar, use the pencil button next to the session title or double-click the title. The sidebar keeps its own selection throughout.
+
+**Stop Pi process** ends a session's Pi process without closing the session: the session and its saved history stay in the session list. It is the stop button on the session's row in the session list, an entry in the sidebar's `…` menu, and **FrostPi: Stop Pi Process**, which also appears in a session tab's title bar menu. Once stopped, the row's button becomes **Restart Pi process**; selecting the session, sending a message or **Restart Pi process** in the `…` menu starts Pi again from where it left off. **Delete session**, in the `…` menu and as **FrostPi: Delete Session**, stops the session and removes its Pi session file, to the trash where possible. Temporary sessions can only be closed.
+
+### Conversation commands
+
+FrostPi answers a few slash commands itself. They never become a prompt, and they take precedence over a Pi extension command or prompt template with the same name.
+
+- `/compact [instructions]` runs Pi's own context compaction.
+- `/new` starts a new conversation in the same session view. The model, thinking level and Pi process stay. The earlier conversation remains in Pi's session history, so **Resume session** can reopen it. Stop a running response first.
+- `/name <name>` or `/alias <name>` renames the session. Without a name, FrostPi asks for one.
+- `/reload` reloads Pi's extensions, skills, prompt templates, themes and context files without restarting the session. Stop a running response first.
+
+`/new` and `/reload` need Pi. With the `oh-my-pi` compatibility profile FrostPi does not offer them and passes such text to the runtime unchanged.
+
+### Folding long turns
+
+A finished turn folds its tools, reasoning and interim replies into one **Worked** summary above the final reply, because the last reply is the model's answer. Click the summary, or the **Reply** line just above the final reply, to open or fold it again. Inside an opened summary each run of tool calls and reasoning stays folded into one row. `frostpi.conversation.collapseTurnTrace` controls this and is on by default.
+
+While a turn is running, the Focus View folds each run of tool calls and reasoning into one row that says what it did, or what it is doing right now, and replies stay visible in order. Click a row to see its steps. A reasoning row shows a line of what the model is thinking, as a tool row shows its target. It is on by default; run **FrostPi: Toggle Running-Turn Collapse (Focus View)** or set `frostpi.conversation.collapseRunningTurnTrace` to switch it. The two settings are independent: one covers running turns, the other finished ones.
+
 ### Pi Session Tree and Fork
 
 FrostPi provides a graphical interface for Pi's session-tree workflow:
 
 - **Branch here** navigates to an earlier user prompt, restores it in the Composer, and lets you continue as another path in the same Pi session and session file.
 - **Switch branch** opens a searchable native VS Code picker for existing paths. Path rows expose message count, last update, and ending context. Leaving the current path may use no summary, Pi's default branch summary, or custom summary-focus instructions.
-- **Fork** creates a separate Pi session and FrostPi session. Use it when the continuation should run and persist independently instead of becoming another path in the current session tree.
+- **Fork** creates a separate Pi session and FrostPi session. Use it when the continuation should run and persist independently instead of becoming another path in the current session tree. Fork also works while a reply is still running: FrostPi forks in a second Pi process and leaves the reply alone. A fork made from a session tab opens in that tab's group.
 
 Pi remains authoritative for the active tree leaf and reconstructed conversation context. FrostPi supplies the GUI compatibility layer.
 
@@ -241,7 +262,10 @@ Common settings include:
 - `frostpi.pi.runtimeCompatibility` — choose the limited Pi or Oh My Pi compatibility contract; this does not enable all runtime-specific OMP features.
 - `frostpi.pi.arguments`
 - `frostpi.session.startOnOpen`
+- `frostpi.session.closeWithEditorTab` — closing a session's editor tab also closes the session, as **Close session** in the list does. Off by default, so the session keeps running in the sidebar.
 - `frostpi.composer.streamingBehavior`
+- `frostpi.conversation.collapseTurnTrace`
+- `frostpi.conversation.collapseRunningTurnTrace`
 - `frostpi.composer.fileMentions.respectSearchExclude`
 - `frostpi.composer.fileMentions.respectIgnoreFiles`
 - `frostpi.composer.fileMentions.followSymlinks`

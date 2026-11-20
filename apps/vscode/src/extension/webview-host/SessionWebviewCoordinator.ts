@@ -3,12 +3,13 @@ import * as vscode from "vscode";
 import type { ComposerDraftView } from "@frostime/pi-client/shared/model/composerDraftModel";
 import type { ClientHost, HostQuickPickItem } from "@frostime/pi-client/host";
 import { ComposerDraftCache } from "@frostime/pi-client/host/bridge/ComposerDraftCache";
-import { WebviewActionDispatcher, type WebviewActionDispatcherDependencies } from "@frostime/pi-client/host/bridge/WebviewActionDispatcher";
+import { WebviewActionDispatcher, type PanelPlacement, type WebviewActionDispatcherDependencies } from "@frostime/pi-client/host/bridge/WebviewActionDispatcher";
 import { WebviewConnection } from "@frostime/pi-client/host/bridge/WebviewConnection";
 import type { WebviewEndpoint } from "@frostime/pi-client/host/bridge/webviewTypes";
 import { WorkspaceFileSearch } from "@frostime/pi-client/host/file-search/WorkspaceFileSearch";
 import type { SessionRegistry } from "@frostime/pi-client/host/SessionRegistry";
 import { ComposerExternalEditor } from "../composer/ComposerExternalEditor.js";
+import { workspaceUriForPath } from "../configuration/workspaceScope.js";
 import { readChatTypography } from "@frostime/pi-client/host/readChatTypography";
 import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { SessionPanelManager } from "./SessionPanelManager.js";
@@ -49,9 +50,10 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
       getProxyCredentials,
       logger,
       drafts: this.#drafts,
-      openPanel: (sessionId, draft) => this.openPanel(sessionId, draft),
+      openPanel: (sessionId, draft, placement) => this.openPanel(sessionId, draft, placement),
       revealPanel: (sessionId) => this.revealPanel(sessionId),
       openComposerEditor: (sessionId, text) => this.#externalEditor.open(sessionId, text),
+      createSessionPanel: (sourceSessionId, ephemeral) => this.createSessionInPanel(sourceSessionId, ephemeral),
     });
     this.#panels = new SessionPanelManager(
       registry,
@@ -65,6 +67,7 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
       this.#drafts.onDidChange(({ sessionId, draft }) => this.#draftChanged(sessionId, draft)),
       this.#drafts.onDidOwnershipChange((sessionId) => this.#forEachConnection((connection) => connection.refreshDraftOwnership(sessionId))),
       this.#panels.onDidChange(() => this.#panelsChanged()),
+      this.#panels.onDidCloseTab((sessionId) => void this.#closeSessionWithTab(sessionId)),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (!chatTypographyChanged(event)) return;
         // A full refresh is unnecessary; each ready Webview can accept typography independently.
@@ -92,11 +95,12 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
     this.#sidebar = null;
   }
 
-  openPanel(sessionId: string, draft?: ComposerDraftView): void {
+  openPanel(sessionId: string, draft?: ComposerDraftView, placement?: PanelPlacement): void {
     if (this.#panels.has(sessionId)) {
       this.#panels.open(sessionId);
       return;
     }
+    const viewColumn = placement ? this.#panels.viewColumn(placement.sameGroupAs) : undefined;
     const pendingText = this.#pendingSidebarComposerText.get(sessionId);
     const handoffDraft = draft && pendingText !== undefined
       ? { ...draft, revision: draft.revision + 1, text: pendingText }
@@ -104,7 +108,7 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
     if (pendingText !== undefined) this.#pendingSidebarComposerText.delete(sessionId);
     const rollbackDraft = handoffDraft ? this.#drafts.beginHandoff(sessionId, handoffDraft) : undefined;
     try {
-      this.#panels.open(sessionId);
+      this.#panels.open(sessionId, viewColumn);
     } catch (error) {
       rollbackDraft?.();
       if (pendingText !== undefined) this.#queueSidebarComposerText(sessionId, pendingText);
@@ -112,8 +116,48 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
     }
   }
 
+  /**
+   * With `frostpi.session.closeWithEditorTab`, closing a Session Tab closes the Session
+   * as the session list does: same confirmations, and Pi's files stay. Declining a
+   * confirmation leaves the Session running in the sidebar.
+   */
+  async #closeSessionWithTab(sessionId: string): Promise<void> {
+    if (!this.#registry.hasSession(sessionId)) return;
+    const scope = this.#registry.configurationScope(sessionId);
+    const configuration = vscode.workspace.getConfiguration("frostpi", scope ? workspaceUriForPath(scope) : undefined);
+    if (!configuration.get<boolean>("session.closeWithEditorTab", false)) return;
+    try {
+      await this.#registry.closeSession(sessionId);
+    } catch (error) {
+      void vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   revealPanel(sessionId: string): void {
     this.#panels.reveal(sessionId);
+  }
+
+  /**
+   * Starts a Session directly in an editor tab. Asked from a Session Tab, or by a
+   * window command while one is active, the new tab joins that tab's group and working
+   * directory. Asked from the sidebar it opens in the active group with the ordinary
+   * directory choice. The sidebar keeps its own selection either way. `ephemeral` makes
+   * it a Temporary Session, which changes what Pi saves, not where the tab opens.
+   */
+  async createSessionInPanel(sourceSessionId?: string | null, ephemeral = false): Promise<string | undefined> {
+    // `null` is the sidebar asking: it has no source tab, whatever editor is active.
+    const source = sourceSessionId === undefined ? this.#panels.activeSessionId() : sourceSessionId;
+    const viewColumn = source ? this.#panels.viewColumn(source) : undefined;
+    return this.#registry.createSession(ephemeral, {
+      selection: "preserve-sidebar-selection",
+      ...(source ? { workingDirectoryOf: source } : {}),
+      onRegistered: (sessionId) => this.#panels.open(sessionId, viewColumn),
+    });
+  }
+
+  /** The Session a window-level command means: the active Session Tab's, else the sidebar's. */
+  commandTargetSessionId(): string | null {
+    return this.#panels.activeSessionId() ?? this.#registry.activeSessionId;
   }
 
   focusSidebarComposer(): void {

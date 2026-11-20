@@ -61,8 +61,11 @@ export const desktopOnlySettingDefinitions: Record<string, SettingDefinition> = 
   "desktop.zoomFactor": { type: "number", default: desktopZoom.default, minimum: desktopZoom.minimum, maximum: desktopZoom.maximum, description: "Scale the whole Desktop content, including text, icons and spacing. Ctrl/Cmd +, - and 0 update this preference." },
 };
 
+/** FrostPi settings for VS Code features Desktop does not have, such as editor tabs. */
+const vscodeOnlySettingKeys = new Set(["frostpi.session.closeWithEditorTab"]);
+
 export const desktopSettingDefinitions: Record<string, SettingDefinition> = {
-  ...frostPiSettingDefinitions,
+  ...Object.fromEntries(Object.entries(frostPiSettingDefinitions).filter(([key]) => !vscodeOnlySettingKeys.has(key))),
   ...relatedVscodeSettingDefinitions,
   ...desktopOnlySettingDefinitions,
 };

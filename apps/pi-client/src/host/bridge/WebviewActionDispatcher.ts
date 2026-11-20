@@ -29,15 +29,26 @@ export interface DispatchConnection extends ConnectionContext {
   deliverQueuedPromptRecovery(requestId: string, sessionId: string, outcome: QueuedPromptRecoveryOutcome): void;
 }
 
+export interface PanelPlacement {
+  sameGroupAs: string;
+}
+
 export interface WebviewActionDispatcherDependencies {
   host: ClientHost;
   registry: SessionRegistry;
   getProxyCredentials: () => Promise<ProxyCredentials | undefined>;
   logger: RuntimeLogger;
   drafts: ComposerDraftCache;
-  openPanel(sessionId: string, draft?: ComposerDraftView): void | Promise<void>;
+  /** `placement.sameGroupAs` opens a new tab in the editor group of that Session's tab. */
+  openPanel(sessionId: string, draft?: ComposerDraftView, placement?: PanelPlacement): void | Promise<void>;
   revealPanel(sessionId: string): void | Promise<void>;
   openComposerEditor(sessionId: string, text: string): Promise<"opened" | "already-open">;
+  /**
+   * Creates a Session directly in an editor tab. `sourceSessionId` is the Session Tab
+   * that asked, whose tab group and working directory the new one shares. `ephemeral`
+   * asks for a Temporary Session. Hosts without editor tabs leave it out.
+   */
+  createSessionPanel?(sourceSessionId: string | null, ephemeral: boolean): Promise<unknown>;
 }
 
 const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
@@ -47,7 +58,8 @@ const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
   "resumeSession",
   "activateSession",
   "closeSession",
-  "renameSession",
+  "stopSession",
+  "deleteSession",
   "openSessionPanel",
   "revealSessionPanel",
   "openSettings",
@@ -63,7 +75,11 @@ const SIDEBAR_ONLY_ACTIONS = new Set<WebviewToHostMessage["type"]>([
 const SIDEBAR_COLLECTION_TARGET_ACTIONS = new Set<WebviewToHostMessage["type"]>([
   "activateSession",
   "closeSession",
+  "stopSession",
+  "deleteSession",
   "renameSession",
+  // The session list opens any listed Session in a tab, also before one is displayed.
+  "openSessionPanel",
   "revealSessionPanel",
   "restartSession",
   "retryStart",
@@ -83,8 +99,10 @@ export class WebviewActionDispatcher {
   readonly #logger: RuntimeLogger;
   readonly #drafts: ComposerDraftCache;
   readonly #openPanel: (sessionId: string, draft?: ComposerDraftView) => void | Promise<void>;
+  readonly #openPanelInGroupOf: (sessionId: string, sourceSessionId: string) => void | Promise<void>;
   readonly #revealPanel: (sessionId: string) => void | Promise<void>;
   readonly #openComposerEditor: (sessionId: string, text: string) => Promise<"opened" | "already-open">;
+  readonly #createSessionPanel: ((sourceSessionId: string | null, ephemeral: boolean) => Promise<unknown>) | undefined;
 
   constructor(dependencies: WebviewActionDispatcherDependencies) {
     this.#host = dependencies.host;
@@ -95,8 +113,12 @@ export class WebviewActionDispatcher {
     this.#openPanel = (sessionId, draft) => draft
       ? dependencies.openPanel(sessionId, draft)
       : dependencies.openPanel(sessionId);
+    this.#openPanelInGroupOf = (sessionId, sourceSessionId) => dependencies.openPanel(sessionId, undefined, { sameGroupAs: sourceSessionId });
     this.#revealPanel = (sessionId) => dependencies.revealPanel(sessionId);
     this.#openComposerEditor = (sessionId, text) => dependencies.openComposerEditor(sessionId, text);
+    this.#createSessionPanel = dependencies.createSessionPanel
+      ? (sourceSessionId, ephemeral) => dependencies.createSessionPanel!(sourceSessionId, ephemeral)
+      : undefined;
   }
 
   async dispatch(message: WebviewToHostMessage, connection: DispatchConnection): Promise<void> {
@@ -167,8 +189,14 @@ export class WebviewActionDispatcher {
       case "resumeSession":
         await this.#registry.resumeSession();
         return;
+      case "createSessionPanel":
+        if (!this.#createSessionPanel) throw unsupportedHostAction("createSessionPanel");
+        await this.#createSessionPanel(connection.surface.kind === "panel" ? connection.sessionId : null, message.ephemeral ?? false);
+        return;
       case "openSessionPanel":
         await this.#openPanel(message.sessionId, message.draft);
+        // A restored Session opened straight into a tab has not started yet.
+        await this.#registry.startIfStopped(message.sessionId).catch(() => undefined);
         return;
       case "revealSessionPanel":
         await this.#revealPanel(message.sessionId);
@@ -190,6 +218,12 @@ export class WebviewActionDispatcher {
         return;
       case "closeSession":
         await this.#registry.closeSession(message.sessionId);
+        return;
+      case "stopSession":
+        await this.#registry.stopSession(message.sessionId);
+        return;
+      case "deleteSession":
+        await this.#registry.deleteSession(message.sessionId);
         return;
       case "renameSession":
         await this.#registry.rename(message.sessionId, message.name);
@@ -260,7 +294,8 @@ export class WebviewActionDispatcher {
         connection.post({ type: "forkResult", requestId: message.requestId, ok: true, ...result });
         if (!result.cancelled && result.forkSessionId && connection.surface.kind === "panel") {
           try {
-            await this.#openPanel(result.forkSessionId);
+            // Beside its source, also when focus moved to another group while the Fork started.
+            await this.#openPanelInGroupOf(result.forkSessionId, message.sessionId);
           } catch (error) {
             this.#logger.error(`Fork result Session Tab failed to open for ${result.forkSessionId}`, error);
             connection.post({

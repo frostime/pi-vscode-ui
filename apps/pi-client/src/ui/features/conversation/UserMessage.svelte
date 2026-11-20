@@ -14,6 +14,11 @@
     session.status !== "ready" || session.isStreaming || session.isCompacting || session.isForking || session.isNavigatingTree
     || session.historyStatus !== "loaded" || session.pendingExtensionUi.length > 0 || session.queuedSteers.length > 0 || session.queuedFollowUps.length > 0,
   );
+  /** Fork works during a reply: the Host forks in a separate Pi process and leaves the reply running. */
+  const forkUnavailable = $derived(
+    !["ready", "running"].includes(session.status) || session.isCompacting || session.isForking || session.isNavigatingTree
+    || session.historyStatus !== "loaded",
+  );
   const pending = $derived($pendingForkEntryId === message.sourceEntryId);
   const copyText = $derived(rawMessageText(message.blocks));
   const sentAtLabel = $derived(formatMessageTimestamp(message.timestamp));
@@ -60,7 +65,7 @@
             type="button"
             aria-label="Fork session from this message"
             title="Create a new session from this message"
-            disabled={unavailable || $pendingForkEntryId !== null}
+            disabled={forkUnavailable || $pendingForkEntryId !== null}
             onclick={() => requestMessageFork(session, message)}
           >
             <span class="codicon codicon-git-branch" aria-hidden="true"></span>
