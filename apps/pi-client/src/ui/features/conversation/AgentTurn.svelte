@@ -2,7 +2,7 @@
   import type { AgentTurnItemView, AgentTurnView } from "$shared/model/conversationModel";
   import type { SessionViewModel } from "$shared/model/sessionViewModel";
 
-  import { formatTraceSummaryLabel, planTurnItems } from "./collapseTurnTrace";
+  import { formatStepGroupLabel, formatTraceSummaryLabel, planTurnItems } from "./collapseTurnTrace";
   import BranchPointControl from "./BranchPointControl.svelte";
   import BranchSummaryBlock from "./BranchSummaryBlock.svelte";
   import CompactionBlock from "./CompactionBlock.svelte";
@@ -15,14 +15,45 @@
   import UserMessage from "./UserMessage.svelte";
 
   let { turn, session }: { turn: AgentTurnView; session: SessionViewModel } = $props();
+  /** A finished turn's folded work, opened by the reader. */
   let traceOpen = $state(false);
+  /** Folded runs the reader opened, by group id. */
+  let openGroupIds = $state<string[]>([]);
+  /**
+   * Opened reasoning rows, kept here because a row is mounted again when its run folds
+   * into a group as the next step starts; it must not close under the reader.
+   */
+  let openReasoningIds = $state<string[]>([]);
 
-  const plan = $derived(planTurnItems(turn, session.collapseTurnTrace));
-  const summaryLabel = $derived(plan.mode === "collapsed" ? formatTraceSummaryLabel(plan.summary) : "");
+  function setReasoningOpen(id: string, open: boolean): void {
+    const isOpen = openReasoningIds.includes(id);
+    if (open && !isOpen) openReasoningIds = [...openReasoningIds, id];
+    else if (!open && isOpen) openReasoningIds = openReasoningIds.filter((openId) => openId !== id);
+  }
+
+  const plan = $derived(planTurnItems(turn, session.collapseTurnTrace, session.collapseRunningTurnTrace));
+  const summaryLabel = $derived(plan.trace ? formatTraceSummaryLabel(plan.trace.summary) : "");
 
   $effect(() => {
-    if (plan.mode !== "collapsed") traceOpen = false;
+    if (!plan.trace) traceOpen = false;
   });
+
+  function toggleGroup(groupId: string): void {
+    openGroupIds = openGroupIds.includes(groupId)
+      ? openGroupIds.filter((id) => id !== groupId)
+      : [...openGroupIds, groupId];
+  }
+
+  /** Hidden inside a folded trace; a step group's own row still shows when this is its first item. */
+  function isInsideClosedTrace(itemId: string): boolean {
+    return plan.trace !== null && !traceOpen && plan.trace.collapsedItemIds.has(itemId);
+  }
+
+  function isItemShown(itemId: string): boolean {
+    if (isInsideClosedTrace(itemId)) return false;
+    const groupId = plan.groups?.groupIdByItemId.get(itemId);
+    return groupId === undefined || openGroupIds.includes(groupId);
+  }
 </script>
 
 <section class="agent-turn" data-turn-id={turn.id}>
@@ -30,7 +61,8 @@
   {#if turn.status === "running"}<TurnTiming startedAt={turn.startedAt} />{/if}
   <div class="turn-activities">
     {#each turn.items as item (item.id)}
-      {#if plan.mode === "collapsed" && item.id === plan.firstCollapsedItemId}
+      {@const group = plan.groups?.groupsByFirstItemId.get(item.id)}
+      {#if plan.trace && item.id === plan.trace.firstCollapsedItemId}
         <div class="turn-trace-header">
           <button
             type="button"
@@ -40,14 +72,14 @@
             onclick={() => traceOpen = !traceOpen}
           >
             <span class="codicon codicon-list-tree activity-leading" aria-hidden="true"></span>
-            <span class="activity-title">{plan.stateLabel}</span>
+            <span class="activity-title">{plan.trace.stateLabel}</span>
             <span class="turn-trace-meta">{summaryLabel}</span>
             <span class={`codicon codicon-chevron-${traceOpen ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
           </button>
         </div>
       {/if}
 
-      {#if plan.mode === "collapsed" && item.id === plan.anchorItemId}
+      {#if plan.trace && item.id === plan.trace.anchorItemId}
         <button
           type="button"
           class="turn-trace-break"
@@ -55,13 +87,39 @@
           onclick={() => traceOpen = !traceOpen}
         >
           <span class="turn-trace-break-line" aria-hidden="true"></span>
-          <span class="turn-trace-break-label">{plan.anchorLabel}</span>
+          <span class="turn-trace-break-label">{plan.trace.anchorLabel}</span>
           <span class="turn-trace-break-line" aria-hidden="true"></span>
         </button>
       {/if}
 
-      {#if plan.mode !== "collapsed" || !plan.collapsedItemIds.has(item.id) || traceOpen}
-        {@render turnItemRow(item)}
+      {#if group && !isInsideClosedTrace(item.id)}
+        {@const groupOpen = openGroupIds.includes(group.id)}
+        <div class="turn-trace-header turn-step-group">
+          <button
+            type="button"
+            class="activity-trigger"
+            aria-expanded={groupOpen}
+            aria-label={`${groupOpen ? "Collapse" : "Expand"} ${formatStepGroupLabel(group)}: ${group.detail}`}
+            onclick={() => toggleGroup(group.id)}
+          >
+            <span class="codicon codicon-list-tree activity-leading" aria-hidden="true"></span>
+            <span class="activity-title">{group.steps} steps</span>
+            {#if group.errors > 0}
+              <span class="turn-step-group-errors">{group.errors === 1 ? "1 error" : `${group.errors} errors`}</span>
+            {/if}
+            <span class="turn-trace-meta" title={group.detail}>{group.detail}</span>
+            {#if group.active}<span class="thinking-pulse" role="status" aria-label="In progress"></span>{/if}
+            <span class={`codicon codicon-chevron-${groupOpen ? "down" : "right"} activity-chevron`} aria-hidden="true"></span>
+          </button>
+        </div>
+      {/if}
+
+      {#if isItemShown(item.id)}
+        {#if plan.groups?.groupIdByItemId.has(item.id)}
+          <div class="turn-step-group-item">{@render turnItemRow(item)}</div>
+        {:else}
+          {@render turnItemRow(item)}
+        {/if}
       {/if}
     {/each}
   </div>
@@ -69,7 +127,10 @@
 
 {#snippet turnItemRow(item: AgentTurnItemView)}
   {#if item.type === "reasoning"}
-    <ThinkingActivity activity={item} />
+    <ThinkingActivity
+      activity={item}
+      bind:open={() => openReasoningIds.includes(item.id), (open) => setReasoningOpen(item.id, open)}
+    />
   {:else if item.type === "tool"}
     <ToolActivity activity={item} />
   {:else if item.type === "response"}
@@ -148,6 +209,16 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     user-select: none;
+  }
+
+  .turn-step-group-errors { flex: none; color: var(--frost-error); font-size: calc(var(--font-size-ui) - 2.5px); }
+
+  /* An opened group keeps its steps visually attached to its summary row. */
+  .turn-step-group-item {
+    min-width: 0;
+    margin-left: 9px;
+    padding-left: 6px;
+    border-left: 1px solid var(--frost-border-soft);
   }
 
   .agent-turn { margin: 0 0 22px; }
