@@ -59,6 +59,13 @@ export interface SessionViewModel {
   isCompacting: boolean;
   isForking: boolean;
   historyStatus: SessionHistoryStatus;
+  /** Why a large session's history was deferred instead of opening on a recent preview. */
+  historyDeferredReason?: string;
+  /**
+   * Set while a large session shows only a recent preview: its current branch from the
+   * latest prompt on. Absent once the whole history is loaded.
+   */
+  partialHistory?: true;
   sessionFile?: string;
   sessionId?: string;
   model: RpcModel | null;
@@ -70,6 +77,8 @@ export interface SessionViewModel {
   attachmentLimits: AttachmentLimitsView;
   /** When true, completed turns collapse tool/reasoning/interim replies into one summary above the final response. */
   collapseTurnTrace: boolean;
+  /** When true, a running turn folds each run of tool calls and reasoning into one expandable row (Focus View); replies stay visible. Finished turns follow `collapseTurnTrace`. */
+  collapseRunningTurnTrace: boolean;
   /** Default streaming delivery selected for this session's Composer. */
   composerStreamingBehavior: StreamingBehavior;
   networkProxy: NetworkProxyView;

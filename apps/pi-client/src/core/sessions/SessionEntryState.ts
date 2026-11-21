@@ -64,9 +64,13 @@ export class SessionEntryState {
     return this.#index;
   }
 
-  replace(entries: readonly RpcSessionEntry[], leafId: string | null): ReplacedSessionEntries {
+  /**
+   * `startId` marks a recent preview: the active path then starts at that entry instead
+   * of the root, and every entry between it and the leaf must still be present.
+   */
+  replace(entries: readonly RpcSessionEntry[], leafId: string | null, { startId }: { startId?: string } = {}): ReplacedSessionEntries {
     const entriesById = uniqueEntries(entries);
-    const activePath = buildActivePath(entriesById, leafId);
+    const activePath = buildActivePath(entriesById, leafId, startId);
 
     this.#initialized = true;
     this.#cursor = entries.at(-1)?.id ?? null;
@@ -103,6 +107,7 @@ export class SessionEntryState {
 function buildActivePath(
   entriesById: ReadonlyMap<string, RpcSessionEntry>,
   leafId: string | null,
+  startId?: string,
 ): RpcSessionEntry[] {
   if (leafId === null) return [];
 
@@ -116,8 +121,12 @@ function buildActivePath(
     const entry = entriesById.get(currentId);
     if (!entry) throw new SessionEntryPathError(`Session entry parent chain is missing ${currentId}`);
     reversedPath.push(entry);
+    if (entry.id === startId) return reversedPath.reverse();
     currentId = entry.parentId;
   }
+  // A preview's start must lie on the active path; reaching the root without it means the
+  // branch changed under the preview.
+  if (startId !== undefined) throw new SessionEntryPathError(`The active branch no longer passes through ${startId}`);
   return reversedPath.reverse();
 }
 

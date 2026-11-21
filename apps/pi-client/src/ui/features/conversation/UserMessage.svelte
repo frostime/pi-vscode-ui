@@ -6,6 +6,7 @@
   import MarkdownContent from "./MarkdownContent.svelte";
   import { copyMessageText, rawMessageText } from "./copyMessageClient";
   import { formatMessageTimestamp } from "./messageTimestamp";
+  import { postToHost } from "../../bridge/hostBridge";
   import { pendingForkEntryId, requestMessageFork } from "./forkMessageClient";
   import { requestBranchHere } from "./sessionTreeClient";
 
@@ -14,7 +15,17 @@
     session.status !== "ready" || session.isStreaming || session.isCompacting || session.isForking || session.isNavigatingTree
     || session.historyStatus !== "loaded" || session.pendingExtensionUi.length > 0 || session.queuedSteers.length > 0 || session.queuedFollowUps.length > 0,
   );
+  /** Fork works during a reply: the Host forks in a separate Pi process and leaves the reply running. */
+  const forkUnavailable = $derived(
+    !["ready", "running"].includes(session.status) || session.isCompacting || session.isForking || session.isNavigatingTree
+    || session.historyStatus !== "loaded",
+  );
   const pending = $derived($pendingForkEntryId === message.sourceEntryId);
+  /**
+   * A Fork from a busy Session runs in a second Pi process and leaves this one running,
+   * so the Composer offers no Cancel Fork for it; its own button does, until Pi forks.
+   */
+  const cancellable = $derived(pending && !session.isForking);
   const copyText = $derived(rawMessageText(message.blocks));
   const sentAtLabel = $derived(formatMessageTimestamp(message.timestamp));
 </script>
@@ -56,16 +67,28 @@
             <span class="codicon codicon-source-control" aria-hidden="true"></span>
             <span>Branch here</span>
           </button>
-          <button
-            type="button"
-            aria-label="Fork session from this message"
-            title="Create a new session from this message"
-            disabled={unavailable || $pendingForkEntryId !== null}
-            onclick={() => requestMessageFork(session, message)}
-          >
-            <span class="codicon codicon-git-branch" aria-hidden="true"></span>
-            <span>{pending ? "Forking…" : "Fork"}</span>
-          </button>
+          {#if cancellable}
+            <button
+              type="button"
+              aria-label="Cancel Fork"
+              title="Forking in a separate Pi process. Cancel the Fork; this session keeps running."
+              onclick={() => postToHost({ type: "cancelFork", sessionId: session.id })}
+            >
+              <span class="codicon codicon-close" aria-hidden="true"></span>
+              <span>Cancel Fork</span>
+            </button>
+          {:else}
+            <button
+              type="button"
+              aria-label="Fork session from this message"
+              title="Create a new session from this message"
+              disabled={forkUnavailable || $pendingForkEntryId !== null}
+              onclick={() => requestMessageFork(session, message)}
+            >
+              <span class="codicon codicon-git-branch" aria-hidden="true"></span>
+              <span>{pending ? "Forking…" : "Fork"}</span>
+            </button>
+          {/if}
         {/if}
       </div>
     {/if}

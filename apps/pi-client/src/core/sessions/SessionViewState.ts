@@ -25,6 +25,7 @@ export class SessionViewState {
     attachmentLimits: AttachmentLimitsView = { maxImageBytes: 10 * 1024 * 1024, maxImages: 12 },
     collapseTurnTrace = true,
     isEphemeral = false,
+    collapseRunningTurnTrace = true,
   ) {
     this.#view = {
       id,
@@ -43,6 +44,7 @@ export class SessionViewState {
       commands: [],
       attachmentLimits,
       collapseTurnTrace,
+      collapseRunningTurnTrace,
       composerStreamingBehavior: "followUp",
       networkProxy: { mode: "inherit", label: "Inherited", restartRequired: false },
       questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
@@ -137,8 +139,16 @@ export class SessionViewState {
     this.#view.isSummarizingTree = isNavigatingTree && isSummarizingTree;
   }
 
-  setHistoryStatus(status: SessionViewModel["historyStatus"]): void {
+  /** `deferredReason` says why a deferred history was not loaded; any other status clears it. */
+  setHistoryStatus(status: SessionViewModel["historyStatus"], deferredReason?: string): void {
     this.#view.historyStatus = status;
+    if (status === "deferred" && deferredReason) this.#view.historyDeferredReason = deferredReason;
+    else delete this.#view.historyDeferredReason;
+  }
+
+  setPartialHistory(partial: boolean): void {
+    if (partial) this.#view.partialHistory = true;
+    else delete this.#view.partialHistory;
   }
 
   setModels(models: SessionViewModel["availableModels"]): void {
@@ -182,6 +192,21 @@ export class SessionViewState {
 
   setCollapseTurnTrace(collapseTurnTrace: boolean): void {
     this.#view.collapseTurnTrace = collapseTurnTrace;
+  }
+
+  setCollapseRunningTurnTrace(collapseRunningTurnTrace: boolean): void {
+    this.#view.collapseRunningTurnTrace = collapseRunningTurnTrace;
+  }
+
+  /** A replaced conversation keeps the process, model catalogue and settings, and nothing of the old transcript. */
+  resetForNewConversation(title: string): void {
+    this.#view.title = title;
+    delete this.#view.sessionFile;
+    delete this.#view.sessionId;
+    delete this.#view.stats;
+    delete this.#view.cacheHitPercent;
+    delete this.#view.composerSeed;
+    delete this.#view.error;
   }
 
   setComposerStreamingBehavior(streamingBehavior: SessionViewModel["composerStreamingBehavior"]): void {
