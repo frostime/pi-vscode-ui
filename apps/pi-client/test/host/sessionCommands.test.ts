@@ -351,7 +351,10 @@ describe("Host slash commands through the real Registry and child-process path",
       await fixture.converse(sessionId, "first");
       await fixture.converse(sessionId, "second");
       const sourceFile = view(sessionId).sessionFile!;
-      const second = view(sessionId).conversationItems.flatMap((item) => item.type === "turn" && item.userMessage?.blocks.some((block) => block.type === "text" && block.text === "second") ? [item.userMessage.sourceEntryId] : [])[0]!;
+      const entryOf = (text: string) => view(sessionId).conversationItems.flatMap((item) => item.type === "turn" && item.userMessage?.blocks.some((block) => block.type === "text" && block.text === text) ? [item.userMessage.sourceEntryId] : [])[0];
+      // The conversation adopts a prompt's Pi entry id in the reconcile after its turn.
+      await fixture.waitFor(() => entryOf("second") !== undefined);
+      const second = entryOf("second")!;
       await registry.sendPrompt(sessionId, "hold", []);
       await fixture.waitFor(() => view(sessionId).isStreaming);
       const fork = registry.forkMessage(sessionId, second, "preserve-sidebar-selection");
