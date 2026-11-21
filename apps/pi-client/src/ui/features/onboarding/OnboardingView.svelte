@@ -32,10 +32,13 @@
     <p class="onboarding-note">If Pi is not installed, install it first. If it is already installed, choose Configure Pi to set its executable path, or check that FrostPi can find Pi and Node.js on PATH. Then retry. FrostPi uses your existing Pi providers, extensions, skills, prompts, and session storage.</p>
   {:else}
     <h1>Start or resume a Pi session</h1>
-    <p>Create a session to begin working with Pi in this workspace.</p>
+    <p>Create a session to begin working with Pi in this workspace. A temporary session is never saved.</p>
     <div class="onboarding-actions">
       <button class="primary" type="button" onclick={() => postToHost({ type: "createSession" })}>
         <span class="codicon codicon-add"></span> New session
+      </button>
+      <button type="button" onclick={() => postToHost({ type: "createSession", ephemeral: true })}>
+        <span class="codicon codicon-eye-closed"></span> Temporary session
       </button>
       <button type="button" onclick={() => postToHost({ type: "resumeSession" })}>
         <span class="codicon codicon-history"></span> Resume session

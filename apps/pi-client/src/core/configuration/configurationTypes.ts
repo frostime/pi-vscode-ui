@@ -10,6 +10,7 @@ export interface FrostPiConfiguration {
   startSessionOnOpen: boolean;
   streamingBehavior: StreamingBehavior;
   collapseTurnTrace: boolean;
+  collapseRunningTurnTrace: boolean;
   questionToolEnabled: boolean;
   maxImageBytes: number;
   diagnosticsLevel: "error" | "info" | "debug";
