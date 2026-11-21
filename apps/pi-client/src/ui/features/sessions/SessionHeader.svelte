@@ -9,14 +9,14 @@
   import { isQueuedPromptRecoveryPending } from "../composer/queuedPromptRecoveryStore.svelte";
   import IconButton from "../../primitives/IconButton.svelte";
   import StatusDot from "./StatusDot.svelte";
-  import SessionList from "./SessionList.svelte";
+  import SessionList, { STOP_PI_PROCESS_TITLE } from "./SessionList.svelte";
+  import { sessionStatusLabel } from "./sessionStatusLabel";
 
   let { sessions, active }: { sessions: SessionSummaryView[]; active: SessionViewModel } = $props();
   let editing = $state(false);
   let titleDraft = $state("");
   let menuOpen = $state(false);
   let launcherOpen = $state(false);
-  let launcherVariantsOpen = $state(false);
   let sessionListOpen = $state(false);
   let extensionsMenuOpen = $state(false);
   let hidden = $state(false);
@@ -26,6 +26,7 @@
   const needsAttention = $derived(sessions.some((session) => session.requiresUserInput));
   const backgroundRuns = $derived(sessions.filter((session) => session.id !== active.id && session.status === "running").length);
   const editorTabs = $derived($clientCapabilities.sessionEditorTabs);
+  const processChanging = $derived(active.status === "queued" || active.status === "starting" || active.status === "stopping");
 
   $effect(() => {
     if (editing) requestAnimationFrame(() => titleInput?.focus());
@@ -43,7 +44,6 @@
   function closeMenus(): void {
     menuOpen = false;
     launcherOpen = false;
-    launcherVariantsOpen = false;
     sessionListOpen = false;
     extensionsMenuOpen = false;
   }
@@ -59,6 +59,8 @@
   }
 
   function commitRename(): void {
+    // Enter or Escape removes the input, whose blur must not commit a second time.
+    if (!editing) return;
     const name = titleDraft.trim();
     if (name && name !== active.title) postToHost({ type: "renameSession", sessionId: active.id, name });
     editing = false;
@@ -79,8 +81,9 @@
     postToHost({ type: "createSessionWithArguments" });
   }
 
-  function toggleLauncherVariants(): void {
-    launcherVariantsOpen = !launcherVariantsOpen;
+  function createSessionPanel(ephemeral = false): void {
+    closeMenus();
+    postToHost(ephemeral ? { type: "createSessionPanel", ephemeral: true } : { type: "createSessionPanel" });
   }
 
   function resumeSession(): void {
@@ -98,6 +101,21 @@
     postToHost({ type: "closeSession", sessionId });
   }
 
+  function stopSession(sessionId: string): void {
+    closeMenus();
+    postToHost({ type: "stopSession", sessionId });
+  }
+
+  function restartSession(sessionId: string): void {
+    closeMenus();
+    postToHost({ type: "restartSession", sessionId });
+  }
+
+  function deleteSession(sessionId: string): void {
+    closeMenus();
+    postToHost({ type: "deleteSession", sessionId });
+  }
+
   function openSessionPanel(sessionId?: string): void {
     const targetId = sessionId ?? active.id;
     // Do not hand a possibly stale Webview draft to a new panel before its recovery result merges.
@@ -108,25 +126,6 @@
     }
     closeMenus();
     postToHost({ type: "openSessionPanel", sessionId: targetId, draft: draftForHost(targetId) });
-  }
-
-  function activeStatusLabel(): string {
-    if (active.pendingExtensionUi.length > 0) return "action required";
-    if (active.isForking) return "forking session";
-    if (active.isNavigatingTree) return active.isSummarizingTree ? "summarizing branch" : "switching branch";
-    if (active.isCompacting) return "compacting context";
-    if (active.status === "queued") return "waiting to start";
-    if (active.historyStatus === "queued") return "waiting for history";
-    if (active.historyStatus === "loading") return "loading history";
-    if (active.status === "running") {
-      if (active.historyStatus === "deferred") return "running · history not loaded";
-      if (active.historyStatus === "failed") return "running · history load failed";
-      return "running";
-    }
-    if (active.historyStatus === "deferred") return "history not loaded";
-    if (active.historyStatus === "failed") return "history load failed";
-    if (active.status === "ready") return "ready";
-    return active.status;
   }
 </script>
 
@@ -160,6 +159,7 @@
             bind:this={titleInput}
             bind:value={titleDraft}
             aria-label="Session name"
+            maxlength="160"
             onkeydown={(event) => {
               if (event.key === "Enter") commitRename();
               if (event.key === "Escape") editing = false;
@@ -176,15 +176,16 @@
           aria-expanded={sessionListOpen}
           title={active.cwd}
           onclick={() => { sessionListOpen = !sessionListOpen; menuOpen = false; launcherOpen = false; }}
+          ondblclick={beginRename}
         >
           <StatusDot status={active.status} />
           <span class="session-title">{active.title}</span>
-          {#if active.isEphemeral}<span class="ephemeral-badge">临时</span>{/if}
+          {#if active.isEphemeral}<span class="ephemeral-badge">Temporary</span>{/if}
           <span class="session-inline-status">
             {#if active.workingDirectoryLabel}
               <span class="session-cwd-pill" title={active.cwd}>{active.workingDirectoryLabel}</span>
             {/if}
-            <span>· {activeStatusLabel()}</span>
+            <span>· {sessionStatusLabel(active)}</span>
           </span>
           <span class="codicon codicon-chevron-down session-heading-chevron" aria-hidden="true"></span>
         </button>
@@ -195,6 +196,8 @@
           activeId={active.id}
           onselect={selectSession}
           onclose={closeSession}
+          onstop={stopSession}
+          onrestart={restartSession}
           onexternalize={editorTabs ? openSessionPanel : undefined}
           oncreate={createSession}
           onresume={resumeSession}
@@ -203,36 +206,35 @@
     </div>
 
     <div class="session-actions">
+      {#if !editing}
+        <IconButton icon="edit" label="Rename session" onclick={beginRename} />
+      {/if}
       <div class="session-menu-wrap">
         <IconButton icon="add" label="New or resume session" active={launcherOpen} onclick={() => { launcherOpen = !launcherOpen; menuOpen = false; sessionListOpen = false; }} />
         {#if launcherOpen}
           <div class="session-menu session-launcher-menu">
+            <!-- Each way to start has a crossed-eye button beside it for the temporary variant, which is never saved. -->
             <div class="launcher-create-row">
               <button type="button" class="launcher-create" onclick={createSession}>
                 <span class="codicon codicon-add"></span><span><strong>New session</strong><small>Start a clean Pi conversation</small></span>
               </button>
-              <button
-                type="button"
-                class="launcher-expand"
-                class:active={launcherVariantsOpen}
-                aria-label="More ways to start a session"
-                aria-haspopup="true"
-                aria-expanded={launcherVariantsOpen}
-                onclick={toggleLauncherVariants}
-              >
-                <span class="codicon" class:codicon-chevron-right={!launcherVariantsOpen} class:codicon-chevron-down={launcherVariantsOpen} aria-hidden="true"></span>
+              <button type="button" class="launcher-temporary" aria-label="New temporary session" title="New temporary session · never saved" onclick={createTemporarySession}>
+                <span class="codicon codicon-eye-closed" aria-hidden="true"></span>
               </button>
             </div>
-            {#if launcherVariantsOpen}
-              <div class="launcher-variants">
-                <button type="button" onclick={createTemporarySession}>
-                  <span class="codicon codicon-eye-closed"></span><span><strong>New temporary session</strong><small>Start a conversation that is never saved</small></span>
+            {#if editorTabs}
+              <div class="launcher-create-row">
+                <button type="button" class="launcher-create" onclick={() => createSessionPanel()}>
+                  <span class="codicon codicon-layout"></span><span><strong>New session in editor tab</strong><small>Start it directly in its own tab</small></span>
                 </button>
-                <button type="button" onclick={createSessionWithArguments}>
-                  <span class="codicon codicon-terminal"></span><span><strong>New session with arguments…</strong><small>Pass extra Pi CLI flags for this launch</small></span>
+                <button type="button" class="launcher-temporary" aria-label="New temporary session in editor tab" title="New temporary session in editor tab · never saved" onclick={() => createSessionPanel(true)}>
+                  <span class="codicon codicon-eye-closed" aria-hidden="true"></span>
                 </button>
               </div>
             {/if}
+            <button type="button" onclick={createSessionWithArguments}>
+              <span class="codicon codicon-terminal"></span><span><strong>New session with arguments…</strong><small>Pass extra Pi CLI flags for this launch</small></span>
+            </button>
             <button type="button" onclick={resumeSession}>
               <span class="codicon codicon-history"></span><span><strong>Resume session</strong><small>Open an existing Pi conversation</small></span>
             </button>
@@ -250,7 +252,10 @@
             {#if active.historyStatus === "deferred" || active.historyStatus === "failed"}
               <button type="button" onclick={() => { closeMenus(); postToHost({ type: "loadHistory", sessionId: active.id }); }}><span class="codicon codicon-history"></span> Load conversation history</button>
             {/if}
-            <button type="button" disabled={active.isEphemeral} title={active.isEphemeral ? "Temporary sessions cannot be restarted" : undefined} onclick={() => { closeMenus(); postToHost({ type: "restartSession", sessionId: active.id }); }}><span class="codicon codicon-debug-restart"></span> Restart session</button>
+            <button type="button" disabled={active.isEphemeral} title={active.isEphemeral ? "Temporary sessions cannot be restarted" : "Restart this session's Pi process from its saved history."} onclick={() => restartSession(active.id)}><span class="codicon codicon-debug-restart"></span> Restart Pi process</button>
+            {#if active.status !== "stopped" && active.status !== "failed"}
+              <button type="button" disabled={active.isEphemeral || processChanging} title={active.isEphemeral ? "A temporary session cannot start again once its Pi process stops" : STOP_PI_PROCESS_TITLE} onclick={() => stopSession(active.id)}><span class="codicon codicon-debug-stop"></span> Stop Pi process</button>
+            {/if}
             {#if active.sessionFile}
               <button
                 type="button"
@@ -311,6 +316,9 @@
             {/if}
             <div class="menu-separator"></div>
             <button class="danger" type="button" onclick={() => closeSession(active.id)}><span class="codicon codicon-close"></span> Close session</button>
+            {#if !active.isEphemeral}
+              <button class="danger" type="button" title="Delete the session and its Pi session file" onclick={() => deleteSession(active.id)}><span class="codicon codicon-trash"></span> Delete session</button>
+            {/if}
           </div>
         {/if}
       </div>
@@ -327,7 +335,6 @@
   .launcher-create-row { display: flex; align-items: stretch; }
   .launcher-create-row > button { width: auto; }
   .launcher-create { flex: 1 1 auto; }
-  .launcher-expand { flex: 0 0 auto; padding: 7px; opacity: 0.7; }
-  .launcher-expand.active { background: var(--frost-hover); opacity: 1; }
-  .launcher-variants { display: flex; flex-direction: column; margin: 2px 0 2px 29px; padding-left: 3px; border-left: 2px solid var(--frost-border); }
+  .launcher-temporary { flex: 0 0 auto; justify-content: center; padding: 7px 9px; color: var(--frost-muted); }
+  .launcher-temporary:hover, .launcher-temporary:focus-visible { color: var(--frost-text); }
 </style>

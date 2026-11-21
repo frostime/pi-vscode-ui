@@ -101,6 +101,8 @@ export function createClientHost(
       return showWindowsToast(title, message, nativeOptions);
     },
     exportDiagnostics: (summary) => exportDiagnostics(inputs.logger, summary),
+    // The path is on the Extension Host, so the file lands in that machine's trash.
+    moveToTrash: (fsPath) => toPromise(vscode.workspace.fs.delete(vscode.Uri.file(fsPath), { useTrash: true })),
   };
 }
 

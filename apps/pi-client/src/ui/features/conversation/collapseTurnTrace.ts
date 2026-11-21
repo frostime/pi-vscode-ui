@@ -3,7 +3,9 @@ import type {
   AgentTurnItemView,
   AgentTurnStatus,
   AgentTurnView,
+  ReasoningActivityView,
   SessionNoticeView,
+  ToolActivityView,
 } from "$shared/model/conversationModel";
 
 export interface TurnTraceSummary {
@@ -14,26 +16,77 @@ export interface TurnTraceSummary {
 
 export type TurnTraceStateLabel = "Worked" | "Stopped" | "Failed";
 
-export type TurnItemPlan =
-  | { mode: "flat" }
-  | {
-      mode: "collapsed";
-      stateLabel: TurnTraceStateLabel;
-      collapsedItemIds: ReadonlySet<string>;
-      firstCollapsedItemId: string;
-      anchorItemId: string;
-      anchorLabel: "Reply" | "Last step";
-      summary: TurnTraceSummary;
-    };
+/** A finished turn's work before its final reply, folded into one summary. */
+export interface TurnTrace {
+  stateLabel: TurnTraceStateLabel;
+  collapsedItemIds: ReadonlySet<string>;
+  firstCollapsedItemId: string;
+  anchorItemId: string;
+  anchorLabel: "Reply" | "Last step";
+  summary: TurnTraceSummary;
+}
 
+/** One folded run of consecutive tool calls and reasoning. */
+export interface TurnStepGroup {
+  /** The first step's id: stable while the run grows, so an opened group stays open. */
+  id: string;
+  steps: number;
+  errors: number;
+  /** The run still has a step in progress. */
+  active: boolean;
+  /** What the run did, or is doing right now when active. */
+  detail: string;
+}
+
+export interface TurnStepGroups {
+  /** Group shown in front of the item with this id. */
+  groupsByFirstItemId: ReadonlyMap<string, TurnStepGroup>;
+  /** Group id of every folded item. */
+  groupIdByItemId: ReadonlyMap<string, string>;
+}
+
+export interface TurnItemPlan {
+  /** Set for a finished turn whose work folds into one summary above its final reply. */
+  trace: TurnTrace | null;
+  /** Runs of steps that fold into one row each: across a running turn, or inside an opened trace. */
+  groups: TurnStepGroups | null;
+}
+
+/** A lone step is already a single collapsed row; folding it would only hide its name. */
+const MIN_GROUP_STEPS = 2;
+const MAX_GROUP_DETAIL_KINDS = 4;
+const MAX_STEP_LABEL_LENGTH = 72;
+
+/**
+ * The two settings are orthogonal, one per phase of a turn.
+ *
+ * - While a turn runs, `collapseRunningTurnTrace` folds each run of consecutive tool
+ *   calls and reasoning into one row; replies stay visible in order.
+ * - Once it has finished, `collapseTurnTrace` folds everything before the final reply
+ *   (tools, reasoning, interim replies and notices) into one summary, as only the last
+ *   reply is the model's answer to the user. Inside an opened summary each run of steps
+ *   stays folded, unless the summary holds nothing but one run: then the summary is
+ *   that run, and a second row inside it would only repeat it.
+ */
 export function planTurnItems(
   turn: Pick<AgentTurnView, "status" | "items" | "startedAt" | "endedAt">,
   collapseTurnTrace: boolean,
+  collapseRunningTurnTrace = false,
 ): TurnItemPlan {
-  if (!collapseTurnTrace || turn.status === "running" || turn.items.length === 0) return { mode: "flat" };
+  if (turn.status === "running") {
+    return { trace: null, groups: collapseRunningTurnTrace ? planStepGroups(turn.items, true) : null };
+  }
+  const trace = collapseTurnTrace ? planTurnTrace(turn) : null;
+  if (!trace) return { trace: null, groups: null };
+  const traced = turn.items.filter((item) => trace.collapsedItemIds.has(item.id));
+  const onlySteps = traced.every((item) => item.type === "reasoning" || item.type === "tool");
+  return { trace, groups: onlySteps ? null : planStepGroups(traced, false) };
+}
 
+function planTurnTrace(turn: Pick<AgentTurnView, "status" | "items" | "startedAt" | "endedAt">): TurnTrace | null {
+  if (turn.items.length === 0) return null;
   const activityLocations = turn.items.flatMap((item, itemIndex) => isAgentActivity(item) ? [{ item, itemIndex }] : []);
-  if (activityLocations.length === 0) return { mode: "flat" };
+  if (activityLocations.length === 0) return null;
 
   let lastResponseIndex: number | undefined;
   for (let index = activityLocations.length - 1; index >= 0; index -= 1) {
@@ -44,14 +97,13 @@ export function planTurnItems(
     }
   }
   const anchorIndex = traceAnchorIndex(turn.status, activityLocations, lastResponseIndex);
-  if (anchorIndex === undefined) return { mode: "flat" };
+  if (anchorIndex === undefined) return null;
 
   const collapsed = turn.items.slice(0, anchorIndex).filter(isTraceItem);
   const anchor = turn.items[anchorIndex];
-  if (collapsed.length === 0 || !anchor || !isAgentActivity(anchor)) return { mode: "flat" };
+  if (collapsed.length === 0 || !anchor || !isAgentActivity(anchor)) return null;
 
   return {
-    mode: "collapsed",
     stateLabel: turnStateLabel(turn.status),
     collapsedItemIds: new Set(collapsed.map((item) => item.id)),
     firstCollapsedItemId: collapsed[0]!.id,
@@ -92,6 +144,71 @@ export function formatTraceSummaryLabel(summary: TurnTraceSummary): string {
   const parts = [summary.steps === 1 ? "1 step" : `${summary.steps} steps`];
   if (summary.errors > 0) parts.push(summary.errors === 1 ? "1 error" : `${summary.errors} errors`);
   if (summary.durationLabel) parts.push(summary.durationLabel);
+  return parts.join(" · ");
+}
+
+function planStepGroups(items: readonly AgentTurnItemView[], running: boolean): TurnStepGroups | null {
+  const groupsByFirstItemId = new Map<string, TurnStepGroup>();
+  const groupIdByItemId = new Map<string, string>();
+  let run: Array<ReasoningActivityView | ToolActivityView> = [];
+
+  const closeRun = (): void => {
+    const steps = run;
+    run = [];
+    const first = steps[0];
+    if (!first || steps.length < MIN_GROUP_STEPS) return;
+    const active = running && steps.some(isStepInProgress);
+    groupsByFirstItemId.set(first.id, {
+      id: first.id,
+      steps: steps.length,
+      errors: countTraceErrors(steps),
+      active,
+      detail: active ? currentStepLabel(steps) : stepKindSummary(steps),
+    });
+    for (const step of steps) groupIdByItemId.set(step.id, first.id);
+  };
+
+  for (const item of items) {
+    // Replies, notices and structural markers stay visible and end the run before them.
+    if (item.type === "reasoning" || item.type === "tool") run.push(item);
+    else closeRun();
+  }
+  closeRun();
+  return groupsByFirstItemId.size === 0 ? null : { groupsByFirstItemId, groupIdByItemId };
+}
+
+function isStepInProgress(step: ReasoningActivityView | ToolActivityView): boolean {
+  return step.type === "reasoning"
+    ? step.status === "streaming"
+    : step.tool.state === "preparing" || step.tool.status === "running" || step.tool.status === "queued";
+}
+
+function currentStepLabel(steps: ReadonlyArray<ReasoningActivityView | ToolActivityView>): string {
+  const current = [...steps].reverse().find(isStepInProgress) ?? steps.at(-1);
+  if (!current) return "";
+  if (current.type === "reasoning") return "Thinking";
+  if (current.tool.state === "preparing") return "Preparing tool call";
+  const label = current.tool.label.replace(/\s+/g, " ").trim();
+  const text = label ? `${current.tool.name} ${label}` : current.tool.name;
+  return text.length <= MAX_STEP_LABEL_LENGTH ? text : `${text.slice(0, MAX_STEP_LABEL_LENGTH - 1).trimEnd()}…`;
+}
+
+/** "read ×3, bash ×2, reasoning" in order of first use. */
+function stepKindSummary(steps: ReadonlyArray<ReasoningActivityView | ToolActivityView>): string {
+  const counts = new Map<string, number>();
+  for (const step of steps) {
+    const kind = step.type === "reasoning" ? "reasoning" : step.tool.state === "bound" ? step.tool.name : "tool call";
+    counts.set(kind, (counts.get(kind) ?? 0) + 1);
+  }
+  const kinds = [...counts].map(([kind, count]) => count > 1 ? `${kind} ×${count}` : kind);
+  const shown = kinds.slice(0, MAX_GROUP_DETAIL_KINDS);
+  if (kinds.length > shown.length) shown.push(`+${kinds.length - shown.length} more`);
+  return shown.join(", ");
+}
+
+export function formatStepGroupLabel(group: Pick<TurnStepGroup, "steps" | "errors">): string {
+  const parts = [`${group.steps} steps`];
+  if (group.errors > 0) parts.push(group.errors === 1 ? "1 error" : `${group.errors} errors`);
   return parts.join(" · ");
 }
 

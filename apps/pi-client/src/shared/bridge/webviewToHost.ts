@@ -63,6 +63,8 @@ const payloadSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("createSession"), ephemeral: z.boolean().optional() }),
   z.object({ type: z.literal("createSessionWithArguments") }),
   z.object({ type: z.literal("resumeSession") }),
+  // A new Session that opens in its own editor tab; from a Session Tab it joins that tab's group.
+  z.object({ type: z.literal("createSessionPanel"), ephemeral: z.boolean().optional() }),
   z.object({
     type: z.literal("openSessionPanel"),
     sessionId: z.string().min(1).max(128),
@@ -90,6 +92,9 @@ const payloadSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("activateSession"), sessionId: z.string().min(1).max(128) }),
   z.object({ type: z.literal("closeSession"), sessionId: z.string().min(1).max(128) }),
+  // Stop keeps the Session listed; delete also removes Pi's session file.
+  z.object({ type: z.literal("stopSession"), sessionId: z.string().min(1).max(128) }),
+  z.object({ type: z.literal("deleteSession"), sessionId: z.string().min(1).max(128) }),
   z.object({ type: z.literal("renameSession"), sessionId: z.string().min(1).max(128), name: z.string().max(160) }),
   z.object({ type: z.literal("copyText"), text: z.string().min(1).max(2_000_000) }),
   z.object({
@@ -116,6 +121,11 @@ const payloadSchema = z.discriminatedUnion("type", [
     draftImageCount: z.number().int().min(0).max(12),
   }),
   z.object({ type: z.literal("abort"), sessionId: z.string().min(1).max(128) }),
+  z.object({
+    type: z.literal("dismissSideQuestion"),
+    sessionId: z.string().min(1).max(128),
+    questionId: z.string().min(1).max(128),
+  }),
   z.object({ type: z.literal("cancelFork"), sessionId: z.string().min(1).max(128) }),
   z.object({
     type: z.literal("branchHere"),
