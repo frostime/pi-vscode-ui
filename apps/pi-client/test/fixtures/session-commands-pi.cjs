@@ -17,6 +17,9 @@ const holdNewSession = args.includes("--hold-new-session");
 const failStateAfterNewSession = args.includes("--fail-state-after-new-session");
 // The bundled extensions were passed but did not load in this process.
 const adaptersNotLoaded = args.includes("--adapters-not-loaded");
+// `fork` writes `fork-waiting` in its working directory and waits for `fork-release` there,
+// so a test can act while a Fork's own process has not forked yet.
+const holdFork = args.includes("--hold-fork");
 
 const MODELS = [
   { provider: "fake", id: "default", name: "Default", reasoning: true },
@@ -162,6 +165,15 @@ function handle(command) {
       const target = entries.find((entry) => entry.id === command.entryId);
       if (!target || target.message.role !== "user") {
         process.stdout.write(`${JSON.stringify({ type: "response", id, command: "fork", success: false, error: "Invalid entry ID for forking" })}\n`);
+        return;
+      }
+      if (holdFork && !fs.existsSync(path.join(process.cwd(), "fork-release"))) {
+        fs.writeFileSync(path.join(process.cwd(), "fork-waiting"), String(process.pid));
+        const timer = setInterval(() => {
+          if (!fs.existsSync(path.join(process.cwd(), "fork-release"))) return;
+          clearInterval(timer);
+          handle(command);
+        }, 5);
         return;
       }
       const kept = [];

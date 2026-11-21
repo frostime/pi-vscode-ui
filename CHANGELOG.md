@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The badge beside a temporary session's title reads **Temporary**, like the menus and messages. It was in Chinese (临时).
 - Inside an opened **Worked** summary, each run of tool calls and reasoning stays folded into one row, so interim replies are easy to find. A summary that holds a single run shows its steps directly.
 - A reasoning row shows one line of the model's thinking beside its title, and an opened reasoning row stays open when the next step folds it into a group.
-- Fork works while a reply is running. FrostPi forks in a separate Pi process, so the reply keeps going.
+- Fork works while a reply is running. FrostPi forks in a separate Pi process, so the reply keeps going. The Fork joins the session list once Pi has written its own file; until then its message offers **Cancel Fork**.
 - New setting `frostpi.session.closeWithEditorTab`: closing a session's editor tab also closes the session.
 - `frostpi.conversation.collapseTurnTrace` now applies as soon as it changes instead of at the next session start.
 - A session file larger than 8 MiB opens on a recent preview: its current branch from the latest prompt on, with **Load full history** to see everything. Branch here, Switch branch and Fork load the full history first. When no prompt of the current branch lies within the last 8 MiB, history waits for **Load full history** as before, and the conversation says why.
