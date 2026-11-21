@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -471,6 +472,67 @@ describe("Host slash commands through the real Registry and child-process path",
       expect(view(sessionId).isStreaming).toBe(true);
       await registry.abort(sessionId);
     }, 30_000);
+
+    /** A busy Session whose Fork's own process waits before forking, until `release`. */
+    async function heldFork(fixture: Awaited<ReturnType<typeof host>>) {
+      const { registry, view } = fixture;
+      const trashed: string[] = [];
+      fixture.host.moveToTrash = (path) => { trashed.push(path); return rm(path); };
+      const sessionId = await fixture.startSession();
+      await fixture.converse(sessionId, "first");
+      await fixture.converse(sessionId, "second");
+      const sourceFile = view(sessionId).sessionFile!;
+      const second = view(sessionId).conversationItems.flatMap((item) => item.type === "turn" && item.userMessage?.blocks.some((block) => block.type === "text" && block.text === "second") ? [item.userMessage.sourceEntryId] : [])[0]!;
+      await registry.sendPrompt(sessionId, "hold", []);
+      await fixture.waitFor(() => view(sessionId).isStreaming);
+      const fork = registry.forkMessage(sessionId, second, "preserve-sidebar-selection");
+      await fixture.waitFor(() => existsSync(join(fixture.directory, "fork-waiting")), 10_000);
+      return { sessionId, sourceFile, trashed, fork, release: () => writeFile(join(fixture.directory, "fork-release"), "1") };
+    }
+
+    it("keeps an unfinished Fork out of the collection, so deleting cannot reach the source's file through it", async () => {
+      const fixture = await host(["--hold-fork"]);
+      const { registry, view } = fixture;
+      const { sessionId, sourceFile, trashed, fork, release } = await heldFork(fixture);
+
+      // The Fork's process has the source's file open; it is not a Session anyone can act on.
+      expect(registry.snapshot().sessions.map((session) => session.id)).toEqual([sessionId]);
+      await expect(registry.deleteSession(sessionId)).rejects.toThrow("Wait for the Fork of this session to finish or cancel it first.");
+      expect(trashed).toEqual([]);
+      expect(existsSync(sourceFile)).toBe(true);
+
+      await release();
+      const result = await fork;
+      expect(result).toEqual({ cancelled: false, forkSessionId: expect.any(String) as string });
+      const forkFile = view(result.forkSessionId!).sessionFile!;
+      expect(forkFile).not.toBe(sourceFile);
+      expect(registry.snapshot().sessions.map((session) => session.id)).toEqual([sessionId, result.forkSessionId]);
+
+      // Once complete, deleting the Fork hands only its own file to the trash.
+      await registry.deleteSession(result.forkSessionId!);
+      expect(trashed).toEqual([forkFile]);
+      expect(existsSync(sourceFile)).toBe(true);
+      expect(view(sessionId).isStreaming).toBe(true);
+      await registry.abort(sessionId);
+    }, 20_000);
+
+    it("cancels an unfinished Fork from a busy Session without touching any file", async () => {
+      const fixture = await host(["--hold-fork"]);
+      const { registry, view } = fixture;
+      const { sessionId, sourceFile, trashed, fork } = await heldFork(fixture);
+
+      await registry.cancelFork(sessionId);
+
+      await expect(fork).resolves.toEqual({ cancelled: true });
+      expect(registry.snapshot().sessions.map((session) => session.id)).toEqual([sessionId]);
+      expect(trashed).toEqual([]);
+      expect(existsSync(sourceFile)).toBe(true);
+      expect(view(sessionId).isStreaming).toBe(true);
+      await expect(registry.cancelFork(sessionId)).rejects.toThrow("No Fork operation is active for this session.");
+      await registry.abort(sessionId);
+      await fixture.waitFor(() => !view(sessionId).isStreaming);
+      expect(userPrompts(view(sessionId))).toEqual(["first", "second", "hold"]);
+    }, 20_000);
 
     it("leaves nothing behind when the Fork fails", async () => {
       const fixture = await host();
