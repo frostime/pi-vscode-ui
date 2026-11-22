@@ -32,7 +32,7 @@ vi.mock("vscode", () => ({
     showQuickPick: vi.fn(),
     showWarningMessage: vi.fn(),
     showTextDocument: vi.fn(),
-    tabGroups: { onDidChangeTabs: vi.fn(() => ({ dispose: vi.fn() })) },
+    tabGroups: { all: [], onDidChangeTabs: vi.fn(() => ({ dispose: vi.fn() })) },
   },
   workspace: {
     textDocuments: [],
@@ -74,13 +74,14 @@ describe("Session Webview coordination", () => {
       () => Promise.resolve(undefined),
       { createEventEmitter: <T>() => new vscodeMock.EventEmitter<T>() } as never,
     );
-    const closeTab = (sessionId: string, title: string) => {
-      const panel = vscodeMock.panels.find((candidate) => candidate.title === title)!;
+    const createPanel = vi.mocked(vscode.window.createWebviewPanel);
+    const closeTab = (panelIndex: number) => {
+      const viewType = createPanel.mock.calls.at(panelIndex)![0];
       for (const [listener] of tabListeners.mock.calls.slice(listenersBefore)) {
-        (listener as unknown as (event: { closed: unknown[] }) => void)({ closed: [{ label: title, input: new vscode.TabInputWebview("mainThreadWebview-frostpi.session") }] });
+        const emit = listener as unknown as (event: { closed: unknown[]; opened: unknown[] }) => void;
+        emit({ closed: [{ input: new vscode.TabInputWebview(`mainThreadWebview-${viewType}`) }], opened: [] });
       }
-      panel.dispose();
-      return sessionId;
+      vscodeMock.panels.at(panelIndex)!.dispose();
     };
     vi.mocked(vscode.workspace.getConfiguration).mockImplementation((() => ({
       get: (key: string, fallback: unknown) => key === "session.closeWithEditorTab" ? enabled : fallback,
@@ -89,14 +90,12 @@ describe("Session Webview coordination", () => {
 
     coordinator.openPanel("one");
     coordinator.openPanel("two");
-    vscodeMock.panels.at(-2)!.title = "FrostPi · One";
-    vscodeMock.panels.at(-1)!.title = "FrostPi · Two";
-    closeTab("one", "FrostPi · One");
+    closeTab(-2);
     await Promise.resolve();
     expect(registry.closeSession).not.toHaveBeenCalled();
 
     enabled = true;
-    closeTab("two", "FrostPi · Two");
+    closeTab(-1);
     await vi.waitFor(() => expect(registry.closeSession).toHaveBeenCalledWith("two"));
     vi.mocked(vscode.workspace.getConfiguration).mockImplementation((() => ({ get: (_key: string, fallback: unknown) => fallback })) as never);
     coordinator.dispose();

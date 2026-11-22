@@ -62,7 +62,7 @@ For Rust-only work, `node scripts/build.mjs --scope desktop` supplies the JS/ren
 |---|---|---|
 | Type/import/schema checks | Consistent declarations and environment boundaries | Working native operations or rendered resources |
 | Unit/DOM tests | Named behavior under controlled inputs | Every real Host binding or model flow |
-| Extension Host E2E | Suite execution in VS Code; currently activation, registration and New/Stop | Complete Webview, remote, theme or real-model acceptance |
+| Extension Host E2E | Activation, command registration, New/Stop and editor-tab close with a controlled Pi child in VS Code | Complete Webview, remote, theme or real-model acceptance |
 | Desktop GUI smoke | Real WebView2/application IPC, hide/restore and renderer-failure cleanup with controlled Pi | Tray menu Exit/confirmation, real-Pi history or model responses |
 | Packaged verification | The identified ZIP's extracted exe works with isolated data | Later source edits, signing, other OSes or complete user experience |
 | Real two-version MSI upgrade | The tested old→new installation, data retention and automatic relaunch into the same profile | Other versions, cancellation recovery, rollback or package-security guarantees |

@@ -209,32 +209,32 @@
         {
           "command": "frostpi.newSessionInEditorTab",
           "alt": "frostpi.newTemporarySessionInEditorTab",
-          "when": "activeWebviewPanelId == 'frostpi.session'",
+          "when": "activeWebviewPanelId =~ /^frostpi\\.session\\.[0-9]+$/",
           "group": "navigation@1"
         },
         {
           "command": "frostpi.newTemporarySessionInEditorTab",
-          "when": "activeWebviewPanelId == 'frostpi.session'",
+          "when": "activeWebviewPanelId =~ /^frostpi\\.session\\.[0-9]+$/",
           "group": "frostpi@0"
         },
         {
           "command": "frostpi.renameSession",
-          "when": "activeWebviewPanelId == 'frostpi.session'",
+          "when": "activeWebviewPanelId =~ /^frostpi\\.session\\.[0-9]+$/",
           "group": "frostpi@1"
         },
         {
           "command": "frostpi.toggleRunningTurnCollapse",
-          "when": "activeWebviewPanelId == 'frostpi.session'",
+          "when": "activeWebviewPanelId =~ /^frostpi\\.session\\.[0-9]+$/",
           "group": "frostpi@2"
         },
         {
           "command": "frostpi.stopSession",
-          "when": "activeWebviewPanelId == 'frostpi.session'",
+          "when": "activeWebviewPanelId =~ /^frostpi\\.session\\.[0-9]+$/",
           "group": "frostpi-session@1"
         },
         {
           "command": "frostpi.deleteSession",
-          "when": "activeWebviewPanelId == 'frostpi.session'",
+          "when": "activeWebviewPanelId =~ /^frostpi\\.session\\.[0-9]+$/",
           "group": "frostpi-session@2"
         }
       ]
