@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import * as vscode from "vscode";
 
-const tabEvents = vi.hoisted(() => ({ listeners: new Set<(event: { closed: unknown[] }) => void>() }));
+type FakeTab = { input: vscode.TabInputWebview };
+const tabEvents = vi.hoisted(() => ({
+  listeners: new Set<(event: { closed: FakeTab[]; opened: FakeTab[] }) => void>(),
+  groups: [] as Array<{ tabs: FakeTab[] }>,
+}));
 
 vi.mock("vscode", () => ({
   TabInputWebview: class { constructor(readonly viewType: string) {} },
@@ -20,7 +24,8 @@ vi.mock("vscode", () => ({
   window: {
     createWebviewPanel: vi.fn(),
     tabGroups: {
-      onDidChangeTabs: (listener: (event: { closed: unknown[] }) => void) => {
+      get all() { return tabEvents.groups; },
+      onDidChangeTabs: (listener: (event: { closed: FakeTab[]; opened: FakeTab[] }) => void) => {
         tabEvents.listeners.add(listener);
         return { dispose: () => tabEvents.listeners.delete(listener) };
       },
@@ -28,39 +33,62 @@ vi.mock("vscode", () => ({
   },
 }));
 
-function closeTabs(...tabs: Array<{ label: string; viewType?: string }>): void {
-  const closed = tabs.map(({ label, viewType = "mainThreadWebview-frostpi.session" }) => ({ label, input: new vscode.TabInputWebview(viewType) }));
-  for (const listener of tabEvents.listeners) listener({ closed });
+function webviewTab(viewType: string): FakeTab {
+  return { input: new vscode.TabInputWebview(`mainThreadWebview-${viewType}`) };
+}
+
+function changeTabs({ closed = [], opened = [] }: { closed?: FakeTab[]; opened?: FakeTab[] }): void {
+  for (const listener of tabEvents.listeners) listener({ closed, opened });
 }
 
 const { SessionPanelManager } = await import("../../src/extension/webview-host/SessionPanelManager.js");
 
 describe("Session panel lifecycle", () => {
-  it("reports a Session Tab the user closed, in either event order, but not a panel the window disposed", () => {
-    const sessions = new Map([["a", { id: "a", title: "Alpha" }], ["b", { id: "b", title: "Beta" }], ["c", { id: "c", title: "Gamma" }]]);
-    const registry = { sessionView: (id: string) => sessions.get(id) ?? null, hasSession: (id: string) => sessions.has(id), retainProvisionalSession: vi.fn() };
-    const panels = new Map<string, ReturnType<typeof fakePanel>>();
-    const manager = new SessionPanelManager(registry as never, {} as never, () => ({ dispose: vi.fn() }) as never, (sessionId, title) => {
-      const panel = fakePanel();
-      panel.value.title = title;
-      panels.set(sessionId, panel);
-      return panel.value as never;
-    });
+  it("pairs same-titled tabs by instance in either event order and ignores a move or old instance", () => {
+    const registry = { sessionView: () => ({ title: "Same title" }), hasSession: () => true, retainProvisionalSession: vi.fn() };
+    const manager = new SessionPanelManager(registry as never, {} as never, () => ({ dispose: vi.fn() }) as never);
+    const createPanel = vi.mocked(vscode.window.createWebviewPanel);
+    createPanel.mockClear();
+    const a = fakePanel();
+    const b = fakePanel();
+    const reopened = fakePanel();
+    for (const panel of [a, b, reopened]) createPanel.mockReturnValueOnce(panel.value as never);
     const closed: string[] = [];
     manager.onDidCloseTab((sessionId) => closed.push(sessionId));
-    for (const id of ["a", "b", "c"]) manager.open(id);
+    try {
+      manager.open("a");
+      manager.open("b");
+      const aTab = webviewTab(createPanel.mock.calls[0]![0]);
+      const bTab = webviewTab(createPanel.mock.calls[1]![0]);
+      const bMoved = webviewTab(createPanel.mock.calls[1]![0]);
+      tabEvents.groups = [{ tabs: [aTab] }, { tabs: [bMoved] }];
+      changeTabs({ opened: [bMoved], closed: [bTab] });
+      expect(closed).toEqual([]);
 
-    // Tab event first, then the disposal.
-    closeTabs({ label: "FrostPi · Alpha" }, { label: "FrostPi · Alpha", viewType: "other.view" });
-    panels.get("a")!.closeFromUser();
-    // Disposal first, then the tab event.
-    panels.get("b")!.closeFromUser();
-    closeTabs({ label: "FrostPi · Beta" });
-    // A panel disposed without a closed tab, as on window close or reload.
-    panels.get("c")!.closeFromUser();
+      // Disposal of the moved panel alone must not complete the old group's close.
+      b.closeFromUser();
+      expect(closed).toEqual([]);
+      tabEvents.groups = [{ tabs: [aTab] }];
+      changeTabs({ closed: [bMoved] });
+      expect(closed).toEqual(["b"]);
 
-    expect(closed).toEqual(["a", "b"]);
-    manager.dispose();
+      // The remaining panel delivers its two events in the reverse order.
+      tabEvents.groups = [];
+      changeTabs({ closed: [aTab] });
+      a.closeFromUser();
+      expect(closed).toEqual(["b", "a"]);
+
+      manager.open("a");
+      const newTab = webviewTab(createPanel.mock.calls[2]![0]);
+      changeTabs({ closed: [aTab] });
+      reopened.closeFromUser();
+      expect(closed).toEqual(["b", "a"]);
+      changeTabs({ closed: [newTab] });
+      expect(closed).toEqual(["b", "a", "a"]);
+    } finally {
+      tabEvents.groups = [];
+      manager.dispose();
+    }
     expect(tabEvents.listeners.size).toBe(0);
   });
 
@@ -112,7 +140,7 @@ describe("Session panel lifecycle", () => {
     manager.open("session");
 
     expect(createWebviewPanel).toHaveBeenCalledWith(
-      "frostpi.session",
+      expect.stringMatching(/^frostpi\.session\.[0-9]+$/),
       "FrostPi · Session",
       { viewColumn: 1, preserveFocus: false },
       expect.objectContaining({ enableScripts: true }),
@@ -183,8 +211,13 @@ function fakePanel() {
   const disposeListeners = new Set<() => void>();
   const viewStateListeners = new Set<(event: { webviewPanel: { visible: boolean } }) => void>();
   let disposed = false;
+  let title = "";
   const value = {
-    title: "",
+    get title() {
+      if (disposed) throw new Error("Webview is disposed");
+      return title;
+    },
+    set title(value: string) { title = value; },
     visible: true,
     viewColumn: 1,
     webview: {
