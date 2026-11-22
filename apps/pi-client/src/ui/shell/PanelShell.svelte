@@ -4,6 +4,7 @@
   import type { LocalComposerCommands } from "../features/composer/frostPiCommands";
   import type { ProviderUsageSource } from "../features/provider-usage/providerUsageSource";
 
+  import PanelSessionHeader from "../features/sessions/PanelSessionHeader.svelte";
   import SessionInteraction from "./SessionInteraction.svelte";
 
   let { session, localCommands, providerUsageSource }: {
@@ -14,6 +15,7 @@
 </script>
 
 <div class="app-shell panel-shell" class:panel-failed={session.status === "failed"}>
+  <PanelSessionHeader {session} />
   {#if session.status === "failed"}
     <section class="panel-failure" role="status">
       <span class="codicon codicon-error" aria-hidden="true"></span>
