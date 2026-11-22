@@ -31,5 +31,6 @@ updated: 2026-10-29
 - [testing.md](testing.md): choose checks by changed responsibility, run focused or real-Host tests, and interpret their evidence.
 - [release.md](release.md): version, package, verify and publish each product with its release gates and credentials.
 - [troubleshooting.md](troubleshooting.md): investigate runtime, discovery, search or editor symptoms before changing behavior.
+- [Known issues](../known-issues/README.md): check whether an observed issue matches a deferred case before opening a new change.
 
 `.dev/changes/` and `.dev/backlog/` contain task context and historical evidence. Read them when working on that task; current architecture and module contracts do not depend on replaying old sessions or plans.
