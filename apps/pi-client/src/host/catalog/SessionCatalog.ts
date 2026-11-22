@@ -21,7 +21,7 @@ export interface PiSessionCatalogEntry {
   cwd: string;
   title: string;
   /** Pi’s stored name, without the preview or filename fallback used by title. */
-  storedName?: string;
+  storedName?: string | undefined;
   updatedAt: number;
   sessionId?: string;
   preview?: string;
