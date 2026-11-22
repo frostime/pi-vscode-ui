@@ -699,7 +699,7 @@ export class SessionRegistry {
     for (const record of this.#records.values()) {
       if (!record.sessionFile || !isPlaceholderSessionTitle(record.title)) continue;
       const metadata = await readPiSessionMetadata(record.sessionFile);
-      const title = metadata?.title && !looksLikeGeneratedSessionName(metadata.title) ? metadata.title : NEW_SESSION_TITLE;
+      const title = metadata?.storedName ?? NEW_SESSION_TITLE;
       if (title === record.title) continue;
       record.title = title;
       this.#runtimes.get(record.id)?.setDisplayTitle(title);
