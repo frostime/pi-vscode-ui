@@ -7,3 +7,4 @@
 - Search and provider disclosure operate on the currently selected view. Selecting a model continues to use the existing `setModel` bridge action.
 - Refreshing models recomputes both the full catalogue and the Host-computed scope. If scope configuration is missing, unreadable, invalid, or matches no available models, the picker fails open to `All`.
 - The browser Tab key remains normal focus navigation; the visible scope control is the authoritative accessible way to switch views.
+- The selected model name uses the available Composer toolbar width. It truncates only when the adjacent controls leave insufficient space; the trigger's title retains the provider and full model ID. Fixed label-width caps must not shorten names when space is available.

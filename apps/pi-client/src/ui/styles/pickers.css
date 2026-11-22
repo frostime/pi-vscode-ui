@@ -21,9 +21,10 @@
 }
 .composer-chip:hover { background: var(--frost-hover); color: var(--frost-text); }
 .composer-chip:disabled { opacity: .45; }
-.chip-text { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-detail); }
+.chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-detail); }
 .model-picker { position: relative; min-width: 0; flex: 1 1 auto; }
 .model-picker-trigger { max-width: 100%; }
+.model-picker-trigger > .codicon { flex-shrink: 0; }
 .picker-scrim { position: fixed; z-index: 48; inset: 0; padding: 0; background: transparent; }
 .model-picker-panel {
   position: fixed;
@@ -194,13 +195,11 @@
 
 @media (max-width: 330px) {
   .composer-chip { padding-left: 5px; padding-right: 5px; }
-  .chip-text { max-width: 70px; }
   .model-picker-panel { left: 0; width: calc(100vw - 10px); }
   .thinking-picker-panel { right: 0; }
 }
 
 @media (max-width: 430px) {
-  .chip-text { max-width: 92px; }
   .thinking-trigger-button { padding-left: 6px; padding-right: 6px; }
   .thinking-chevron { display: none; }
   .model-picker-panel { left: 0; width: min(300px, calc(100vw - 12px)); }
