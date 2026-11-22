@@ -29,4 +29,22 @@ describe("SessionViewState", () => {
     conversation.appendNotice("Visible conversation update");
     expect(session.read(conversation.read()).conversationContentRevision).toBe(initialContentRevision + 1);
   });
+
+  it("adopts Pi's session name from an info-change event", () => {
+    const conversation = new ConversationProjection();
+    const session = new SessionViewState("session", "/workspace", "New session");
+
+    session.applyEvent({ type: "session_info_changed", name: "26-11-14T17:48_梳理backend" });
+
+    expect(session.read(conversation.read()).title).toBe("26-11-14T17:48_梳理backend");
+  });
+
+  it("keeps the current title when Pi reports a cleared name", () => {
+    const conversation = new ConversationProjection();
+    const session = new SessionViewState("session", "/workspace", "Named session");
+
+    session.applyEvent({ type: "session_info_changed" });
+
+    expect(session.read(conversation.read()).title).toBe("Named session");
+  });
 });

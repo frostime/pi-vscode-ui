@@ -20,6 +20,8 @@ export interface PiSessionCatalogEntry {
   path: string;
   cwd: string;
   title: string;
+  /** Pi’s stored name, without the preview or filename fallback used by title. */
+  storedName?: string | undefined;
   updatedAt: number;
   sessionId?: string;
   preview?: string;
@@ -112,6 +114,7 @@ export async function readPiSessionMetadata(path: string): Promise<PiSessionCata
       path: resolve(path),
       cwd: resolve(expandHome(header.cwd)),
       title: name ?? preview ?? basename(path, ".jsonl"),
+      storedName: name,
       updatedAt: fileStat.mtimeMs,
       ...(typeof header.id === "string" ? { sessionId: header.id } : {}),
       ...(preview ? { preview } : {}),
@@ -141,13 +144,14 @@ async function readFastOrFallbackMetadata(
   if (!name) {
     const fallback = await readPiSessionMetadata(path);
     if (!fallback) return undefined;
-    return { ...fallback, title: fallback.preview ?? basename(path, ".jsonl") };
+    return { ...fallback, title: fallback.preview ?? basename(path, ".jsonl"), storedName: undefined };
   }
 
   return {
     path: resolve(path),
     cwd: resolve(expandHome(scanned.cwd)),
     title: name,
+    storedName: name,
     updatedAt: fileStat.mtimeMs,
     ...(scanned.sessionId !== undefined ? { sessionId: scanned.sessionId } : {}),
   };

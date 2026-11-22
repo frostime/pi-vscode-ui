@@ -25,6 +25,7 @@ export class SessionViewState {
     attachmentLimits: AttachmentLimitsView = { maxImageBytes: 10 * 1024 * 1024, maxImages: 12 },
     collapseTurnTrace = true,
     isEphemeral = false,
+    collapseRunningTurnTrace = true,
   ) {
     this.#view = {
       id,
@@ -43,6 +44,7 @@ export class SessionViewState {
       commands: [],
       attachmentLimits,
       collapseTurnTrace,
+      collapseRunningTurnTrace,
       composerStreamingBehavior: "followUp",
       networkProxy: { mode: "inherit", label: "Inherited", restartRequired: false },
       questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
@@ -109,6 +111,10 @@ export class SessionViewState {
         break;
       case "compaction_end":
         this.#view.isCompacting = false;
+        break;
+      case "session_info_changed":
+        // Pi reports a cleared name as an absent field; only a real name moves the title.
+        if (typeof event.name === "string" && event.name) this.setTitle(event.name);
         break;
       default:
         return;
@@ -182,6 +188,21 @@ export class SessionViewState {
 
   setCollapseTurnTrace(collapseTurnTrace: boolean): void {
     this.#view.collapseTurnTrace = collapseTurnTrace;
+  }
+
+  setCollapseRunningTurnTrace(collapseRunningTurnTrace: boolean): void {
+    this.#view.collapseRunningTurnTrace = collapseRunningTurnTrace;
+  }
+
+  /** A replaced conversation keeps the process, model catalogue and settings, and nothing of the old transcript. */
+  resetForNewConversation(title: string): void {
+    this.#view.title = title;
+    delete this.#view.sessionFile;
+    delete this.#view.sessionId;
+    delete this.#view.stats;
+    delete this.#view.cacheHitPercent;
+    delete this.#view.composerSeed;
+    delete this.#view.error;
   }
 
   setComposerStreamingBehavior(streamingBehavior: SessionViewModel["composerStreamingBehavior"]): void {

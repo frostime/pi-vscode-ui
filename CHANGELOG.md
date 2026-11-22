@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Start new sessions, including temporary ones, directly in VS Code editor tabs without changing the sidebar selection. Opt in to closing the session with its tab via `frostpi.session.closeWithEditorTab`.
+- Rename a session from its editor tab or with `/name` and `/alias` in the Composer.
+- Start a new conversation in place with `/new`, keeping saved history available to resume. `/reload` reloads Pi extensions, skills, and other resources without restarting Pi.
+- Fork a saved message while Pi is still responding. The original reply keeps running, and the fork can be canceled before it joins the session list.
+- Stop and restart Pi without closing the session or losing its history. **Stop Response** still cancels only the current reply.
+- Delete a saved session without deleting its forks. VS Code tries the trash first; Desktop deletes the file permanently after confirmation.
+- Focus View folds consecutive tool calls and reasoning while a turn runs, leaving replies visible. It is on by default and can be turned off independently of finished-turn folding.
+
+### Changed
+
+- Open a finished turn's **Worked** summary to read interim replies without expanding every tool call. Changes to turn folding settings now apply immediately.
+
+### Fixed
+
+- Open sessions in editor tabs directly from the session list, even if they have not been shown in the sidebar.
+- Wait for history to load before sending a prompt that restarts a stopped or failed session.
+- Resume Pi sessions with their saved model and thinking level instead of overriding them with defaults from `frostpi.pi.arguments`.
+- Sync names set by Pi as they change. On startup, recover saved names for sessions still labeled `New session`.
+
 ## [0.16.7] - 2026-11-16
 
 ### Fixed
