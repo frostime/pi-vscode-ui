@@ -13,7 +13,7 @@ afterEach(async () => { for (const directory of directories.splice(0)) await rm(
 async function binDirectory(files: readonly string[]): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "frostpi-actions-bin-"));
   directories.push(directory);
-  for (const file of files) await writeFile(join(directory, file), "");
+  for (const file of files) await writeFile(join(directory, file), "", { mode: 0o755 });
   return directory;
 }
 

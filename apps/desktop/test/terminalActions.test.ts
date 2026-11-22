@@ -1,6 +1,6 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProjectActions } from "../src/main/projectActions.js";
 import { DesktopSettingsStore } from "../src/main/settings/DesktopSettingsStore.js";
@@ -36,8 +36,8 @@ describe("terminal Actions", () => {
     await actions.run("custom:dev", "C:/repo");
     expect(launch).toHaveBeenCalledTimes(2);
     for (const [executable, args] of launch.mock.calls) {
-      expect(executable).toBe(join("C:/Tools", terminal ? "wt.exe" : shell));
-      const prefix = terminal ? ["-w", "FrostPi", "new-tab", join("C:/Tools", shell)] : [];
+      expect(executable).toBe(resolve("C:/Tools", terminal ? "wt.exe" : shell));
+      const prefix = terminal ? ["-w", "FrostPi", "new-tab", resolve("C:/Tools", shell)] : [];
       expect(args).toEqual([...prefix, "-NoLogo", "-NoExit", "-EncodedCommand", expect.any(String)]);
       expect(Buffer.from(args.at(-1)!, "base64").toString("utf16le"))
         .toBe("Set-Location -LiteralPath 'C:/repo' -ErrorAction Stop\nGet-Location");
