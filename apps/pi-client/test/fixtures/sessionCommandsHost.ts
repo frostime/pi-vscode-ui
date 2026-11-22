@@ -114,13 +114,15 @@ export async function sessionCommandsHost(piArguments: string[] = [], { adapters
         && view(sessionId).commands.length > 0 && view(sessionId).sessionTreeAvailable === treeAdapterLoads);
       return sessionId;
     },
-    /** Sends a prompt and waits until its turn is persisted and settled. */
+    /** Sends a prompt and waits for completion and, in saved sessions, its Pi entry ID. */
     async converse(sessionId: string, text: string): Promise<void> {
       await registry.sendPrompt(sessionId, text, []);
       await waitFor(() => {
         const session = view(sessionId);
+        const turn = session.conversationItems.at(-1);
         return !session.isStreaming && session.status === "ready" && userPrompts(session).at(-1) === text
-          && session.conversationItems.at(-1)?.type === "turn" && turnStatus(session) === "completed";
+          && turn?.type === "turn" && turn.status === "completed"
+          && (session.isEphemeral || Boolean(turn.userMessage?.sourceEntryId));
       });
     },
     async dispose(): Promise<void> {
@@ -135,9 +137,4 @@ export function userPrompts(session: SessionViewModel): string[] {
   return session.conversationItems.flatMap((item) => item.type === "turn" && item.userMessage
     ? [item.userMessage.blocks.map((block) => block.type === "text" ? block.text : "").join("")]
     : []);
-}
-
-function turnStatus(session: SessionViewModel): string | undefined {
-  const last = session.conversationItems.at(-1);
-  return last?.type === "turn" ? last.status : undefined;
 }
