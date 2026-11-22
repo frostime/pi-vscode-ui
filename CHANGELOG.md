@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Open sessions in editor tabs directly from the session list, even if they have not been shown in the sidebar.
 - Wait for history to load before sending a prompt that restarts a stopped or failed session.
 - Keep the current reply marked as running when the previous reply's status arrives late, so **Stop Response**, Fork, and `/new` use the correct state.
+- Keep tool calls and the answer in one turn when a provider reports that the reply has stopped but Pi still has tools to run.
 - Resume Pi sessions with their saved model and thinking level instead of overriding them with defaults from `frostpi.pi.arguments`.
 - Sync names set by Pi as they change. On startup, recover saved names for sessions still labeled `New session`.
 
