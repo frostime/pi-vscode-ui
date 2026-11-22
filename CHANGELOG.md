@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A prompt sent to a session that had stopped or failed could be refused with "Wait for conversation history to finish loading" while FrostPi started it again. The prompt now waits for the history and is sent.
 - Opening a session in an editor tab from the session list failed with "The Webview action does not target the Session displayed by this surface" until that session had been shown in the sidebar. A restored session opened this way now also starts and loads its history.
 - A model set in `frostpi.pi.arguments` (`--model`, `--provider`, `--thinking`) applies to new conversations only. Pi used to apply it to every resumed session too, replacing the model that session was using.
+- Show a session title as soon as Pi names or renames it. At startup, restore the stored Pi name for sessions still labeled `New session`.
 
 ### Changed
 

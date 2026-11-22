@@ -62,6 +62,9 @@ describe("Host slash commands through the real Registry and child-process path",
       const { registry, view } = fixture;
       const sessionId = await fixture.startSession();
       await fixture.converse(sessionId, "first");
+      // Start the busy-rename scenario after the previous prompt is reconciled with Pi history.
+      await fixture.waitFor(() => view(sessionId).conversationItems.some((item) =>
+        item.type === "turn" && Boolean(item.userMessage?.sourceEntryId)));
       await registry.sendPrompt(sessionId, "hold", []);
       await fixture.waitFor(() => view(sessionId).isStreaming);
 

@@ -33,6 +33,9 @@ export interface RegistryToast {
 type SystemNotificationEvent = "inputRequired" | "failed" | "completed";
 type DiscoverSessionWorkingDirectories = typeof discoverSessionWorkingDirectories;
 
+/** Title FrostPi shows until Pi names the session; also the marker for an unnamed record. */
+const NEW_SESSION_TITLE = "New session";
+
 export type ForkResultSelection = "select-result" | "preserve-sidebar-selection";
 
 export interface CreateSessionOptions {
@@ -157,7 +160,7 @@ export class SessionRegistry {
     if (!this.#host.workspace.getWorkspaceFolders().length) return;
     await this.#reconcilePersistedWorkingDirectories();
     this.#assertOpen();
-    await this.#repairGeneratedTitles();
+    await this.#repairPlaceholderTitles();
     this.#assertOpen();
     // Never invent a new session on open. Empty workspaces stay on the onboarding home until
     // the user creates or resumes a session. Optionally start only an already-selected one.
@@ -337,7 +340,7 @@ export class SessionRegistry {
     const id = randomUUID();
     const record: PersistedSessionRecord = {
       id,
-      title: "New session",
+      title: NEW_SESSION_TITLE,
       cwd: directory.cwd,
       ...(ephemeral ? { ephemeral: true } : {}),
       updatedAt: Date.now(),
@@ -1002,12 +1005,14 @@ export class SessionRegistry {
     return false;
   }
 
-  async #repairGeneratedTitles(): Promise<void> {
+  /** Adopt the name already stored in Pi's file for records whose title is still a placeholder. */
+  async #repairPlaceholderTitles(): Promise<void> {
     let changed = false;
     for (const record of this.#records.values()) {
-      if (!record.sessionFile || !looksLikeGeneratedSessionName(record.title)) continue;
+      if (!record.sessionFile || !isPlaceholderSessionTitle(record.title)) continue;
       const metadata = await readPiSessionMetadata(record.sessionFile);
-      const title = metadata?.title && !looksLikeGeneratedSessionName(metadata.title) ? metadata.title : "New session";
+      const title = metadata?.storedName ?? NEW_SESSION_TITLE;
+      if (title === record.title) continue;
       record.title = title;
       this.#runtimes.get(record.id)?.setDisplayTitle(title);
       changed = true;
@@ -1464,4 +1469,9 @@ function normalizedPath(path: string): string {
 
 function looksLikeGeneratedSessionName(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?Z?_[0-9a-f-]{8,}$/i.test(value);
+}
+
+/** A record title that only marks an unnamed session: FrostPi's own placeholder or a catalog file-name fallback. */
+function isPlaceholderSessionTitle(value: string): boolean {
+  return value === NEW_SESSION_TITLE || looksLikeGeneratedSessionName(value);
 }

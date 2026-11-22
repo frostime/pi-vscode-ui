@@ -211,6 +211,33 @@ describe("FrostPi session collection", () => {
     expect(exact.snapshot().sessions).toEqual([expect.objectContaining({ id: "saved-a", status: "stopped" })]);
   });
 
+  it("repairs startup placeholders with stored Pi names, not prompt previews", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "frostpi-registry-titles-"));
+    testEnvironment.cwd = cwd;
+    const { host, logger } = createTestHost();
+    const sessions = await Promise.all([
+      { id: "unnamed" },
+      { id: "named", name: "A name chosen in Pi" },
+    ].map(async ({ id, name }) => {
+      const sessionFile = join(cwd, `${id}.jsonl`);
+      await writeFile(sessionFile, [
+        { type: "session", id, cwd },
+        { type: "message", message: { role: "user", content: "Prompt preview only" } },
+        ...(name ? [{ type: "session_info", name }] : []),
+      ].map((entry) => JSON.stringify(entry)).join("\n") + "\n");
+      return { id, title: "New session", cwd, sessionFile, updatedAt: 1 };
+    }));
+    const stored = { version: 1, activeSessionId: null, sessions };
+    host.storage.get = (<T>() => stored as T);
+    const registry = new SessionRegistry(host, { logger, restoreSelection: "saved-only" });
+    registries.push(registry);
+
+    await registry.ensureInitialSession();
+
+    expect(registry.sessionView("unnamed")?.title).toBe("New session");
+    expect(registry.sessionView("named")?.title).toBe("A name chosen in Pi");
+  });
+
   it("drains queued metadata before shutdown and reports a rejected save without swallowing it", async () => {
     testEnvironment.cwd = await mkdtemp(join(tmpdir(), "frostpi-registry-flush-"));
     testEnvironment.quickPickCwd = testEnvironment.cwd;
