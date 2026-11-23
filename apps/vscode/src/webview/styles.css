@@ -1,0 +1,4 @@
+/* Let VS Code own the available width in sidebars and editor tabs. */
+.frostpi-root {
+  --content-max-width: 100%;
+}
