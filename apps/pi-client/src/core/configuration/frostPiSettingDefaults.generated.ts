@@ -18,5 +18,5 @@ export const frostPiSettingDefaults = {
   "network.proxy.noProxy": "localhost,127.0.0.1,::1",
   "composer.fileMentions.respectSearchExclude": true,
   "composer.fileMentions.respectIgnoreFiles": true,
-  "composer.fileMentions.followSymlinks": true
+  "composer.fileMentions.followSymlinks": false
 } as const;
