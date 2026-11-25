@@ -274,7 +274,7 @@ export class ConversationProjection {
         this.#endAgentAttempt(event.willRetry === true);
         break;
       case "agent_settled":
-        this.#settleAgentTurn();
+        this.#settleAgentTurn(event.aborted === true);
         break;
       case "message_start":
         if (
@@ -414,7 +414,7 @@ export class ConversationProjection {
       const turn = this.#persistedTurnFor(entry.id, timestamp);
       const source = persistedAssistantSource(entry);
       if (!source) return;
-      const status = assistantMessageStatus(message.stopReason);
+      const status = assistantMessageStatus(message.stopReason, message.errorMessage);
       this.#validatedBlocks(message.content, undefined, source.fallbackViewMessageId);
       const placement = this.#store.placeAssistant({
         turnId: turn.id,
@@ -430,7 +430,7 @@ export class ConversationProjection {
       });
       if (placement.kind === "conflict") throw new Error(`Persisted assistant placement conflict: ${placement.reason}`);
       this.#analyzeAssistantMessage({ turnId: turn.id, viewMessageId: placement.viewMessageId, status, timestamp }, message);
-      if (message.stopReason === "error") {
+      if (status === "error") {
         this.#persistedTurn = { turnId: turn.id, phase: "error-awaiting-continuation" };
       } else if (!continuesWithTools(message.stopReason, assistantPartsFromMessage(message))) {
         this.#setTurnStatus(turn.id, statusToTurnStatus(status), timestamp);
@@ -532,12 +532,14 @@ export class ConversationProjection {
     this.#pendingLiveErrorTurnId = null;
   }
 
-  #settleAgentTurn(): void {
+  #settleAgentTurn(aborted: boolean): void {
     this.#recoveringQueueContent = false;
     this.#store.finalizeUnresolvedTools();
     if (this.#activeTurnId) {
       const turn = this.#turn(this.#activeTurnId);
-      if (turn.status === "running") {
+      if (aborted && turn.status !== "aborted") {
+        this.#setTurnStatus(turn.id, "aborted", Date.now());
+      } else if (turn.status === "running") {
         this.#setTurnStatus(turn.id, this.#pendingLiveErrorTurnId === turn.id ? "error" : "completed", Date.now());
       }
     }
@@ -604,7 +606,7 @@ export class ConversationProjection {
     const turn = this.#activeTurn() ?? this.#ensureLiveTurn(timestamp);
     this.#activeTurnId = turn.id;
     const status: MessageStatus = message.phase === "final"
-      ? assistantMessageStatus(message.stopReason)
+      ? assistantMessageStatus(message.stopReason, message.errorMessage)
       : message.legacyFailure ?? "streaming";
     const placement = this.#store.placeAssistant({
       turnId: turn.id,
@@ -1134,6 +1136,10 @@ function assistantActivities(
     const errorIndex = Math.max(-1, ...parts.map((part) => part.contentIndex)) + 1;
     activities.push(responseActivity(messageId, errorIndex, [{ type: "error", text: errorMessage }], status, timestamp));
   }
+  if (status === "aborted" && !activities.some((activity) => activity.type === "response")) {
+    const stoppedIndex = Math.max(-1, ...parts.map((part) => part.contentIndex)) + 1;
+    activities.push(responseActivity(messageId, stoppedIndex, [], status, timestamp));
+  }
   return activities;
 }
 
@@ -1305,8 +1311,9 @@ function continuesWithTools(stopReason: unknown, parts: readonly AdaptedAssistan
   return stopReason !== "error" && stopReason !== "aborted" && parts.some((part) => part.type === "tool");
 }
 
-function assistantMessageStatus(stopReason: unknown): MessageStatus {
-  if (stopReason === "aborted") return "aborted";
+function assistantMessageStatus(stopReason: unknown, errorMessage: unknown): MessageStatus {
+  // Pi can serialize a standard AbortError as an error when aborting in a tool.
+  if (stopReason === "aborted" || (stopReason === "error" && errorMessage === "This operation was aborted")) return "aborted";
   if (stopReason === "error") return "error";
   return "complete";
 }
