@@ -22,7 +22,19 @@ interface SessionTab {
 
 const SESSION_VIEW_TYPE_PREFIX = "frostpi.session.";
 const VSCODE_WEBVIEW_VIEW_TYPE_PREFIX = "mainThreadWebview-";
-let nextPanelId = 0;
+
+/**
+ * Session Tabs numbered up to this come back after VS Code restarts. Each number is a
+ * Webview type of its own, which needs its own panel serializer and an
+ * `onWebviewPanel:frostpi.session.<n>` activation event in the manifest; a tab takes the
+ * lowest free number, so only more open tabs than this are not restored.
+ */
+export const RESTORABLE_SESSION_TABS = 32;
+
+/** The Webview type of the Session Tab numbered `n`. */
+export function sessionTabViewType(n: number): string {
+  return `${SESSION_VIEW_TYPE_PREFIX}${n}`;
+}
 
 export class SessionPanelManager implements vscode.Disposable {
   readonly #registry: SessionRegistry;
@@ -34,6 +46,9 @@ export class SessionPanelManager implements vscode.Disposable {
   readonly #changeEmitter = new vscode.EventEmitter<void>();
   readonly #closeEmitter = new vscode.EventEmitter<string>();
   readonly #subscriptions: vscode.Disposable[] = [];
+  /** When each Session Tab number was last handed out, by a counter. */
+  readonly #issued = new Map<string, number>();
+  #issueCount = 0;
   #disposed = false;
 
   readonly onDidChange = this.#changeEmitter.event;
@@ -58,10 +73,9 @@ export class SessionPanelManager implements vscode.Disposable {
       title,
       { viewColumn: viewColumn ?? vscode.ViewColumn.Active, preserveFocus: false },
       {
-        enableScripts: true,
+        ...this.#webviewOptions(),
         // Keep a hidden Session Tab mounted so returning to it does not show the bootstrap UI.
         retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(this.#extensionUri, "dist", "webview")],
       },
     ));
     this.#subscriptions.push(vscode.window.tabGroups.onDidChangeTabs((event) => this.#tabGroupsChanged(event)));
@@ -98,17 +112,80 @@ export class SessionPanelManager implements vscode.Disposable {
     const session = this.#registry.sessionView(sessionId);
     if (!session) throw new Error("This FrostPi Session no longer exists.");
 
-    const viewType = `${SESSION_VIEW_TYPE_PREFIX}${++nextPanelId}`;
-    const panel = this.#createPanel(viewType, panelTitle(session.title), viewColumn);
+    const viewType = this.#freeViewType();
+    this.#attach(this.#createPanel(viewType, panelTitle(session.title), viewColumn), sessionId, viewType);
+  }
+
+  /**
+   * Takes over a Session Tab VS Code restored after a restart, in the group and position
+   * it had and under its own Webview type. A tab whose Session is gone, such as a Temporary
+   * Session, or that is already open elsewhere, is closed instead. Returns whether the tab
+   * was kept.
+   */
+  restore(panel: vscode.WebviewPanel, sessionId: string | undefined): boolean {
+    const session = sessionId ? this.#registry.sessionView(sessionId) : null;
+    const viewType = sessionTabViewTypeOf(panel.viewType);
+    if (!sessionId || !session || !viewType || this.#tabs.get(sessionId)?.handle) {
+      panel.dispose();
+      return false;
+    }
+    panel.webview.options = this.#webviewOptions();
+    panel.title = panelTitle(session.title);
+    try {
+      this.#attach(panel, sessionId, viewType);
+    } catch {
+      return false;
+    }
+    return true;
+  }
+
+  #webviewOptions(): vscode.WebviewOptions {
+    return { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.#extensionUri, "dist", "webview")] };
+  }
+
+  /**
+   * A Session Tab number no tab uses, within the restorable range while one is free there.
+   * A tab VS Code restored that no serializer has taken over yet, and a closed tab whose
+   * close has not finished, still hold theirs. Numbers not handed out since activation come
+   * first, then the one handed out longest ago, so a late event of a closed tab is unlikely
+   * to meet a new tab of the same number.
+   */
+  #freeViewType(): string {
+    const used = new Set([...this.#tabs.values()].map(({ viewType }) => viewType));
+    for (const group of vscode.window.tabGroups.all) {
+      for (const tab of group.tabs) {
+        const viewType = sessionViewType(tab);
+        if (viewType) used.add(viewType);
+      }
+    }
+    let choice: string | undefined;
+    for (let n = 1; n <= RESTORABLE_SESSION_TABS; n += 1) {
+      const viewType = sessionTabViewType(n);
+      if (used.has(viewType)) continue;
+      const issued = this.#issued.get(viewType);
+      if (issued === undefined) {
+        choice = viewType;
+        break;
+      }
+      if (choice === undefined || issued < this.#issued.get(choice)!) choice = viewType;
+    }
+    for (let n = RESTORABLE_SESSION_TABS + 1; choice === undefined; n += 1) {
+      if (!used.has(sessionTabViewType(n))) choice = sessionTabViewType(n);
+    }
+    return choice;
+  }
+
+  #attach(panel: vscode.WebviewPanel, sessionId: string, viewType: string): void {
     let connection: WebviewConnection | undefined;
     try {
-      panel.webview.html = createWebviewHtml(panel.webview, this.#extensionUri);
+      panel.webview.html = createWebviewHtml(panel.webview, this.#extensionUri, sessionId);
       const endpoint = panelEndpoint(panel, sessionId);
       connection = this.#createConnection(endpoint);
       if (!this.#registry.hasSession(sessionId)) throw new Error("The Session was removed while its editor tab was opening.");
 
       const handle: SessionPanelHandle = { sessionId, panel, connection };
       const tab: SessionTab = { viewType, handle, lastTabClosed: false };
+      this.#issued.set(viewType, ++this.#issueCount);
       this.#registry.retainProvisionalSession(sessionId);
       this.#tabs.set(sessionId, tab);
       panel.onDidDispose(() => this.#forgetDisposedPanel(handle, tab));
@@ -196,7 +273,11 @@ export class SessionPanelManager implements vscode.Disposable {
 
 function sessionViewType(tab: vscode.Tab): string | undefined {
   if (!(tab.input instanceof vscode.TabInputWebview)) return undefined;
-  const raw = tab.input.viewType;
+  return sessionTabViewTypeOf(tab.input.viewType);
+}
+
+/** A Session Tab's Webview type, with or without the prefix VS Code's tab model adds. */
+function sessionTabViewTypeOf(raw: string): string | undefined {
   const viewType = raw.startsWith(VSCODE_WEBVIEW_VIEW_TYPE_PREFIX) ? raw.slice(VSCODE_WEBVIEW_VIEW_TYPE_PREFIX.length) : raw;
   return viewType.startsWith(SESSION_VIEW_TYPE_PREFIX) ? viewType : undefined;
 }
