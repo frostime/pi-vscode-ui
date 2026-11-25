@@ -22,6 +22,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger,
     sessionTreeArtifactPath: context.asAbsolutePath("dist/pi-extensions/session-tree.js"),
     questionToolArtifactPath: context.asAbsolutePath("dist/pi-extensions/question-tool.js"),
+    sideQuestionArtifactPath: context.asAbsolutePath("dist/pi-extensions/side-question.js"),
   });
   const coordinator = new SessionWebviewCoordinator(registry, logger, context.extensionUri, () => host.proxyCredentials.get(), host);
   const viewProvider = new PiViewProvider(context.extensionUri, coordinator);

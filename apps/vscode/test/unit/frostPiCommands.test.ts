@@ -26,9 +26,9 @@ describe("FrostPi composer commands", () => {
   it("keeps the Host commands a Session lists for its own runtime", () => {
     const hostListed = [
       { name: "new", description: "Start a new conversation", source: "frostpi" },
-      { name: "reload", description: "Reload Pi resources", source: "frostpi" },
+      { name: "btw", description: "Side question", source: "frostpi" },
     ];
-    expect(withFrostPiCommands(hostListed).map((command) => command.name)).toEqual(["compact", "resume", "new", "reload"]);
+    expect(withFrostPiCommands(hostListed).map((command) => command.name)).toEqual(["compact", "resume", "new", "btw"]);
   });
 
   it("replaces only names occupied by the supplied local command set", () => {
