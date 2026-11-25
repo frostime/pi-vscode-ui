@@ -29,13 +29,18 @@ export interface DispatchConnection extends ConnectionContext {
   deliverQueuedPromptRecovery(requestId: string, sessionId: string, outcome: QueuedPromptRecoveryOutcome): void;
 }
 
+export interface PanelPlacement {
+  sameGroupAs: string;
+}
+
 export interface WebviewActionDispatcherDependencies {
   host: ClientHost;
   registry: SessionRegistry;
   getProxyCredentials: () => Promise<ProxyCredentials | undefined>;
   logger: RuntimeLogger;
   drafts: ComposerDraftCache;
-  openPanel(sessionId: string, draft?: ComposerDraftView): void | Promise<void>;
+  /** `placement.sameGroupAs` opens a new tab in the editor group of that Session's tab. */
+  openPanel(sessionId: string, draft?: ComposerDraftView, placement?: PanelPlacement): void | Promise<void>;
   revealPanel(sessionId: string): void | Promise<void>;
   openComposerEditor(sessionId: string, text: string): Promise<"opened" | "already-open">;
   /**
@@ -94,6 +99,7 @@ export class WebviewActionDispatcher {
   readonly #logger: RuntimeLogger;
   readonly #drafts: ComposerDraftCache;
   readonly #openPanel: (sessionId: string, draft?: ComposerDraftView) => void | Promise<void>;
+  readonly #openPanelInGroupOf: (sessionId: string, sourceSessionId: string) => void | Promise<void>;
   readonly #revealPanel: (sessionId: string) => void | Promise<void>;
   readonly #openComposerEditor: (sessionId: string, text: string) => Promise<"opened" | "already-open">;
   readonly #createSessionPanel: ((sourceSessionId: string | null, ephemeral: boolean) => Promise<unknown>) | undefined;
@@ -107,6 +113,7 @@ export class WebviewActionDispatcher {
     this.#openPanel = (sessionId, draft) => draft
       ? dependencies.openPanel(sessionId, draft)
       : dependencies.openPanel(sessionId);
+    this.#openPanelInGroupOf = (sessionId, sourceSessionId) => dependencies.openPanel(sessionId, undefined, { sameGroupAs: sourceSessionId });
     this.#revealPanel = (sessionId) => dependencies.revealPanel(sessionId);
     this.#openComposerEditor = (sessionId, text) => dependencies.openComposerEditor(sessionId, text);
     this.#createSessionPanel = dependencies.createSessionPanel
@@ -288,7 +295,8 @@ export class WebviewActionDispatcher {
         connection.post({ type: "forkResult", requestId: message.requestId, ok: true, ...result });
         if (!result.cancelled && result.forkSessionId && connection.surface.kind === "panel") {
           try {
-            await this.#openPanel(result.forkSessionId);
+            // Beside its source, also when focus moved to another group while the Fork started.
+            await this.#openPanelInGroupOf(result.forkSessionId, message.sessionId);
           } catch (error) {
             this.#logger.error(`Fork result Session Tab failed to open for ${result.forkSessionId}`, error);
             connection.post({

@@ -22,7 +22,7 @@ Use this map to locate a feature's source and nearest contract. Paths are worksp
 
 - Shared Git worktree discovery: `apps/pi-client/src/host/sessions/SessionWorkingDirectories.ts`; history scan/picker: `apps/pi-client/src/host/catalog/`.
 - Tree interaction: `apps/pi-client/src/host/pickers/SessionTreePicker.ts`; tree projection/private bridge: `apps/pi-client/src/core/sessions/tree/`.
-- Fork of a busy session in a second Pi process: `SessionRegistry.#forkInNewProcess`.
+- Fork in a second Pi process, keeping the source running and its model choice: `SessionRegistry.#forkInNewProcess`; its tab opens in the source tab's group (`SessionWebviewCoordinator.openPanel`).
 - Model-selection flags dropped on resume: `apps/pi-client/src/core/configuration/resumeLaunchArguments.ts`.
 - Closing a session with its editor tab: `SessionPanelManager.onDidCloseTab` and `SessionWebviewCoordinator`.
 - Stopping a session while keeping it listed, and deleting it with Pi's file: `SessionRegistry.stopSession` and `deleteSession`; the trash is `ClientHost.moveToTrash`.

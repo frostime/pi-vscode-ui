@@ -179,7 +179,7 @@ FrostPi exposes Pi's session-tree workflow as graphical conversation controls:
 
 - **Branch here** restores an earlier user prompt and continues from it as another path in the same Pi session and session file.
 - **Switch branch** uses a native VS Code picker to move between existing paths, with message count, last update, ending context, and optional branch summaries.
-- **Fork** creates a separate Pi session and FrostPi session instead of another path in the current tree. It also works while a reply is running, including from the message that reply answers.
+- **Fork** creates a separate Pi session and FrostPi session instead of another path in the current tree. The current session keeps running, also while a reply is running, including from the message that reply answers. The fork keeps the session's model and thinking level, and opens in the same tab group as its source tab.
 
 Pi remains authoritative for tree navigation and context reconstruction. FrostPi provides the GUI compatibility layer and keeps Tree navigation distinct from Fork's independent-session lifecycle.
 

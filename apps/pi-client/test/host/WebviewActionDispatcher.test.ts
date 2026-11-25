@@ -263,7 +263,7 @@ describe("Session Tab Host authorization", () => {
     expect(posted).toMatchObject([{ type: "toast", level: "info" }]);
   });
 
-  it("preserves sidebar selection policy for panel Fork and opens the distinct result tab", async () => {
+  it("preserves sidebar selection policy for panel Fork and opens the result tab in the source tab's group", async () => {
     const { dispatcher, registry, openPanel, posted, connection } = setup();
     await dispatcher.dispatch({
       type: "forkMessage",
@@ -274,7 +274,7 @@ describe("Session Tab Host authorization", () => {
     } as never, connection);
 
     expect(registry.forkMessage).toHaveBeenCalledWith("source", "entry", "preserve-sidebar-selection");
-    expect(openPanel).toHaveBeenCalledWith("fork");
+    expect(openPanel).toHaveBeenCalledWith("fork", undefined, { sameGroupAs: "source" });
     expect(posted).toContainEqual(expect.objectContaining({ type: "forkResult", ok: true, forkSessionId: "fork" }));
   });
 

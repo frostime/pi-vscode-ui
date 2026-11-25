@@ -442,16 +442,8 @@ export class SessionRuntime {
     hadConversation: boolean,
   ): Promise<{ cancelled: false }> {
     try {
-      let state = await api.getState();
       // A new Pi session starts on Pi's default model; /new keeps the one in use.
-      let restored = false;
-      if (previousModel && (state.model?.provider !== previousModel.provider || state.model?.id !== previousModel.id)) {
-        restored = await api.setModel(previousModel.provider, previousModel.id).then(() => true, () => false);
-      }
-      if (restored || state.thinkingLevel !== previousThinkingLevel) {
-        await api.setThinkingLevel(previousThinkingLevel).catch(() => undefined);
-        state = await api.getState();
-      }
+      const state = await keepModelChoice(api, { model: previousModel, thinkingLevel: previousThinkingLevel });
       const [entryData, stats, commands] = await Promise.all([
         api.getEntries(),
         api.getSessionStats().catch(() => undefined),
@@ -545,10 +537,14 @@ export class SessionRuntime {
     }
   }
 
-  async reconcileFork(name: string, composerSeed: ComposerSeedView): Promise<void> {
+  /**
+   * Pi starts a Fork on the model and thinking level saved at the fork point, or its
+   * defaults; `modelChoice` keeps the source's instead.
+   */
+  async reconcileFork(name: string, composerSeed: ComposerSeedView, modelChoice?: ModelChoice): Promise<void> {
     const api = this.#requireApi();
     await api.setSessionName(name);
-    const state = await api.getState();
+    const state = modelChoice ? await keepModelChoice(api, modelChoice) : await api.getState();
     const [entryData, stats, commands] = await Promise.all([
       api.getEntries(),
       api.getSessionStats().catch(() => undefined),
@@ -1363,4 +1359,25 @@ function delay(ms: number): Promise<void> {
 
 function conversationTurns(view: SessionViewModel): AgentTurnView[] {
   return view.conversationItems.filter((item): item is AgentTurnView => item.type === "turn");
+}
+
+export interface ModelChoice {
+  model: SessionViewModel["model"];
+  thinkingLevel: ThinkingLevel;
+}
+
+/**
+ * Puts a session that Pi just replaced back on the model and thinking level chosen before.
+ * Best effort: a model Pi no longer offers leaves Pi's own choice. Returns the state after.
+ */
+async function keepModelChoice(api: PiRpcApi, choice: ModelChoice): Promise<Awaited<ReturnType<PiRpcApi["getState"]>>> {
+  const state = await api.getState();
+  const { model, thinkingLevel } = choice;
+  let restored = false;
+  if (model && (state.model?.provider !== model.provider || state.model?.id !== model.id)) {
+    restored = await api.setModel(model.provider, model.id).then(() => true, () => false);
+  }
+  if (!restored && state.thinkingLevel === thinkingLevel) return state;
+  await api.setThinkingLevel(thinkingLevel).catch(() => undefined);
+  return api.getState();
 }

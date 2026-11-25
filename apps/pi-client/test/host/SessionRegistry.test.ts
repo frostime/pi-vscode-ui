@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -592,7 +593,7 @@ process.on("SIGTERM", () => process.exit(0));
     await expect(registry.sendPrompt(sessionId, "Too early", [])).rejects.toThrow("Wait for conversation history");
   });
 
-  it("keeps the original identity across cancellation, recovery, and a successful temporary Fork", async () => {
+  it("forks in its own Pi process, keeping the source running and its model choice", async () => {
     const dir = await mkdtemp(join(tmpdir(), "frostpi-registry-fork-"));
     const sessionFile = join(dir, "source.jsonl");
     await writeFile(sessionFile, `${JSON.stringify({ type: "session", version: 3, id: "source", cwd: dir })}\n`);
@@ -605,6 +606,8 @@ const sourceFile = sessionIndex >= 0 ? process.argv[sessionIndex + 1] : undefine
 let sessionFile = sourceFile;
 let sessionId = "source";
 let sessionName = "Source";
+let model = null;
+let thinkingLevel = "off";
 let failReconcile = false;
 let pendingForkRequestId;
 let pendingForkEntryId;
@@ -631,7 +634,9 @@ process.stdin.on("data", chunk => {
     const command = JSON.parse(input.slice(0, index));
     input = input.slice(index + 1);
     const response = { type: "response", id: command.id, success: true };
-    if (command.type === "get_state") response.data = { model: null, thinkingLevel: "off", isStreaming: false, isCompacting: false, sessionFile, sessionId, sessionName };
+    if (command.type === "get_state") response.data = { model, thinkingLevel, isStreaming: false, isCompacting: false, sessionFile, sessionId, sessionName };
+    else if (command.type === "set_model") response.data = model = { provider: command.provider, id: command.modelId, name: command.modelId };
+    else if (command.type === "set_thinking_level") thinkingLevel = command.level;
     else if (command.type === "get_messages") response.data = { messages };
     else if (command.type === "get_entries") response.data = { entries, leafId: entries.at(-1)?.id ?? null };
     else if (command.type === "get_available_models") response.data = { models: [] };
@@ -640,9 +645,11 @@ process.stdin.on("data", chunk => {
     else if (command.type === "fork") {
       if (command.entryId === "cancel-entry") {
         response.data = { text: "Cancel this", cancelled: true };
-      } else if (command.entryId === "wait-entry" || command.entryId === "preserve-entry") {
+      } else if (command.entryId === "wait-entry") {
+        // An extension asks before forking; the test watches for this file instead of the question.
         pendingForkRequestId = command.id;
         pendingForkEntryId = command.entryId;
+        fs.writeFileSync(path.join(path.dirname(sourceFile), "fork-asked"), "1");
         process.stdout.write(JSON.stringify({ type: "extension_ui_request", id: "fork-confirm", method: "confirm", message: "Fork?" }) + "\n");
         continue;
       } else {
@@ -652,7 +659,8 @@ process.stdin.on("data", chunk => {
         messages = [];
         entries = [];
         failReconcile = command.entryId === "fail-entry";
-        response.data = { text: command.entryId === "fail-entry" ? "Fail refresh" : "Retry this", cancelled: false };
+        const texts = { "fail-entry": "Fail refresh", "preserve-entry": "Preserve sidebar" };
+        response.data = { text: texts[command.entryId] ?? "Retry this", cancelled: false };
       }
     } else if (command.type === "set_session_name") {
       if (failReconcile) {
@@ -661,16 +669,7 @@ process.stdin.on("data", chunk => {
         failReconcile = false;
       } else sessionName = command.name;
     } else if (command.type === "extension_ui_response" && pendingForkRequestId) {
-      if (pendingForkEntryId === "preserve-entry") {
-        sessionFile = path.join(path.dirname(sourceFile), "fork.jsonl");
-        fs.writeFileSync(sessionFile, JSON.stringify({ type: "session", version: 3, id: "fork", cwd: path.dirname(sourceFile), parentSession: sourceFile }) + "\n");
-        sessionId = "fork";
-        messages = [];
-        entries = [];
-        process.stdout.write(JSON.stringify({ type: "response", id: pendingForkRequestId, success: true, data: { text: "Preserve sidebar", cancelled: false } }) + "\n");
-      } else {
-        process.stdout.write(JSON.stringify({ type: "response", id: pendingForkRequestId, success: true, data: { text: "Wait", cancelled: true } }) + "\n");
-      }
+      process.stdout.write(JSON.stringify({ type: "response", id: pendingForkRequestId, success: true, data: { text: "Wait", cancelled: true } }) + "\n");
       pendingForkRequestId = undefined;
       pendingForkEntryId = undefined;
       continue;
@@ -698,34 +697,39 @@ process.on("SIGTERM", () => process.exit(0));
     const activeId = await registry.openSession({ path: sessionFile, cwd: dir, title: "Source", updatedAt: Date.now() });
     expect(created).toContainEqual({ id: activeId, sourceId: undefined });
     await waitForForkableHistory(registry, "preserve-entry");
+    // A Pi process started again would come back on the fake's null model: this shows the source was never restarted.
+    await registry.setModel(activeId, "provider", "chosen");
+    await registry.setThinkingLevel(activeId, "high");
+    const sourceIsUntouched = () => expect(registry.sessionView(activeId)).toMatchObject({
+      status: "ready", isForking: false, model: { provider: "provider", id: "chosen" }, thinkingLevel: "high",
+    });
+    const forkEntry = () => registry.snapshot().sessions.find((session) => session.id !== activeId && session.id !== unrelatedSidebarId)?.id;
 
     const unrelatedSidebarId = (await registry.createSession())!;
     await waitFor(() => registry.activeSessionId === unrelatedSidebarId && registry.sessionView(unrelatedSidebarId)?.status === "ready");
-    const preservedFork = registry.forkMessage(activeId, "preserve-entry", "preserve-sidebar-selection");
-    await waitFor(() => registry.sessionView(activeId)?.isForking === true && registry.sessionView(activeId)?.pendingExtensionUi.length === 1);
+    const preservedResult = await registry.forkMessage(activeId, "preserve-entry", "preserve-sidebar-selection");
+    const preservedId = forkEntry()!;
+    expect(preservedResult).toEqual({ cancelled: false, forkSessionId: preservedId });
+    expect(registry.activeSessionId).toBe(unrelatedSidebarId);
+    expect(created).toContainEqual({ id: preservedId, sourceId: activeId });
     await registry.closeSession(unrelatedSidebarId);
-    expect(registry.activeSessionId).toBe(activeId);
-    await registry.respondExtensionUi(activeId, "fork-confirm", { confirmed: true });
-    const preservedResult = await preservedFork;
-    expect(preservedResult.cancelled).toBe(false);
-    expect(typeof preservedResult.forkSessionId).toBe("string");
-    expect(registry.activeSessionId).toBe(activeId);
-    expect(registry.snapshot().sessions.some((session) => session.id === preservedResult.forkSessionId)).toBe(true);
-    expect(created).toContainEqual({ id: preservedResult.forkSessionId, sourceId: activeId });
-    await registry.closeSession(preservedResult.forkSessionId!);
-    await registry.activateSession(activeId);
-    await waitForForkableHistory(registry, "preserve-entry");
+    expect(registry.sessionView(preservedId)).toMatchObject({ model: { provider: "provider", id: "chosen" }, thinkingLevel: "high" });
+    sourceIsUntouched();
+    await registry.closeSession(preservedId);
 
     await expect(registry.forkMessage(activeId, "fail-entry")).rejects.toThrow("set_session_name failed after Fork");
-    await waitForForkableHistory(registry, "preserve-entry");
     expect(registry.snapshot().sessions).toEqual([expect.objectContaining({ id: activeId, status: "ready" })]);
+    sourceIsUntouched();
 
     const pendingFork = registry.forkMessage(activeId, "wait-entry");
-    await waitFor(() => registry.snapshot().activeSession?.isForking === true && registry.snapshot().activeSession?.pendingExtensionUi.length === 1);
-    await expect(registry.createSession()).rejects.toThrow("cancel it first");
+    await waitFor(() => existsSync(join(dir, "fork-asked")), 5_000);
+    // Until Pi has forked, the Fork's process is no Session: nothing lists, selects or deletes it.
+    expect(registry.snapshot().sessions).toEqual([expect.objectContaining({ id: activeId, status: "ready" })]);
+    await expect(registry.deleteSession(activeId)).rejects.toThrow("Wait for the Fork of this session to finish or cancel it first.");
+    await expect(registry.createSession()).rejects.toThrow("Wait for the current session creation to finish.");
     await registry.cancelFork(activeId);
     await expect(pendingFork).resolves.toEqual({ cancelled: true });
-    await waitForForkableHistory(registry, "preserve-entry");
+    expect(registry.snapshot().sessions).toEqual([expect.objectContaining({ id: activeId, status: "ready" })]);
 
     await expect(registry.forkMessage(activeId, "cancel-entry")).resolves.toEqual({ cancelled: true });
     expect(registry.snapshot().sessions).toHaveLength(1);
@@ -741,6 +745,8 @@ process.on("SIGTERM", () => process.exit(0));
       id: result.forkSessionId,
       title: "Fork: Source",
       sessionId: "fork",
+      model: { provider: "provider", id: "chosen" },
+      thinkingLevel: "high",
       conversationItems: [],
       composerSeed: {
         id: result.forkSessionId,
@@ -748,11 +754,10 @@ process.on("SIGTERM", () => process.exit(0));
         images: [{ id: "image", name: "shot.png", mimeType: "image/png", dataUrl: "data:image/png;base64,AA==", size: 1 }],
       },
     });
-    const original = registry.snapshot().sessions.find((session) => session.id === activeId);
-    expect(original).toMatchObject({ title: "Source", status: "stopped" });
-    expect(persisted?.sessions).toEqual([
-      expect.objectContaining({ id: activeId, sessionFile }),
-    ]);
+    sourceIsUntouched();
+    expect(registry.snapshot().sessions.map((session) => session.id)).toContain(result.forkSessionId);
+    // A Fork is Provisional, like a new session: it is saved once it is used.
+    expect(persisted?.sessions).toEqual([expect.objectContaining({ id: activeId, sessionFile })]);
   });
 
   it("replaces an unused new session but retains one after Pi accepts a prompt", async () => {

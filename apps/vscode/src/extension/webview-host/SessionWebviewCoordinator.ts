@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import type { ComposerDraftView } from "@frostime/pi-client/shared/model/composerDraftModel";
 import type { ClientHost, HostQuickPickItem } from "@frostime/pi-client/host";
 import { ComposerDraftCache } from "@frostime/pi-client/host/bridge/ComposerDraftCache";
-import { WebviewActionDispatcher, type WebviewActionDispatcherDependencies } from "@frostime/pi-client/host/bridge/WebviewActionDispatcher";
+import { WebviewActionDispatcher, type PanelPlacement, type WebviewActionDispatcherDependencies } from "@frostime/pi-client/host/bridge/WebviewActionDispatcher";
 import { WebviewConnection } from "@frostime/pi-client/host/bridge/WebviewConnection";
 import type { WebviewEndpoint } from "@frostime/pi-client/host/bridge/webviewTypes";
 import { WorkspaceFileSearch } from "@frostime/pi-client/host/file-search/WorkspaceFileSearch";
@@ -50,7 +50,7 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
       getProxyCredentials,
       logger,
       drafts: this.#drafts,
-      openPanel: (sessionId, draft) => this.openPanel(sessionId, draft),
+      openPanel: (sessionId, draft, placement) => this.openPanel(sessionId, draft, placement),
       revealPanel: (sessionId) => this.revealPanel(sessionId),
       openComposerEditor: (sessionId, text) => this.#externalEditor.open(sessionId, text),
       createSessionPanel: (sourceSessionId, ephemeral) => this.createSessionInPanel(sourceSessionId, ephemeral),
@@ -95,11 +95,12 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
     this.#sidebar = null;
   }
 
-  openPanel(sessionId: string, draft?: ComposerDraftView): void {
+  openPanel(sessionId: string, draft?: ComposerDraftView, placement?: PanelPlacement): void {
     if (this.#panels.has(sessionId)) {
       this.#panels.open(sessionId);
       return;
     }
+    const viewColumn = placement ? this.#panels.viewColumn(placement.sameGroupAs) : undefined;
     const pendingText = this.#pendingSidebarComposerText.get(sessionId);
     const handoffDraft = draft && pendingText !== undefined
       ? { ...draft, revision: draft.revision + 1, text: pendingText }
@@ -107,7 +108,7 @@ export class SessionWebviewCoordinator implements vscode.Disposable {
     if (pendingText !== undefined) this.#pendingSidebarComposerText.delete(sessionId);
     const rollbackDraft = handoffDraft ? this.#drafts.beginHandoff(sessionId, handoffDraft) : undefined;
     try {
-      this.#panels.open(sessionId);
+      this.#panels.open(sessionId, viewColumn);
     } catch (error) {
       rollbackDraft?.();
       if (pendingText !== undefined) this.#queueSidebarComposerText(sessionId, pendingText);

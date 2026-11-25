@@ -284,6 +284,11 @@ describe("Session Webview coordination", () => {
       selection: "preserve-sidebar-selection", workingDirectoryOf: "source",
     }));
     expect(createWebviewPanel.mock.calls.at(-1)?.[2]).toEqual({ viewColumn: 2, preserveFocus: false });
+
+    // A Fork's tab opens in its source tab's group, wherever focus is now.
+    sessions.set("fork", { id: "fork", title: "Fork: Source", cwd: "/worktree" });
+    coordinator.openPanel("fork", undefined, { sameGroupAs: "source" });
+    expect(createWebviewPanel.mock.calls.at(-1)?.[2]).toEqual({ viewColumn: 2, preserveFocus: false });
     coordinator.dispose();
   });
 

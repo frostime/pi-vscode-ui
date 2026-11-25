@@ -43,7 +43,8 @@ describe("Fork from a user message", () => {
     const request = bridge.post.mock.calls[0]?.[0] as { requestId: string };
     expect(request).toMatchObject({ type: "forkMessage", sessionId: "session-1", messageId: "local-user-1" });
     expect(request).not.toHaveProperty("entryId");
-    expect(view.getByRole("button", { name: "Fork session from this message" }).textContent).toContain("Forking…");
+    // The Fork is made in a second process; until Pi forks, the message offers Cancel Fork.
+    expect(view.getByRole("button", { name: "Cancel Fork" })).toBeTruthy();
     resolveForkResult({ type: "forkResult", requestId: request.requestId, ok: true } as never);
   });
 
