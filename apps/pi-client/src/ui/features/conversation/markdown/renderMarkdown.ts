@@ -301,7 +301,8 @@ function applyPromptReferencePlugin(md: MarkdownIt): void {
       state.pending = state.pending.slice(0, -4);
       const token = state.push("prompt_reference", "span", 0);
       token.content = reference.path;
-      token.meta = { inLink: state.linkLevel > 0 };
+      // Markdown-it 14.3 tracks link nesting here; its 14.1 types omit the field.
+      token.meta = { inLink: (state as StateInline & { linkLevel: number }).linkLevel > 0 };
     }
     state.pos = reference.to;
     return true;
