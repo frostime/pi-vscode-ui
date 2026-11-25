@@ -1190,7 +1190,11 @@ export class SessionRuntime {
       this.#reportEntryRefreshFailure("Failed to reconcile Pi session entries", error);
     });
     if (this.#disposed || api !== this.#api) return;
-    if (continueQueue && state && (state.pendingMessageCount ?? 0) === 0) this.#dispatchNextFollowUp();
+    // Another turn can start and settle while history is loading. Only its own
+    // refresh knows whether Pi still has a message ahead of our editable follow-ups.
+    if (continueQueue && startsBefore === this.#agentStarts && state && (state.pendingMessageCount ?? 0) === 0) {
+      this.#dispatchNextFollowUp();
+    }
     this.#notifyChange();
   }
 

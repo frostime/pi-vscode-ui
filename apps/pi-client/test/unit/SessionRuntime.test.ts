@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { PiRpcApi } from "@frostime/pi-rpc";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentTurnView, CustomMessageView, SessionNoticeView } from "../../src/shared/model/conversationModel.js";
@@ -697,6 +698,74 @@ process.on("SIGTERM", () => process.exit(0));
     // Let the settle refresh finish; the stale idle state must not end the new turn.
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(runtime.view).toMatchObject({ isStreaming: true, status: "running" });
+  });
+
+  it.each([0, 1])("uses the latest settlement's pending count (%i) to deliver an editable follow-up", async (pendingMessageCount) => {
+    const dir = await mkdtemp(join(tmpdir(), "frostpi-followup-settle-"));
+    const finishSecondTurn = join(dir, "finish-second-turn");
+    const configuration = runtimeConfiguration(streamingFixture);
+    configuration.piArguments.push("--stream-084-release", finishSecondTurn);
+    const onChange = vi.fn<() => void>();
+    const runtime = new SessionRuntime("session", dir, "Settle order", () => configuration, noProxyCredentials(),
+      { error: vi.fn(), info: vi.fn() }, { onChange, onEditorText: vi.fn() }, host);
+    runtimes.push(runtime);
+    const startup = vi.spyOn(PiRpcApi.prototype, "getCommands");
+    let api: PiRpcApi;
+    try {
+      await runtime.start();
+      api = startup.mock.contexts[0] as PiRpcApi;
+    } finally {
+      startup.mockRestore();
+    }
+    await vi.waitFor(() => expect(runtime.view.commands.some(command => command.name === "echo")).toBe(true));
+
+    const getEntries = api.getEntries.bind(api);
+    const getState = api.getState.bind(api);
+    const entries = vi.spyOn(api, "getEntries");
+    const state = vi.spyOn(api, "getState");
+    const prompts = vi.spyOn(api, "prompt");
+    function holdNextEntryRead() {
+      let release!: () => void;
+      const gate = new Promise<void>(resolve => { release = resolve; });
+      entries.mockImplementationOnce(async (since) => {
+        const result = await getEntries(since);
+        await gate;
+        return result;
+      });
+      return release;
+    }
+    const first = holdNextEntryRead();
+    const second = holdNextEntryRead();
+    const releaseAndObserve = (release: () => void) => new Promise<void>(resolve => {
+      onChange.mockImplementationOnce(() => resolve());
+      release();
+    });
+    try {
+      await runtime.sendPrompt("first turn", []);
+      await vi.waitFor(() => expect(entries).toHaveBeenCalledTimes(1));
+      await runtime.sendPrompt("stream-084", []);
+      await vi.waitFor(() => expect(runtime.view.isStreaming).toBe(true));
+      await runtime.sendPrompt("editable follow-up", [], "followUp");
+      state.mockImplementationOnce(async () => ({ ...await getState(), pendingMessageCount }));
+      await writeFile(finishSecondTurn, "");
+      await vi.waitFor(() => expect(entries).toHaveBeenCalledTimes(2));
+
+      // Both turns have settled. The first refresh saw an empty Pi queue before the second started.
+      await releaseAndObserve(first);
+      expect(runtime.view.queuedFollowUps.map(prompt => prompt.text)).toEqual(["editable follow-up"]);
+      expect(prompts).toHaveBeenCalledTimes(2);
+      await releaseAndObserve(second);
+      expect(runtime.view.queuedFollowUps.map(prompt => prompt.text)).toEqual(pendingMessageCount ? ["editable follow-up"] : []);
+      expect(prompts.mock.calls.map(([text]) => text)).toEqual(pendingMessageCount
+        ? ["first turn", "stream-084"]
+        : ["first turn", "stream-084", "editable follow-up"]);
+    } finally {
+      first();
+      second();
+      entries.mockRestore();
+      state.mockRestore();
+      prompts.mockRestore();
+    }
   });
 
   it("refreshes session stats during a long running turn", async () => {
