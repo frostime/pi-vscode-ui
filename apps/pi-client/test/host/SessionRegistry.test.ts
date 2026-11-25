@@ -30,6 +30,7 @@ vi.mock("../../src/host/pickers/SessionTreePicker.js", () => treePickerMocks);
 const testEnvironment = vi.hoisted(() => ({
   cwd: "",
   piExecutable: "",
+  piArguments: [] as string[],
   quickPickCwd: "",
   configurationScopes: [] as string[],
   experimentalNotificationsEnabled: true,
@@ -80,6 +81,7 @@ function createTestHost(): { host: ClientHost; logger: { error: Mock<RuntimeLogg
         return {
           get: <T>(key: string, fallback: T): T => {
             if (section === "frostpi" && key === "pi.executable") return testEnvironment.piExecutable as T;
+            if (section === "frostpi" && key === "pi.arguments") return testEnvironment.piArguments as T;
             if (section === "frostpi" && key === "notifications.experimental.enabled") {
               return testEnvironment.experimentalNotificationsEnabled as T;
             }
@@ -133,6 +135,7 @@ describe("FrostPi session collection", () => {
   afterEach(async () => {
     await Promise.all(registries.splice(0).map((registry) => registry.dispose()));
     testEnvironment.quickPickCwd = "";
+    testEnvironment.piArguments = [];
     testEnvironment.configurationScopes = [];
     testEnvironment.experimentalNotificationsEnabled = true;
     testEnvironment.windowFocused = true;
@@ -753,6 +756,50 @@ process.on("SIGTERM", () => process.exit(0));
     expect(persisted?.sessions).toEqual([
       expect.objectContaining({ id: activeId, sessionFile }),
     ]);
+  });
+
+  it.each([
+    { launch: "regular", args: [], provider: "selected-provider" },
+    { launch: "temporary", args: [], provider: "selected-provider" },
+    { launch: "unavailable model", args: ["--reject-test-model"], provider: "e2e" },
+    { launch: "explicit model", args: ["--provider", "e2e", "--model", "model"], provider: "e2e" },
+  ])("chooses a model for a $launch new chat", async ({ launch, args, provider }) => {
+    testEnvironment.cwd = resolve("test/fixtures");
+    testEnvironment.piExecutable = fakePiFixture();
+    const { host, logger } = createTestHost();
+    const registry = new SessionRegistry(host, { logger });
+    registries.push(registry);
+    const previous = (await registry.createSession())!;
+    expect(registry.sessionView(previous)?.model).toMatchObject({ provider: "e2e", id: "model" });
+    await registry.setModel(previous, "selected-provider", "model");
+    testEnvironment.piArguments = args;
+
+    const next = (await registry.createSession(launch === "temporary"))!;
+    expect(registry.hasSession(previous)).toBe(false);
+    expect(registry.sessionView(next)).toMatchObject({ status: "ready", model: { provider, id: "model" } });
+  });
+
+  it.each([false, true])("inherits the source tab's model without changing the sidebar (temporary=%s)", async (ephemeral) => {
+    testEnvironment.cwd = resolve("test/fixtures");
+    testEnvironment.piExecutable = fakePiFixture();
+    const { host, logger } = createTestHost();
+    const registry = new SessionRegistry(host, { logger });
+    registries.push(registry);
+    const source = (await registry.createSession())!;
+    registry.retainProvisionalSession(source);
+    await registry.setModel(source, "source-provider", "model");
+    const sidebar = (await registry.createSession())!;
+    await registry.setModel(sidebar, "sidebar-provider", "model");
+
+    const created = (await registry.createSession(ephemeral, {
+      selection: "preserve-sidebar-selection", workingDirectoryOf: source,
+    }))!;
+    expect(registry.activeSessionId).toBe(sidebar);
+    expect(registry.sessionView(created)).toMatchObject({
+      status: "ready", cwd: registry.sessionView(source)?.cwd, model: { provider: "source-provider", id: "model" },
+    });
+    expect(registry.sessionView(sidebar)?.model?.provider).toBe("sidebar-provider");
+    expect(registry.hasSession(source)).toBe(true);
   });
 
   it("replaces an unused new session but retains one after Pi accepts a prompt", async () => {

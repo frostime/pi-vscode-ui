@@ -9,7 +9,7 @@ import type { QuestionDraftSubmission } from "../shared/question-tool/questionTo
 import type { SessionRuntimeStatus, SessionSummaryView, SessionViewModel, WorkspaceViewModel } from "../shared/model/sessionViewModel.js";
 import { sameCanonicalPath } from "../core/_shared/canonicalPath.js";
 import { parseHostCommand } from "../core/sessions/hostCommands.js";
-import { SessionRuntime } from "../core/index.js";
+import { SessionRuntime, type SessionModelReference } from "../core/sessions/SessionRuntime.js";
 import type { RuntimeLogger } from "../core/diagnostics/RuntimeLogger.js";
 import { readConfiguration, readHostProxy } from "./readConfiguration.js";
 import type { ClientHost, HostEventEmitter, HostQuickPickItem } from "./clientHost.js";
@@ -225,6 +225,9 @@ export class SessionRegistry {
 
   async createSession(ephemeral = false, options: CreateSessionOptions = {}): Promise<string | undefined> {
     return this.#withSessionCreation(async () => {
+      const sourceId = options.workingDirectoryOf ?? this.#activeSessionId;
+      const source = sourceId ? this.#runtimes.get(sourceId) : undefined;
+      const inheritedModel = source?.view.model ?? undefined;
       const inherited = options.workingDirectoryOf
         ? await this.#workingDirectoryOfSession(options.workingDirectoryOf)
         : undefined;
@@ -237,7 +240,7 @@ export class SessionRegistry {
         directory = await this.#pickSessionWorkingDirectory(discovery.directories);
       }
       if (!directory) return undefined;
-      return this.#createSessionInDirectory(directory, ephemeral, undefined, options);
+      return this.#createSessionInDirectory(directory, ephemeral, undefined, options, inheritedModel);
     });
   }
 
@@ -332,6 +335,7 @@ export class SessionRegistry {
     ephemeral: boolean,
     customArguments?: readonly string[],
     options: CreateSessionOptions = {},
+    inheritedModel?: SessionModelReference,
   ): Promise<string> {
     this.#assertOpen();
     const preserveSidebar = options.selection === "preserve-sidebar-selection";
@@ -362,7 +366,7 @@ export class SessionRegistry {
     } catch (error) {
       presentationError = error;
     }
-    await this.#startRuntime(runtime, true);
+    await this.#startRuntime(runtime, true, inheritedModel);
     if (presentationError) throw presentationError instanceof Error ? presentationError : new Error("The new session could not be presented.", { cause: presentationError });
     return id;
   }
@@ -1047,7 +1051,11 @@ export class SessionRegistry {
     );
   }
 
-  async #startRuntime(runtime: SessionRuntime, workingDirectoryValidated = false): Promise<void> {
+  async #startRuntime(
+    runtime: SessionRuntime,
+    workingDirectoryValidated = false,
+    inheritedModel?: SessionModelReference,
+  ): Promise<void> {
     this.#assertOpen();
     const pending = this.#startJobs.get(runtime.id);
     if (pending) return pending;
@@ -1059,7 +1067,7 @@ export class SessionRegistry {
     const job = this.#startQueue.catch(() => undefined).then(async () => {
       if (this.#disposed || this.#runtimes.get(runtime.id) !== runtime) return;
       try {
-        await runtime.start(sessionFile);
+        await runtime.start(sessionFile, inheritedModel);
         if (sessionFile) void this.#queueHistory(runtime, false).catch(() => undefined);
       } catch (error) {
         if (this.#runtimes.get(runtime.id) !== runtime) return;

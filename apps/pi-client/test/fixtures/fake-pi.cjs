@@ -2,6 +2,7 @@
 
 let buffer = "";
 let sessionName = "E2E session";
+let model = { provider: "e2e", id: "model", name: "E2E Model", supportsImages: true, reasoning: true };
 let entries = [];
 let entrySequence = 0;
 let isStreaming = false;
@@ -66,7 +67,7 @@ function handle(command) {
     case "negotiate_protocol": respond(id, { protocolVersion: 2 }); break;
     case "get_state":
       respond(id, {
-        model: { provider: "e2e", id: "model", name: "E2E Model", supportsImages: true, reasoning: true },
+        model,
         thinkingLevel: "medium",
         isStreaming,
         isCompacting: false,
@@ -106,7 +107,12 @@ function handle(command) {
       break;
     case "set_session_name": sessionName = command.name; persistFixtureEntries(); respond(id); break;
     case "set_model":
-      respond(id, { provider: command.provider, id: command.modelId, name: "E2E Model", supportsImages: true, reasoning: true });
+      if (process.argv.includes("--reject-test-model")) {
+        process.stdout.write(JSON.stringify({ type: "response", id, success: false, error: "Model not found" }) + "\n");
+      } else {
+        model = { ...model, provider: command.provider, id: command.modelId };
+        respond(id, model);
+      }
       break;
     case "set_thinking_level": respond(id); break;
     case "abort": cancelStreaming?.(); respond(id); event({ type: "agent_settled" }); break;
