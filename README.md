@@ -158,7 +158,7 @@ The executable may be the `pi` command, an absolute native executable, or Pi's c
 
 Paste PNG, JPEG, or WebP images directly into the composer.
 
-File references inserted from the editor menu or `@` completion appear as tags in the input and sent messages. Hover for the full path, click the filename to edit it, or use × to remove it. FrostPi sends the complete path and selected line range, without inserting file contents. Ordinary backticked code stays plain.
+File references from the editor menu or `@` completion appear as editable tags in the input and file links in sent messages. Hover for the full path. In the input, click the filename to edit it or use × to remove it. Pi receives the complete path and line range without file contents; ordinary backticked code stays plain.
 
 Use `/` completion for Pi extension commands, prompt templates, skills, and FrostPi-local actions.
 
