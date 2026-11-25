@@ -105,7 +105,7 @@
 .prompt-editor .cm-editor { min-width: 0; }
 .prompt-editor .cm-editor.cm-focused { outline: 0; }
 .prompt-editor .cm-scroller { scrollbar-color: var(--frost-scrollbar) transparent; }
-.prompt-editor .cm-content { word-break: break-word; padding: 13px 34px 11px 14px; }
+.prompt-editor .cm-content { min-width: 0; word-break: break-word; padding: 13px 34px 11px 14px; }
 .prompt-editor .cm-placeholder { color: var(--frost-faint); font-style: normal; }
 .prompt-editor .cm-prompt-command {
   color: var(--frost-link);
@@ -229,3 +229,31 @@
   .composer-toolbar { gap: 3px; }
   .composer-toolbar-left { gap: 1px; }
 }
+
+/* Explicit file references, without rendering ordinary inline code as attachments. */
+.cm-file-reference {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  vertical-align: middle;
+  gap: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--frost-input-border);
+  border-radius: 5px;
+  background: var(--frost-hover);
+  color: var(--frost-text);
+}
+.cm-file-reference > .codicon { flex: 0 0 auto; font-size: 13px; }
+.cm-file-reference-label {
+  display: inline-flex;
+  min-width: 0;
+  white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
+}
+.cm-file-reference-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cm-file-reference-lines { flex: 0 0 auto; }
+.cm-file-reference-remove { flex: 0 0 auto; cursor: pointer; }
+.cm-file-reference button { background: transparent; color: inherit; border: none; padding: 0; }
+.cm-file-reference button:hover:not(:disabled) { color: var(--frost-link); }
+.cm-file-reference button:focus-visible { outline: 1px solid var(--frost-focus); outline-offset: 2px; }

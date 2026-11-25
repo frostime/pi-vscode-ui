@@ -53,8 +53,8 @@ describe("workspace file completion", () => {
     option.apply(view, option, 0, 2);
 
     expect(dispatched).toMatchObject({
-      changes: { from: 0, to: 2, insert: "`src/beta.ts` " },
-      selection: { anchor: 14 },
+      changes: { from: 0, to: 2, insert: "ref:`src/beta.ts` " },
+      selection: { anchor: 18 },
     });
   });
 });

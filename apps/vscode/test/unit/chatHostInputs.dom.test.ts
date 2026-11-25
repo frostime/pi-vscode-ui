@@ -60,6 +60,20 @@ beforeEach(() => {
 });
 afterEach(() => cleanup());
 
+it("submits the exact reference marker and path, and restores its chip after a failed send", async () => {
+  const text = "Review ref:`reports/Long report.tex:23-23` without inserting its contents";
+  setDraft("session", "webview", { text, images: [] });
+  const view = composer();
+  await waitFor(() => expect(view.container.querySelector(".cm-file-reference")).not.toBeNull());
+  await fireEvent.click(view.getByRole("button", { name: "Send to Pi" }));
+  expect(lastSubmission().text).toBe(text);
+  expect(lastSubmission().images).toEqual([]);
+  await waitFor(() => expect(getDraft("session").text).toBe(""));
+  promptSubmissionResult.set({ requestId: lastSubmission().requestId, ok: false, error: "Synthetic send failure" });
+  await waitFor(() => expect(getDraft("session").text).toBe(text));
+  await waitFor(() => expect(view.container.querySelector(".cm-file-reference")?.textContent).toBe("Long report.tex:23-23"));
+});
+
 describe("explicit Composer host inputs", () => {
   it("applies a supplied local command result before its action without guessing the command name", async () => {
     setDraft("session", "webview", { text: "/custom", images: [image] });

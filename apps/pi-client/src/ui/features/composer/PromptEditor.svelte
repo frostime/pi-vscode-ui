@@ -14,6 +14,7 @@
   import { promptCompletionConfigurationKey, shouldStartPromptCompletion } from "./completionPolicy";
   import { indentPromptWithTab, insertPromptNewline, outdentPromptWithShiftTab } from "./promptEditing";
   import { promptSyntax } from "./promptSyntax";
+  import { referenceChips } from "./referenceChips";
   import { commandCompletion } from "./commandCompletion";
   import { workspaceFileCompletion } from "./workspaceFileCompletion";
 
@@ -112,6 +113,7 @@
       doc,
       extensions: [
         history(),
+        referenceChips(),
         editingCompartment.of(editingExtensions(readOnly)),
         // Keep returned drafts writable by the Host, but reject user-originated changes
         // from undo, completion or an already queued input transaction while locked.

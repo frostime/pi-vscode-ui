@@ -1,3 +1,5 @@
+import { formatPromptReference } from "$shared/files/promptReferences";
+
 export interface WorkspaceMentionEdit {
   text: string;
   cursorOffset: number;
@@ -9,7 +11,7 @@ export function workspaceMentionReplaceTo(matchText: string, to: number, nextCha
 
 export function workspaceMentionEdit(path: string, isDirectory: boolean): WorkspaceMentionEdit {
   const completionPath = isDirectory && !path.endsWith("/") ? `${path}/` : path;
-  const text = `\`${completionPath}\``;
+  const text = formatPromptReference(completionPath);
   const suffix = isDirectory ? "" : " ";
   return {
     text: `${text}${suffix}`,
