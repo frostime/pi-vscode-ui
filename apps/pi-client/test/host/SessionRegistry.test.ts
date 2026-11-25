@@ -779,6 +779,29 @@ process.on("SIGTERM", () => process.exit(0));
     expect(registry.sessionView(next)).toMatchObject({ status: "ready", model: { provider, id: "model" } });
   });
 
+  it.each([false, true])("inherits the source tab's model without changing the sidebar (temporary=%s)", async (ephemeral) => {
+    testEnvironment.cwd = resolve("test/fixtures");
+    testEnvironment.piExecutable = fakePiFixture();
+    const { host, logger } = createTestHost();
+    const registry = new SessionRegistry(host, { logger });
+    registries.push(registry);
+    const source = (await registry.createSession())!;
+    registry.retainProvisionalSession(source);
+    await registry.setModel(source, "source-provider", "model");
+    const sidebar = (await registry.createSession())!;
+    await registry.setModel(sidebar, "sidebar-provider", "model");
+
+    const created = (await registry.createSession(ephemeral, {
+      selection: "preserve-sidebar-selection", workingDirectoryOf: source,
+    }))!;
+    expect(registry.activeSessionId).toBe(sidebar);
+    expect(registry.sessionView(created)).toMatchObject({
+      status: "ready", cwd: registry.sessionView(source)?.cwd, model: { provider: "source-provider", id: "model" },
+    });
+    expect(registry.sessionView(sidebar)?.model?.provider).toBe("sidebar-provider");
+    expect(registry.hasSession(source)).toBe(true);
+  });
+
   it("replaces an unused new session but retains one after Pi accepts a prompt", async () => {
     testEnvironment.cwd = resolve("test/fixtures");
     testEnvironment.piExecutable = fakePiFixture();
