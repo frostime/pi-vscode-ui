@@ -2,6 +2,7 @@
   import { get } from "svelte/store";
 
   import { absoluteFileReferencePath } from "$shared/files/fileReferences.js";
+  import { FILE_LINK_SECTION, LINK_TARGET_KEY, WEB_LINK_SECTION } from "$shared/model/linkContextMenu.js";
 
   import { clientCapabilities as capabilitiesStore } from "../../../state/clientCapabilities.svelte";
   import { presentationStore } from "../../../state/sessionViewStore.svelte";
@@ -90,6 +91,22 @@
     const top = below + height > window.innerHeight - LINK_PREVIEW_EDGE_PX && above >= LINK_PREVIEW_EDGE_PX ? above : below;
     element.style.left = `${Math.round(left)}px`;
     element.style.top = `${Math.round(top)}px`;
+  }
+
+  // VS Code's webview frame reads the closest `data-vscode-context` when its
+  // context menu opens, from a window listener that runs after this one. The
+  // target is resolved now, so it follows the current Session cwd, and the
+  // manifest's Copy Link Address / Copy Path entries copy what the preview shows.
+  function handleContextMenu(event: MouseEvent): void {
+    const anchor = anchorFromEvent(event);
+    if (!anchor) return;
+    const target = linkPreviewLabel(anchor);
+    if (!target) {
+      anchor.removeAttribute("data-vscode-context");
+      return;
+    }
+    const section = anchor.hasAttribute("data-file-path") ? FILE_LINK_SECTION : WEB_LINK_SECTION;
+    anchor.setAttribute("data-vscode-context", JSON.stringify({ webviewSection: section, [LINK_TARGET_KEY]: target }));
   }
 
   function anchorFromEvent(event: Event): Element | undefined {
@@ -248,7 +265,7 @@
     const anchor = target?.closest("a");
     const path = anchor?.getAttribute("data-file-path");
     if (path) {
-      event.preventDefault();
+      claimLinkClick(event);
       if (!$clientCapabilities.openReferencedLocation) return;
       const line = positiveInteger(anchor?.getAttribute("data-file-line"));
       const column = positiveInteger(anchor?.getAttribute("data-file-column"));
@@ -265,8 +282,20 @@
 
     const href = anchor?.getAttribute("href");
     if (!href || !/^https?:\/\//i.test(href)) return;
-    event.preventDefault();
+    claimLinkClick(event);
     postToHost({ type: "openExternal", url: href });
+  }
+
+  // VS Code's webview frame routes every anchor click it sees on the window to
+  // its own opener, ignoring defaultPrevented. For an external link that made a
+  // second opener beside FrostPi's openExternal, so the page opened without
+  // waiting for VS Code's "Open / Copy / Cancel" confirmation; for a file link
+  // (href="#") it scrolls the frame to the top. Links FrostPi handles therefore
+  // stop here, before the click bubbles to the window, and an external link
+  // opens once, through openExternal and VS Code's usual confirmation.
+  function claimLinkClick(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   function positiveInteger(value: string | null | undefined): number | undefined {
@@ -301,6 +330,7 @@
   function linkActions(node: HTMLElement): { destroy(): void } {
     const hide = (): void => cancelLinkPreview();
     node.addEventListener("click", handleClick);
+    node.addEventListener("contextmenu", handleContextMenu);
     node.addEventListener("pointerover", handlePointerOver);
     node.addEventListener("pointerout", handlePointerOut);
     node.addEventListener("focusin", handleFocusIn);
@@ -313,6 +343,7 @@
     return {
       destroy: () => {
         node.removeEventListener("click", handleClick);
+        node.removeEventListener("contextmenu", handleContextMenu);
         node.removeEventListener("pointerover", handlePointerOver);
         node.removeEventListener("pointerout", handlePointerOut);
         node.removeEventListener("focusin", handleFocusIn);

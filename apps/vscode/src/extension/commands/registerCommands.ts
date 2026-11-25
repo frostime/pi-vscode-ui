@@ -9,6 +9,7 @@ import type { DiagnosticLogger } from "../diagnostics/DiagnosticLogger.js";
 import { configureProxy, configureProxyCredentials } from "../network/configureProxy.js";
 import { ProxySecretStore } from "../network/ProxySecretStore.js";
 import type { SessionRegistry } from "@frostime/pi-client/host/SessionRegistry";
+import { FILE_LINK_SECTION, linkTargetFromContext, WEB_LINK_SECTION, type LinkContextSection } from "@frostime/pi-client/shared/model/linkContextMenu";
 import type { PiViewProvider } from "../webview-host/PiViewProvider.js";
 import type { SessionWebviewCoordinator } from "../webview-host/SessionWebviewCoordinator.js";
 
@@ -21,6 +22,12 @@ async function reportFailure(action: () => Promise<unknown>): Promise<void> {
   }
 }
 
+/** A message link's context-menu entry copies the target the Webview resolved for it. */
+async function copyLinkTarget(context: unknown, section: LinkContextSection): Promise<void> {
+  const target = linkTargetFromContext(context, section);
+  if (target) await vscode.env.clipboard.writeText(target);
+}
+
 export function registerCommands(
   context: vscode.ExtensionContext,
   registry: SessionRegistry,
@@ -31,6 +38,8 @@ export function registerCommands(
   const proxySecrets = new ProxySecretStore(context.secrets);
   context.subscriptions.push(
     vscode.commands.registerCommand("frostpi.focus", () => viewProvider.reveal()),
+    vscode.commands.registerCommand("frostpi.copyLinkAddress", (context: unknown) => copyLinkTarget(context, WEB_LINK_SECTION)),
+    vscode.commands.registerCommand("frostpi.copyLinkPath", (context: unknown) => copyLinkTarget(context, FILE_LINK_SECTION)),
     vscode.commands.registerCommand("frostpi.newSession", async () => {
       const sessionId = await registry.createSession();
       if (sessionId) await viewProvider.reveal();
