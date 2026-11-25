@@ -9,6 +9,7 @@ export default defineConfig({
       { find: /^@frostime\/pi-client\/host\//, replacement: `${resolve(client, "host")}/` },
       { find: /^@frostime\/pi-client\/core$/, replacement: resolve(client, "core/index.ts") },
       { find: /^@frostime\/pi-client\/core\//, replacement: `${resolve(client, "core")}/` },
+      { find: /^@frostime\/pi-client\/shared$/, replacement: resolve(client, "shared/index.ts") },
       { find: /^@frostime\/pi-client\/shared\//, replacement: `${resolve(client, "shared")}/` },
       { find: "@frostime/pi-rpc", replacement: resolve(import.meta.dirname, "../../packages/pi-rpc/src/index.ts") },
       { find: "@frostime/provider-usage", replacement: resolve(import.meta.dirname, "../../packages/provider-usage/src/index.ts") },
