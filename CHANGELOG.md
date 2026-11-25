@@ -6,13 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-25
+
 ### Added
 
 - Start new or temporary sessions in VS Code editor tabs without changing the sidebar selection, or open existing sessions directly from the session list. Enable `frostpi.session.closeWithEditorTab` to stop Pi when its tab closes. ([#13](https://github.com/frostime/pi-vscode-ui/pull/13))
 - Rename sessions from their editor tabs or with `/name` and `/alias` in the Composer ([#13](https://github.com/frostime/pi-vscode-ui/pull/13)). FrostPi follows names set in Pi and restores saved names for sessions still labeled `New session`.
 - Use `/new` to start a conversation in place and keep the previous one available to resume. ([#13](https://github.com/frostime/pi-vscode-ui/pull/13))
-- Fork a saved message while Pi is responding. The original reply keeps running, and you can cancel the fork before it joins the session list. ([#13](https://github.com/frostime/pi-vscode-ui/pull/13))
-- Stop or restart Pi without closing the session or losing history. Use `/reload` to reload extensions, skills, and other resources without restarting. ([#13](https://github.com/frostime/pi-vscode-ui/pull/13))
+- Fork a saved message while Pi is responding, without interrupting the original reply. You can cancel the fork before it joins the session list. To keep a new fork in the list after restarting FrostPi, send a message in it or rename it. ([#13](https://github.com/frostime/pi-vscode-ui/pull/13))
+- Stop or restart Pi without closing the session or losing saved history. **Stop Pi Process** warns that queued messages will be discarded. Use `/reload` to refresh Pi extensions, skills, and other resources without restarting. ([#13](https://github.com/frostime/pi-vscode-ui/pull/13))
 - Delete a saved session without deleting its forks. VS Code tries the trash first; Desktop deletes the file permanently after confirmation. ([#13](https://github.com/frostime/pi-vscode-ui/pull/13))
 - Focus View folds tool calls and reasoning by default while a reply runs, leaving reply text visible. Afterward, open **Worked** to read interim replies without expanding every tool call. Running and finished turns have separate folding settings. ([#13](https://github.com/frostime/pi-vscode-ui/pull/13))
 
@@ -615,7 +617,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add editor context capture, file navigation, Git-base diffs, diagnostics export, CSP, and trusted-workspace constraints.
 - Add production builds, tests, VSIX verification, release scripts, and maintenance documentation.
 
-[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.7...HEAD
+[Unreleased]: https://github.com/frostime/pi-vscode-ui/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.7...v0.17.0
 [0.16.7]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.6...v0.16.7
 [0.16.6]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.5...v0.16.6
 [0.16.5]: https://github.com/frostime/pi-vscode-ui/compare/v0.16.4...v0.16.5
