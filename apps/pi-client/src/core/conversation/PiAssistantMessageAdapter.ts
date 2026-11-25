@@ -29,6 +29,7 @@ interface ActiveAssistantMessage {
   errorMessage?: string;
   parts: Map<number, AdaptedAssistantPart>;
   closedTextPartIndexes: Set<number>;
+  openingPartIndexes: Set<number>;
 }
 
 /**
@@ -48,6 +49,8 @@ export class PiAssistantMessageAdapter {
       if (!message) return undefined;
       const active = activeMessage(message);
       if (!hasIdentity(active)) return undefined;
+      // Pi can include the first fragment in message_start and replay it as an indexed delta.
+      active.openingPartIndexes = new Set(active.parts.keys());
       this.#active = active;
       this.#updatesBlocked = false;
       return adaptedMessage(active, "streaming", legacyFailure(event));
@@ -109,6 +112,7 @@ function activeMessage(message: Record<string, unknown>): ActiveAssistantMessage
     ...(typeof message.errorMessage === "string" ? { errorMessage: message.errorMessage } : {}),
     parts: partsFromContent(message.content),
     closedTextPartIndexes: new Set(),
+    openingPartIndexes: new Set(),
   };
 }
 
@@ -145,24 +149,33 @@ function partsFromContent(content: unknown): Map<number, AdaptedAssistantPart> {
 }
 
 function applyDelta(active: ActiveAssistantMessage, delta: Record<string, unknown>): boolean {
-  const { parts, closedTextPartIndexes } = active;
+  const { parts, closedTextPartIndexes, openingPartIndexes } = active;
   const contentIndex = nonNegativeInteger(delta.contentIndex);
   if (contentIndex === undefined || typeof delta.type !== "string") return false;
 
   switch (delta.type) {
     case "text_start":
-      return startTextPart(parts, contentIndex, "text");
-    case "thinking_start":
-      return startTextPart(parts, contentIndex, "thinking");
+    case "thinking_start": {
+      const type = delta.type === "text_start" ? "text" : "thinking";
+      if (parts.get(contentIndex)?.type === type && openingPartIndexes.delete(contentIndex)) parts.delete(contentIndex);
+      return startTextPart(parts, contentIndex, type);
+    }
     case "text_delta":
-      return appendTextPart(parts, closedTextPartIndexes, contentIndex, "text", delta.delta);
-    case "thinking_delta":
-      return appendTextPart(parts, closedTextPartIndexes, contentIndex, "thinking", delta.delta);
+    case "thinking_delta": {
+      const type = delta.type === "text_delta" ? "text" : "thinking";
+      const applied = appendTextPart(parts, closedTextPartIndexes, contentIndex, type, delta.delta);
+      if (applied) openingPartIndexes.delete(contentIndex);
+      return applied;
+    }
     case "text_end":
-      return endTextPart(parts, closedTextPartIndexes, contentIndex, "text", delta.content);
-    case "thinking_end":
-      return endTextPart(parts, closedTextPartIndexes, contentIndex, "thinking", delta.content);
+    case "thinking_end": {
+      const type = delta.type === "text_end" ? "text" : "thinking";
+      const applied = endTextPart(parts, closedTextPartIndexes, contentIndex, type, delta.content);
+      if (applied) openingPartIndexes.delete(contentIndex);
+      return applied;
+    }
     case "toolcall_start":
+      if (parts.get(contentIndex)?.type === "tool" && openingPartIndexes.delete(contentIndex)) parts.delete(contentIndex);
       if (parts.has(contentIndex)) return false;
       parts.set(contentIndex, { type: "tool", contentIndex, tool: { state: "preparing", rawArguments: "" } });
       return true;

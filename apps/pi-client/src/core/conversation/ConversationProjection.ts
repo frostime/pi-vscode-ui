@@ -1,6 +1,7 @@
 import type { RpcEvent, RpcModel, RpcSessionEntry } from "@frostime/pi-rpc";
 
 import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
+import type { ResponseMetricsView } from "../../shared/model/sessionViewModel.js";
 import type {
   AgentActivityView,
   AgentTurnStatus,
@@ -54,6 +55,7 @@ export interface ConversationProjectionSnapshot {
   queuedSteers: readonly QueuedPromptView[];
   queuedFollowUps: readonly QueuedPromptView[];
   contentRevision: number;
+  responseMetrics?: ResponseMetricsView;
 }
 
 export type ConversationReconcileResult = "applied" | "reload";
@@ -70,6 +72,11 @@ interface AssistantPlacement {
   timestamp: number;
 }
 
+interface ResponseMeter {
+  id: string;
+  metrics: ResponseMetricsView;
+}
+
 const CACHE_MISS_NOTICE_ID_PREFIX = "cache-miss-";
 
 export class ConversationProjection {
@@ -83,6 +90,7 @@ export class ConversationProjection {
   #pendingLiveErrorTurnId: string | null = null;
   #sequence = 0;
   #contentRevision = 0;
+  #responseMetrics: ResponseMeter | undefined;
   readonly #persistedEntryIds = new Set<string>();
   readonly #eligibleLiveTurnIds: string[] = [];
   readonly #eligibleLiveTurnIdSet = new Set<string>();
@@ -105,6 +113,7 @@ export class ConversationProjection {
       queuedSteers: this.#queuedSteers,
       queuedFollowUps: this.#queuedFollowUps,
       contentRevision: this.#contentRevision,
+      ...(this.#responseMetrics ? { responseMetrics: this.#responseMetrics.metrics } : {}),
     };
   }
 
@@ -114,6 +123,7 @@ export class ConversationProjection {
     this.#persistedTurn = null;
     this.#pendingLiveErrorTurnId = null;
     this.#resetStreamingAssistant();
+    this.#responseMetrics = undefined;
     this.#persistedEntryIds.clear();
     this.#eligibleLiveTurnIds.length = 0;
     this.#eligibleLiveTurnIdSet.clear();
@@ -257,7 +267,7 @@ export class ConversationProjection {
 
   finalizeLiveState(): void {
     this.#store.finalizeUnresolvedTools();
-    this.#assistantMessageAdapter.reset();
+    this.#resetStreamingAssistant();
     this.#markContentChanged();
   }
 
@@ -548,6 +558,7 @@ export class ConversationProjection {
 
   #resetStreamingAssistant(): void {
     this.#assistantMessageAdapter.reset();
+    if (this.#responseMetrics?.metrics.durationMs === undefined) this.#responseMetrics = undefined;
   }
 
   #placeCustomMessageEntry(entry: RpcSessionEntry, kind: "entry-appended" | "persisted", turnId?: string): void {
@@ -623,6 +634,7 @@ export class ConversationProjection {
       ),
     });
     if (placement.kind !== "placed") return undefined;
+    this.#updateResponseMetrics(placement.viewMessageId, message, event, status);
     if (status === "streaming") this.#setTurnStatus(turn.id, "running");
     else if (status === "error") {
       this.#pendingLiveErrorTurnId = turn.id;
@@ -635,6 +647,43 @@ export class ConversationProjection {
       this.#setTurnStatus(turn.id, "completed", Date.now());
     }
     return { turnId: turn.id, viewMessageId: placement.viewMessageId, status, timestamp };
+  }
+
+  #updateResponseMetrics(id: string, message: AdaptedAssistantMessage, event: RpcEvent, status: MessageStatus): void {
+    if (status === "error" || status === "aborted" || message.stopReason === "deferred") {
+      this.#responseMetrics = undefined;
+      return;
+    }
+    const previous = this.#responseMetrics?.id === id ? this.#responseMetrics : undefined;
+    const rawMessage = recordValue(event.message);
+    const usage = recordValue(message.phase === "final" ? rawMessage.usage : event.usage ?? rawMessage.usage);
+    const output = usage.output;
+    const reported = typeof output === "number" && Number.isSafeInteger(output) && output > 0 ? output : undefined;
+    if (message.phase === "streaming") {
+      const startedAt = previous?.metrics.startedAt ?? message.timestamp ?? Date.now();
+      const cumulative = reported ?? (previous?.metrics.estimated ? undefined : previous?.metrics.outputTokens);
+      const estimated = cumulative === undefined;
+      const observedTokens = cumulative ?? estimateOutputTokens(message.parts);
+      // Pi timestamps the request before output, so buffered chunks still use
+      // the full elapsed time. Wait one second before showing a live average.
+      const elapsedMs = Date.now() - startedAt;
+      const rate = observedTokens > 0 && elapsedMs >= 1_000 ? observedTokens * 1000 / elapsedMs : undefined;
+      this.#responseMetrics = { id, metrics: {
+        startedAt,
+        ...(observedTokens > 0 ? { outputTokens: Math.ceil(observedTokens), ...(estimated ? { estimated: true } : {}) } : {}),
+        ...(rate !== undefined ? { outputTokensPerSecond: rate } : {}),
+      } };
+      return;
+    }
+    const startedAt = previous?.metrics.startedAt ?? message.timestamp;
+    const nativeDuration = rawMessage.durationMs;
+    const durationMs = typeof nativeDuration === "number" && Number.isFinite(nativeDuration) && nativeDuration > 0
+      ? nativeDuration : previous && Math.max(0, Date.now() - previous.metrics.startedAt);
+    const outputTokens = reported ?? Math.ceil(estimateOutputTokens(message.parts));
+    this.#responseMetrics = outputTokens && startedAt !== undefined && durationMs ? { id, metrics: {
+      startedAt, durationMs, outputTokens,
+      ...(reported === undefined ? { estimated: true } : {}),
+    } } : undefined;
   }
 
   #applyToolStart(event: RpcEvent): void {
@@ -1029,6 +1078,19 @@ export class ConversationProjection {
   #markContentChanged(): void {
     this.#contentRevision += 1;
   }
+}
+
+function estimateOutputTokens(parts: readonly AdaptedAssistantPart[]): number {
+  let characters = 0;
+  for (const part of parts) {
+    if (part.type === "text" || part.type === "thinking") characters += part.text.length;
+    if (part.type === "tool") {
+      characters += part.tool.state === "preparing" ? part.tool.rawArguments.length
+        : part.tool.name.length + JSON.stringify(part.tool.arguments).length;
+    }
+  }
+  // Match Pi's chars-per-token heuristic and round only when displaying the estimate.
+  return characters / 4;
 }
 
 function cacheMissNotice(viewMessageId: string, miss: CacheMiss, timestamp: number): SessionNoticeView {

@@ -166,6 +166,9 @@ Use `@Selection`, `@CurrentFile`, or `@path/to/file` for workspace references. F
 
 ### Models and sessions
 
+The chat footer shows a running output token count and an average rate over the model request. Counts marked `≈` are estimated from streamed content and are replaced by the provider's count when it arrives.
+
+
 Run multiple independent Pi sessions, switch providers and models, resume existing sessions, and select only the thinking levels exposed by the active model's Pi metadata.
 
 Session state remains visible while other sessions continue working in the background.
