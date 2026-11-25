@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { activateTranscriptLink } from "./activateTranscriptLink";
   import { detectMermaidTheme, getCachedMermaidSvg, renderMermaidSvg, type MermaidTheme } from "./mermaidRenderer";
 
   let { source }: { source: string } = $props();
@@ -9,6 +10,15 @@
   let errorText = $state<string | null>(null);
   let requestId = 0;
   let theme = $state<MermaidTheme | null>(null);
+
+  function linkActions(node: HTMLElement) {
+    node.addEventListener("click", activateTranscriptLink);
+    node.addEventListener("keydown", activateTranscriptLink);
+    return { destroy() {
+      node.removeEventListener("click", activateTranscriptLink);
+      node.removeEventListener("keydown", activateTranscriptLink);
+    } };
+  }
 
   onMount(() => {
     const updateTheme = (): void => { theme = detectMermaidTheme(); };
@@ -55,7 +65,7 @@
 
 <div class="mermaid-block" class:mermaid-error={status === "error"} aria-busy={status === "loading"}>
   {#if status === "ready" && svgHtml}
-    <div class="mermaid-host">{@html svgHtml}</div>
+    <div class="mermaid-host" use:linkActions>{@html svgHtml}</div>
   {:else if status === "error"}
     <div class="mermaid-fallback">
       <div class="mermaid-status">{errorText}</div>

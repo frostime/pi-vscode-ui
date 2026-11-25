@@ -21,7 +21,6 @@ export { WebviewActionDispatcher, type WebviewActionDispatcherDependencies, type
 export { WebviewConnection, type ConnectionHostInputs } from "./bridge/WebviewConnection.js";
 export type { WebviewEndpoint, ConnectionContext } from "./bridge/webviewTypes.js";
 export { collectionDelta } from "./bridge/collectionDelta.js";
-export { resolveLocalMarkdownImage } from "./bridge/markdown-images/MarkdownImageResolver.js";
 export { readConfiguration, readHostProxy } from "./readConfiguration.js";
 export { readChatTypography } from "./readChatTypography.js";
 export { SessionPersistence } from "./sessions/SessionPersistence.js";

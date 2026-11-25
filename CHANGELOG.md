@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- VS Code now asks once before opening a web link from a chat message.
+
+### Fixed
+
+- VS Code now asks once before opening a web link from a chat message.
+
 ## [0.17.0] - 2026-11-25
 
 ### Added

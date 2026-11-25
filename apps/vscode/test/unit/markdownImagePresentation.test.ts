@@ -13,7 +13,7 @@ describe("Markdown image presentation", () => {
     expect(markdownImageCaption(undefined, "x".repeat(161))).toBeUndefined();
   });
 
-  it("keeps HTTPS sources inert behind an explicit load action", () => {
+  it("keeps HTTPS sources inert without a load action", () => {
     const { body } = render(MarkdownImage, {
       props: {
         source: "https://images.example.com/diagram.png",
@@ -23,7 +23,7 @@ describe("Markdown image presentation", () => {
       },
     });
 
-    expect(body).toContain("Load image");
+    expect(body).toContain("Remote image blocked");
     expect(body).toContain("images.example.com");
     expect(body).not.toContain("<img");
     expect(body).not.toContain('src="https://images.example.com/diagram.png"');

@@ -183,7 +183,7 @@ describe("renderMarkdownHtml", () => {
     const root = document.createElement("div");
     root.innerHTML = html;
 
-    expect(root.querySelector("a")?.getAttribute("href")).toBe("https://example.com/details");
+    expect(root.querySelector("a")?.getAttribute("data-transcript-url")).toBe("https://example.com/details");
     expect(root.querySelector("a > [data-markdown-image]")).not.toBeNull();
   });
 
@@ -193,7 +193,8 @@ describe("renderMarkdownHtml", () => {
     root.innerHTML = html;
     const link = root.querySelector("a");
 
-    expect(link?.getAttribute("href")).toBe("https://example.com/file.ts:42");
+    expect(link?.getAttribute("data-transcript-url")).toBe("https://example.com/file.ts:42");
+    expect(link?.hasAttribute("href")).toBe(false);
     expect(link?.hasAttribute("data-file-path")).toBe(false);
   });
 
@@ -340,7 +341,8 @@ describe("sanitizeMermaidSvg", () => {
 
     expect(cleaned).toContain(pixel);
     expect(cleaned).toContain('href="#curve"');
-    expect(cleaned).toContain('href="https://example.com/docs"');
+    expect(cleaned).toContain('data-transcript-url="https://example.com/docs"');
+    expect(cleaned).not.toContain('href="https://example.com/docs"');
     for (const leaked of ["ping", "label.png", "label-2x.png", "poster.png"]) expect(cleaned).not.toContain(leaked);
   });
 
@@ -413,7 +415,8 @@ describe("sanitizeMermaidSvg", () => {
 
     for (const leaked of ["srcset", "ping", "img-2x.png", "source-2x.png", "beacon"]) expect(cleaned).not.toContain(leaked);
     expect(cleaned).toContain('src="data:image/png;base64,iVBORw0KGgo="');
-    expect(cleaned).toContain('href="https://example.com/docs"');
+    expect(cleaned).toContain('data-transcript-url="https://example.com/docs"');
+    expect(cleaned).not.toContain('href="https://example.com/docs"');
   });
 
   it.each([
