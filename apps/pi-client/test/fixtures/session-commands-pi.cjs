@@ -35,6 +35,7 @@ let sequence = 0;
 let streaming = false;
 let reloads = 0;
 let finishHeldTurn;
+let pendingMessages = [];
 let releaseNewSession;
 let failNextState = false;
 
@@ -101,7 +102,7 @@ function handle(command) {
         return;
       }
       respond(id, {
-        model, thinkingLevel, isStreaming: streaming, isCompacting: false, pendingMessageCount: 0,
+        model, thinkingLevel, isStreaming: streaming, isCompacting: false, pendingMessageCount: pendingMessages.length,
         sessionFile: sessionFile(), sessionId: `fake-${generation}`, ...(sessionName ? { sessionName } : {}),
       });
       return;
@@ -136,6 +137,7 @@ function handle(command) {
     case "set_thinking_level": thinkingLevel = command.level; respond(id); return;
     case "set_session_name": sessionName = command.name; respond(id); return;
     case "abort":
+      pendingMessages = [];
       finishHeldTurn?.();
       respond(id);
       return;
@@ -147,6 +149,7 @@ function handle(command) {
           return;
         }
         generation += 1;
+        pendingMessages = [];
         entries = [];
         leafId = null;
         sequence = 0;
@@ -227,6 +230,13 @@ function prompt(command) {
     return;
   }
 
+  // A follow-up accepted during the held turn stays queued until that turn is
+  // stopped. It must not start a second reply merely because its RPC was read.
+  if (streaming && command.streamingBehavior) {
+    pendingMessages.push(command);
+    respond(id);
+    return;
+  }
   respond(id);
   const userMessage = { role: "user", content: text, timestamp: (sequence + 1) * 1000 };
   event({ type: "agent_start" });
