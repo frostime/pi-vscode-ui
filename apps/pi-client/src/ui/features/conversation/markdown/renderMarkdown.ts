@@ -287,7 +287,8 @@ function applyPromptReferencePlugin(md: MarkdownIt): void {
   const references = new WeakMap<StateInline, Map<number, PromptReference>>();
   md.inline.ruler.before("backticks", "prompt_reference", (state, silent) => {
     const from = state.pos - 4;
-    if (!state.env.promptReferences || state.src[state.pos] !== "`"
+    const environment = state.env as { promptReferences?: boolean };
+    if (!environment.promptReferences || state.src[state.pos] !== "`"
       || !state.pending.endsWith("ref:") || state.src.slice(from, state.pos) !== "ref:") return false;
     let matches = references.get(state);
     if (!matches) {
@@ -308,7 +309,8 @@ function applyPromptReferencePlugin(md: MarkdownIt): void {
   md.renderer.rules.prompt_reference = (tokens, index) => {
     const token = tokens[index]!, path = token.content;
     const { name, lines } = promptReferenceLabel(path);
-    const reference = token.meta?.inLink ? null : parseFileReference(path);
+    const metadata = token.meta as { inLink: boolean };
+    const reference = metadata.inLink ? null : parseFileReference(path);
     const label = `<span class="file-reference-name">${escapeHtml(name)}</span>`
       + (lines ? `<span class="file-reference-lines">${escapeHtml(lines)}</span>` : "");
     const display = reference
