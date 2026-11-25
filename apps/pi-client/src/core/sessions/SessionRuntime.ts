@@ -16,14 +16,14 @@ import {
   type ThinkingLevel,
 } from "@frostime/pi-rpc";
 
-import type { WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
+import type { QueuedPromptAction, WebviewImageInput } from "../../shared/bridge/webviewToHost.js";
 import type { QuestionDraftSubmission } from "../../shared/question-tool/questionToolProtocol.js";
-import type { AgentTurnView, ImageAttachmentView } from "../../shared/model/conversationModel.js";
+import type { AgentTurnView, ImageAttachmentView, QueuedPromptView } from "../../shared/model/conversationModel.js";
 import type { ComposerSeedView, SessionViewModel } from "../../shared/model/sessionViewModel.js";
 import type { QueuedPromptRecoveryOutcome } from "../../shared/model/queuedPromptRecoveryModel.js";
 import { canonicalPath } from "../_shared/canonicalPath.js";
 import { loadPiSettings, showCacheMissNoticesEnabled } from "../_shared/pi-settings/loadPiSettings.js";
-import { normalizeImageAttachments, validateProjectedImageAttachments } from "../attachments/normalizeImageAttachment.js";
+import { normalizeImageAttachments, projectedImageInput, validateProjectedImageAttachments } from "../attachments/normalizeImageAttachment.js";
 import type { FrostPiConfiguration } from "../configuration/configurationTypes.js";
 import { assistantCacheHitPercent } from "../conversation/cacheMissDetection.js";
 import { ConversationProjection } from "../conversation/ConversationProjection.js";
@@ -99,6 +99,7 @@ export class SessionRuntime {
   #abortRequested = false;
   /** Counts `agent_start` events, so a state read before the latest one is known to be stale. */
   #agentStarts = 0;
+  #dispatchingQueuedPrompt = false;
   readonly #sessionTreeBridge: SessionTreeExtensionBridge | null;
   readonly #questionToolBridge: QuestionToolExtensionBridge | null;
   /** False until a command list from this process has shown which bundled adapters it loaded. */
@@ -197,6 +198,7 @@ export class SessionRuntime {
     this.#api = null;
     this.#ompPrompts = null;
     this.#queuedPromptRecovery = null;
+    this.#dispatchingQueuedPrompt = false;
     this.#extensionUi = null;
     this.#historyEventBuffer = null;
     this.#entries.reset();
@@ -246,12 +248,18 @@ export class SessionRuntime {
     // Park while streaming or while an earlier prompt still awaits promotion; otherwise an idle-gap
     // appendUserPrompt can steal the next agent_start and leave queue bubbles stuck.
     const hasQueuedPrompts = this.view.queuedSteers.length > 0 || this.view.queuedFollowUps.length > 0;
-    const queuePrompt = !extensionCommand && (this.view.isStreaming || hasQueuedPrompts);
+    const queuePrompt = !extensionCommand && (this.view.isStreaming || hasQueuedPrompts || this.#dispatchingQueuedPrompt);
 
     if (queuePrompt) {
       const recovery = this.#queuedPromptRecovery;
       if (!recovery) throw new Error("The session is not ready to accept queued messages.");
       const streamingBehavior = requestedStreamingBehavior ?? configuration.streamingBehavior;
+      if (!ompPrompts && streamingBehavior === "followUp") {
+        if (recovery.view.state === "recovering") throw new Error("Wait for pending-message recovery to finish.");
+        this.#conversation.enqueueFollowUp(message, images, Date.now(), true);
+        this.#notifyChange();
+        return;
+      }
       const queuedId = streamingBehavior === "steer"
         ? this.#conversation.enqueueSteer(message, images)
         : this.#conversation.enqueueFollowUp(message, images);
@@ -303,6 +311,99 @@ export class SessionRuntime {
       this.#notifyChange();
       throw error;
     }
+  }
+
+  async updateQueuedPrompt(id: string, action: QueuedPromptAction): Promise<void> {
+    if (this.#viewState.queueRecoveryAvailability() !== "ready" || this.view.queuedPromptRecovery.state === "recovering") {
+      throw new Error("Wait for the session to finish its current operation.");
+    }
+    const prompts = this.#editableFollowUps();
+    const index = prompts.findIndex((prompt) => prompt.id === id);
+    const prompt = prompts[index];
+    if (!prompt) throw new Error("This message has already left the queue.");
+    switch (action.kind) {
+      case "startEdit":
+        prompts[index] = { ...prompt, editing: true };
+        break;
+      case "cancelEdit":
+        prompts[index] = { ...prompt, editing: false };
+        break;
+      case "edit": {
+        const text = normalizePiSlashPrompt(action.text);
+        if (!text && prompt.images.length === 0) throw new Error("A queued message needs text or an image.");
+        prompts[index] = { ...prompt, text, editing: false };
+        break;
+      }
+      case "move": {
+        const target = index + (action.direction === "up" ? -1 : 1);
+        const neighbor = prompts[target];
+        if (!neighbor) return;
+        prompts[target] = prompt;
+        prompts[index] = neighbor;
+        break;
+      }
+      case "remove":
+        prompts.splice(index, 1);
+        break;
+      case "steer":
+        if (this.#dispatchingQueuedPrompt) throw new Error("Wait for the current queued message to send.");
+        await this.#deliverQueuedPrompt(prompt, this.view.isStreaming);
+        return;
+    }
+    this.#conversation.replaceEditableFollowUps(prompts);
+    this.#notifyChange();
+    if (action.kind !== "startEdit") this.#dispatchNextFollowUp();
+  }
+
+  #editableFollowUps(): QueuedPromptView[] {
+    return this.#conversation.read().queuedFollowUps.filter((prompt) => prompt.editable);
+  }
+
+  async #deliverQueuedPrompt(prompt: QueuedPromptView, steer: boolean): Promise<void> {
+    const api = this.#requireApi();
+    const recovery = this.#queuedPromptRecovery;
+    const version = this.#lifecycleVersion;
+    const images = prompt.images.map(projectedImageInput);
+    const normalizedImages = normalizeImageAttachments(images, this.#configurationProvider().maxImageBytes);
+    this.#dispatchingQueuedPrompt = true;
+    const index = this.#editableFollowUps().findIndex((item) => item.id === prompt.id);
+    this.#conversation.removeQueuedPrompt(prompt.id);
+    const submittedId = steer
+      ? this.#conversation.enqueueSteer(prompt.text, images, prompt.timestamp)
+      : this.#conversation.appendUserPrompt(prompt.text, images, prompt.timestamp);
+    this.#notifyChange();
+    try {
+      const submit = () => api.prompt(prompt.text, {
+        images: normalizedImages,
+        ...(steer ? { streamingBehavior: "steer" as const } : {}),
+      });
+      await (steer && recovery ? recovery.admitQueuedPrompt(submit) : submit());
+    } catch (error) {
+      if (version !== this.#lifecycleVersion || this.view.status === "failed") return;
+      if (steer) this.#conversation.removeQueuedPrompt(submittedId);
+      else this.#conversation.completeTurn(submittedId, "error");
+      if (error instanceof PiRpcCommandError && !this.#abortRequested) {
+        const remaining = this.#editableFollowUps();
+        remaining.splice(index, 0, prompt);
+        this.#conversation.replaceEditableFollowUps(remaining);
+        this.#conversation.appendNotice("Pi declined the message. It is still in the queue.", "error");
+      } else {
+        this.#conversation.appendNotice("Could not confirm delivery of the queued message. Check the conversation before resending.", "error");
+      }
+      this.#notifyChange();
+    } finally {
+      if (version === this.#lifecycleVersion) this.#dispatchingQueuedPrompt = false;
+    }
+  }
+
+  #dispatchNextFollowUp(): void {
+    if (this.#dispatchingQueuedPrompt || this.#abortRequested || this.view.isStreaming || this.view.queuedSteers.length
+      || this.#viewState.queueRecoveryAvailability() !== "ready" || this.view.queuedPromptRecovery.state === "recovering") return;
+    const next = this.#editableFollowUps()[0];
+    if (next && !next.editing) void this.#deliverQueuedPrompt(next, false).catch(() => {
+      this.#conversation.appendNotice("Could not send the next queued message. Review its attachments and try again.", "error");
+      this.#notifyChange();
+    });
   }
 
   async restoreQueuedPrompts(): Promise<QueuedPromptRecoveryOutcome> {
@@ -1007,7 +1108,7 @@ export class SessionRuntime {
       this.#stopLiveStatsRefresh();
       const settledTurn = settlingTurnId ? conversationTurns(this.view).find((turn) => turn.id === settlingTurnId) : undefined;
       if (!abortRequested && settledTurn?.status === "completed") this.#hooks.onAgentTurnCompleted?.(this);
-      void this.#refreshAfterSettled();
+      void this.#refreshAfterSettled(!abortRequested);
     }
     if (event.type === "compaction_end") void this.#refreshAfterCompaction();
   }
@@ -1069,7 +1170,7 @@ export class SessionRuntime {
     this.#scheduleLiveStatsRefresh();
   }
 
-  async #refreshAfterSettled(): Promise<void> {
+  async #refreshAfterSettled(continueQueue: boolean): Promise<void> {
     const api = this.#api;
     if (!api) return;
     const startsBefore = this.#agentStarts;
@@ -1078,6 +1179,7 @@ export class SessionRuntime {
       api.getSessionStats().catch(() => undefined),
       this.#runtimeCapabilities().slashCommands ? api.getCommands().catch(() => undefined) : Promise.resolve(undefined),
     ]);
+    if (this.#disposed || api !== this.#api) return;
     // Pi may start the next turn (a queued follow-up, or a prompt sent at once) while
     // these replies are in flight. Its state then predates that start, and applying it
     // would mark the running turn idle; the next settle reads the state again.
@@ -1087,6 +1189,12 @@ export class SessionRuntime {
     await this.#refreshPersistedEntries(api).catch((error) => {
       this.#reportEntryRefreshFailure("Failed to reconcile Pi session entries", error);
     });
+    if (this.#disposed || api !== this.#api) return;
+    // Another turn can start and settle while history is loading. Only its own
+    // refresh knows whether Pi still has a message ahead of our editable follow-ups.
+    if (continueQueue && startsBefore === this.#agentStarts && state && (state.pendingMessageCount ?? 0) === 0) {
+      this.#dispatchNextFollowUp();
+    }
     this.#notifyChange();
   }
 

@@ -4,7 +4,7 @@ import { basename, normalize, resolve } from "node:path";
 
 import type { RpcExtensionUiResponse, StreamingBehavior, ThinkingLevel } from "@frostime/pi-rpc";
 
-import type { WebviewImageInput } from "../shared/bridge/webviewToHost.js";
+import type { QueuedPromptAction, WebviewImageInput } from "../shared/bridge/webviewToHost.js";
 import type { QuestionDraftSubmission } from "../shared/question-tool/questionToolProtocol.js";
 import type { SessionRuntimeStatus, SessionSummaryView, SessionViewModel, WorkspaceViewModel } from "../shared/model/sessionViewModel.js";
 import { sameCanonicalPath } from "../core/_shared/canonicalPath.js";
@@ -594,6 +594,11 @@ export class SessionRegistry {
         }
       }
     });
+  }
+
+  async updateQueuedPrompt(sessionId: string, promptId: string, action: QueuedPromptAction): Promise<void> {
+    this.#assertSessionOutsideFork(sessionId);
+    await this.#requireRuntime(sessionId).updateQueuedPrompt(promptId, action);
   }
 
   async restoreQueuedPrompts(sessionId: string) {

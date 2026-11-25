@@ -41,6 +41,8 @@ FrostPi aims to keep Pi's functional workflows available from the GUI: extension
 
 Conversation rendering supports ordered reasoning, tool activity, command output, errors, images, rich Markdown including Mermaid, compaction records, branch summaries, and extension-defined custom messages.
 
+Messages queue by default while Pi is running. Use the pending list to edit or reorder them, or choose **Steer** to send one into the current run.
+
 <table>
   <tr>
     <td width="50%" align="center">

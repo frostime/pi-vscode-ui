@@ -376,6 +376,35 @@ function restoreButton(container: HTMLElement): HTMLButtonElement {
   return button;
 }
 
+describe("editable pending messages", () => {
+  it("targets the selected message for reorder, edit, and steering", async () => {
+    const first = { ...queuedPrompt("one", "Same prompt"), editable: true as const };
+    const second = { ...queuedPrompt("two", "Same prompt"), editable: true as const };
+    presentationStore.set(presentation("sidebar", session("session", { queued: [first, second] })));
+    const view = render(ClientApp, { props: { localComposerCommands: stubCommands } });
+
+    await fireEvent.click(view.getAllByRole("button", { name: "Move up" })[1]!);
+    expect(postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+      type: "updateQueuedPrompt", promptId: "two", action: { kind: "move", direction: "up" },
+    }));
+    await fireEvent.click(view.getAllByRole("button", { name: "Steer" })[0]!);
+    expect(postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+      type: "updateQueuedPrompt", promptId: "one", action: { kind: "steer" },
+    }));
+    await fireEvent.click(view.getAllByRole("button", { name: "Edit queued message" })[1]!);
+    expect(postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+      type: "updateQueuedPrompt", promptId: "two", action: { kind: "startEdit" },
+    }));
+    presentationStore.set(presentation("sidebar", session("session", { queued: [{ ...second, editing: true }, first] })));
+    const editor = await view.findByRole("textbox", { name: "Edit queued message" });
+    await fireEvent.input(editor, { target: { value: "Revised prompt" } });
+    await fireEvent.click(view.getByRole("button", { name: "Save" }));
+    expect(postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+      type: "updateQueuedPrompt", promptId: "two", action: { kind: "edit", text: "Revised prompt" },
+    }));
+  });
+});
+
 describe("pending message recovery availability", () => {
   it.each<[string, QueuedPromptRecoveryView, QueuedPromptView[], DraftImage[]]>([
     ["compaction", { state: "unavailable", reason: "compacting" }, [queuedPrompt("steer", "pending")], []],
