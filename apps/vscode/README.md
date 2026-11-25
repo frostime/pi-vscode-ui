@@ -46,7 +46,7 @@ FrostPi keeps Pi's functional workflows available from the GUI:
 - Switch provider/model and select only thinking levels supported by the active model's Pi metadata.
 - Resume sessions and use Pi's native `/compact` and session-summary behavior.
 - Render rich Markdown including Mermaid, compaction records, branch summaries, and Pi extension custom messages.
-- Display PNG, JPEG, WebP, GIF, AVIF, BMP, and SVG images in conversations; remote HTTPS images load only when clicked.
+- Display PNG, JPEG, WebP, GIF, AVIF, BMP, and SVG image data in conversations. File and remote-image references remain placeholders; FrostPi does not fetch them from chat text.
 - Review command output and tool details; open files and Git-base diffs in native VS Code editors.
 - Inspect context, token categories, tool/message counts, and estimated session cost.
 
