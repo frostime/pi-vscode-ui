@@ -176,12 +176,12 @@
       },
       {
         "command": "frostpi.restartSession",
-        "title": "FrostPi: Restart Current Session",
+        "title": "FrostPi: Restart Pi Process",
         "icon": "$(debug-restart)"
       },
       {
         "command": "frostpi.restartAllSessions",
-        "title": "FrostPi: Restart All Sessions"
+        "title": "FrostPi: Restart All Pi Processes"
       },
       {
         "command": "frostpi.configureProxy",

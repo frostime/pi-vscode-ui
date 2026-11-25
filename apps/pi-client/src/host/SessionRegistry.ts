@@ -1454,7 +1454,7 @@ async function confirmRestart(host: ClientHost, runtimes: readonly SessionRuntim
     runtimes.length > 1
       ? "Restarting all FrostPi sessions will stop active responses, tools, and pending extension UI requests. Persisted Pi history is retained."
       : "Restarting this FrostPi session will stop its active response, tools, and pending extension UI requests. Persisted Pi history is retained.",
-    runtimes.length > 1 ? ["Restart all sessions"] : ["Restart session"],
+    runtimes.length > 1 ? ["Restart all Pi processes"] : ["Restart Pi process"],
   );
   return Boolean(choice);
 }
