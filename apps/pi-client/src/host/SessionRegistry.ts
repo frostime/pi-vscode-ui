@@ -645,6 +645,7 @@ export class SessionRegistry {
     if (forkNeedsOwnProcess(runtime)) {
       return this.#withSessionCreation(() => this.#forkInNewProcess(runtime, original, original.sessionFile!, entryId, resultSelection));
     }
+    if (runtime.view.partialHistory) await this.#loadFullHistory(runtime);
     const operation: ForkOperation = {
       phase: "waiting-for-pi",
       sourceId: sessionId,
@@ -794,6 +795,7 @@ export class SessionRegistry {
       this.#assertNoForkOperation();
       const runtime = this.#requireRuntime(sessionId);
       await this.#ensureRunning(runtime);
+      if (runtime.view.partialHistory) await this.#loadFullHistory(runtime);
       if (hasDraft && !await confirmDraftReplacement(this.#host)) return { cancelled: true };
       const summary = await pickBranchSummary(this.#host);
       if (!summary) return { cancelled: true };
@@ -812,6 +814,8 @@ export class SessionRegistry {
       this.#assertNoForkOperation();
       const runtime = this.#requireRuntime(sessionId);
       await this.#ensureRunning(runtime);
+      // The candidates are listed from the full tree, never from a recent preview.
+      if (runtime.view.partialHistory) await this.#loadFullHistory(runtime);
       const selected = await pickBranchEnd(this.#host, await runtime.listBranchEnds(branchPointId));
       if (!selected || selected.isCurrent) return { cancelled: true };
       if (selected.isEditable && hasDraft && !await confirmDraftReplacement(this.#host)) return { cancelled: true };
@@ -897,6 +901,8 @@ export class SessionRegistry {
     this.#assertSessionOutsideFork(sessionId);
     const runtime = this.#requireRuntime(sessionId);
     await this.#ensureRunning(runtime);
+    // A pending ordinary load may end in a recent preview; it is not the load asked for.
+    await this.#historyJobs.get(runtime.id)?.catch(() => undefined);
     await this.#queueHistory(runtime, true);
   }
 
@@ -1193,6 +1199,23 @@ export class SessionRegistry {
       await this.#historyJobs.get(runtime.id)?.catch(() => undefined);
     }
     if (!this.#runtimes.has(runtime.id)) throw new Error("The session's worktree is no longer available.");
+  }
+
+  /**
+   * Tree operations (Branch here, Switch branch, Fork) need every entry. A recent preview,
+   * or a pending ordinary load that may produce one, is never taken for the full history.
+   * When the full load fails the operation stops before anything is committed.
+   */
+  async #loadFullHistory(runtime: SessionRuntime): Promise<void> {
+    await this.#historyJobs.get(runtime.id)?.catch(() => undefined);
+    const complete = (): boolean => runtime.view.historyStatus === "loaded" && !runtime.view.partialHistory;
+    if (complete()) return;
+    try {
+      await this.#queueHistory(runtime, true);
+    } catch (error) {
+      throw new Error(`Unable to load the full conversation history, so nothing was changed. Try again. ${error instanceof Error ? error.message : String(error)}`.trim());
+    }
+    if (!complete()) throw new Error("Unable to load the full conversation history, so nothing was changed. Try again.");
   }
 
   async #queueHistory(runtime: SessionRuntime, force: boolean): Promise<void> {

@@ -143,8 +143,16 @@ export class SessionViewState {
     this.#view.isSummarizingTree = isNavigatingTree && isSummarizingTree;
   }
 
-  setHistoryStatus(status: SessionViewModel["historyStatus"]): void {
+  /** `deferredReason` says why a deferred history was not loaded; any other status clears it. */
+  setHistoryStatus(status: SessionViewModel["historyStatus"], deferredReason?: string): void {
     this.#view.historyStatus = status;
+    if (status === "deferred" && deferredReason) this.#view.historyDeferredReason = deferredReason;
+    else delete this.#view.historyDeferredReason;
+  }
+
+  setPartialHistory(partial: boolean): void {
+    if (partial) this.#view.partialHistory = true;
+    else delete this.#view.partialHistory;
   }
 
   setModels(models: SessionViewModel["availableModels"]): void {

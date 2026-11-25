@@ -59,6 +59,13 @@ export interface SessionViewModel {
   isCompacting: boolean;
   isForking: boolean;
   historyStatus: SessionHistoryStatus;
+  /** Why a large session's history was deferred instead of opening on a recent preview. */
+  historyDeferredReason?: string;
+  /**
+   * Set while a large session shows only a recent preview: its current branch from the
+   * latest prompt on. Absent once the whole history is loaded.
+   */
+  partialHistory?: true;
   sessionFile?: string;
   sessionId?: string;
   model: RpcModel | null;
