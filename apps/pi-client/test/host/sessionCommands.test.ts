@@ -288,7 +288,7 @@ describe("Host slash commands through the real Registry and child-process path",
 
 
   describe("Fork during a reply", () => {
-    it("forks in a separate Pi process and leaves the running reply alone", async () => {
+    it.each(["first prompt", "explicit rename"] as const)("keeps a busy Fork provisional until its %s", async (use) => {
       const fixture = await host();
       const { registry, view } = fixture;
       const sessionId = await fixture.startSession();
@@ -310,7 +310,14 @@ describe("Host slash commands through the real Registry and child-process path",
       expect(view(sessionId)).toMatchObject({ isStreaming: true, sessionFile: sourceFile });
       expect(registry.activeSessionId).toBe(sessionId);
       await registry.flushPersistence();
-      expect(fixture.persistedSessions().map((record) => record.id)).toEqual([sessionId, result.forkSessionId]);
+      expect(fixture.persistedSessions().map((record) => record.id)).toEqual([sessionId]);
+      expect(existsSync(fork.sessionFile!)).toBe(true);
+
+      const forkId = result.forkSessionId!;
+      if (use === "first prompt") await fixture.converse(forkId, "continue the fork");
+      else await registry.rename(forkId, "Keep this fork");
+      await registry.flushPersistence();
+      expect(fixture.persistedSessions().map((record) => record.id)).toEqual([sessionId, forkId]);
 
       await registry.abort(sessionId);
       await fixture.waitFor(() => !view(sessionId).isStreaming);
@@ -441,21 +448,25 @@ describe("Host slash commands through the real Registry and child-process path",
       expect(userPrompts(view(sessionId))).toEqual(["first", "second"]);
     });
 
-    it("asks before stopping a running reply, and leaves it running when declined", async () => {
+    it("warns about discarding queued messages before stopping a running reply", async () => {
       const fixture = await host();
       const { registry, view } = fixture;
       const sessionId = await fixture.startSession();
       await registry.sendPrompt(sessionId, "hold", []);
       await fixture.waitFor(() => view(sessionId).isStreaming);
+      await registry.sendPrompt(sessionId, "follow up", [], "followUp");
+      expect(view(sessionId).queuedFollowUps).toHaveLength(1);
 
       fixture.answerWarningDialogs(undefined);
       await registry.stopSession(sessionId);
       expect(fixture.warningDialogs.at(-1)).toContain("Stopping this session's Pi process will stop its active response");
+      expect(fixture.warningDialogs.at(-1)).toContain("Any queued messages will be discarded.");
       expect(view(sessionId).isStreaming).toBe(true);
+      expect(view(sessionId).queuedFollowUps).toHaveLength(1);
 
       fixture.answerWarningDialogs("first-button");
       await registry.stopSession(sessionId);
-      expect(view(sessionId).status).toBe("stopped");
+      expect(view(sessionId)).toMatchObject({ status: "stopped", queuedFollowUps: [] });
     });
 
     it("neither stops nor deletes a temporary Session, which could not start again", async () => {

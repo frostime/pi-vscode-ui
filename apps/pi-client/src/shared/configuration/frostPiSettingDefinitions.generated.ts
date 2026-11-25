@@ -143,8 +143,8 @@ export const frostPiSettingDefinitions = {
   },
   "frostpi.composer.fileMentions.followSymlinks": {
     "type": "boolean",
-    "default": true,
+    "default": false,
     "scope": "resource",
-    "description": "Follow symbolic links during @ path completion."
+    "description": "Follow symbolic links during @ path completion. Off by default: a link to a large directory outside the workspace, or a link loop, can make the search slow or fill it with duplicates."
   }
 } as const;

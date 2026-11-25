@@ -552,6 +552,47 @@ describe("ConversationProjection", () => {
     expect(normalizePersistedProjection(projection)).toEqual(normalizePersistedProjection(replacement));
   });
 
+  it("keeps tool calls that end with stop in one user turn, as Pi runs them", () => {
+    // Gemini behind an OpenAI-compatible gateway reports finish_reason "stop" with tool calls.
+    // Pi's openai-completions path keeps that stopReason and Pi still runs the calls.
+    const read = (id: string) => ({ type: "toolCall", id, name: "read", arguments: { path: `${id}.ts` } });
+    const entries = [
+      userEntry("u1", null, "Look around", 1),
+      assistantEntry("a1", "u1", [{ type: "thinking", thinking: "plan" }, read("c1")], "stop", 2),
+      toolResultEntry("r1", "a1", "c1", "one", 3),
+      assistantEntry("a2", "r1", [read("c2"), read("c3")], "stop", 4),
+      toolResultEntry("r2", "a2", "c2", "two", 5),
+      toolResultEntry("r3", "r2", "c3", "three", 6),
+      assistantEntry("a3", "r3", [{ type: "text", text: "done" }], "stop", 7),
+    ];
+    const history = new ConversationProjection();
+    history.replaceEntries(entries, []);
+    const [turn, ...rest] = turns(history.read().items);
+    expect(rest).toEqual([]);
+    expect(turn?.status).toBe("completed");
+    expect(turn?.items.map((item) => item.type)).toEqual(["reasoning", "tool", "tool", "tool", "response"]);
+    expect(turn?.items.filter((item) => item.type === "tool").map((item) => item.tool.status)).toEqual(["complete", "complete", "complete"]);
+
+    const live = new ConversationProjection();
+    live.appendUserPrompt("Look around", [], 1);
+    live.applyEvent({ type: "agent_start" });
+    live.applyEvent({ type: "message_start", message: { role: "user", content: "Look around", timestamp: 1 } });
+    for (const persisted of entries.slice(1)) {
+      const message = persisted.message as Record<string, unknown>;
+      if (message.role === "assistant") {
+        applyCompletedAssistant(live, message);
+        if (message.timestamp === 2) expect(turns(live.read().items)[0]?.status).toBe("running");
+      } else {
+        live.applyEvent({ type: "tool_execution_start", toolCallId: message.toolCallId, toolName: "read", args: {} });
+        live.applyEvent({ type: "tool_execution_end", toolCallId: message.toolCallId, toolName: "read", result: { content: message.content }, isError: false });
+      }
+    }
+    live.applyEvent({ type: "agent_end", messages: [] });
+    live.applyEvent({ type: "agent_settled" });
+    expect(live.reconcileEntries(entries, [])).toBe("applied");
+    expect(normalizePersistedProjection(live)).toEqual(normalizePersistedProjection(history));
+  });
+
   it("finalizes failed-attempt tool calls as cancelled when the agent retries", () => {
     const projection = new ConversationProjection();
     projection.appendUserPrompt("Retry", [], 1);

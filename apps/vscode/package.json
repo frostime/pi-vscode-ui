@@ -2,7 +2,7 @@
   "name": "frostpi",
   "displayName": "Pi VS Code UI — FrostPi",
   "description": "A visual VS Code UI for Pi Coding Agent that uses your existing Pi configuration, extensions, models, sessions, and workflows.",
-  "version": "0.16.7",
+  "version": "0.17.0",
   "publisher": "frostime",
   "license": "AGPL-3.0-only",
   "private": false,
@@ -384,9 +384,9 @@
         },
         "frostpi.composer.fileMentions.followSymlinks": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "scope": "resource",
-          "description": "Follow symbolic links during @ path completion."
+          "description": "Follow symbolic links during @ path completion. Off by default: a link to a large directory outside the workspace, or a link loop, can make the search slow or fill it with duplicates."
         }
       }
     }

@@ -37,7 +37,7 @@ describe("FrostPi configuration reading", () => {
       proxy: { mode: "inherit", noProxy: "localhost,127.0.0.1,::1" },
       fileMentionRespectSearchExclude: true,
       fileMentionRespectIgnoreFiles: true,
-      fileMentionFollowSymlinks: true,
+      fileMentionFollowSymlinks: false,
     });
   });
 
