@@ -4,6 +4,7 @@ import { VSCODE_CLIENT_UI_CAPABILITIES } from "@frostime/pi-client/shared/model/
 import type {
   ClientHost,
   HostConfiguration,
+  HostMemento,
   HostOpenFileDialogOptions,
   HostQuickPickItem,
   HostQuickPickOptions,
@@ -25,6 +26,8 @@ import { showWindowsToast } from "./notifications/showWindowsToast.js";
 export interface ClientHostInputs {
   logger: DiagnosticLogger;
   proxyCredentials: ProxySecretStore;
+  /** Workspace state on the Extension Host's machine (`WorkspaceFileMemento`). */
+  storage: HostMemento;
 }
 
 /** vscode "Thenable" is structurally in-between Promise and PromiseLike; normalize it once. */
@@ -42,8 +45,7 @@ export function createClientHost(
     createEventEmitter: <T>() => new vscode.EventEmitter<T>(),
     clientVersion: () =>
       (vscode.extensions.getExtension("frostime.frostpi")?.packageJSON as { version?: string } | undefined)?.version ?? "unknown",
-    // Memento's Thenable surface satisfies the PromiseLike-based HostMemento.
-    storage: context.workspaceState,
+    storage: inputs.storage,
     proxyCredentials: inputs.proxyCredentials,
     configuration: {
       getConfiguration: (section, scope) => {

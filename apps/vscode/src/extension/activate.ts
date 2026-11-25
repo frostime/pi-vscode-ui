@@ -8,6 +8,7 @@ import { DiagnosticLogger } from "./diagnostics/DiagnosticLogger.js";
 import { GIT_BASE_SCHEME, GitBaseContentProvider } from "./file-changes/GitBaseContentProvider.js";
 import { SessionStatusBar } from "./status-bar/SessionStatusBar.js";
 import { ProxySecretStore } from "./network/ProxySecretStore.js";
+import { WorkspaceFileMemento } from "./storage/WorkspaceFileMemento.js";
 import { PiViewProvider } from "./webview-host/PiViewProvider.js";
 import { SessionWebviewCoordinator } from "./webview-host/SessionWebviewCoordinator.js";
 
@@ -16,7 +17,9 @@ let registryForDeactivate: SessionRegistry | undefined;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const logger = new DiagnosticLogger("info");
   const proxyCredentials = new ProxySecretStore(context.secrets);
-  const host = createClientHost(context, { logger, proxyCredentials });
+  // The session list stays with Pi's session files on the Extension Host's machine, also over Remote SSH.
+  const storage = await WorkspaceFileMemento.open(context.storageUri, context.workspaceState, logger);
+  const host = createClientHost(context, { logger, proxyCredentials, storage });
   logger.setLevel(readConfiguration(host).diagnosticsLevel);
   const registry = new SessionRegistry(host, {
     logger,
