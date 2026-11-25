@@ -1,4 +1,5 @@
 import "$ui/styles";
+import "./styles.css";
 
 import { mount } from "svelte";
 
