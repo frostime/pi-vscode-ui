@@ -442,16 +442,8 @@ export class SessionRuntime {
     hadConversation: boolean,
   ): Promise<{ cancelled: false }> {
     try {
-      let state = await api.getState();
       // A new Pi session starts on Pi's default model; /new keeps the one in use.
-      let restored = false;
-      if (previousModel && (state.model?.provider !== previousModel.provider || state.model?.id !== previousModel.id)) {
-        restored = await api.setModel(previousModel.provider, previousModel.id).then(() => true, () => false);
-      }
-      if (restored || state.thinkingLevel !== previousThinkingLevel) {
-        await api.setThinkingLevel(previousThinkingLevel).catch(() => undefined);
-        state = await api.getState();
-      }
+      const state = await keepModelChoice(api, { model: previousModel, thinkingLevel: previousThinkingLevel });
       const [entryData, stats, commands] = await Promise.all([
         api.getEntries(),
         api.getSessionStats().catch(() => undefined),
@@ -481,6 +473,29 @@ export class SessionRuntime {
   /** False when this runtime leaves the command's text for the runtime itself to interpret. */
   answersHostCommand(name: HostCommand["name"]): boolean {
     return answersHostCommand(name, this.#hostCommandSupport());
+  }
+
+  /**
+   * The Pi entry of a displayed user message. The message of a running turn has none in
+   * the conversation until the turn ends, but Pi saves it as soon as it is sent, so it is
+   * read from Pi's entries without changing the projection. Pi keeps the message's own
+   * timestamp in the entry, which identifies it.
+   */
+  async userMessageEntryId(messageId: string): Promise<string> {
+    const message = this.#conversation.userMessageByViewId(messageId);
+    if (!message) throw new Error("The selected message is no longer available for forking.");
+    if (message.sourceEntryId) return message.sourceEntryId;
+    const api = this.#requireApi();
+    const cursor = this.#entries.cursor ?? undefined;
+    // A cursor Pi no longer knows (its session changed) reads every entry instead.
+    const { entries } = await api.getEntries(cursor).catch(() => api.getEntries());
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const entry = entries[index]!;
+      if (entry.type === "message" && isRecord(entry.message) && entry.message.role === "user" && entry.message.timestamp === message.timestamp) {
+        return entry.id;
+      }
+    }
+    throw new Error("Wait for Pi to save this message before forking it.");
   }
 
   async executeFork(entryId: string): Promise<ForkExecutionResult> {
@@ -522,10 +537,14 @@ export class SessionRuntime {
     }
   }
 
-  async reconcileFork(name: string, composerSeed: ComposerSeedView): Promise<void> {
+  /**
+   * Pi starts a Fork on the model and thinking level saved at the fork point, or its
+   * defaults; `modelChoice` keeps the source's instead.
+   */
+  async reconcileFork(name: string, composerSeed: ComposerSeedView, modelChoice?: ModelChoice): Promise<void> {
     const api = this.#requireApi();
     await api.setSessionName(name);
-    const state = await api.getState();
+    const state = modelChoice ? await keepModelChoice(api, modelChoice) : await api.getState();
     const [entryData, stats, commands] = await Promise.all([
       api.getEntries(),
       api.getSessionStats().catch(() => undefined),
@@ -1340,4 +1359,25 @@ function delay(ms: number): Promise<void> {
 
 function conversationTurns(view: SessionViewModel): AgentTurnView[] {
   return view.conversationItems.filter((item): item is AgentTurnView => item.type === "turn");
+}
+
+export interface ModelChoice {
+  model: SessionViewModel["model"];
+  thinkingLevel: ThinkingLevel;
+}
+
+/**
+ * Puts a session that Pi just replaced back on the model and thinking level chosen before.
+ * Best effort: a model Pi no longer offers leaves Pi's own choice. Returns the state after.
+ */
+async function keepModelChoice(api: PiRpcApi, choice: ModelChoice): Promise<Awaited<ReturnType<PiRpcApi["getState"]>>> {
+  const state = await api.getState();
+  const { model, thinkingLevel } = choice;
+  let restored = false;
+  if (model && (state.model?.provider !== model.provider || state.model?.id !== model.id)) {
+    restored = await api.setModel(model.provider, model.id).then(() => true, () => false);
+  }
+  if (!restored && state.thinkingLevel === thinkingLevel) return state;
+  await api.setThinkingLevel(thinkingLevel).catch(() => undefined);
+  return api.getState();
 }

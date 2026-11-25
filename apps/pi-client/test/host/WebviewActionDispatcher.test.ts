@@ -23,6 +23,7 @@ describe("Session Tab Host authorization", () => {
       abort: vi.fn(),
       sendPrompt: vi.fn().mockResolvedValue(undefined),
       forkMessage: vi.fn().mockResolvedValue({ cancelled: false, forkSessionId: "fork" }),
+      userMessageEntryId: vi.fn().mockResolvedValue("saved-entry"),
     };
     const logger = { error: vi.fn(), info: vi.fn() };
     const openPanel = vi.fn().mockResolvedValue(undefined);
@@ -262,7 +263,7 @@ describe("Session Tab Host authorization", () => {
     expect(posted).toMatchObject([{ type: "toast", level: "info" }]);
   });
 
-  it("preserves sidebar selection policy for panel Fork and opens the distinct result tab", async () => {
+  it("preserves sidebar selection policy for panel Fork and opens the result tab in the source tab's group", async () => {
     const { dispatcher, registry, openPanel, posted, connection } = setup();
     await dispatcher.dispatch({
       type: "forkMessage",
@@ -273,8 +274,34 @@ describe("Session Tab Host authorization", () => {
     } as never, connection);
 
     expect(registry.forkMessage).toHaveBeenCalledWith("source", "entry", "preserve-sidebar-selection");
-    expect(openPanel).toHaveBeenCalledWith("fork");
+    expect(openPanel).toHaveBeenCalledWith("fork", undefined, { sameGroupAs: "source" });
     expect(posted).toContainEqual(expect.objectContaining({ type: "forkResult", ok: true, forkSessionId: "fork" }));
+  });
+
+  it("forks a running turn's message at the entry Pi saved for it", async () => {
+    const { dispatcher, registry, posted, connection } = setup();
+    await dispatcher.dispatch({
+      type: "forkMessage",
+      bridgeVersion: "3.0",
+      requestId: "request",
+      sessionId: "source",
+      messageId: "local-user-1",
+    } as never, connection);
+
+    expect(registry.userMessageEntryId).toHaveBeenCalledWith("source", "local-user-1");
+    expect(registry.forkMessage).toHaveBeenCalledWith("source", "saved-entry", "preserve-sidebar-selection");
+    expect(posted).toContainEqual(expect.objectContaining({ type: "forkResult", ok: true }));
+
+    registry.userMessageEntryId.mockRejectedValueOnce(new Error("Wait for Pi to save this message before forking it."));
+    await dispatcher.dispatch({
+      type: "forkMessage",
+      bridgeVersion: "3.0",
+      requestId: "unsaved",
+      sessionId: "source",
+      messageId: "local-user-2",
+    } as never, connection);
+    expect(registry.forkMessage).toHaveBeenCalledOnce();
+    expect(posted).toContainEqual(expect.objectContaining({ type: "forkResult", requestId: "unsaved", ok: false, error: "Wait for Pi to save this message before forking it." }));
   });
 
   it("reports logical Fork success when opening the result panel fails", async () => {

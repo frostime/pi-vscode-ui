@@ -50,17 +50,11 @@ export interface CreateSessionOptions {
   onRegistered?: (sessionId: string) => void | Promise<void>;
 }
 
-interface ForkOperation {
-  phase: "waiting-for-pi" | "reconciling";
-  sourceId: string;
-  forkId: string;
-  runtime: SessionRuntime;
-  resultSelection: ForkResultSelection;
-  cancelRequested: boolean;
-  stopPromise?: Promise<void>;
-}
-
-/** A Fork from a busy Session, running in a second Pi process that is not yet a Session. */
+/**
+ * A Fork being made in its own Pi process. The source Session and its process are never
+ * touched, so the source stays usable while the Fork starts, forks and loads. Until Pi
+ * has written the Fork's own file, that process is not a Session (see `#processForks`).
+ */
 interface ProcessForkOperation {
   sourceId: string;
   forkId: string;
@@ -108,11 +102,11 @@ export class SessionRegistry {
   readonly #onSessionOpened: SessionRegistryOptions["onSessionOpened"];
 
   #activeSessionId: string | null = null;
-  #forkOperation: ForkOperation | null = null;
   /**
-   * Forks running in a second Pi process, by Fork id. Until Pi has written the Fork's own
-   * file they are not Sessions: they are in neither `#runtimes` nor `#records`, so the
-   * collection, its menus and commands cannot select, stop or delete them.
+   * Forks being made, by Fork id. Until Pi has written the Fork's own file they are not
+   * Sessions: they are in neither `#runtimes` nor `#records`, so the collection, its menus
+   * and commands cannot select, stop or delete them, nor take the source's file, which
+   * the Fork's process has open, for the Fork's.
    */
   readonly #processForks = new Map<string, ProcessForkOperation>();
   #sessionCreationInProgress = 0;
@@ -266,7 +260,6 @@ export class SessionRegistry {
 
   async resumeSession(): Promise<string | undefined> {
     this.#assertOpen();
-    this.#assertNoForkOperation();
     const cwd = this.#sourceWorkspaceCwd("resuming a Pi session");
     const discovery = await this.#discoverWorkingDirectories(cwd);
     this.#assertOpen();
@@ -287,7 +280,6 @@ export class SessionRegistry {
     workingDirectory?: SessionWorkingDirectory,
   ): Promise<string> {
     this.#assertOpen();
-    this.#assertNoForkOperation();
     const existing = [...this.#records.values()].find((record) => record.sessionFile && samePath(record.sessionFile, entry.path));
     if (existing) {
       this.#onSessionOpened?.(existing.id);
@@ -368,7 +360,6 @@ export class SessionRegistry {
   }
 
   async activateSession(sessionId: string): Promise<void> {
-    this.#assertNoForkOperation();
     const runtime = this.#requireRuntime(sessionId);
     if (sessionId !== this.#activeSessionId) await this.#discardActiveTemporarySession();
     this.#assertOpen();
@@ -391,7 +382,6 @@ export class SessionRegistry {
   /** Clear the foreground without closing, discarding or starting any Runtime. */
   async clearActiveSession(): Promise<void> {
     this.#assertOpen();
-    this.#assertNoForkOperation();
     if (this.#activeSessionId === null) return;
     this.#activeSessionId = null;
     await this.#persist();
@@ -399,7 +389,6 @@ export class SessionRegistry {
   }
 
   async closeSession(sessionId: string): Promise<void> {
-    this.#assertSessionOutsideFork(sessionId);
     const runtime = this.#requireRuntime(sessionId);
     if (!await confirmClose(this.#host, runtime)) return;
     await runtime.dispose();
@@ -418,7 +407,6 @@ export class SessionRegistry {
    * file to start from, so it can only be closed.
    */
   async stopSession(sessionId: string): Promise<void> {
-    this.#assertSessionOutsideFork(sessionId);
     const runtime = this.#requireRuntime(sessionId);
     if (runtime.isEphemeral) throw new Error("A temporary session cannot start again once stopped. Close it instead.");
     // A start already under way finishes first, so it cannot bring the process back afterwards.
@@ -437,7 +425,6 @@ export class SessionRegistry {
    * Session stays listed, stopped.
    */
   async deleteSession(sessionId: string): Promise<void> {
-    this.#assertSessionOutsideFork(sessionId);
     // The Fork's process reads this file; it must outlive the Fork.
     if (this.#processForkOf(sessionId)) throw new Error("Wait for the Fork of this session to finish or cancel it first.");
     const runtime = this.#requireRuntime(sessionId);
@@ -490,7 +477,6 @@ export class SessionRegistry {
 
   async retrySession(sessionId?: string): Promise<void> {
     const targetId = sessionId ?? this.#requireActiveId();
-    this.#assertSessionOutsideFork(targetId);
     const runtime = this.#requireRuntime(targetId);
     if (runtime.isEphemeral) throw new Error("Temporary sessions cannot be restarted.");
     if (!await confirmRestart(this.#host, [runtime])) return;
@@ -498,7 +484,6 @@ export class SessionRegistry {
   }
 
   async restartAllSessions(): Promise<void> {
-    this.#assertNoForkOperation();
     const runtimes = [...this.#runtimes.values()];
     const restartable = runtimes.filter((runtime) => !runtime.isEphemeral);
     const skipped = runtimes.length - restartable.length;
@@ -521,7 +506,6 @@ export class SessionRegistry {
   }
 
   async sendPrompt(sessionId: string, text: string, images: WebviewImageInput[], streamingBehavior?: StreamingBehavior): Promise<void> {
-    this.#assertSessionOutsideFork(sessionId);
     if (!text.trim() && images.length === 0) return;
     const runtime = this.#requireRuntime(sessionId);
     await this.#ensureRunning(runtime);
@@ -568,7 +552,6 @@ export class SessionRegistry {
    * entry's conversation and must not be what a restart reopens.
    */
   async startNewConversation(sessionId: string): Promise<{ cancelled: boolean }> {
-    this.#assertSessionOutsideFork(sessionId);
     // /new is a session-tree interaction too: a branch switch or a second /new must not interleave.
     return this.#withTreeInteraction(sessionId, async () => {
       const runtime = this.#requireRuntime(sessionId);
@@ -597,32 +580,26 @@ export class SessionRegistry {
   }
 
   async restoreQueuedPrompts(sessionId: string) {
-    this.#assertSessionOutsideFork(sessionId);
     // A recovery request must not start/restart a process with an empty queue.
     return this.#requireRuntime(sessionId).restoreQueuedPrompts();
   }
 
   async abort(sessionId = this.#requireActiveId()): Promise<void> {
-    this.#assertSessionOutsideFork(sessionId);
     await this.#requireRuntime(sessionId).abort();
   }
 
   async cancelFork(sessionId: string): Promise<void> {
-    const processFork = this.#processForkOf(sessionId);
-    if (processFork) {
-      if (processFork.committed) throw new Error("Pi has already created the Fork; it opens in a moment.");
-      processFork.cancelRequested = true;
-      processFork.stopPromise ??= processFork.runtime.stop();
-      await processFork.stopPromise;
-      return;
-    }
-    const operation = this.#forkOperation;
-    if (!operation || (sessionId !== operation.sourceId && sessionId !== operation.forkId)) {
-      throw new Error("No Fork operation is active for this session.");
-    }
+    const operation = this.#processForkOf(sessionId);
+    if (!operation) throw new Error("No Fork operation is active for this session.");
+    if (operation.committed) throw new Error("Pi has already created the Fork; it opens in a moment.");
     operation.cancelRequested = true;
     operation.stopPromise ??= operation.runtime.stop();
     await operation.stopPromise;
+  }
+
+  /** The Pi entry to fork at for a displayed user message, which may belong to a running turn. */
+  async userMessageEntryId(sessionId: string, messageId: string): Promise<string> {
+    return this.#requireRuntime(sessionId).userMessageEntryId(messageId);
   }
 
   async forkMessage(
@@ -630,7 +607,6 @@ export class SessionRegistry {
     entryId: string,
     resultSelection: ForkResultSelection = "select-result",
   ): Promise<{ cancelled: boolean; forkSessionId?: string }> {
-    this.#assertNoForkOperation();
     this.#assertNoSessionCreation();
     if (resultSelection === "select-result" && sessionId !== this.#activeSessionId) {
       throw new Error("Activate the session before forking one of its messages.");
@@ -642,81 +618,21 @@ export class SessionRegistry {
     await access(original.sessionFile).catch(() => {
       throw new Error("Wait for Pi to finish saving this session before forking.");
     });
-    if (forkNeedsOwnProcess(runtime)) {
-      return this.#withSessionCreation(() => this.#forkInNewProcess(runtime, original, original.sessionFile!, entryId, resultSelection));
-    }
-    const operation: ForkOperation = {
-      phase: "waiting-for-pi",
-      sourceId: sessionId,
-      forkId: randomUUID(),
-      runtime,
-      resultSelection,
-      cancelRequested: false,
-    };
-    this.#assertNoSessionCreation();
-    this.#forkOperation = operation;
-    const forkName = forkSessionName(runtime.view.title);
-
-    let result: Awaited<ReturnType<SessionRuntime["executeFork"]>>;
-    try {
-      result = await runtime.executeFork(entryId);
-    } catch (error) {
-      await this.#restoreOriginalAfterFork(operation);
-      if (operation.cancelRequested) return { cancelled: true };
-      throw error;
-    }
-    if (operation.cancelRequested) {
-      await this.#restoreOriginalAfterFork(operation);
-      return { cancelled: true };
-    }
-    if (result.cancelled) {
-      this.#finishForkOperation(operation);
-      this.#emitChange();
-      return { cancelled: true };
-    }
-
-    try {
-      if (this.#startJobs.has(operation.sourceId) || this.#historyJobs.has(operation.sourceId)) {
-        throw new Error("Session lifecycle work was still pending when Pi committed the Fork.");
-      }
-      operation.phase = "reconciling";
-      this.#replaceRuntimeWithFork(operation, original, forkName);
-      await runtime.reconcileFork(forkName, {
-        id: operation.forkId,
-        text: result.text,
-        images: result.images,
-      });
-    } catch (error) {
-      await this.#restoreOriginalAfterFork(operation);
-      if (operation.cancelRequested) return { cancelled: true };
-      throw error;
-    }
-
-    const forkFile = runtime.view.sessionFile;
-    this.#records.set(operation.forkId, {
-      id: operation.forkId,
-      title: forkName,
-      cwd: runtime.cwd,
-      ...(forkFile ? { sessionFile: forkFile } : {}),
-      updatedAt: Date.now(),
-    });
-    this.#finishForkOperation(operation);
-    await Promise.resolve(this.#persist()).catch((error: unknown) => this.#logger.error("Failed to persist session collection after Fork", error));
-    this.#emitChange();
-    return { cancelled: false, forkSessionId: operation.forkId };
+    return this.#withSessionCreation(() => this.#forkInNewProcess(runtime, original, original.sessionFile!, entryId, resultSelection));
   }
 
   /**
-   * Fork while the source is busy. Pi's fork replaces the conversation of the process
-   * that runs it, which would end the running reply, so a second Pi process opens the
-   * same session file and forks there. The source process is never touched.
+   * Pi's fork replaces the conversation of the process that runs it, so a second Pi
+   * process opens the same session file and forks there. The source Session and its
+   * process are never touched: a reply in progress continues, and an idle source stays
+   * running. The Fork keeps the source's model and thinking level, which Pi would
+   * otherwise take from the fork point.
    *
    * Until Pi has written the Fork's own file and its history has loaded, the second
    * process belongs to this operation alone (`#processForks`): it is not a Session, so
-   * nothing can select, stop or delete it, and in particular nothing can mistake the
-   * source's file, which that process has open, for the Fork's. Only then does the Fork
-   * join the collection. A failed or cancelled Fork disposes its process and touches no
-   * file.
+   * nothing can select, stop or delete it, and nothing can mistake the source's file,
+   * which that process has open, for the Fork's. Only then does the Fork join the
+   * collection. A failed or cancelled Fork disposes its process and touches no file.
    */
   async #forkInNewProcess(
     source: SessionRuntime,
@@ -727,6 +643,7 @@ export class SessionRegistry {
   ): Promise<{ cancelled: boolean; forkSessionId?: string }> {
     const forkId = randomUUID();
     const forkName = forkSessionName(source.view.title);
+    const modelChoice = { model: source.view.model, thinkingLevel: source.view.thinkingLevel };
     const runtime = this.#createRuntime({ id: forkId, title: forkName, cwd: original.cwd, updatedAt: Date.now() });
     const operation: ProcessForkOperation = { sourceId: source.id, forkId, runtime, committed: false, cancelRequested: false };
     this.#processForks.set(forkId, operation);
@@ -742,7 +659,7 @@ export class SessionRegistry {
       const result = await runtime.executeFork(entryId);
       if (result.cancelled || operation.cancelRequested) return { cancelled: true };
       operation.committed = true;
-      await runtime.reconcileFork(forkName, { id: forkId, text: result.text, images: result.images });
+      await runtime.reconcileFork(forkName, { id: forkId, text: result.text, images: result.images }, modelChoice);
       const forkFile = runtime.view.sessionFile;
       if (!forkFile || samePath(forkFile, sourceFile)) throw new Error("Pi did not create a separate file for the Fork.");
       // The Fork joins the collection as Provisional, like a Fork from an idle Session.
@@ -752,8 +669,8 @@ export class SessionRegistry {
       this.#lastStatuses.set(forkId, runtime.view.status);
       this.#temporarySessionIds.add(forkId);
       listed = true;
-      this.#onSessionOpened?.(forkId, source.id);
       if (resultSelection === "select-result") this.#activeSessionId = forkId;
+      this.#onSessionOpened?.(forkId, source.id);
       await Promise.resolve(this.#persist()).catch((error: unknown) => this.#logger.error("Failed to persist session collection after Fork", error));
       this.#emitChange();
       return { cancelled: false, forkSessionId: forkId };
@@ -784,14 +701,13 @@ export class SessionRegistry {
     await job;
   }
 
-  /** The Fork running in a second process for this source Session, if any. */
+  /** The Fork being made from this source Session, if any. */
   #processForkOf(sourceId: string): ProcessForkOperation | undefined {
     return [...this.#processForks.values()].find((operation) => operation.sourceId === sourceId);
   }
 
   async branchHere(sessionId: string, entryId: string, hasDraft: boolean): Promise<{ cancelled: boolean }> {
     return this.#withTreeInteraction(sessionId, async () => {
-      this.#assertNoForkOperation();
       const runtime = this.#requireRuntime(sessionId);
       await this.#ensureRunning(runtime);
       if (hasDraft && !await confirmDraftReplacement(this.#host)) return { cancelled: true };
@@ -809,7 +725,6 @@ export class SessionRegistry {
     hasDraft: boolean,
   ): Promise<{ cancelled: boolean }> {
     return this.#withTreeInteraction(sessionId, async () => {
-      this.#assertNoForkOperation();
       const runtime = this.#requireRuntime(sessionId);
       await this.#ensureRunning(runtime);
       const selected = await pickBranchEnd(this.#host, await runtime.listBranchEnds(branchPointId));
@@ -839,7 +754,6 @@ export class SessionRegistry {
   }
 
   async rename(sessionId: string, name: string): Promise<void> {
-    this.#assertSessionOutsideFork(sessionId);
     const runtime = this.#requireRuntime(sessionId);
     await this.#ensureRunning(runtime);
     await runtime.rename(name);
@@ -850,35 +764,30 @@ export class SessionRegistry {
   }
 
   async setModel(sessionId: string, provider: string, modelId: string): Promise<void> {
-    this.#assertSessionOutsideFork(sessionId);
     const runtime = this.#requireRuntime(sessionId);
     await this.#ensureRunning(runtime);
     await runtime.setModel(provider, modelId);
   }
 
   async setThinkingLevel(sessionId: string, level: ThinkingLevel): Promise<void> {
-    this.#assertSessionOutsideFork(sessionId);
     const runtime = this.#requireRuntime(sessionId);
     await this.#ensureRunning(runtime);
     await runtime.setThinkingLevel(level);
   }
 
   async refreshModels(sessionId: string): Promise<void> {
-    this.#assertSessionOutsideFork(sessionId);
     const runtime = this.#requireRuntime(sessionId);
     await this.#ensureRunning(runtime);
     await runtime.refreshModels();
   }
 
   async refreshCommands(sessionId: string): Promise<void> {
-    this.#assertSessionOutsideFork(sessionId);
     const runtime = this.#requireRuntime(sessionId);
     await this.#ensureRunning(runtime);
     await runtime.refreshCommands();
   }
 
   async checkPiIntegration(sessionId: string): Promise<void> {
-    this.#assertSessionOutsideFork(sessionId);
     const runtime = this.#requireRuntime(sessionId);
     await this.#ensureRunning(runtime);
     const result = await runtime.probePiIntegration();
@@ -894,7 +803,6 @@ export class SessionRegistry {
   }
 
   async loadHistory(sessionId: string): Promise<void> {
-    this.#assertSessionOutsideFork(sessionId);
     const runtime = this.#requireRuntime(sessionId);
     await this.#ensureRunning(runtime);
     await this.#queueHistory(runtime, true);
@@ -910,12 +818,10 @@ export class SessionRegistry {
 
   diagnosticsSummary(): string {
     const sessions = [...this.#runtimes.values()];
-    const operation = this.#forkOperation;
     return [
       `Registry active session: ${this.#activeSessionId ?? "<none>"}`,
       `Registry session count: ${sessions.length}`,
-      `Fork operation: ${operation ? `${operation.phase} source=${operation.sourceId} target=${operation.forkId}` : "<none>"}`,
-      `Forks in a second process: ${this.#processForks.size === 0 ? "<none>" : [...this.#processForks.values()].map((fork) => `source=${fork.sourceId} target=${fork.forkId}${fork.committed ? " committed" : ""}`).join(", ")}`,
+      `Forks being made: ${this.#processForks.size === 0 ? "<none>" : [...this.#processForks.values()].map((fork) => `source=${fork.sourceId} target=${fork.forkId}${fork.committed ? " committed" : ""}`).join(", ")}`,
       "",
       ...sessions.flatMap((runtime) => [runtime.diagnosticsSummary(), ""]),
     ].join("\n");
@@ -1030,7 +936,7 @@ export class SessionRegistry {
       this.#host.proxyCredentials,
       this.#logger,
       {
-        // A Fork still running in its own process is not a Session yet; nothing it reports reaches the collection.
+        // A Fork still being made is not a Session yet; nothing it reports reaches the collection.
         onChange: (runtime) => { if (!this.#processForks.has(runtime.id)) this.#handleRuntimeChange(runtime); },
         onAgentTurnCompleted: (runtime) => { if (!this.#processForks.has(runtime.id)) void this.#showSystemNotification(runtime, "completed"); },
         onExtensionCommandCompletionUnconfirmed: (runtime, message) => { if (!this.#processForks.has(runtime.id)) this.#toastEmitter.fire({ level: "warning", message }); },
@@ -1077,67 +983,6 @@ export class SessionRegistry {
     }
   }
 
-  #replaceRuntimeWithFork(
-    operation: ForkOperation,
-    original: PersistedSessionRecord,
-    forkName: string,
-  ): void {
-    const originalRuntime = this.#createRuntime(original);
-    const previousStatus = this.#lastStatuses.get(operation.sourceId) ?? operation.runtime.view.status;
-    const pendingUiCount = operation.runtime.view.pendingExtensionUi.length;
-    operation.runtime.rebindSessionId(operation.forkId);
-
-    this.#runtimes.delete(operation.sourceId);
-    this.#lastStatuses.delete(operation.sourceId);
-    this.#lastPendingUiCounts.delete(operation.sourceId);
-
-    this.#runtimes.set(operation.forkId, operation.runtime);
-    this.#lastStatuses.set(operation.forkId, previousStatus);
-    this.#lastPendingUiCounts.set(operation.forkId, pendingUiCount);
-    this.#records.set(operation.forkId, {
-      id: operation.forkId,
-      title: forkName,
-      cwd: original.cwd,
-      updatedAt: Date.now(),
-    });
-    this.#temporarySessionIds.add(operation.forkId);
-
-    this.#runtimes.set(operation.sourceId, originalRuntime);
-    this.#lastStatuses.set(operation.sourceId, "stopped");
-    this.#lastPendingUiCounts.set(operation.sourceId, 0);
-    if (operation.resultSelection === "select-result") this.#activeSessionId = operation.forkId;
-    else this.#ensureValidActiveSelection();
-    this.#onSessionOpened?.(operation.forkId, operation.sourceId);
-  }
-
-  async #restoreOriginalAfterFork(operation: ForkOperation): Promise<void> {
-    operation.stopPromise ??= operation.runtime.stop();
-    await operation.stopPromise.catch(() => undefined);
-
-    if (operation.phase === "reconciling") {
-      await operation.runtime.dispose().catch(() => undefined);
-      this.#removeSession(operation.forkId);
-    }
-    if (operation.resultSelection === "select-result") this.#activeSessionId = operation.sourceId;
-    else this.#ensureValidActiveSelection();
-
-    const originalRuntime = this.#requireRuntime(operation.sourceId);
-    let restartError: unknown;
-    try {
-      await this.#startRuntime(originalRuntime);
-    } catch (error) {
-      restartError = error;
-    }
-    await Promise.resolve(this.#persist()).catch((error: unknown) => this.#logger.error("Failed to persist session collection after Fork recovery", error));
-    this.#finishForkOperation(operation);
-    this.#emitChange();
-    if (restartError) throw restartError instanceof Error ? restartError : new Error("Unable to restart the original session after Fork recovery.", { cause: restartError });
-  }
-
-  #finishForkOperation(operation: ForkOperation): void {
-    if (this.#forkOperation === operation) this.#forkOperation = null;
-  }
-
   async #withTreeInteraction<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
     if (this.#treeInteractionSessions.has(sessionId)) throw new Error("Finish the current session-tree interaction first.");
     this.#treeInteractionSessions.add(sessionId);
@@ -1148,30 +993,18 @@ export class SessionRegistry {
     }
   }
 
-  #assertNoForkOperation(): void {
-    if (this.#forkOperation) throw new Error("Wait for the current session Fork to finish or cancel it first.");
-  }
-
   #assertNoSessionCreation(): void {
     if (this.#sessionCreationInProgress > 0) throw new Error("Wait for the current session creation to finish.");
   }
 
   async #withSessionCreation<T>(operation: () => Promise<T>): Promise<T> {
     this.#assertOpen();
-    this.#assertNoForkOperation();
     this.#assertNoSessionCreation();
     this.#sessionCreationInProgress += 1;
     try {
       return await operation();
     } finally {
       this.#sessionCreationInProgress -= 1;
-    }
-  }
-
-  #assertSessionOutsideFork(sessionId: string): void {
-    const operation = this.#forkOperation;
-    if (operation && (sessionId === operation.sourceId || sessionId === operation.forkId)) {
-      throw new Error("Wait for the current session Fork to finish or cancel it first.");
     }
   }
 
@@ -1396,13 +1229,6 @@ export class SessionRegistry {
 
 /** The bridge's bound on a session name; Pi itself accepts longer ones. */
 const MAX_SESSION_NAME_LENGTH = 160;
-
-/** The source cannot hand its own process to the Fork while it is busy. */
-function forkNeedsOwnProcess(runtime: SessionRuntime): boolean {
-  const view = runtime.view;
-  return view.isStreaming || view.status === "running" || view.pendingExtensionUi.length > 0
-    || view.queuedSteers.length > 0 || view.queuedFollowUps.length > 0;
-}
 
 function forkSessionName(title: string): string {
   const source = title.trim();

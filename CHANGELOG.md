@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Fork the message you just sent while Pi is still replying to it. The fork keeps the conversation before that message and puts the message back in the new session's Composer, so the reply in progress is not part of it. Before, **Fork** appeared on that message only once the reply had finished.
+
+### Changed
+
+- Fork no longer stops the session you fork from. When that session was idle, the fork took over its Pi process and left it stopped, to restart when next used. Every fork now runs in a Pi process of its own, as a fork during a reply already did, and the session you forked from stays running and usable while the fork starts. The fork joins the session list only once Pi has written its own file, so nothing can close or delete it while it starts; until then the message you forked from offers **Cancel Fork**. A question an extension asks about the fork has nowhere to appear meanwhile; cancel the fork to stop waiting.
+- A fork keeps the model and thinking level of the session it came from. Pi started it on those saved at the message you forked from, or on its defaults.
+- A fork made from a session tab opens in that tab's editor group, also if you moved to another group while it started.
+
 ## [0.17.0] - 2026-11-25
 
 ### Added
