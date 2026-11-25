@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep the session list with Pi's session files on the remote machine over Remote SSH, WSL or a dev container. It was saved on the computer that opened the remote folder, so another computer showed a different list. The list from VS Code's workspace state is carried over on the first save.
+
 ## [0.17.0] - 2026-11-25
 
 ### Added

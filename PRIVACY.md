@@ -2,7 +2,7 @@
 
 FrostPi contains no telemetry, analytics, advertising, account system, or remote service of its own.
 
-FrostPi persists only local session metadata in VS Code workspace state: FrostPi session id, title, workspace path, Pi session-file path, last-update time, and active session id. It does not persist prompt bodies, responses, reasoning, tool output, pasted images, API keys, or provider credentials.
+FrostPi persists only session metadata, in a `frostpi-state.json` file in its VS Code workspace storage on the machine that runs the extension (the remote machine over Remote SSH, WSL or a dev container; an earlier version's copy in VS Code workspace state is read once): FrostPi session id, title, workspace path, Pi session-file path, last-update time, and active session id. It does not persist prompt bodies, responses, reasoning, tool output, pasted images, API keys, or provider credentials.
 
 Prompts, images, tool calls, and model requests are sent to the locally launched Pi process. Pi and the configured model provider may store or process that data under their own settings and policies. FrostPi does not alter those data flows. Opening Provider Usage separately reads Pi's saved provider configuration and available environment credentials in the workspace Extension Host, then queries the matching official usage endpoints. This read-only feature does not refresh tokens or modify credentials. Only usage results reach the Webview; snapshots are cached in memory and are not persisted. They may describe a different account from model-specific or extension-injected session authentication.
 
