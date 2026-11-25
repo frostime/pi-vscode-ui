@@ -169,8 +169,8 @@ function planStepGroups(items: readonly AgentTurnItemView[], running: boolean): 
   };
 
   for (const item of items) {
-    // Replies, notices and structural markers stay visible and end the run before them.
-    if (item.type === "reasoning" || item.type === "tool") run.push(item);
+    // Render image-bearing calls in place so their thumbnails remain visible.
+    if (item.type === "reasoning" || (item.type === "tool" && !hasToolImages(item))) run.push(item);
     else closeRun();
   }
   closeRun();
@@ -239,7 +239,12 @@ function isAgentActivity(item: AgentTurnView["items"][number]): item is AgentAct
   return item.type === "reasoning" || item.type === "response" || item.type === "tool";
 }
 
+function hasToolImages(item: ToolActivityView): boolean {
+  return item.tool.state === "bound" && Boolean(item.tool.images?.length);
+}
+
 function isTraceItem(item: AgentTurnItemView): item is AgentActivityView | SessionNoticeView {
+  if (item.type === "tool" && hasToolImages(item)) return false;
   return isAgentActivity(item) || item.type === "notice";
 }
 

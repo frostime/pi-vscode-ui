@@ -1,3 +1,5 @@
+import type { ImageAttachmentView } from "./conversationModel.js";
+
 export type ToolCallStatus = "queued" | "running" | "complete" | "error" | "cancelled";
 
 interface ToolCallBase {
@@ -40,6 +42,7 @@ export interface BoundToolCallView extends ToolCallBase {
   label: string;
   args: Record<string, unknown>;
   output?: string;
+  images?: ImageAttachmentView[];
   recognized?: RecognizedToolCallView;
 }
 

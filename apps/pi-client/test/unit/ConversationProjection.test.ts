@@ -879,6 +879,60 @@ describe("ConversationProjection", () => {
     expect(projectedTool(projection, "t1")).toMatchObject({ status: "complete", output: "final", isError: false, endedAt: 3 });
   });
 
+  it.each(["read", "browser"])("keeps %s images on their call during execution, reconciliation and restore", (toolName) => {
+    const projection = new ConversationProjection();
+    const calls = [{ type: "toolCall", id: "t1", name: toolName, arguments: {} }];
+    const user = userEntry("u1", null, "Inspect", 1);
+    const assistant = assistantEntry("a1", "u1", calls, "toolUse", 2, "assistant-1");
+    const image = { type: "image", data: "AA==", mimeType: "image/png" };
+    const finalImage = { type: "image", data: "AQI=", mimeType: "image/gif" };
+    const content = [{ type: "text", text: "Captured" }, finalImage, image];
+    const result = entry("message", "r1", "a1", { message: {
+      role: "toolResult", toolCallId: "t1", toolName, content, timestamp: 3,
+    } });
+
+    projection.appendUserPrompt("Inspect", [], 1);
+    projection.applyEvent({ type: "agent_start" });
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "Inspect", timestamp: 1 } });
+    projection.applyEvent({ type: "message_end", message: assistant.message });
+    projection.applyEvent({ type: "tool_execution_update", toolCallId: "t1", toolName, partialResult: { content: [image] } });
+    expect(projection.reconcileEntries([user, assistant], [])).toBe("applied");
+    expect(projectedTool(projection, "t1")).toMatchObject({
+      status: "running", output: "", images: [{ id: "t1-image-1", dataUrl: "data:image/png;base64,AA==" }],
+    });
+    projection.applyEvent({ type: "tool_execution_end", toolCallId: "t1", toolName, result: { content }, isError: false });
+    const expected = {
+      status: "complete", output: "Captured", images: [
+        { id: "t1-image-1", dataUrl: "data:image/gif;base64,AQI=", size: 2 },
+        { id: "t1-image-2", dataUrl: "data:image/png;base64,AA==", size: 1 },
+      ],
+    };
+    expect(projectedTool(projection, "t1")).toMatchObject(expected);
+
+    const restored = new ConversationProjection();
+    restored.replaceEntries([user, assistant, result], []);
+    expect(projectedTool(restored, "t1")).toMatchObject(expected);
+    expect(projection.reconcileEntries([result], [])).toBe("applied");
+    projection.applyEvent({ type: "tool_execution_end", toolCallId: "t1", toolName, result: "stale", isError: false });
+    expect(projectedToolsInProjection(projection)).toHaveLength(1);
+    expect(projectedTool(projection, "t1")).toMatchObject(expected);
+  });
+
+  it("keeps usable tool output when images are invalid or exceed configured limits", () => {
+    const projection = new ConversationProjection(2, 1);
+    const image = { type: "image", mimeType: "image/png", data: "AQI=" };
+    const content = [
+      { ...image, mimeType: "image/svg+xml" }, { ...image, data: "!@#$" }, { ...image, data: "AAEC" },
+      { type: "text", text: "Status" }, image, image,
+    ];
+    projection.applyEvent({ type: "tool_execution_update", toolCallId: "t1", toolName: "browser", partialResult: { content } });
+    expect(projectedTool(projection, "t1")).toMatchObject({
+      output: "Status\n4 images could not be displayed.", images: [{ dataUrl: "data:image/png;base64,AQI=" }],
+    });
+    projection.applyEvent({ type: "tool_execution_end", toolCallId: "t1", toolName: "browser", result: "Done", isError: false });
+    expect(projectedTool(projection, "t1")).toMatchObject({ output: "Done", images: [] });
+  });
+
   it("projects per-call diffs from live and persisted tool results", () => {
     const liveProjection = new ConversationProjection();
     liveProjection.appendUserPrompt("Edit", [], 1);

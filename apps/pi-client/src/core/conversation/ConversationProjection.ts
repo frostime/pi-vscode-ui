@@ -41,7 +41,7 @@ import {
   emptyCacheAnalysis,
   isSignificantCacheMiss,
 } from "./cacheMissDetection.js";
-import { contentToBlocks, createToolView, extractText, extractToolDiff, isRecord, recordValue, stringValue } from "./messageAssembler.js";
+import { contentToBlocks, createToolView, extractToolOutput, extractToolDiff, isRecord, recordValue, stringValue } from "./messageAssembler.js";
 
 export interface ActiveBranchEdge {
   branchPointId: string | null;
@@ -450,7 +450,7 @@ export class ConversationProjection {
         name: stringValue(message.toolName, "tool"),
         args: {},
         status: message.isError === true ? "error" : "complete",
-        output: extractText(message.content).slice(-160_000),
+        ...extractToolOutput(message.content, message.toolCallId, 160_000, this.#maxImages, this.#maxImageBytes),
         ...(diff ? { diff } : {}),
         isError: message.isError === true,
         endedAt: timestamp,
@@ -665,7 +665,7 @@ export class ConversationProjection {
       name: stringValue(event.toolName, "tool"),
       args: recordValue(event.args),
       status: "running",
-      output: extractText(event.partialResult).slice(-80_000),
+      ...extractToolOutput(event.partialResult, event.toolCallId, 80_000, this.#maxImages, this.#maxImageBytes),
       isError: false,
       timestamp: Date.now(),
     });
@@ -685,7 +685,7 @@ export class ConversationProjection {
       name: stringValue(event.toolName, "tool"),
       args: recordValue(event.args),
       status: isError ? "error" : "complete",
-      output: extractText(event.result).slice(-160_000),
+      ...extractToolOutput(event.result, event.toolCallId, 160_000, this.#maxImages, this.#maxImageBytes),
       ...(diff ? { diff } : {}),
       isError,
       endedAt,

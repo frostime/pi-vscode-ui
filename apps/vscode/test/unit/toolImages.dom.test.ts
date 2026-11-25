@@ -1,0 +1,36 @@
+import { cleanup, fireEvent, render } from "@testing-library/svelte";
+import { afterEach, expect, it } from "vitest";
+
+import type { AgentTurnView } from "@frostime/pi-client/shared/model/conversationModel";
+import type { SessionViewModel } from "@frostime/pi-client/shared/model/sessionViewModel";
+import AgentTurn from "$ui/features/conversation/AgentTurn.svelte";
+
+afterEach(cleanup);
+
+it.each(["running", "completed"] as const)("opens a tool image while other steps of a %s turn are folded", async (status) => {
+  const dataUrl = "data:image/png;base64,iVBORw0KGgo=";
+  const turn: AgentTurnView = {
+    type: "turn", id: "turn-1", startedAt: 1, status, items: [
+      { type: "reasoning", id: "thinking", timestamp: 1, text: "Inspecting the page", status: "complete" },
+      { type: "tool", id: "read-step", timestamp: 1, tool: {
+        state: "bound", id: "read-call", name: "read", label: "read", args: {}, startedAt: 1, status: "complete", isError: false,
+      } },
+      { type: "tool", id: "step", timestamp: 2, tool: {
+        state: "bound", id: "call", name: "browser", label: "browser", args: {}, startedAt: 2, status: "complete", isError: false,
+        images: [{ id: "call-image-1", name: "Image 1", mimeType: "image/png", dataUrl, size: 8 }],
+      } },
+      { type: "response", id: "reply", timestamp: 3, status: "complete", blocks: [{ type: "text", text: "Done" }] },
+    ],
+  };
+  const view = render(AgentTurn, { turn, session: { collapseTurnTrace: true, collapseRunningTurnTrace: true } as SessionViewModel });
+  const folded = status === "running" ? /Expand 2 steps:/ : /Expand work trace:/;
+  expect(view.getByRole("button", { name: folded }).getAttribute("aria-expanded")).toBe("false");
+  const thumbnail = view.getByRole("button", { name: "Open Image 1" });
+  expect(thumbnail.querySelector("img")?.getAttribute("src")).toBe(dataUrl);
+  thumbnail.focus();
+  await fireEvent.click(thumbnail);
+  expect(view.getByRole("dialog", { name: "Image 1" }).querySelector("img")?.getAttribute("src")).toBe(dataUrl);
+  await fireEvent.keyDown(window, { key: "Escape" });
+  expect(view.queryByRole("dialog")).toBeNull();
+  expect(document.activeElement).toBe(thumbnail);
+});
