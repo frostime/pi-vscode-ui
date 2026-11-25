@@ -78,8 +78,24 @@ describe("a finished turn with collapseTurnTrace", () => {
   it("stays flat when collapse is disabled or no activity precedes the anchor", () => {
     expect(planTurnItems(turn("completed", [response("final")]), true)).toEqual(FLAT);
     expect(planTurnItems(turn("completed", [tool("t1"), response("final")]), false)).toEqual(FLAT);
-    // The running-turn setting does not reach a finished turn.
-    expect(planTurnItems(turn("completed", [tool("t1"), tool("t2"), response("final")]), false, true)).toEqual(FLAT);
+    expect(planTurnItems(turn("completed", [tool("t1"), tool("t2"), response("final")]), false, false)).toEqual(FLAT);
+  });
+
+  it("keeps the runs folded while it ran once the turn ends without a summary", () => {
+    const items = [tool("t1"), reasoning("r1"), response("interim"), tool("t2"), tool("t3"), response("final")];
+    const plan = planTurnItems(turn("completed", items, 0, 1_000), false, true);
+
+    expect(plan.trace).toBeNull();
+    expect([...plan.groups!.groupsByFirstItemId.keys()]).toEqual(["t1", "t2"]);
+    expect(plan.groups!.groupsByFirstItemId.get("t2")).toMatchObject({ steps: 2, active: false, detail: "bash ×2" });
+    expect(plan.groups!.groupIdByItemId.has("interim")).toBe(false);
+    // The same run keeps its id from the running turn, so a run the user opened stays open.
+    const running = planTurnItems(turn("running", items.slice(0, 5)), false, true);
+    expect([...running.groups!.groupsByFirstItemId.keys()]).toEqual(["t1", "t2"]);
+    // A completed turn without a reply has no summary to anchor even with the setting on; its runs stay folded too.
+    const unanswered = planTurnItems(turn("completed", [tool("a"), tool("b")], 0, 1), true, true);
+    expect(unanswered.trace).toBeNull();
+    expect(unanswered.groups?.groupsByFirstItemId.has("a")).toBe(true);
   });
 });
 

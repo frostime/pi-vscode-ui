@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- With `frostpi.conversation.collapseTurnTrace` off and Focus View on, a finished turn keeps its tool calls and reasoning folded per run instead of unfolding them all when it ends.
+
 ## [0.17.0] - 2026-11-25
 
 ### Added
