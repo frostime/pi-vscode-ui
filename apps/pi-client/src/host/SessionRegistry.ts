@@ -900,6 +900,11 @@ export class SessionRegistry {
     await this.#queueHistory(runtime, true);
   }
 
+  async showSystemPrompt(sessionId: string): Promise<void> {
+    this.#assertSessionOutsideFork(sessionId);
+    await this.#requireRuntime(sessionId).showSystemPrompt();
+  }
+
   async respondExtensionUi(sessionId: string, requestId: string, response: RpcExtensionUiResponse): Promise<void> {
     await this.#requireRuntime(sessionId).respondExtensionUi(requestId, response);
   }

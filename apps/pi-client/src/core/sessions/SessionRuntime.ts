@@ -30,6 +30,7 @@ import { ConversationProjection } from "../conversation/ConversationProjection.j
 import { diagnosticErrorText } from "../diagnostics/diagnosticRedaction.js";
 import type { RuntimeLogger } from "../diagnostics/RuntimeLogger.js";
 import { ExtensionUiCoordinator } from "../extension-ui/ExtensionUiCoordinator.js";
+import { matchQuestionSelect } from "../extension-ui/matchQuestionSelect.js";
 import { QuestionToolExtensionBridge } from "../question-tool/QuestionToolExtensionBridge.js";
 import { answersHostCommand, withHostCommands, type HostCommand, type HostCommandSupport } from "./hostCommands.js";
 import { commandName, normalizePiSlashPrompt } from "./normalizePiSlashPrompt.js";
@@ -315,8 +316,18 @@ export class SessionRuntime {
     await this.#requireApi().compact(customInstructions);
   }
 
+  async showSystemPrompt(): Promise<void> {
+    const view = this.view;
+    if (view.status !== "ready" || view.isStreaming || view.isCompacting || view.isNavigatingTree
+      || view.pendingExtensionUi.length > 0 || view.queuedSteers.length > 0 || view.queuedFollowUps.length > 0) {
+      throw new Error("Finish the current Pi interaction before viewing the system prompt.");
+    }
+    if (!this.#sessionTreeBridge) throw new Error("System prompt viewing is unavailable in this Pi process.");
+    await this.#sessionTreeBridge.showSystemPrompt(this.#requireApi());
+  }
+
   async abort(): Promise<void> {
-    await this.#extensionUi?.cancelAll();
+    await this.#extensionUi?.cancelAll(true);
     this.#abortRequested = true;
     try {
       await this.#requireApi().abort();
@@ -989,7 +1000,7 @@ export class SessionRuntime {
     const abortRequested = this.#abortRequested;
     if (isExtensionUiRequest(event)) {
       if (this.#questionToolBridge?.recognizes(event)) void this.#handleQuestionUiRequest(event);
-      else this.#extensionUi?.handle(event);
+      else this.#extensionUi?.handle(event, event.method === "select" ? matchQuestionSelect(event, conversationTurns(this.view)) : undefined);
     } else {
       this.#viewState.applyEvent(event);
       this.#conversation.applyEvent(this.#ompPrompts?.projectEvent(event) ?? event);

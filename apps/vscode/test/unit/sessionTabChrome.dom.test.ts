@@ -44,6 +44,17 @@ function posted(): unknown[] {
 }
 
 describe("Session Tab header", () => {
+  it.each([SessionHeader, PanelSessionHeader])("keeps deferred questions from blocking the running status", (Component) => {
+    const active = session({ pendingExtensionUi: [{
+      id: "deferred", method: "select", title: "Choose a destination", deferredQuestionId: "question", receivedAt: 0,
+    }] });
+    const view = Component === SessionHeader
+      ? render(SessionHeader, { sessions: [], active })
+      : render(PanelSessionHeader, { session: active });
+    expect(view.container.textContent).toContain("· running");
+    expect(view.container.textContent).not.toContain("action required");
+  });
+
   it("renames the pinned Session while its turn is running", async () => {
     const view = render(PanelSessionHeader, { session: session() });
     expect(view.container.textContent).toContain("· running");

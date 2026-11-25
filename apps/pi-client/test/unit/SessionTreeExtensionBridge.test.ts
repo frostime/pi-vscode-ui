@@ -36,6 +36,27 @@ describe("SessionTreeExtensionBridge", () => {
     expect(bridge.commandName).toBe("frostpi.session-tree:1");
   });
 
+  it("only opens the system prompt with the bundled, discovered command", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "frostpi-tree-bridge-test-"));
+    const artifactPath = join(directory, "session-tree.js");
+    const bridge = new SessionTreeExtensionBridge(artifactPath);
+    bridges.push(bridge);
+    await bridge.prepare();
+    const executeExtensionCommand = vi.fn(async () => {});
+    const api = { executeExtensionCommand } as unknown as PiRpcApi;
+    const other = command("frostpi.system-prompt", join(directory, "user-extension.js"));
+    bridge.discover([other]);
+    await expect(bridge.showSystemPrompt(api)).rejects.toThrow("System prompt viewing is unavailable");
+    expect(executeExtensionCommand).not.toHaveBeenCalled();
+
+    const tree = command("frostpi.session-tree:1", artifactPath);
+    const prompt = command("frostpi.system-prompt:1", artifactPath);
+    expect(bridge.discover([other, prompt, tree])).toEqual([other]);
+    expect(bridge.commandName).toBe(tree.name);
+    await Promise.all([bridge.showSystemPrompt(api), bridge.showSystemPrompt(api)]);
+    expect(executeExtensionCommand).toHaveBeenCalledExactlyOnceWith(prompt.name, bridge.launchEnvironment().FROSTPI_SESSION_TREE_TOKEN);
+  });
+
   it("invokes the discovered command and validates correlated bounded metadata", async () => {
     const directory = await mkdtemp(join(tmpdir(), "frostpi-tree-bridge-test-"));
     const artifactPath = join(directory, "session-tree.js");
