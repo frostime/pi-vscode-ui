@@ -7,6 +7,12 @@ export interface PromptReference {
   contentTo: number;
 }
 
+export function promptReferenceLabel(path: string): { name: string; lines: string } {
+  const filename = path.replace(/\/$/, "").split(/[\\/]/).at(-1) ?? path;
+  const lines = /:\d+-\d+$/.exec(filename)?.[0] ?? "";
+  return { name: lines ? filename.slice(0, -lines.length) : filename, lines };
+}
+
 export function formatPromptReference(path: string, range?: { start: number; end: number }): string {
   const reference = range ? `${path}:${range.start}-${range.end}` : path;
   const ticks = "`".repeat(Math.max(0, ...[...reference.matchAll(/`+/g)].map(match => match[0].length)) + 1);

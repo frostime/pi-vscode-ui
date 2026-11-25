@@ -1,7 +1,7 @@
 import { type Extension, RangeSetBuilder } from "@codemirror/state";
 import { isolateHistory } from "@codemirror/commands";
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from "@codemirror/view";
-import { findPromptReferences, type PromptReference } from "$shared/files/promptReferences";
+import { findPromptReferences, promptReferenceLabel, type PromptReference } from "$shared/files/promptReferences";
 
 class ReferenceChip extends WidgetType {
   constructor(readonly reference: PromptReference, readonly readOnly: boolean) { super(); }
@@ -20,16 +20,15 @@ class ReferenceChip extends WidgetType {
     icon.setAttribute("aria-hidden", "true");
     const label = chip.appendChild(document.createElement("button"));
     label.type = "button";
-    label.className = "cm-file-reference-label";
-    const filename = this.reference.path.replace(/\/$/, "").split(/[\\/]/).at(-1) ?? this.reference.path;
-    const range = /:\d+-\d+$/.exec(filename)?.[0] ?? "";
+    label.className = "cm-file-reference-label file-reference-label";
+    const display = promptReferenceLabel(this.reference.path);
     const name = label.appendChild(document.createElement("span"));
-    name.className = "cm-file-reference-name";
-    name.textContent = range ? filename.slice(0, -range.length) : filename;
-    if (range) {
+    name.className = "file-reference-name";
+    name.textContent = display.name;
+    if (display.lines) {
       const lines = label.appendChild(document.createElement("span"));
-      lines.className = "cm-file-reference-lines";
-      lines.textContent = range;
+      lines.className = "file-reference-lines";
+      lines.textContent = display.lines;
     }
     label.setAttribute("aria-label", `Edit file reference ${this.reference.path}`);
     label.title = `${this.reference.path}\nClick to edit`;

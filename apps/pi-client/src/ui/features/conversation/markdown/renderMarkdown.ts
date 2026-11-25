@@ -8,6 +8,7 @@ import imageRule from "markdown-it/lib/rules_inline/image.mjs";
 import type StateInline from "markdown-it/lib/rules_inline/state_inline.mjs";
 
 import { parseFileHref, parseFileReference, type FileReference } from "../../../../shared/files/fileReferences.js";
+import { findPromptReferences, promptReferenceLabel, type PromptReference } from "../../../../shared/files/promptReferences.js";
 import { renderDiffHtml } from "../diffPresentation.js";
 
 const katexCache = new Map<string, string>();
@@ -218,10 +219,10 @@ function applyMathPlugin(md: MarkdownIt): void {
     `<div class="math-block">${renderKatex(tokens[idx]!.content, true)}</div>\n`;
 }
 
-function fileReferenceAttributes(reference: FileReference): string {
+function fileReferenceAttributes(reference: FileReference, classes = "file-link"): string {
   return [
     `href="#"`,
-    `class="file-link"`,
+    `class="${classes}"`,
     `data-file-path="${escapeHtml(reference.path)}"`,
     ...(reference.line === undefined ? [] : [`data-file-line="${reference.line}"`]),
     ...(reference.column === undefined ? [] : [`data-file-column="${reference.column}"`]),
@@ -282,6 +283,42 @@ function applyFileLinkPlugin(md: MarkdownIt): void {
   };
 }
 
+function applyPromptReferencePlugin(md: MarkdownIt): void {
+  const references = new WeakMap<StateInline, Map<number, PromptReference>>();
+  md.inline.ruler.before("backticks", "prompt_reference", (state, silent) => {
+    const from = state.pos - 4;
+    if (!state.env.promptReferences || state.src[state.pos] !== "`"
+      || !state.pending.endsWith("ref:") || state.src.slice(from, state.pos) !== "ref:") return false;
+    let matches = references.get(state);
+    if (!matches) {
+      matches = new Map(findPromptReferences(state.src).map(item => [item.from, item]));
+      references.set(state, matches);
+    }
+    const reference = matches.get(from);
+    if (!reference) return false;
+    if (!silent) {
+      state.pending = state.pending.slice(0, -4);
+      const token = state.push("prompt_reference", "span", 0);
+      token.content = reference.path;
+      token.meta = { inLink: state.linkLevel > 0 };
+    }
+    state.pos = reference.to;
+    return true;
+  });
+  md.renderer.rules.prompt_reference = (tokens, index) => {
+    const token = tokens[index]!, path = token.content;
+    const { name, lines } = promptReferenceLabel(path);
+    const reference = token.meta?.inLink ? null : parseFileReference(path);
+    const label = `<span class="file-reference-name">${escapeHtml(name)}</span>`
+      + (lines ? `<span class="file-reference-lines">${escapeHtml(lines)}</span>` : "");
+    const display = reference
+      ? `<a ${fileReferenceAttributes(reference, "file-link file-reference-label")}>${label}</a>`
+      : `<span class="file-reference-label">${label}</span>`;
+    return `<span class="message-file-reference" title="${escapeHtml(path)}">`
+      + `<span class="codicon codicon-file" aria-hidden="true"></span>${display}</span>`;
+  };
+}
+
 // Prose-like fenced blocks read better wrapped; everything else scrolls horizontally.
 const WRAP_LANGUAGES = new Set(["txt", "text", "plaintext", "md", "markdown", "tex", "latex"]);
 
@@ -317,9 +354,10 @@ markdown.linkify.set({ fuzzyLink: false });
 applyMathPlugin(markdown);
 applyImagePlugin(markdown);
 applyFileLinkPlugin(markdown);
+applyPromptReferencePlugin(markdown);
 
-export function renderMarkdownHtml(content: string): string {
-  return DOMPurify.sanitize(markdown.render(content), {
+export function renderMarkdownHtml(content: string, promptReferences = false): string {
+  return DOMPurify.sanitize(markdown.render(content, { promptReferences }), {
     USE_PROFILES: { html: true },
     ADD_ATTR: [
       "target",

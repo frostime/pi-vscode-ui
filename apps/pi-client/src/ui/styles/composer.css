@@ -231,7 +231,7 @@
 }
 
 /* Explicit file references, without rendering ordinary inline code as attachments. */
-.cm-file-reference {
+.cm-file-reference, .message-file-reference {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
@@ -243,16 +243,16 @@
   background: var(--frost-hover);
   color: var(--frost-text);
 }
-.cm-file-reference > .codicon { flex: 0 0 auto; font-size: 13px; }
-.cm-file-reference-label {
+.cm-file-reference > .codicon, .message-file-reference > .codicon { flex: 0 0 auto; font-size: 13px; }
+.file-reference-label {
   display: inline-flex;
   min-width: 0;
   white-space: nowrap;
   text-align: left;
-  cursor: pointer;
 }
-.cm-file-reference-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.cm-file-reference-lines { flex: 0 0 auto; }
+.cm-file-reference-label { cursor: pointer; }
+.file-reference-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.file-reference-lines { flex: 0 0 auto; }
 .cm-file-reference-remove { flex: 0 0 auto; cursor: pointer; }
 .cm-file-reference button { background: transparent; color: inherit; border: none; padding: 0; }
 .cm-file-reference button:hover:not(:disabled) { color: var(--frost-link); }

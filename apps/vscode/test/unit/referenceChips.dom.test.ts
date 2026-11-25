@@ -24,8 +24,8 @@ describe("Composer file reference chips", () => {
     const chip = view.dom.querySelector<HTMLElement>(".cm-file-reference")!;
     expect(chip.title).toBe(path);
     expect(chip.textContent).toBe("Quarterly Observatory Instrument Calibration Notes.tex:23-23");
-    expect(chip.querySelector(".cm-file-reference-name")?.textContent).toBe("Quarterly Observatory Instrument Calibration Notes.tex");
-    expect(chip.querySelector(".cm-file-reference-lines")?.textContent).toBe(":23-23");
+    expect(chip.querySelector(".file-reference-name")?.textContent).toBe("Quarterly Observatory Instrument Calibration Notes.tex");
+    expect(chip.querySelector(".file-reference-lines")?.textContent).toBe(":23-23");
     expect(chip.querySelector("button")?.getAttribute("aria-label")).toBe(`Edit file reference ${path}`);
     expect(view.state.doc.toString()).toBe(text);
     expect(view.dom.querySelectorAll(".cm-file-reference")).toHaveLength(1);
