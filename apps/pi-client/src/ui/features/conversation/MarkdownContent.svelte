@@ -21,7 +21,7 @@
   import MermaidBlock from "./markdown/MermaidBlock.svelte";
   import { parseMessageBlocks } from "./markdown/parseMessageBlocks";
 
-  let { content }: { content: string } = $props();
+  let { content, promptReferences = false }: { content: string; promptReferences?: boolean } = $props();
 
   const segments = $derived(parseMessageBlocks(content));
 </script>
@@ -29,7 +29,7 @@
 <div class="message-content">
   {#each segments as segment, index (segmentKey(segment, index))}
     {#if segment.type === "markdown"}
-      <MarkdownHtml content={segment.text} />
+      <MarkdownHtml content={segment.text} {promptReferences} />
     {:else}
       <MermaidBlock source={segment.text} />
     {/if}

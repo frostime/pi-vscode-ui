@@ -60,11 +60,11 @@ describe("VS Code UI capability backing", () => {
       document: { uri: { scheme: "file", fsPath: "/synthetic/src/synthetic.ts" } },
       selection: { isEmpty: false, start: { line: 2 }, end: { line: 4 } },
     };
-    expect(client.editor.captureActiveSelection!()).toBe("`src/synthetic.ts:3-5`");
-    expect(client.editor.captureActiveFileReference!()).toBe("`src/synthetic.ts`");
+    expect(client.editor.captureActiveSelection!()).toBe("ref:`src/synthetic.ts:3-5`");
+    expect(client.editor.captureActiveFileReference!()).toBe("ref:`src/synthetic.ts`");
     expect(client.editor.listEditorMentionSpecials!("")).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "selection", insertText: "`src/synthetic.ts:3-5` " }),
-      expect.objectContaining({ id: "current-file", insertText: "`src/synthetic.ts` " }),
+      expect.objectContaining({ id: "selection", insertText: "ref:`src/synthetic.ts:3-5` " }),
+      expect.objectContaining({ id: "current-file", insertText: "ref:`src/synthetic.ts` " }),
     ]));
   });
 

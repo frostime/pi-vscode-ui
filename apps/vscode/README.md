@@ -41,6 +41,7 @@ FrostPi keeps Pi's functional workflows available from the GUI:
 
 - Stream ordered reasoning, tool activity, command output, errors, and final responses.
 - Paste PNG, JPEG, or WebP images directly into prompts.
+- File references from editor menus or `@` completion appear as editable input tags and file links in sent messages. Hover for the full path; edit or remove a tag in the input. Pi receives the complete path and line range without file contents. Ordinary backticked code stays plain.
 - Use `/` completion for Pi extension commands, prompt templates, skills, and FrostPi-local actions.
 - Use `@Selection`, `@CurrentFile`, and workspace paths as explicit prompt references.
 - Switch provider/model and select only thinking levels supported by the active model's Pi metadata.

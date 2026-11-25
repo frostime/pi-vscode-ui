@@ -34,7 +34,7 @@
   <div class="user-message-stack">
     <div class="user-bubble">
       {#each message.blocks as block, index (index)}
-        {#if block.type === "text"}<MarkdownContent content={block.text} />{/if}
+        {#if block.type === "text"}<MarkdownContent content={block.text} promptReferences />{/if}
         {#if block.type === "images"}<ImageGallery images={block.images} />{/if}
         {#if block.type === "error"}<div class="inline-error">{block.text}</div>{/if}
       {/each}
