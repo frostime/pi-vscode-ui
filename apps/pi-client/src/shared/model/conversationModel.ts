@@ -80,6 +80,7 @@ export interface CustomMessageView {
   id: string;
   type: "customMessage";
   customType: string;
+  scheduledTaskName?: string;
   blocks: MessageBlockView[];
   timestamp: number;
 }

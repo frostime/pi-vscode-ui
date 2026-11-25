@@ -36,8 +36,8 @@ export class PiRpcApi {
       : this.connection.request(command);
   }
 
-  executeExtensionCommand(commandName: string, encodedRequest: string): Promise<void> {
-    return this.connection.request({ type: "prompt", message: `/${commandName} ${encodedRequest}` }, null);
+  executeExtensionCommand(commandName: string, encodedRequest: string, timeout: number | null = null): Promise<void> {
+    return this.connection.request({ type: "prompt", message: `/${commandName} ${encodedRequest}` }, timeout);
   }
 
   steer(message: string, images?: RpcImageContent[]): Promise<void> {

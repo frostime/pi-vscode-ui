@@ -33,9 +33,27 @@ A Webview remount restores Host-owned pending requests but not unsubmitted draft
 - `notify` appends a sanitized notice, including its severity, to the emitting session's conversation timeline. During an active turn it appears where first observed among turn activities; while idle it remains a session-level timeline item. Notices remain in the live projection but are not persisted across session rehydration or process restart.
 - `setStatus` upserts/deletes keyed status text.
 - `setWidget` upserts/deletes keyed line widgets above or below the composer.
+- The `subagent-async` widget displays pi-subagents' version 1 status snapshot as worker names and states. Nested workers appear beneath their parent. Empty snapshots clear the widget, and unsupported snapshots show a short status message.
 - `setTitle` changes the owning session title.
 - `set_editor_text` updates the active session composer; for an inactive session, the host retains the latest text until that session becomes active.
+
+## Background worker transcripts
+
+The pi-subagents status widget projects worker names, states, and elapsed times.
+An inspectable background worker can open a read-only transcript in the parent
+session. FrostPi requests recent recorded activity through the registered
+`subagents-inspect-rpc` command. The host accepts only run and child identifiers
+from the current session’s status widget and correlates each reply. Transcript
+text is displayed literally. The viewer refreshes while the worker runs and
+leaves approval requests in the parent chat.
+
+**Stop workers…** opens Pi’s stop picker for the current session when the
+subagent package exposes it. Pi confirms the selected worker or group before
+stopping it. **Stop turn** interrupts the parent’s current turn and leaves
+detached background workers available in the list.
 
 ## Unsupported UI
 
 Arbitrary custom TUI components, custom headers/footers/editors, raw terminal input listeners, and theme APIs are not emulated. Unknown structured methods are ignored rather than rendered from arbitrary JSON. This boundary prevents FrostPi from becoming a terminal UI runtime or executing extension-provided presentation code in the Webview.
+
+The `psf-scheduled-tasks` widget projects a version 1 JSON snapshot of the emitting session into an expandable, read-only task list when the session has tasks. Names, IDs, timing and state are text. Pi owns scheduling and mutations.

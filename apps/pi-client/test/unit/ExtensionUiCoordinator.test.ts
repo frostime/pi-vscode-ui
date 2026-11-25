@@ -29,6 +29,119 @@ describe("Pi extension UI coordination", () => {
     expect(coordinator.snapshot().statuses[0]?.text).toBe("preset:research");
   });
 
+  it("projects async workers into text and clears a completed widget on the next empty snapshot", () => {
+    const coordinator = new ExtensionUiCoordinator(
+      { sendExtensionUiResponse: vi.fn() } as never,
+      { onChange: vi.fn(), onNotify: vi.fn(), onTitle: vi.fn(), onEditorText: vi.fn() },
+    );
+    const send = (runs: unknown[]) => coordinator.handle({
+      type: "extension_ui_request", id: "w1", method: "setWidget", widgetKey: "subagent-async", widgetPlacement: "belowEditor",
+      widgetLines: ["PI_SUBAGENT_ASYNC_JSON:" + JSON.stringify({ kind: "pi-subagents.async-status-snapshot", version: 1, runs })],
+    });
+    const first = { id: "12345678-abcd-4000-8000-0123456789ab", label: "assistant", state: "queued" };
+    const second = { id: "98765432-abcd-4000-8000-0123456789ab", label: "assistant", state: "running",
+      children: [{ label: "\u001b[31mreader\u001b[0m\nchild", state: "running", hostStep: { target: "/private" } }] };
+    send([first, second]);
+    expect(coordinator.snapshot().widgets).toMatchObject([{ key: "subagent-async", placement: "below",
+      lines: ["Subagents", "assistant (12345678) · queued", "assistant (98765432) · running", "  reader child · running"] }]);
+    send([{ ...first, state: "complete" }, { ...second, state: "failed", children: [] }]);
+    expect(coordinator.snapshot().widgets[0]?.lines).toEqual([
+      "Subagents", "assistant (12345678) · complete", "assistant (98765432) · failed",
+    ]);
+    send([]);
+    expect(coordinator.snapshot().widgets).toEqual([]);
+  });
+
+  it("inspects only known workers and consumes only a correlated, scoped reply", async () => {
+    const command = vi.fn().mockResolvedValue(undefined);
+    const commands = vi.fn().mockResolvedValue([{ source: "extension", name: "subagents-inspect-rpc" }]);
+    const coordinator = new ExtensionUiCoordinator(
+      { executeExtensionCommand: command, getCommands: commands } as never,
+      { onChange: vi.fn(), onNotify: vi.fn(), onTitle: vi.fn(), onEditorText: vi.fn() },
+    );
+    const first = "12345678-abcd-4000-8000-0123456789ab";
+    const second = "98765432-abcd-4000-8000-0123456789ab";
+    const send = (key: string, widgetLines?: string[]) => coordinator.handle({
+      type: "extension_ui_request", id: "w", method: "setWidget", widgetKey: key, ...(widgetLines ? { widgetLines } : {}),
+    });
+    send("subagent-async", ["PI_SUBAGENT_ASYNC_JSON:" + JSON.stringify({
+      kind: "pi-subagents.async-status-snapshot", version: 1,
+      runs: [first, second].map(id => ({ id, kind: "subagent", label: "assistant", state: "running", startedAt: 100 })),
+    })]);
+    expect(coordinator.snapshot().widgets[0]?.subagents?.[0]).toMatchObject({
+      target: { runId: first, childId: "step:0" }, startedAt: 100,
+    });
+    await expect(coordinator.inspectSubagent({ runId: "unlisted" })).resolves.toHaveProperty("error");
+    expect(command).not.toHaveBeenCalled();
+    const pendingFirst = coordinator.inspectSubagent({ runId: first, childId: "step:0" });
+    await vi.waitFor(() => expect(command).toHaveBeenCalledTimes(1));
+    const pendingSecond = coordinator.inspectSubagent({ runId: second, childId: "step:0" });
+    await expect(pendingFirst).resolves.toHaveProperty("error");
+    await vi.waitFor(() => expect(command).toHaveBeenCalledTimes(2));
+    const requestId = (index: number) => String(command.mock.calls[index]?.[1]).split(" ")[0];
+    const reply = (request: string, asyncId: string, text: string, childId = "step:0") => send("subagent-inspect", [
+      "PI_SUBAGENT_INSPECT_JSON:" + JSON.stringify({
+        kind: "pi-subagents.inspect-reply", version: 1, requestId: request, asyncId, childId, status: "running",
+        messages: [{ role: "assistant", kind: "text", text }],
+      }),
+    ]);
+    reply(requestId(0)!, first, "old selection");
+    reply(requestId(1)!, first, "wrong worker");
+    reply(requestId(1)!, second, "wrong child", "step:1");
+    send("subagent-async");
+    reply(requestId(1)!, second, "\u001b[31mCurrent worker\u001b[0m");
+    send("subagent-inspect");
+    await expect(pendingSecond).resolves.toEqual({
+      finished: false, state: "running", messages: [{ role: "assistant", kind: "text", text: "Current worker" }], truncated: false,
+    });
+    expect(coordinator.snapshot().widgets).toEqual([]);
+  });
+
+  it("keeps unknown snapshots out of the subagent widget and preserves ordinary text widgets", () => {
+    const coordinator = new ExtensionUiCoordinator(
+      { sendExtensionUiResponse: vi.fn() } as never,
+      { onChange: vi.fn(), onNotify: vi.fn(), onTitle: vi.fn(), onEditorText: vi.fn() },
+    );
+    const send = (key: string, line: string) => coordinator.handle({
+      type: "extension_ui_request", id: "w2", method: "setWidget", widgetKey: key, widgetLines: [line],
+    });
+    for (const payload of ["{", '{"kind":"pi-subagents.async-status-snapshot","version":2,"runs":[]}', "x".repeat(32769)]) {
+      send("subagent-async", "PI_SUBAGENT_ASYNC_JSON:" + payload);
+      expect(coordinator.snapshot().widgets[0]?.lines).toEqual(["Subagent status unavailable"]);
+    }
+    send("subagent-async", "Legacy worker status");
+    send("other", "PI_SUBAGENT_ASYNC_JSON:example");
+    expect(coordinator.snapshot().widgets.map(widget => widget.lines)).toEqual([
+      ["Legacy worker status"], ["PI_SUBAGENT_ASYNC_JSON:example"],
+    ]);
+  });
+
+  it("shows a single worker once and preserves nested workers and separate workflow steps", () => {
+    const coordinator = new ExtensionUiCoordinator(
+      { sendExtensionUiResponse: vi.fn() } as never,
+      { onChange: vi.fn(), onNotify: vi.fn(), onTitle: vi.fn(), onEditorText: vi.fn() },
+    );
+    const step = { kind: "step", id: "step:0", label: "assistant", state: "queued" };
+    const worker = { kind: "subagent", label: "assistant", state: "running" };
+    const runs = [
+      { ...worker, id: "a40570e2-abcd-4000-8000-0123456789ab", children: [step] },
+      { ...worker, id: "3296afb7-abcd-4000-8000-0123456789ab", children: [
+        { ...step, children: [{ ...worker, state: "complete" }] },
+      ] },
+      { kind: "workflow", label: "review", state: "running", children: [
+        { ...step, label: "review" }, { ...step, id: "step:1", label: "check" },
+      ] },
+    ];
+    coordinator.handle({
+      type: "extension_ui_request", id: "w3", method: "setWidget", widgetKey: "subagent-async",
+      widgetLines: ["PI_SUBAGENT_ASYNC_JSON:" + JSON.stringify({ kind: "pi-subagents.async-status-snapshot", version: 1, runs })],
+    });
+    expect(coordinator.snapshot().widgets[0]?.lines).toEqual([
+      "Subagents", "assistant (a40570e2) · running", "assistant (3296afb7) · running", "  assistant · complete",
+      "review · running", "  review · queued", "  check · queued",
+    ]);
+  });
+
   it("preserves notify severity and multiline text while stripping terminal escapes", () => {
     const onNotify = vi.fn();
     const coordinator = new ExtensionUiCoordinator(

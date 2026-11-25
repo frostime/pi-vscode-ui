@@ -176,6 +176,13 @@ const payloadSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("checkPiIntegration"), sessionId: z.string().min(1).max(128) }),
   z.object({ type: z.literal("refreshModels"), sessionId: z.string().min(1).max(128) }),
   z.object({ type: z.literal("loadHistory"), sessionId: z.string().min(1).max(128) }),
+  z.object({ type: z.literal("stopBackgroundWorkers"), sessionId: z.string().min(1).max(128) }),
+  z.object({
+    type: z.literal("inspectSubagent"),
+    sessionId: z.string().min(1).max(128),
+    requestId: z.string().min(1).max(128),
+    target: z.object({ runId: z.string().min(1).max(128), childId: z.string().min(1).max(128).optional() }).strict(),
+  }),
   z.object({ type: z.literal("searchWorkspaceFiles"), requestId: z.string().min(1).max(128), sessionId: z.string().min(1).max(128), query: z.string().max(1_024), limit: z.number().int().min(1).max(50) }),
   z.object({ type: z.literal("openSettings") }),
   z.object({ type: z.literal("openProxySettings") }),

@@ -1,6 +1,7 @@
 import type { ProviderUsageDescriptor, ProviderUsageResult } from "@frostime/provider-usage/types";
 import type { ChatTypographyView } from "../model/chatTypography.js";
 import type { ComposerDraftView } from "../model/composerDraftModel.js";
+import type { SubagentTranscriptView } from "../model/extensionUiModel.js";
 import type { ConversationItemView } from "../model/conversationModel.js";
 import type { SessionViewModel } from "../model/sessionViewModel.js";
 import type { QueuedPromptRecoveryOutcome } from "../model/queuedPromptRecoveryModel.js";
@@ -61,6 +62,7 @@ export type HostToWebviewPayload =
   | { type: "focusComposer" }
   | { type: "promptResult"; requestId: string; ok: boolean; error?: string }
   | { type: "markdownImageResult"; requestId: string; sessionId: string; result: MarkdownImageLoadResult }
+  | { type: "subagentTranscriptResult"; requestId: string; sessionId: string; result: SubagentTranscriptView }
   | {
       type: "forkResult";
       requestId: string;

@@ -1,7 +1,10 @@
+import { randomUUID } from "node:crypto";
 import type { PiRpcApi, RpcExtensionUiRequest, RpcExtensionUiResponse } from "@frostime/pi-rpc";
 
-import type { ExtensionStatusView, ExtensionWidgetView, PendingExtensionUiView } from "../../shared/model/extensionUiModel.js";
+import type { ExtensionStatusView, ExtensionWidgetView, PendingExtensionUiView, SubagentTarget, SubagentTranscriptView } from "../../shared/model/extensionUiModel.js";
+import { projectExtensionWidget } from "./extensionWidgetLines.js";
 import { sanitizeExtensionUiText } from "./sanitizeExtensionUiText.js";
+import { readSubagentTranscript, subagentInspector, subagentInspectWidget } from "./subagentTranscript.js";
 
 const DIALOG_METHODS = new Set(["select", "confirm", "input", "editor"]);
 
@@ -17,6 +20,13 @@ export class ExtensionUiCoordinator {
   readonly #statuses = new Map<string, ExtensionStatusView>();
   readonly #widgets = new Map<string, ExtensionWidgetView>();
   readonly #timeouts = new Map<string, ReturnType<typeof setTimeout>>();
+  #subagentTargets: SubagentTarget[] = [];
+  #inspection: {
+    requestId: string;
+    target: SubagentTarget;
+    timer: ReturnType<typeof setTimeout>;
+    resolve(value: SubagentTranscriptView): void;
+  } | undefined;
 
   readonly #api: PiRpcApi;
   readonly #effects: ExtensionUiEffects;
@@ -66,13 +76,23 @@ export class ExtensionUiCoordinator {
         break;
       case "setWidget": {
         if (!request.widgetKey) break;
-        if (request.widgetLines) {
+        if (request.widgetKey === subagentInspectWidget) {
+          const pending = this.#inspection;
+          if (pending) {
+            const result = readSubagentTranscript(request.widgetLines, pending.requestId, pending.target);
+            if (result) this.#finishInspection(pending.requestId, result);
+          }
+          return;
+        }
+        const content = request.widgetLines && projectExtensionWidget(request.widgetKey, request.widgetLines);
+        if (content) {
           this.#widgets.set(request.widgetKey, {
             key: request.widgetKey,
-            lines: request.widgetLines.map(sanitizeExtensionUiText),
+            ...content,
             placement: request.widgetPlacement === "belowEditor" ? "below" : "above",
           });
         } else this.#widgets.delete(request.widgetKey);
+        if (content?.subagents) this.#subagentTargets = content.subagents.flatMap(row => row.target ? [row.target] : []);
         this.#effects.onChange();
         break;
       }
@@ -105,6 +125,8 @@ export class ExtensionUiCoordinator {
   }
 
   clearSessionDecorations(): void {
+    this.cancelInspection();
+    this.#subagentTargets = [];
     this.#statuses.clear();
     this.#widgets.clear();
     this.#effects.onChange();
@@ -118,6 +140,7 @@ export class ExtensionUiCoordinator {
     this.#widgets.clear();
     for (const status of statuses) this.#statuses.set(status.key, status);
     for (const widget of widgets) this.#widgets.set(widget.key, widget);
+    this.#subagentTargets = widgets.flatMap(widget => widget.subagents?.flatMap(row => row.target ? [row.target] : []) ?? []);
     this.#effects.onChange();
   }
 
@@ -135,6 +158,41 @@ export class ExtensionUiCoordinator {
     for (const id of ids) this.#clearTimeout(id);
     this.#effects.onChange();
     await Promise.allSettled(ids.map((id) => this.#api.sendExtensionUiResponse(id, { cancelled: true })));
+  }
+
+  async inspectSubagent(target: SubagentTarget): Promise<SubagentTranscriptView> {
+    const isKnown = () => this.#subagentTargets.some(({ runId, childId }) => runId === target.runId && childId === target.childId);
+    if (!isKnown()) return { error: "This worker is no longer available in the current session." };
+    this.cancelInspection();
+    const requestId = randomUUID();
+    return new Promise(resolve => {
+      const unavailable = { error: "Could not load the worker transcript. Try refreshing." };
+      const timer = setTimeout(() => this.#finishInspection(requestId, unavailable), 5_000);
+      this.#inspection = { requestId, target, timer, resolve };
+      const load = async () => {
+        const commands = await this.#api.getCommands();
+        if (this.#inspection?.requestId !== requestId) return;
+        if (!isKnown() || !commands.some(command => command.source === "extension" && command.name === subagentInspector)) {
+          this.#finishInspection(requestId, { error: "This worker’s transcript is unavailable in the current Pi session." });
+          return;
+        }
+        const args = [requestId, target.runId, target.childId, "--lines", "100"].filter(Boolean).join(" ");
+        await this.#api.executeExtensionCommand(subagentInspector, args, 5_000);
+      };
+      void load().catch(() => this.#finishInspection(requestId, unavailable));
+    });
+  }
+
+  cancelInspection(): void {
+    if (this.#inspection) this.#finishInspection(this.#inspection.requestId, { error: "The worker transcript request was closed." });
+  }
+
+  #finishInspection(requestId: string, result: SubagentTranscriptView): void {
+    const pending = this.#inspection;
+    if (pending?.requestId !== requestId) return;
+    clearTimeout(pending.timer);
+    this.#inspection = undefined;
+    pending.resolve(result);
   }
 
   #clearTimeout(requestId: string): void {

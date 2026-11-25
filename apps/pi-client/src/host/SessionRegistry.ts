@@ -900,6 +900,16 @@ export class SessionRegistry {
     await this.#queueHistory(runtime, true);
   }
 
+  async inspectSubagent(sessionId: string, target: Parameters<SessionRuntime["inspectSubagent"]>[0]) {
+    this.#assertSessionOutsideFork(sessionId);
+    return this.#requireRuntime(sessionId).inspectSubagent(target);
+  }
+
+  async openWorkerStopPicker(sessionId: string): Promise<void> {
+    this.#assertSessionOutsideFork(sessionId);
+    await this.#requireRuntime(sessionId).openWorkerStopPicker();
+  }
+
   async respondExtensionUi(sessionId: string, requestId: string, response: RpcExtensionUiResponse): Promise<void> {
     await this.#requireRuntime(sessionId).respondExtensionUi(requestId, response);
   }

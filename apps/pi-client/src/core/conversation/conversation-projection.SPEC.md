@@ -85,3 +85,5 @@ A live bound tool's `startedAt` is the local receipt time of `tool_execution_sta
 Consumers prefer `durationMs` and fall back to the `startedAt`/`endedAt` span only when it is absent, which keeps pre-duration sessions and runtimes that do not report it on the previous best-effort estimate. That fallback span is an upper bound, not a measurement: every tool call in one assistant message shares that message's timestamp, so a later call's span includes the calls before it.
 
 A completed turn has one turn-wide collapsible work trace before its final response. Failed assistant activities and notices on either side of a visible structural boundary belong to that trace; the boundary itself remains visible and is never counted or hidden as a work step.
+
+A displayed `scheduled_prompt` custom entry shows a delivery marker using its job name. The separate Pi user message carries the prompt.
