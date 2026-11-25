@@ -455,6 +455,9 @@ describe("Host slash commands through the real Registry and child-process path",
       await registry.sendPrompt(sessionId, "hold", []);
       await fixture.waitFor(() => view(sessionId).isStreaming);
       await registry.sendPrompt(sessionId, "follow up", [], "followUp");
+      // A second RPC response proves the child processed the queued submission.
+      await registry.setThinkingLevel(sessionId, "low");
+      expect(view(sessionId).isStreaming).toBe(true);
       expect(view(sessionId).queuedFollowUps).toHaveLength(1);
 
       fixture.answerWarningDialogs(undefined);
