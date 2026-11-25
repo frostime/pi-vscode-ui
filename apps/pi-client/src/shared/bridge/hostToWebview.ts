@@ -1,7 +1,7 @@
 import type { ProviderUsageDescriptor, ProviderUsageResult } from "@frostime/provider-usage/types";
 import type { ChatTypographyView } from "../model/chatTypography.js";
 import type { ComposerDraftView } from "../model/composerDraftModel.js";
-import type { ConversationItemView } from "../model/conversationModel.js";
+import type { AgentTurnItemView, AgentTurnView, ConversationItemView } from "../model/conversationModel.js";
 import type { SessionViewModel } from "../model/sessionViewModel.js";
 import type { QueuedPromptRecoveryOutcome } from "../model/queuedPromptRecoveryModel.js";
 import type { WebviewPresentationView } from "../model/webviewPresentationModel.js";
@@ -30,10 +30,25 @@ export interface CollectionDelta<T> {
   items: T[];
 }
 
+/** A changed turn the Webview already has: its own fields and only its changed items. */
+export interface TurnPatch {
+  turn: Omit<AgentTurnView, "items">;
+  items: CollectionDelta<AgentTurnItemView>;
+}
+
+/**
+ * Conversation items as a collection delta. In `upsert` mode a changed turn the Webview
+ * already has arrives as a patch instead of in `items`, so a running turn with many steps
+ * does not resend, and the Webview does not render again, the steps that did not change.
+ */
+export interface ConversationDelta extends CollectionDelta<ConversationItemView> {
+  turnPatches?: TurnPatch[];
+}
+
 export interface PresentationDeltaView extends Omit<WebviewPresentationView, "displayedSession"> {
   displayedSession: {
     base: SessionBaseView;
-    conversationItems: CollectionDelta<ConversationItemView>;
+    conversationItems: ConversationDelta;
   } | null;
 }
 

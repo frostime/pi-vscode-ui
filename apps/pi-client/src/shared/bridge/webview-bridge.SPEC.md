@@ -7,14 +7,14 @@ scope:
   - /apps/pi-client/src/ui/bridge/**
   - /apps/vscode/src/extension/webview-host/**
   - /apps/desktop/src/**
-updated: 2026-11-14
+updated: 2026-11-20
 ---
 
 # Webview Bridge Compatibility Contract
 
 The backend Host (VS Code Extension Host or Desktop Node service) is authoritative. One sidebar `WebviewConnection` follows `SessionRegistry.activeSessionId`; each Session Tab has an independent Connection pinned to one Session id. Presentation snapshots explicitly carry surface identity, the true sidebar `activeSessionId`, and the Session displayed by that Connection. A pinned Session is never represented by changing or reinterpreting `activeSessionId`.
 
-A mounted Webview sends `ready` and receives a complete presentation snapshot. A panel snapshot also carries its authoritative Host Composer draft; a sidebar snapshot carries a draft only when completing or recovering an externalization handoff. Sidebar selection changes snapshot the sidebar Connection. Same-target updates use deltas. Each Connection computes and caches deltas only for its displayed Session, advances that cache only after successful delivery, and owns one file-search cancellation scope. Hidden, failed, newly visible, or recreated panel projections recover through a fresh authoritative snapshot; browser persistence is not a recovery source.
+A mounted Webview sends `ready` and receives a complete presentation snapshot. A panel snapshot also carries its authoritative Host Composer draft; a sidebar snapshot carries a draft only when completing or recovering an externalization handoff. Sidebar selection changes snapshot the sidebar Connection. Same-target updates use deltas. Each Connection computes and caches deltas only for its displayed Session, advances that cache only after successful delivery, and owns one file-search cancellation scope. A conversation delta sends a changed turn the page already has as a patch of the turn's own fields and its changed steps, and the page keeps its objects for everything unchanged, so a long running turn neither resends nor renders its finished steps again. A hidden page receives nothing; both products keep a hidden page's state, so when it is shown again it catches up with a delta from what it last received. Failed deliveries, draft-ownership changes, and recreated pages (which send `ready`) recover through a fresh authoritative snapshot; browser persistence is not a recovery source.
 
 On `ready` and supported VS Code Chat typography changes, the Host sends `setChatTypography`. Message font settings apply to rendered Markdown, message size also applies to code blocks, editor font family applies to the Composer and code blocks, and editor font size applies to the Composer.
 
