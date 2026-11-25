@@ -92,10 +92,23 @@ describe("turn folding", () => {
     expect(view.container.querySelectorAll(".tool-activity-name")).toHaveLength(2);
   });
 
-  it("leaves a finished turn flat when collapseTurnTrace is off, whatever the running-turn setting", () => {
+  it("keeps a finished turn's runs folded when collapseTurnTrace is off, and flat when Focus View is off too", async () => {
     const done: AgentTurnItemView = { id: "r1", type: "response", blocks: [{ type: "text", text: "Visible reply" }], status: "complete", timestamp: 0 };
-    const view = render(AgentTurn, { turn: turn([tool("t1", "read", "a.ts"), tool("t2", "bash", "ls"), done], "completed"), session: session(true, false) });
+    const running = [tool("t1", "read", "a.ts"), tool("t2", "bash", "ls", "running")];
+    const finished = [tool("t1", "read", "a.ts"), tool("t2", "bash", "ls"), done];
+    const view = render(AgentTurn, { turn: turn(running), session: session(true, false) });
+    await fireEvent.click(view.getByRole("button", { name: /^Expand 2 steps/ }));
+
+    // The run opened while the turn ran stays open once it ends; it does not unfold into a flat list either way.
+    await view.rerender({ turn: turn(finished, "completed"), session: session(true, false) });
     expect(view.queryByRole("button", { name: /work trace/ })).toBeNull();
+    expect(view.getByRole("button", { name: /^Collapse 2 steps/ })).toBeTruthy();
+    expect(view.container.querySelectorAll(".tool-activity-name")).toHaveLength(2);
+    await fireEvent.click(view.getByRole("button", { name: /^Collapse 2 steps/ }));
+    expect(view.container.querySelectorAll(".tool-activity-name")).toHaveLength(0);
+    expect(view.container.textContent).toContain("Visible reply");
+
+    await view.rerender({ turn: turn(finished, "completed"), session: session(false, false) });
     expect(view.container.querySelector(".turn-step-group")).toBeNull();
     expect(view.container.querySelectorAll(".tool-activity-name")).toHaveLength(2);
   });

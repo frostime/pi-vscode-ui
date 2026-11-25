@@ -58,7 +58,7 @@ const MAX_GROUP_DETAIL_KINDS = 4;
 const MAX_STEP_LABEL_LENGTH = 72;
 
 /**
- * The two settings are orthogonal, one per phase of a turn.
+ * One setting per phase of a turn.
  *
  * - While a turn runs, `collapseRunningTurnTrace` folds each run of consecutive tool
  *   calls and reasoning into one row; replies stay visible in order.
@@ -67,6 +67,9 @@ const MAX_STEP_LABEL_LENGTH = 72;
  *   reply is the model's answer to the user. Inside an opened summary each run of steps
  *   stays folded, unless the summary holds nothing but one run: then the summary is
  *   that run, and a second row inside it would only repeat it.
+ * - A finished turn without that summary, because `collapseTurnTrace` is off or there
+ *   is nothing to fold above a reply, keeps the runs `collapseRunningTurnTrace` folded
+ *   while it ran, so the turn does not unfold the moment it ends.
  */
 export function planTurnItems(
   turn: Pick<AgentTurnView, "status" | "items" | "startedAt" | "endedAt">,
@@ -77,7 +80,7 @@ export function planTurnItems(
     return { trace: null, groups: collapseRunningTurnTrace ? planStepGroups(turn.items, true) : null };
   }
   const trace = collapseTurnTrace ? planTurnTrace(turn) : null;
-  if (!trace) return { trace: null, groups: null };
+  if (!trace) return { trace: null, groups: collapseRunningTurnTrace ? planStepGroups(turn.items, false) : null };
   const traced = turn.items.filter((item) => trace.collapsedItemIds.has(item.id));
   const onlySteps = traced.every((item) => item.type === "reasoning" || item.type === "tool");
   return { trace, groups: onlySteps ? null : planStepGroups(traced, false) };

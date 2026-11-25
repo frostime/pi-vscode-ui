@@ -66,7 +66,7 @@ export const frostPiSettingDefinitions = {
     "type": "boolean",
     "default": true,
     "scope": "resource",
-    "description": "While a turn is still running, fold each run of consecutive tool calls and reasoning into one expandable row. Replies stay visible. How finished turns fold is controlled by frostpi.conversation.collapseTurnTrace. \"FrostPi: Toggle Running-Turn Collapse (Focus View)\" switches it."
+    "description": "While a turn is still running, fold each run of consecutive tool calls and reasoning into one expandable row. Replies stay visible. A finished turn keeps these rows unless frostpi.conversation.collapseTurnTrace folds it into one summary. \"FrostPi: Toggle Running-Turn Collapse (Focus View)\" switches it."
   },
   "frostpi.questionTool.enabled": {
     "type": "boolean",

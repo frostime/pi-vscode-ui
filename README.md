@@ -189,7 +189,7 @@ FrostPi answers a few slash commands itself. They never become a prompt, and the
 
 A finished turn folds its tools, reasoning and interim replies into one **Worked** summary above the final reply, because the last reply is the model's answer. Click the summary, or the **Reply** line just above the final reply, to open or fold it again. Inside an opened summary each run of tool calls and reasoning stays folded into one row. `frostpi.conversation.collapseTurnTrace` controls this and is on by default.
 
-While a turn is running, the Focus View folds each run of tool calls and reasoning into one row that says what it did, or what it is doing right now, and replies stay visible in order. Click a row to see its steps. A reasoning row shows a line of what the model is thinking, as a tool row shows its target. It is on by default; run **FrostPi: Toggle Running-Turn Collapse (Focus View)** or set `frostpi.conversation.collapseRunningTurnTrace` to switch it. The two settings are independent: one covers running turns, the other finished ones.
+While a turn is running, the Focus View folds each run of tool calls and reasoning into one row that says what it did, or what it is doing right now, and replies stay visible in order. Click a row to see its steps. A reasoning row shows a line of what the model is thinking, as a tool row shows its target. It is on by default; run **FrostPi: Toggle Running-Turn Collapse (Focus View)** or set `frostpi.conversation.collapseRunningTurnTrace` to switch it. With `frostpi.conversation.collapseTurnTrace` off, a finished turn keeps these rows instead of unfolding.
 
 ### Pi Session Tree and Fork
 
