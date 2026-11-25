@@ -745,11 +745,12 @@ export class SessionRegistry {
       await runtime.reconcileFork(forkName, { id: forkId, text: result.text, images: result.images });
       const forkFile = runtime.view.sessionFile;
       if (!forkFile || samePath(forkFile, sourceFile)) throw new Error("Pi did not create a separate file for the Fork.");
-      // The Fork has its own file: from here it is an ordinary Session.
+      // The Fork joins the collection as Provisional, like a Fork from an idle Session.
       this.#processForks.delete(forkId);
       this.#records.set(forkId, { id: forkId, title: runtime.view.title, cwd: runtime.view.cwd, sessionFile: forkFile, updatedAt: Date.now() });
       this.#runtimes.set(forkId, runtime);
       this.#lastStatuses.set(forkId, runtime.view.status);
+      this.#temporarySessionIds.add(forkId);
       listed = true;
       this.#onSessionOpened?.(forkId, source.id);
       if (resultSelection === "select-result") this.#activeSessionId = forkId;
@@ -1440,7 +1441,7 @@ async function confirmStop(host: ClientHost, runtime: SessionRuntime): Promise<b
   const view = runtime.view;
   if (!view.isStreaming && view.pendingExtensionUi.length === 0) return true;
   const choice = await host.window.showWarningDialog(
-    "Stopping this session's Pi process will stop its active response, tools, and pending extension UI requests. The session and its saved Pi history are kept.",
+    "Stopping this session's Pi process will stop its active response, tools, and pending extension UI requests. Any queued messages will be discarded. The session and its saved Pi history are kept.",
     ["Stop Pi process"],
   );
   return choice === "Stop Pi process";
