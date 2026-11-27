@@ -1213,7 +1213,7 @@ function runtimeConfiguration(piExecutable: string, runtimeCompatibility: Runtim
     runtimeCompatibility,
     piArguments: [],
     startSessionOnOpen: true,
-    streamingBehavior: "followUp" as const,
+    sendOnEnter: true, streamingBehavior: "followUp" as const,
     collapseTurnTrace: true, collapseRunningTurnTrace: true,
     questionToolEnabled: false,
     maxImageBytes: 10 * 1024 * 1024,

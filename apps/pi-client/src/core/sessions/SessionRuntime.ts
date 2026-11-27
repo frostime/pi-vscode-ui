@@ -128,7 +128,7 @@ export class SessionRuntime {
       maxImageBytes: initialConfiguration.maxImageBytes,
       maxImages: 12,
     }, initialConfiguration.collapseTurnTrace, isEphemeral, initialConfiguration.collapseRunningTurnTrace);
-    this.#viewState.setComposerStreamingBehavior(initialConfiguration.streamingBehavior);
+    this.#viewState.setComposerPreferences(initialConfiguration.sendOnEnter, initialConfiguration.streamingBehavior);
     this.#viewState.setQuestionTool({
       configuredEnabled: initialConfiguration.questionToolEnabled,
       appliedEnabled: initialConfiguration.questionToolEnabled,
@@ -714,7 +714,7 @@ export class SessionRuntime {
     this.#viewState.setAttachmentLimits({ maxImageBytes: configuration.maxImageBytes, maxImages: 12 });
     this.#viewState.setCollapseTurnTrace(configuration.collapseTurnTrace);
     this.#viewState.setCollapseRunningTurnTrace(configuration.collapseRunningTurnTrace);
-    this.#viewState.setComposerStreamingBehavior(configuration.streamingBehavior);
+    this.#viewState.setComposerPreferences(configuration.sendOnEnter, configuration.streamingBehavior);
     this.#viewState.setNetworkProxy({
       mode: configuration.proxy.mode,
       label: appliedLabel,

@@ -182,7 +182,7 @@ process.on("SIGTERM", () => process.exit(0));
   const completed = vi.fn();
   function runtime() {
     const configuration: FrostPiConfiguration = {
-      piExecutable: fake, runtimeCompatibility: "oh-my-pi", piArguments: [], streamingBehavior: "followUp",
+      piExecutable: fake, runtimeCompatibility: "oh-my-pi", piArguments: [], sendOnEnter: true, streamingBehavior: "followUp",
       maxImageBytes: 10 * 1024 * 1024, questionToolEnabled: false, collapseTurnTrace: true, collapseRunningTurnTrace: true,
       startSessionOnOpen: true, diagnosticsLevel: "info", experimentalNotificationsEnabled: false,
       fileMentionRespectSearchExclude: true, fileMentionRespectIgnoreFiles: true, fileMentionFollowSymlinks: true,

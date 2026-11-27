@@ -3,11 +3,13 @@
 
   let {
     selected,
+    shortcut,
     disabled = false,
     onselect,
     onsubmit,
   }: {
     selected: StreamingBehavior;
+    shortcut: string;
     disabled?: boolean;
     onselect: (behavior: StreamingBehavior) => void;
     onsubmit: (behavior: StreamingBehavior) => void;
@@ -28,7 +30,7 @@
       class="streaming-send-main"
       type="button"
       aria-label={`Send as ${selected === "steer" ? "Steer" : "Queue"}`}
-      title={`Send as ${selected === "steer" ? "Steer" : "Queue"} (Ctrl+Enter)`}
+      title={`Send as ${selected === "steer" ? "Steer" : "Queue"} (${shortcut})`}
       {disabled}
       onclick={() => onsubmit(selected)}
     >

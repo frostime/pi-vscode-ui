@@ -42,6 +42,12 @@ export const frostPiSettingDefinitions = {
     "scope": "resource",
     "description": "Closing a session's editor tab also closes the session: its Pi process stops and it leaves the session list, as Close session in the list does. Pi's session file is kept, so Resume session can reopen it. When off, the session keeps running in the sidebar."
   },
+  "frostpi.composer.sendOnEnter": {
+    "type": "boolean",
+    "default": false,
+    "scope": "resource",
+    "description": "Send the prompt with Enter instead of inserting a newline. Shift+Enter inserts a newline. Ctrl+Enter or Cmd+Enter sends in either mode."
+  },
   "frostpi.composer.streamingBehavior": {
     "type": "string",
     "enum": [

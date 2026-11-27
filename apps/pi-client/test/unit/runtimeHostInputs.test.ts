@@ -43,7 +43,7 @@ process.on("SIGTERM", () => process.exit(0));
     piArguments: [environmentFile],
     runtimeCompatibility: "pi",
     startSessionOnOpen: false,
-    streamingBehavior: "followUp",
+    sendOnEnter: true, streamingBehavior: "followUp",
     collapseTurnTrace: true, collapseRunningTurnTrace: true,
     questionToolEnabled: false,
     maxImageBytes: 10 * 1024 * 1024,

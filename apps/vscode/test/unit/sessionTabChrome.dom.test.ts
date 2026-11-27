@@ -27,7 +27,7 @@ function session(overrides: Partial<SessionViewModel> = {}): SessionViewModel {
     id: "session", title: "Parser work", cwd: "/workspace", status: "running", isEphemeral: false,
     isStreaming: true, isCompacting: false, isForking: false, historyStatus: "loaded",
     model: null, thinkingLevel: "off", availableModels: [], scopedModelIds: [], commands: [],
-    attachmentLimits: { maxImageBytes: 1, maxImages: 1 }, collapseTurnTrace: true, collapseRunningTurnTrace: true,
+    attachmentLimits: { maxImageBytes: 1, maxImages: 1 }, collapseTurnTrace: true, collapseRunningTurnTrace: true, composerSendOnEnter: true,
     composerStreamingBehavior: "steer", networkProxy: { mode: "inherit", label: "Inherited", restartRequired: false },
     questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
     conversationItems: [], queuedSteers: [], queuedFollowUps: [], queuedPromptRecovery: { state: "unavailable" } as never,

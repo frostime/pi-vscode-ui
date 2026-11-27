@@ -7,6 +7,7 @@ import type { SessionViewModel } from "$shared/model/sessionViewModel";
 import type { WebviewToHostPayload } from "$shared/bridge/webviewToHost";
 import Composer from "$ui/features/composer/Composer.svelte";
 import { composerDrafts, getDraft, type DraftImage } from "$ui/features/composer/composerDraftStore.svelte";
+import { composerStreamingBehaviors } from "$ui/features/composer/composerStreamingBehaviorStore.svelte";
 import { setDraft } from "$ui/features/composer/composerDraftSync";
 import { promptSubmissionResult } from "$ui/features/composer/promptSubmissionStore.svelte";
 import type { LocalComposerCommands } from "$ui/features/composer/frostPiCommands";
@@ -25,7 +26,7 @@ function session(id = "session", provider = "example"): SessionViewModel {
     isStreaming: false, isCompacting: false, isForking: false, historyStatus: "loaded",
     model: { id: "model", provider, supportsImages: true }, thinkingLevel: "off",
     availableModels: [], scopedModelIds: [], commands: [], attachmentLimits: { maxImages: 4, maxImageBytes: 1_000 },
-    collapseTurnTrace: false, collapseRunningTurnTrace: false, composerStreamingBehavior: "steer",
+    collapseTurnTrace: false, collapseRunningTurnTrace: false, composerSendOnEnter: false, composerStreamingBehavior: "steer",
     networkProxy: { mode: "direct", label: "Direct", restartRequired: false },
     questionTool: { configuredEnabled: false, appliedEnabled: false, restartRequired: false },
     conversationItems: [], queuedSteers: [], queuedFollowUps: [], queuedPromptRecovery: { state: "ready" }, pendingExtensionUi: [], extensionStatuses: [], extensionWidgets: [],
@@ -39,9 +40,9 @@ function session(id = "session", provider = "example"): SessionViewModel {
 
 const image: DraftImage = { id: "image", name: "synthetic.png", mimeType: "image/png", data: "AA==", dataUrl: "data:image/png;base64,AA==", size: 1 };
 
-function composer(panel = false, localCommands = createVsCodeComposerCommands()) {
+function composer(panel = false, localCommands = createVsCodeComposerCommands(), overrides: Partial<SessionViewModel> = {}) {
   return render(Composer, {
-    session: session(), localCommands, draftAuthority: panel ? "host" : "webview", restoreFailedSubmissionLocally: !panel,
+    session: { ...session(), ...overrides }, localCommands, draftAuthority: panel ? "host" : "webview", restoreFailedSubmissionLocally: !panel,
   });
 }
 
@@ -53,6 +54,7 @@ function lastSubmission(): { requestId: string; text: string; images: unknown[] 
 
 beforeEach(() => {
   composerDrafts.set({});
+  composerStreamingBehaviors.set({});
   promptSubmissionResult.set(null);
   toastStore.set([]);
   presentationStore.set(EMPTY_PRESENTATION);
@@ -61,6 +63,84 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("explicit Composer host inputs", () => {
+  it("sends with Enter and inserts a newline with Shift+Enter when enabled", async () => {
+    setDraft("session", "webview", { text: "First line", images: [] });
+    const view = composer(false, undefined, { composerSendOnEnter: true });
+    const input = view.getByRole("textbox", { name: "Message Pi" });
+    const editor = EditorView.findFromDOM(view.container.querySelector(".cm-editor")!)!;
+    editor.dispatch({ selection: { anchor: editor.state.doc.length } });
+    await fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    expect(editor.state.doc.toString()).toBe("First line\n");
+    expect(bridge.post).not.toHaveBeenCalled();
+    await fireEvent.keyDown(input, { key: "Enter" });
+    expect(lastSubmission().text).toBe("First line\n");
+  });
+
+  it("keeps Enter for editing by default", async () => {
+    setDraft("session", "webview", { text: "First line", images: [] });
+    const view = composer();
+    const input = view.getByRole("textbox", { name: "Message Pi" });
+    const editor = EditorView.findFromDOM(view.container.querySelector(".cm-editor")!)!;
+    editor.dispatch({ selection: { anchor: editor.state.doc.length } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+    expect(editor.state.doc.toString()).toBe("First line\n");
+    expect(bridge.post).not.toHaveBeenCalled();
+    await fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    expect(editor.state.doc.toString()).toBe("First line\n\n");
+    expect(bridge.post).not.toHaveBeenCalled();
+    await fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
+    expect(lastSubmission().text).toBe("First line\n\n");
+  });
+
+  it.each([false, true])("keeps Ctrl+Enter sending in either mode (sendOnEnter=%s)", async (sendOnEnter) => {
+    setDraft("session", "webview", { text: "Send this prompt", images: [] });
+    const view = composer(false, undefined, { composerSendOnEnter: sendOnEnter });
+    await fireEvent.keyDown(view.getByRole("textbox", { name: "Message Pi" }), { key: "Enter", ctrlKey: true });
+    expect(lastSubmission().text).toBe("Send this prompt");
+  });
+
+  it.each([false, true])("keeps Alt+Enter queuing in either mode (sendOnEnter=%s)", async (sendOnEnter) => {
+    setDraft("session", "webview", { text: "Queue this prompt", images: [] });
+    const view = composer(false, undefined, { composerSendOnEnter: sendOnEnter, isStreaming: true, status: "running" });
+    await fireEvent.keyDown(view.getByRole("textbox", { name: "Message Pi" }), { key: "Enter", altKey: true });
+    expect(bridge.post).toHaveBeenLastCalledWith(expect.objectContaining({
+      type: "sendPrompt", text: "Queue this prompt", streamingBehavior: "followUp",
+    }));
+  });
+
+  it.each([false, true])("shows the selected shortcut in idle and streaming controls (sendOnEnter=%s)", async (sendOnEnter) => {
+    setDraft("session", "webview", { text: "A prompt", images: [] });
+    const view = composer(false, undefined, { composerSendOnEnter: sendOnEnter });
+    const shortcut = sendOnEnter ? "Enter" : "Ctrl+Enter";
+    expect(view.container.querySelector(".send-hint")?.textContent).toBe(sendOnEnter ? "↵" : "Ctrl ↵");
+    expect(view.getByRole("button", { name: "Send to Pi" }).title).toBe(`Send (${shortcut})`);
+    await view.rerender({
+      session: { ...session(), composerSendOnEnter: sendOnEnter, isStreaming: true, status: "running" },
+    });
+    expect(view.getByRole("button", { name: "Send as Steer" }).title).toBe(`Send as Steer (${shortcut})`);
+    await fireEvent.click(view.getByRole("button", { name: "Choose streaming delivery" }));
+    await fireEvent.click(view.getByRole("option", { name: /Queue/ }));
+    expect(view.getByRole("button", { name: "Send as Queue" }).title).toBe(`Send as Queue (${shortcut})`);
+  });
+
+  it.each([false, true])("accepts an active completion before Enter can send (sendOnEnter=%s)", async (sendOnEnter) => {
+    setDraft("session", "webview", { text: "/", images: [] });
+    const view = composer(false, undefined, { composerSendOnEnter: sendOnEnter });
+    const editor = EditorView.findFromDOM(view.container.querySelector(".cm-editor")!)!;
+    editor.dispatch({ selection: { anchor: 1 } });
+    startCompletion(editor);
+    await waitFor(() => expect(view.queryByRole("option", { name: /compact/ })).not.toBeNull());
+    // CodeMirror deliberately ignores acceptance immediately after a menu opens.
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 1000);
+    try {
+      await fireEvent.keyDown(view.getByRole("textbox", { name: "Message Pi" }), { key: "Enter" });
+    } finally {
+      now.mockRestore();
+    }
+    expect(editor.state.doc.toString()).toBe("/compact ");
+    expect(bridge.post).not.toHaveBeenCalled();
+  });
+
   it("applies a supplied local command result before its action without guessing the command name", async () => {
     setDraft("session", "webview", { text: "/custom", images: [image] });
     const observed: string[] = [];
