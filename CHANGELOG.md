@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Enable `frostpi.composer.sendOnEnter` to send prompts with Enter. It is off by default; Shift+Enter inserts a newline, and Ctrl/Cmd+Enter sends in either mode.
+
 ## [0.17.0] - 2026-11-25
 
 ### Added

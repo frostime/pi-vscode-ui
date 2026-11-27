@@ -57,7 +57,7 @@ export const settingsPages: readonly SettingsPage[] = [
     id: "agent", title: "Conversation & Pi", icon: "comment-discussion", description: "Conversation behavior and Pi startup.",
     sections: [
       { title: "Reading & input", settings: [
-        { key: "frostpi.composer.sendOnEnter", label: "Send with Enter", description: "Shift+Enter inserts a new line." },
+        { key: "frostpi.composer.sendOnEnter", label: "Send with Enter", description: "Enter sends instead of inserting a new line. Shift+Enter inserts a new line. Ctrl+Enter or Cmd+Enter sends in either mode." },
         { key: "frostpi.composer.streamingBehavior", label: "Prompts sent while Pi is running", description: "The Composer can override this per session.", enumLabels: { followUp: "Queue for after the turn", steer: "Deliver during the turn" } },
         { key: "frostpi.conversation.collapseTurnTrace", label: "Collapse completed turn details", description: "Group tools, reasoning and interim replies above the final answer once a turn completes." },
         { key: "frostpi.conversation.collapseRunningTurnTrace", label: "Collapse running turn steps (Focus View)", description: "While a turn is running, fold each run of tool calls and reasoning into one row. Replies stay visible." },

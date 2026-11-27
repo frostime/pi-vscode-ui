@@ -16,6 +16,21 @@ const STATS: RpcSessionStats = {
 };
 
 describe("SessionViewState", () => {
+  it("keeps Enter for newlines until sending with Enter is explicitly enabled", () => {
+    const conversation = new ConversationProjection();
+    const session = new SessionViewState("session", "/workspace", "Session");
+    expect(session.read(conversation.read()).composerSendOnEnter).toBe(false);
+
+    session.setComposerPreferences(true, "steer");
+    expect(session.read(conversation.read())).toMatchObject({
+      composerSendOnEnter: true, composerStreamingBehavior: "steer",
+    });
+    session.setComposerPreferences(false, "followUp");
+    expect(session.read(conversation.read())).toMatchObject({
+      composerSendOnEnter: false, composerStreamingBehavior: "followUp",
+    });
+  });
+
   it("keeps stats refreshes separate from conversation content changes", () => {
     const conversation = new ConversationProjection();
     const session = new SessionViewState("session", "/workspace", "Session");

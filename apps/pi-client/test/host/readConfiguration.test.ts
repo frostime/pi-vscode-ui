@@ -28,7 +28,7 @@ describe("FrostPi configuration reading", () => {
       runtimeCompatibility: "pi",
       piArguments: [],
       startSessionOnOpen: true,
-      sendOnEnter: true, streamingBehavior: "followUp",
+      sendOnEnter: false, streamingBehavior: "followUp",
       collapseTurnTrace: true, collapseRunningTurnTrace: true,
       questionToolEnabled: false,
       maxImageBytes: 10 * 1024 * 1024,
@@ -53,6 +53,11 @@ describe("FrostPi configuration reading", () => {
     expect(frostPiSettingDefaults).toEqual(nativeDefaults);
     expect(readConfiguration(hostWithConfiguration({})))
       .toEqual(readConfiguration(hostWithConfiguration(nativeDefaults)));
+  });
+
+  it.each([false, true])("honors the explicit Enter-to-send preference: %s", (sendOnEnter) => {
+    expect(readConfiguration(hostWithConfiguration({ "composer.sendOnEnter": sendOnEnter })).sendOnEnter)
+      .toBe(sendOnEnter);
   });
 
   it("passes scope strings through and honors host values", () => {

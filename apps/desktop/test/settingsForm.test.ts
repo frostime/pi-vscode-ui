@@ -4,6 +4,14 @@ import { settingsPages, settingsByKey, matchesSettingSearch } from "../src/rende
 import { changedSettingKeys, createSettingsDraft, mergeSettingsDraft, parseSettingsDraft, settingDraftValue, type SettingsDraft } from "../src/renderer/settingsForm.js";
 
 describe("Desktop settings presentation and original-key drafts", () => {
+  it("keeps sending with Enter opt-in in the schema and settings form", () => {
+    const key = "frostpi.composer.sendOnEnter";
+    expect(desktopSettingDefinitions[key]?.default).toBe(false);
+    expect(settingDraftValue(key, createSettingsDraft({}))).toBe(false);
+    expect(settingsByKey[key]?.description).toContain("Ctrl+Enter or Cmd+Enter sends in either mode");
+    expect(parseSettingsDraft(createSettingsDraft({ [key]: true })).values[key]).toBe(true);
+  });
+
   it("places every schema key exactly once without mixing Desktop identity with visual grouping", () => {
     const displayed = settingsPages.flatMap((page) => page.sections.flatMap((section) => section.settings.map((setting) => setting.key)));
     expect([...displayed].sort()).toEqual(Object.keys(desktopSettingDefinitions).sort());

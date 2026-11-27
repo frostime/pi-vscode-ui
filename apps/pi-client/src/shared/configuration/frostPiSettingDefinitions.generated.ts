@@ -44,9 +44,9 @@ export const frostPiSettingDefinitions = {
   },
   "frostpi.composer.sendOnEnter": {
     "type": "boolean",
-    "default": true,
+    "default": false,
     "scope": "resource",
-    "description": "Send the prompt with Enter. Shift+Enter inserts a newline. Turn this off to insert a newline with Enter and send with Ctrl+Enter or Cmd+Enter."
+    "description": "Send the prompt with Enter instead of inserting a newline. Shift+Enter inserts a newline. Ctrl+Enter or Cmd+Enter sends in either mode."
   },
   "frostpi.composer.streamingBehavior": {
     "type": "string",
