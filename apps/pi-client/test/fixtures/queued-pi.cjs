@@ -11,8 +11,12 @@ const release = arg("--recovery-release");
 const clearRelease = arg("--recovery-clear-release");
 const admissionRelease = arg("--recovery-admission-release");
 const compactRelease = arg("--recovery-compact-release");
+// When this file appears during a manual compaction, an extension message starts a run, as
+// Pi's sendMessage with triggerTurn does: Pi does not refuse it while compacting.
+const noticeRelease = arg("--recovery-notice-release");
 let streaming = false;
 let compacting = false;
+let compactionReason;
 let sequence = 0;
 let activeAssistant;
 const entries = [];
@@ -39,6 +43,16 @@ function assistantEnd() {
   send({ type: "message_end", message });
   append(message);
 }
+function notice() {
+  const message = { role: "custom", customType: "process-notification", content: "process finished", display: true, timestamp: ++sequence };
+  streaming = true;
+  send({ type: "agent_start" });
+  send({ type: "message_start", message });
+  send({ type: "message_end", message });
+  entries.push({ type: "custom_message", id: `entry-${++sequence}`, parentId: entries.at(-1)?.id ?? null, timestamp: message.timestamp,
+    customType: message.customType, content: message.content, display: true });
+  assistantStart();
+}
 function queueUpdate() {
   send({ type: "queue_update", steering: steering.map((p) => p.text), followUp: followUp.map((p) => p.text) });
 }
@@ -57,10 +71,12 @@ function finish() {
   send({ type: "agent_end", messages: [], willRetry: false });
   send({ type: omp ? "session_settled" : "agent_settled" });
 }
-async function waitForFile(path) {
+let noticed = false;
+async function waitForFile(path, onPoll) {
   if (!path) return;
   const deadline = Date.now() + 10000;
   while (!fs.existsSync(path)) {
+    onPoll?.();
     if (Date.now() > deadline) throw new Error("Recovery fixture barrier timed out");
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
@@ -85,7 +101,24 @@ async function handle(command) {
         tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0 }); return;
     case "prompt": {
       if (command.message === "delayed") await waitForFile(admissionRelease);
+      // Like Pi, a manual compaction refuses prompts; an automatic one runs inside a run, which queues them.
+      if (compactionReason === "manual") throw new Error("Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry.");
       const item = { text: command.message, images: command.images };
+      if (!streaming && command.message === "auto-compact") {
+        streaming = true;
+        send({ type: "agent_start" });
+        user(item);
+        respond(id);
+        compacting = true;
+        compactionReason = "threshold";
+        send({ type: "compaction_start", reason: "threshold" });
+        await waitForFile(compactRelease);
+        compacting = false;
+        compactionReason = undefined;
+        send({ type: "compaction_end", reason: "threshold" });
+        assistantStart();
+        return;
+      }
       if (streaming) {
         (command.streamingBehavior === "steer" ? steering : followUp).push(item);
         queueUpdate();
@@ -115,10 +148,17 @@ async function handle(command) {
     }
     case "compact":
       compacting = true;
-      send({ type: "compaction_start" });
-      await waitForFile(compactRelease);
+      compactionReason = "manual";
+      send({ type: "compaction_start", reason: "manual" });
+      if (noticeRelease) {
+        // Either barrier may come first; the notice is optional.
+        await waitForFile(compactRelease, () => {
+          if (!streaming && fs.existsSync(noticeRelease) && !noticed) { noticed = true; notice(); }
+        });
+      } else await waitForFile(compactRelease);
       compacting = false;
-      send({ type: "compaction_end" });
+      compactionReason = undefined;
+      send({ type: "compaction_end", reason: "manual" });
       respond(id, {}); return;
     case "abort":
       finish(); respond(id); return;

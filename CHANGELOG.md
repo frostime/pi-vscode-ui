@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- You can keep typing while Pi compacts the context. A prompt sent during compaction waits as a pending Steer or Queue message and goes to Pi when compaction ends, as in Pi's terminal. It used to be refused, and the Composer was disabled. **Restore all** takes messages waiting for a `/compact` back into the Composer, images included, while compaction still runs. During Pi's automatic compaction it stays unavailable, because Pi may already have picked up a queued message. If an extension message, such as a background process notice, starts a turn during `/compact`, waiting messages stay pending and join that turn when compaction ends. Stopping the compaction drops waiting messages, as Stop does with a queue. `/compact` itself still waits for the running compaction to finish.
+
 ## [0.17.0] - 2026-11-25
 
 ### Added

@@ -45,7 +45,7 @@
   const streamingBehavior = $derived($composerStreamingBehaviors[session.id] ?? session.composerStreamingBehavior);
   const unavailable = $derived(
     session.status === "queued" || session.status === "starting" || session.status === "stopping" || session.status === "failed"
-    || session.historyStatus === "queued" || session.historyStatus === "loading" || session.isCompacting || session.isForking || session.isNavigatingTree,
+    || session.historyStatus === "queued" || session.historyStatus === "loading" || session.isForking || session.isNavigatingTree,
   );
   // Keep the draft unchanged from request admission through result application.
   const recoveryBusy = $derived(
