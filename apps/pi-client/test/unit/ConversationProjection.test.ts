@@ -334,6 +334,27 @@ describe("ConversationProjection", () => {
     expect(projection.read().queuedFollowUps).toEqual([]);
   });
 
+  it("never promotes a held prompt, which Pi has not received", () => {
+    const projection = new ConversationProjection();
+    const held = projection.enqueueSteer("held", [], 1);
+    projection.holdQueuedPrompt(held);
+    projection.enqueueFollowUp("sent", [], 2);
+
+    // A run Pi starts on its own, then a user message Pi delivers into it.
+    projection.applyEvent({ type: "agent_start" });
+    expect(projection.read().queuedSteers.map((item) => item.text)).toEqual(["held"]);
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "sent", timestamp: 2 } });
+    expect(turns(projection.read().items).map((turn) => userText(turn))).toEqual(["sent"]);
+    expect(projection.read().queuedSteers.map((item) => item.text)).toEqual(["held"]);
+    expect(projection.read().queuedFollowUps).toEqual([]);
+
+    // Once released, the same text as a new bubble is promotable.
+    projection.removeQueuedPrompt(held);
+    projection.enqueueSteer("held", [], 3);
+    projection.applyEvent({ type: "message_start", message: { role: "user", content: "held", timestamp: 3 } });
+    expect(turns(projection.read().items).map((turn) => userText(turn))).toEqual(["sent", "held"]);
+  });
+
   it("promotes queued follow-ups from consecutive user events without agent_start", () => {
     const projection = new ConversationProjection();
     projection.appendUserPrompt("first", [], 1);

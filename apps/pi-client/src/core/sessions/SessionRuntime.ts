@@ -266,6 +266,9 @@ export class SessionRuntime {
       const queuedId = streamingBehavior === "steer"
         ? this.#conversation.enqueueSteer(message, images)
         : this.#conversation.enqueueFollowUp(message, images);
+      // Pi has not seen it: a run Pi starts meanwhile (an extension's message can trigger one
+      // during the compaction) must not show it as that run's user message.
+      this.#conversation.holdQueuedPrompt(queuedId);
       this.#heldForCompaction.push({ queuedId, text: message, images, streamingBehavior });
       this.#notifyChange();
       return;
@@ -345,7 +348,8 @@ export class SessionRuntime {
     // Each one is shown again as it is submitted.
     for (const item of held) this.#conversation.removeQueuedPrompt(item.queuedId);
     this.#notifyChange();
-    if (this.#abortRequested || this.view.status !== "ready") return;
+    // A run can be under way: an extension's message may start one during the compaction.
+    if (this.#abortRequested || (this.view.status !== "ready" && this.view.status !== "running")) return;
     for (const item of held) {
       if (!pending.has(item.queuedId)) continue;
       try {

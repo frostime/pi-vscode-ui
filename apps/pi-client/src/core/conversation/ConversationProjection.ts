@@ -77,6 +77,8 @@ export class ConversationProjection {
   readonly #assistantMessageAdapter = new PiAssistantMessageAdapter();
   #queuedSteers: QueuedPromptView[] = [];
   #queuedFollowUps: QueuedPromptView[] = [];
+  /** Queued prompts that exist only here, not in Pi's queue, so no Pi event may promote them. */
+  readonly #localOnlyQueuedIds = new Set<string>();
   #recoveringQueueContent = false;
   #activeTurnId: string | null = null;
   #persistedTurn: PersistedTurnState | null = null;
@@ -208,6 +210,17 @@ export class ConversationProjection {
     return id;
   }
 
+  /**
+   * Marks a queued prompt as held by FrostPi rather than sent to Pi (a prompt waiting for a manual
+   * compaction). A run Pi starts meanwhile, such as one an extension's message triggers, then cannot
+   * take it as its user message; the holder removes it and submits it later.
+   */
+  holdQueuedPrompt(id: string): void {
+    if (this.#queuedSteers.some((item) => item.id === id) || this.#queuedFollowUps.some((item) => item.id === id)) {
+      this.#localOnlyQueuedIds.add(id);
+    }
+  }
+
   /** Keep content authoritative after recovery invalidates optimistic queue correspondence. */
   beginQueueRecovery(): void {
     this.#recoveringQueueContent = true;
@@ -215,6 +228,7 @@ export class ConversationProjection {
 
   clearQueuedPrompts(): void {
     this.#recoveringQueueContent = false;
+    this.#localOnlyQueuedIds.clear();
     if (this.#queuedSteers.length === 0 && this.#queuedFollowUps.length === 0) return;
     this.#queuedSteers = [];
     this.#queuedFollowUps = [];
@@ -222,6 +236,7 @@ export class ConversationProjection {
   }
 
   removeQueuedPrompt(id: string): boolean {
+    this.#localOnlyQueuedIds.delete(id);
     const nextSteers = this.#queuedSteers.filter((item) => item.id !== id);
     const nextFollowUps = this.#queuedFollowUps.filter((item) => item.id !== id);
     if (nextSteers.length === this.#queuedSteers.length && nextFollowUps.length === this.#queuedFollowUps.length) return false;
@@ -502,7 +517,7 @@ export class ConversationProjection {
       return;
     }
     let active = this.#activeTurn();
-    if (this.#hasQueuedPrompts() && active?.status === "running" && active.items.length === 0) {
+    if (this.#hasPromotableQueuedPrompts() && active?.status === "running" && active.items.length === 0) {
       this.#store.removeTopLevelItem(active.id);
       this.#activeTurnId = null;
       active = undefined;
@@ -772,7 +787,7 @@ export class ConversationProjection {
   }
 
   #tryPromoteQueuedUserMessage(event: RpcEvent): boolean {
-    if (!this.#hasQueuedPrompts()) return false;
+    if (!this.#hasPromotableQueuedPrompts()) return false;
     const message = event.message;
     if (!isRecord(message) || message.role !== "user") return false;
 
@@ -833,19 +848,21 @@ export class ConversationProjection {
     return turn;
   }
 
+  /** Takes the next prompt Pi has (steers first); prompts FrostPi still holds stay queued. */
   #takeNextQueuedPrompt(): QueuedPromptView | undefined {
-    const steer = this.#queuedSteers[0];
+    const steer = this.#queuedSteers.find((item) => !this.#localOnlyQueuedIds.has(item.id));
     if (steer) {
-      this.#queuedSteers = this.#queuedSteers.slice(1);
+      this.#queuedSteers = this.#queuedSteers.filter((item) => item !== steer);
       return steer;
     }
-    const followUp = this.#queuedFollowUps[0];
-    if (followUp) this.#queuedFollowUps = this.#queuedFollowUps.slice(1);
+    const followUp = this.#queuedFollowUps.find((item) => !this.#localOnlyQueuedIds.has(item.id));
+    if (followUp) this.#queuedFollowUps = this.#queuedFollowUps.filter((item) => item !== followUp);
     return followUp;
   }
 
-  #hasQueuedPrompts(): boolean {
-    return this.#queuedSteers.length > 0 || this.#queuedFollowUps.length > 0;
+  #hasPromotableQueuedPrompts(): boolean {
+    const promotable = (item: QueuedPromptView) => !this.#localOnlyQueuedIds.has(item.id);
+    return this.#queuedSteers.some(promotable) || this.#queuedFollowUps.some(promotable);
   }
 
   #refreshBranchControls(branchEdges: readonly ActiveBranchEdge[]): void {

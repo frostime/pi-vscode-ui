@@ -29,11 +29,12 @@ describe("prompts sent while Pi compacts the context", () => {
     const fixture = await queuedRecoveryHost("pi", (dir) => [
       "--recovery-compact-release", join(dir, "compact"),
       "--recovery-release", join(dir, "release"),
+      "--recovery-notice-release", join(dir, "notice"),
     ]);
     fixtures.push(fixture);
     const view = () => fixture.registry.sessionView(fixture.sessionId);
     await waitForRecovery(() => view()?.status === "ready");
-    return { ...fixture, view, release: (name: "compact" | "release") => writeFile(join(fixture.directory, name), "1") };
+    return { ...fixture, view, release: (name: "compact" | "release" | "notice") => writeFile(join(fixture.directory, name), "1") };
   }
 
   it("answers /compact from the Composer once compaction starts, so the next message can be sent", async () => {
@@ -85,6 +86,38 @@ describe("prompts sent while Pi compacts the context", () => {
     await waitForRecovery(() => view()?.isStreaming === false && userPrompts(view()).length === 2);
     expect(userPrompts(view())).toEqual(["first", "second"]);
     expect(pending(view())).toEqual([]);
+    expect(view()?.conversationItems.filter((item) => item.type === "notice" && item.level === "error")).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  it("keeps a held prompt pending when an extension message starts a run during a manual compaction", async () => {
+    const { registry, sessionId, view, release, errors } = await host();
+    const compact = registry.sendPrompt(sessionId, "/compact", []);
+    await waitForRecovery(() => view()?.isCompacting === true);
+    await registry.sendPrompt(sessionId, "held", [], "followUp");
+
+    // Pi starts a run for a background process notice without waiting for the compaction.
+    await release("notice");
+    await waitForRecovery(() => view()?.isStreaming === true);
+    await waitForRecovery(() => (view()?.conversationItems ?? []).some((item) => item.type === "customMessage"
+      || (item.type === "turn" && item.items.some((turnItem) => turnItem.type === "customMessage"))));
+    // Pi has not seen the held prompt, so the notice's run must not show it as its user message.
+    expect(userPrompts(view())).toEqual([]);
+    expect(pending(view())).toEqual(["held"]);
+
+    await release("compact");
+    await compact;
+    await waitForRecovery(() => view()?.isCompacting === false);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Sent at compaction_end while the notice's run still streams, it queues into that run.
+    expect(view()?.isStreaming).toBe(true);
+    expect(pending(view())).toEqual(["held"]);
+    await release("release");
+    await waitForRecovery(() => view()?.isStreaming === false && userPrompts(view()).length === 1);
+    expect(userPrompts(view())).toEqual(["held"]);
+    expect(pending(view())).toEqual([]);
+    const heldTurn = view()?.conversationItems.find((item) => item.type === "turn" && item.userMessage !== undefined);
+    expect(heldTurn?.type === "turn" && heldTurn.items.some((item) => item.type === "customMessage")).toBe(false);
     expect(view()?.conversationItems.filter((item) => item.type === "notice" && item.level === "error")).toEqual([]);
     expect(errors).toEqual([]);
   });
